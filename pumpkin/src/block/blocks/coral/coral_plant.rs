@@ -43,7 +43,7 @@ impl BlockBehaviour for CoralPlantBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
-                let current_state = args.world.get_block_state(args.position).await;
+                let current_state = args.world.get_block_state(args.position);
                 let dead_block_state_id = {
                     let props =
                         CoralPlantLikeProperties::from_state_id(current_state.id, args.block);
@@ -55,17 +55,12 @@ impl BlockBehaviour for CoralPlantBlock {
             }
         })
     }
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let support_block = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            if support_block.is_center_solid(BlockDirection::Up) {
-                return true;
-            }
-            false
-        })
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> bool {
+        let support_block = args.block_accessor.get_block_state(&args.position.down());
+        if support_block.is_center_solid(BlockDirection::Up) {
+            return true;
+        }
+        false
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -74,7 +69,7 @@ impl BlockBehaviour for CoralPlantBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             if args.direction == BlockDirection::Down {
-                let support_block = args.world.get_block_state(&args.position.down()).await;
+                let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
                     return 0;
                 }

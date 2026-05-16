@@ -47,7 +47,7 @@ impl BlockBehaviour for CoralFanBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             if args.direction == BlockDirection::Down {
-                let support_block = args.world.get_block_state(&args.position.down()).await;
+                let support_block = args.world.get_block_state(&args.position.down());
                 if support_block.is_center_solid(BlockDirection::Up) {
                     return get_default_coral_fan_state_id(
                         args.block,
@@ -69,7 +69,7 @@ impl BlockBehaviour for CoralFanBlock {
                     directions[0] = face;
                 }
             } else if directions[0] == Facing::Down {
-                let support_block = args.world.get_block_state(&args.position.down()).await;
+                let support_block = args.world.get_block_state(&args.position.down());
                 if support_block.is_center_solid(BlockDirection::Up) {
                     return get_default_coral_fan_state_id(
                         args.block,
@@ -81,7 +81,7 @@ impl BlockBehaviour for CoralFanBlock {
             for dir in directions {
                 if dir != Facing::Up
                     && dir != Facing::Down
-                    && can_place_at(args.world, args.position, dir.to_block_direction()).await
+                    && can_place_at(args.world, args.position, dir.to_block_direction())
                 {
                     let Some(wall_block) = get_corresponding_wall_fan_type(args.block) else {
                         return 0;
@@ -97,7 +97,7 @@ impl BlockBehaviour for CoralFanBlock {
                 }
             }
 
-            let support_block = args.world.get_block_state(&args.position.down()).await;
+            let support_block = args.world.get_block_state(&args.position.down());
             if support_block.is_center_solid(BlockDirection::Up) {
                 return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
             }
@@ -114,7 +114,7 @@ impl BlockBehaviour for CoralFanBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
-                let current_state = args.world.get_block_state(args.position).await;
+                let current_state = args.world.get_block_state(args.position);
                 let dead_block_state_id = if is_wall_fan(args.block) {
                     let props =
                         CoralWallFanLikeProperties::from_state_id(current_state.id, args.block);
@@ -129,22 +129,17 @@ impl BlockBehaviour for CoralFanBlock {
             }
         })
     }
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let support_block = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            if support_block.is_center_solid(BlockDirection::Up) && !is_wall_fan(args.block) {
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> bool {
+        let support_block = args.block_accessor.get_block_state(&args.position.down());
+        if support_block.is_center_solid(BlockDirection::Up) && !is_wall_fan(args.block) {
+            return true;
+        }
+        for dir in BlockDirection::horizontal() {
+            if can_place_at(args.block_accessor, args.position, dir) {
                 return true;
             }
-            for dir in BlockDirection::horizontal() {
-                if can_place_at(args.block_accessor, args.position, dir).await {
-                    return true;
-                }
-            }
-            false
-        })
+        }
+        false
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -160,12 +155,11 @@ impl BlockBehaviour for CoralFanBlock {
                         args.position,
                         props.facing.to_block_direction().opposite(),
                     )
-                    .await
                 {
                     return 0;
                 }
             } else if args.direction == BlockDirection::Down {
-                let support_block = args.world.get_block_state(&args.position.down()).await;
+                let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
                     return 0;
                 }
@@ -235,13 +229,8 @@ fn get_corresponding_wall_fan_type(block: &Block) -> Option<Block> {
         None
     }
 }
-async fn can_place_at(
-    world: &dyn BlockAccessor,
-    block_pos: &BlockPos,
-    facing: BlockDirection,
-) -> bool {
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: BlockDirection) -> bool {
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
-        .await
         .is_side_solid(facing.opposite())
 }

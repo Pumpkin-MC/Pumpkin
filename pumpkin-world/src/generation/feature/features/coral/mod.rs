@@ -1,4 +1,4 @@
-use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
+use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, SeaPickleLikeProperties},
@@ -18,7 +18,7 @@ pub struct CoralFeature;
 impl CoralFeature {
     pub fn generate_coral_piece<T: GenerationCache>(
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         state: &BlockState,
         pos: BlockPos,

@@ -1,4 +1,4 @@
-use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
+use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 use pumpkin_data::tag;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -14,7 +14,7 @@ impl CoralMushroomFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

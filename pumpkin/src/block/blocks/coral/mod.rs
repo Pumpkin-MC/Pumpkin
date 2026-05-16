@@ -14,7 +14,7 @@ pub mod coral_plant;
 pub async fn scan_for_water(world: &Arc<World>, pos: &BlockPos) -> bool {
     for direction in BlockDirection::all() {
         let neighbor_pos = pos.offset(direction.to_offset());
-        let block = world.get_block(&neighbor_pos).await;
+        let block = world.get_block(&neighbor_pos);
         if block == &Block::WATER {
             return true;
         }
@@ -45,12 +45,10 @@ fn is_dead_coral(block: &Block) -> bool {
 }
 async fn try_schedule_die_tick(block: &Block, world: &Arc<World>, pos: &BlockPos) {
     let tick_delay = 60 + rand::rng().random_range(0..40);
-    world
-        .schedule_block_tick(
-            block,
-            *pos,
-            tick_delay as u8,
-            pumpkin_world::tick::TickPriority::Normal,
-        )
-        .await;
+    world.schedule_block_tick(
+        block,
+        *pos,
+        tick_delay as u8,
+        pumpkin_world::tick::TickPriority::Normal,
+    );
 }
