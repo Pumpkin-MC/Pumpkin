@@ -1,7 +1,9 @@
 use super::Carver;
 use super::cave::get_height;
 use crate::ProtoChunk;
-use pumpkin_data::block_state::BlockState;
+use crate::generation::carver::{
+    Aquifer, carve_block_state, column_aquifer, column_is_aquifer_boundary,
+};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -18,6 +20,7 @@ impl Carver for CanyonCarver {
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
         legacy_random_source: bool,
+        sea_level: i32,
     ) {
         let CarverAdditionalConfig::Canyon(ref canyon_config) = config.additional else {
             return;
@@ -53,6 +56,7 @@ impl Carver for CanyonCarver {
             distance,
             y_scale,
             legacy_random_source,
+            sea_level,
         );
     }
 }
@@ -74,6 +78,7 @@ impl CanyonCarver {
         distance: i32,
         y_scale: f64,
         legacy_random_source: bool,
+        sea_level: i32,
     ) {
         let mut random = if legacy_random_source {
             RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
@@ -137,6 +142,7 @@ impl CanyonCarver {
                     horizontal_radius,
                     vertical_radius,
                     &width_factor_per_height,
+                    sea_level,
                 );
             }
         }
@@ -211,6 +217,7 @@ impl CanyonCarver {
         horizontal_radius: f64,
         vertical_radius: f64,
         width_factor_per_height: &[f32],
+        sea_level: i32,
     ) {
         let center_x = (chunk.x << 4) as f64 + 8.0;
         let center_z = (chunk.z << 4) as f64 + 8.0;
@@ -243,6 +250,13 @@ impl CanyonCarver {
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
                 if xd * xd + zd * zd < 1.0 {
+                    if column_is_aquifer_boundary(chunk, world_x, world_z, sea_level) {
+                        continue;
+                    }
+
+                    let column_below_water =
+                        column_aquifer(chunk, world_x, world_z, sea_level) == Some(Aquifer::Water);
+
                     for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
@@ -256,7 +270,15 @@ impl CanyonCarver {
                         ) && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            self.carve_block(chunk, config, world_x, world_y, world_z);
+                            self.carve_block(
+                                chunk,
+                                config,
+                                world_x,
+                                world_y,
+                                world_z,
+                                sea_level,
+                                column_below_water,
+                            );
                         }
                     }
                 }
@@ -287,6 +309,8 @@ impl CanyonCarver {
         x: i32,
         y: i32,
         z: i32,
+        sea_level: i32,
+        column_below_water: bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
@@ -297,19 +321,11 @@ impl CanyonCarver {
         }
 
         if config.replaceable.1.contains(&block.id) {
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
-
             let lava_y = config
                 .lava_level
                 .get_y(chunk.bottom_y() as i16, chunk.height());
-
-            if y <= lava_y {
-                chunk.set_block_state(x & 15, local_y, z & 15, lava);
-            } else {
-                chunk.set_block_state(x & 15, local_y, z & 15, air);
-            }
-
+            let bs = carve_block_state(y, lava_y, sea_level, column_below_water);
+            chunk.set_block_state(x & 15, y, z & 15, bs);
             return true;
         }
         false

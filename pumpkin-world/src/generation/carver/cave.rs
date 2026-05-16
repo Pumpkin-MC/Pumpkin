@@ -1,6 +1,8 @@
 use super::Carver;
 use crate::ProtoChunk;
-use pumpkin_data::block_state::BlockState;
+use crate::generation::carver::{
+    Aquifer, carve_block_state, column_aquifer, column_is_aquifer_boundary,
+};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -17,6 +19,7 @@ impl Carver for CaveCarver {
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
         legacy_random_source: bool,
+        sea_level: i32,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -59,6 +62,7 @@ impl Carver for CaveCarver {
                     config,
                     floor_level,
                     is_nether,
+                    sea_level,
                 );
                 tunnels += random.next_bounded_i32(4);
             }
@@ -87,6 +91,7 @@ impl Carver for CaveCarver {
                     floor_level,
                     is_nether,
                     legacy_random_source,
+                    sea_level,
                 );
             }
         }
@@ -118,6 +123,7 @@ impl CaveCarver {
         config: &CarverConfig,
         floor_level: f64,
         is_nether: bool,
+        sea_level: i32,
     ) {
         let horizontal_radius = 1.5 + (PI / 2.0).sin() * thickness;
         let vertical_radius = horizontal_radius as f64 * y_scale;
@@ -131,6 +137,7 @@ impl CaveCarver {
             vertical_radius,
             floor_level,
             is_nether,
+            sea_level,
         );
     }
 
@@ -154,6 +161,7 @@ impl CaveCarver {
         floor_level: f64,
         is_nether: bool,
         legacy_random_source: bool,
+        sea_level: i32,
     ) {
         let mut random = if legacy_random_source {
             RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
@@ -205,6 +213,7 @@ impl CaveCarver {
                     floor_level,
                     is_nether,
                     legacy_random_source,
+                    sea_level,
                 );
                 self.create_tunnel(
                     config,
@@ -224,6 +233,7 @@ impl CaveCarver {
                     floor_level,
                     is_nether,
                     legacy_random_source,
+                    sea_level,
                 );
                 return;
             }
@@ -243,6 +253,7 @@ impl CaveCarver {
                     vertical_radius * vertical_radius_multiplier,
                     floor_level,
                     is_nether,
+                    sea_level,
                 );
             }
         }
@@ -280,6 +291,7 @@ impl CaveCarver {
         vertical_radius: f64,
         floor_level: f64,
         is_nether: bool,
+        sea_level: i32,
     ) {
         let center_x = (chunk.x << 4) as f64 + 8.0;
         let center_z = (chunk.z << 4) as f64 + 8.0;
@@ -314,6 +326,15 @@ impl CaveCarver {
                 if xd * xd + zd * zd < 1.0 {
                     let mut has_grass = false;
 
+                    if !is_nether && column_is_aquifer_boundary(chunk, world_x, world_z, sea_level)
+                    {
+                        continue;
+                    }
+
+                    let column_below_water = !is_nether
+                        && column_aquifer(chunk, world_x, world_z, sea_level)
+                            == Some(Aquifer::Water);
+
                     for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
@@ -328,6 +349,8 @@ impl CaveCarver {
                                 world_y,
                                 world_z,
                                 is_nether,
+                                sea_level,
+                                column_below_water,
                                 &mut has_grass,
                             );
                         }
@@ -354,6 +377,8 @@ impl CaveCarver {
         y: i32,
         z: i32,
         is_nether: bool,
+        sea_level: i32,
+        column_below_water: bool,
         has_grass: &mut bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
@@ -366,12 +391,12 @@ impl CaveCarver {
             *has_grass = true;
         }
 
+        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
+            return false;
+        }
+
         // Only carve if it's replaceable
         if config.replaceable.1.contains(&block.id) {
-            // Replace with air or lava
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
-
             let lava_y = if is_nether {
                 chunk.bottom_y() as i32 + 31
             } else {
@@ -379,12 +404,8 @@ impl CaveCarver {
                     .lava_level
                     .get_y(chunk.bottom_y() as i16, chunk.height())
             };
-
-            if y <= lava_y {
-                chunk.set_block_state(x & 15, local_y, z & 15, lava);
-            } else {
-                chunk.set_block_state(x & 15, local_y, z & 15, air);
-            }
+            let bs = carve_block_state(y, lava_y, sea_level, column_below_water);
+            chunk.set_block_state(x & 15, y, z & 15, bs);
 
             // TODO: fix this
             // if *has_grass {
@@ -401,6 +422,7 @@ impl CaveCarver {
 
             return true;
         }
+
         false
     }
 }
