@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 use crate::deserializer::NbtReadHelper;
 use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
-use crate::{END_ID, Error, Nbt, get_nbt_string};
+use crate::{END_ID, Error, Nbt, get_nbt_string, get_nbt_string_bedrock};
 use std::collections::hash_map::IntoIter;
 use std::io::{ErrorKind, Read, Seek, Write};
 
@@ -64,6 +64,30 @@ impl NbtCompound {
         Ok(())
     }
 
+    pub fn skip_content_bedrock<R: Read + Seek>(
+        reader: &mut NbtReadHelper<R>,
+    ) -> Result<(), Error> {
+        loop {
+            let tag_id = match reader.get_u8_le() {
+                Ok(id) => id,
+                Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
+            };
+
+            if tag_id == END_ID {
+                break;
+            }
+
+            let len = reader.get_var_u32()?;
+            reader.skip_bytes(i64::from(len))?;
+
+            // Skip Value
+            NbtTag::skip_data_bedrock(reader, tag_id)?;
+        }
+
+        Ok(())
+    }
+
     pub fn deserialize_content<R: Read + Seek>(
         reader: &mut NbtReadHelper<R>,
     ) -> Result<Self, Error> {
@@ -89,6 +113,31 @@ impl NbtCompound {
         Ok(compound)
     }
 
+    pub fn deserialize_content_bedrock<R: Read + Seek>(
+        reader: &mut NbtReadHelper<R>,
+    ) -> Result<Self, Error> {
+        let mut compound = Self::new();
+
+        loop {
+            let tag_id = match reader.get_u8_le() {
+                Ok(id) => id,
+                Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
+            };
+
+            if tag_id == END_ID {
+                break;
+            }
+
+            let name = get_nbt_string_bedrock(reader)?;
+            let tag = NbtTag::deserialize_data_bedrock(reader, tag_id)?;
+
+            compound.child_tags.insert(name, tag);
+        }
+
+        Ok(compound)
+    }
+
     pub fn serialize_content<W: Write>(self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
         for (name, tag) in self.child_tags {
             w.write_u8_be(tag.get_type_id())?;
@@ -96,6 +145,16 @@ impl NbtCompound {
             tag.serialize_data(w)?;
         }
         w.write_u8_be(END_ID)?;
+        Ok(())
+    }
+
+    pub fn serialize_content_bedrock<W: Write>(self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
+        for (name, tag) in self.child_tags {
+            w.write_u8_le(tag.get_type_id())?;
+            NbtTag::write_string_bedrock(&name, w)?;
+            tag.serialize_data_bedrock(w)?;
+        }
+        w.write_u8_le(END_ID)?;
         Ok(())
     }
 

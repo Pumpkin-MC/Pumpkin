@@ -1,12 +1,13 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::{Cursor, Read},
+    io::{Cursor, Read, Seek, SeekFrom},
     panic,
 };
 use syn::{Ident, LitInt, LitStr};
@@ -1389,81 +1390,57 @@ pub fn build() -> TokenStream {
 /// # Arguments
 /// – `reader` – a readable byte source positioned at the start of the NBT data.
 #[expect(clippy::type_complexity)]
-fn get_be_data_from_nbt<R: Read>(
+fn get_be_data_from_nbt<R: Read + Seek>(
     reader: &mut R,
 ) -> BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> {
     let mut block_data: BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> = BTreeMap::new();
     let mut current_id = 0;
 
-    let read_nbt_string = |reader: &mut R| -> String {
-        let len = read_varint(reader);
-        let mut buf = vec![0; len as usize];
-        reader.read_exact(&mut buf).unwrap();
-        String::from_utf8(buf).unwrap()
-    };
+    let data_start = reader.stream_position().unwrap();
+    let data_end = reader.seek(SeekFrom::End(0)).unwrap();
+    reader.seek(SeekFrom::Start(data_start));
 
-    let read_byte_safe = |reader: &mut R| -> Option<u8> {
-        let mut buf = [0; 1];
-        reader.read_exact(&mut buf).is_ok().then(|| buf[0])
-    };
+    let nbt_reader = &mut NbtReadHelperBedrock::new(&mut *reader);
 
-    while let Some(tag_id) = read_byte_safe(reader) {
-        if tag_id != 10 {
+    loop {
+        if nbt_reader.reader().stream_position().unwrap() >= data_end {
             break;
-        } // Tag_Compound (10) required
-
-        // Read Root Name (usually empty string in palette)
-        let _root_name = read_nbt_string(reader);
-
-        let mut block_name = String::new();
-        let mut properties = BTreeMap::new();
-
-        loop {
-            let field_type = read_byte(reader);
-            if field_type == 0 {
-                break;
-            } // Tag_End (0)
-
-            let field_name = read_nbt_string(reader);
-
-            match field_name.as_str() {
-                "name" => {
-                    let raw_name = read_nbt_string(reader);
-                    block_name = raw_name
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(&raw_name)
-                        .to_string();
-                }
-                "states" => loop {
-                    let prop_type = read_byte(reader);
-                    if prop_type == 0 {
-                        break;
-                    }
-
-                    let prop_key = read_nbt_string(reader);
-
-                    let prop_val = match prop_type {
-                        1 => {
-                            let val = read_byte(reader);
-                            if val == 1 {
-                                "true".to_string()
-                            } else {
-                                "false".to_string()
-                            }
-                        }
-                        3 => read_varint(reader).to_string(),
-                        8 => read_nbt_string(reader),
-                        _ => panic!("Unknown property type {prop_type} for key {prop_key}"),
-                    };
-
-                    properties.insert(prop_key, prop_val);
-                },
-                "version" => {
-                    read_varint(reader);
-                }
-                _ => panic!("Unexpected root field: {field_name}"),
-            }
         }
+
+        let nbt = pumpkin_nbt::Nbt::read(nbt_reader).unwrap();
+
+        let block_name = {
+            let raw_name = nbt.get_string("name").unwrap();
+            raw_name
+                .strip_prefix("minecraft:")
+                .unwrap_or(&raw_name)
+                .to_string()
+        };
+
+        let properties = nbt
+            .get_compound("states")
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(key, val)| {
+                let unpacked = match val {
+                    pumpkin_nbt::tag::NbtTag::Byte(v) => {
+                        if v == 1 {
+                            "true".into()
+                        } else {
+                            "false".into()
+                        }
+                    }
+                    pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
+                    pumpkin_nbt::tag::NbtTag::String(v) => v,
+                    _ => {
+                        panic!("Unexpected type for {}. Value: {val:?}", &key);
+                    }
+                };
+
+                (key, unpacked)
+            })
+            .collect::<BTreeMap<_, _>>();
 
         if !block_name.is_empty() {
             block_data
@@ -1476,31 +1453,4 @@ fn get_be_data_from_nbt<R: Read>(
     }
 
     block_data
-}
-
-/// Reads a variable-length encoded 32-bit integer from the reader.
-///
-/// # Arguments
-/// – `reader` – the byte source to read from.
-fn read_varint<W: Read>(reader: &mut W) -> u32 {
-    let mut val = 0;
-    for i in 0..5u32 {
-        let byte = &mut [0];
-        reader.read_exact(byte).unwrap();
-        val |= (u32::from(byte[0]) & 0x7F) << (i * 7);
-        if byte[0] & 0x80 == 0 {
-            return val;
-        }
-    }
-    panic!()
-}
-
-/// Reads a single byte from the reader, returning `0` on failure.
-///
-/// # Arguments
-/// – `reader` – the byte source to read from.
-fn read_byte<W: Read>(reader: &mut W) -> u8 {
-    let byte = &mut [0];
-    reader.read_exact(byte).unwrap_or_default();
-    byte[0]
 }

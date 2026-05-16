@@ -31,6 +31,16 @@ macro_rules! write_number_be {
     };
 }
 
+macro_rules! write_number_le {
+    ($name:ident, $type:ty) => {
+        pub fn $name(&mut self, value: $type) -> Result<()> {
+            let buf = value.to_le_bytes();
+            self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+            Ok(())
+        }
+    };
+}
+
 impl<W: Write> WriteAdaptor<W> {
     write_number_be!(write_u8_be, u8);
     write_number_be!(write_i8_be, i8);
@@ -43,6 +53,59 @@ impl<W: Write> WriteAdaptor<W> {
     write_number_be!(write_f32_be, f32);
     write_number_be!(write_f64_be, f64);
 
+    write_number_le!(write_u8_le, u8);
+    write_number_le!(write_i8_le, i8);
+    write_number_le!(write_u16_le, u16);
+    write_number_le!(write_i16_le, i16);
+    write_number_le!(write_u32_le, u32);
+    write_number_le!(write_i32_le, i32);
+    write_number_le!(write_u64_le, u64);
+    write_number_le!(write_i64_le, i64);
+    write_number_le!(write_f32_le, f32);
+    write_number_le!(write_f64_le, f64);
+
+    pub fn write_var_u32(&mut self, mut value: u32) -> Result<()> {
+        // LEB128
+        loop {
+            let mut byte = (value & 0x7F) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            self.write_u8_le(byte)?;
+            if value == 0 {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn write_var_i32(&mut self, value: i32) -> Result<()> {
+        // ZigZag
+        self.write_var_u32(((value << 1) ^ (value >> 31)) as u32)
+    }
+
+    pub fn write_var_u64(&mut self, mut value: u64) -> Result<()> {
+        // LEB128
+        loop {
+            let mut byte = (value & 0x7F) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            self.write_u8_le(byte)?;
+            if value == 0 {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn write_var_i64(&mut self, value: i64) -> Result<()> {
+        // ZigZag
+        self.write_var_u64(((value << 1) ^ (value >> 63)) as u64)
+    }
+
     pub fn write_slice(&mut self, value: &[u8]) -> Result<()> {
         self.writer.write_all(value).map_err(Error::Incomplete)?;
         Ok(())
@@ -54,15 +117,17 @@ pub struct Serializer<W: Write> {
     state: State,
     handled_root: bool,
     expected_list_tag: u8,
+    bedrock: bool,
 }
 
 impl<W: Write> Serializer<W> {
-    pub const fn new(output: W, name: Option<String>) -> Self {
+    pub const fn new(output: W, name: Option<String>, bedrock: bool) -> Self {
         Self {
             output: WriteAdaptor::new(output),
             state: State::Root(name),
             handled_root: false,
             expected_list_tag: 0,
+            bedrock,
         }
     }
 }
@@ -91,12 +156,21 @@ impl<W: Write> Serializer<W> {
     fn parse_state(&mut self, tag: u8) -> Result<()> {
         match &mut self.state {
             State::Named(name) | State::Array { name, .. } => {
-                self.output.write_u8_be(tag)?;
+                if self.bedrock {
+                    self.output.write_u8_le(tag)?
+                } else {
+                    self.output.write_u8_be(tag)?
+                };
                 NbtTag::write_string(name, &mut self.output)?;
             }
             State::FirstListElement { len } => {
-                self.output.write_u8_be(tag)?;
-                self.output.write_i32_be(*len)?;
+                if self.bedrock {
+                    self.output.write_u8_le(tag)?;
+                    self.output.write_var_i32(*len)?;
+                } else {
+                    self.output.write_u8_be(tag)?;
+                    self.output.write_i32_be(*len)?;
+                }
                 self.expected_list_tag = tag;
             }
             State::MapKey => {
@@ -129,9 +203,18 @@ impl<W: Write> Serializer<W> {
                     )));
                 }
                 self.handled_root = true;
-                self.output.write_u8_be(tag)?;
+
+                if self.bedrock {
+                    self.output.write_u8_le(tag)?;
+                } else {
+                    self.output.write_u8_be(tag)?;
+                }
                 if let Some(root_name) = root_name {
-                    NbtTag::write_string(root_name, &mut self.output)?;
+                    if self.bedrock {
+                        NbtTag::write_string_bedrock(root_name, &mut self.output)?;
+                    } else {
+                        NbtTag::write_string(root_name, &mut self.output)?;
+                    }
                 }
             }
         }
@@ -141,20 +224,31 @@ impl<W: Write> Serializer<W> {
 
 /// Serializes struct using Serde Serializer to unnamed (network) NBT
 pub fn to_bytes_unnamed<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
-    let mut serializer = Serializer::new(w, None);
+    let mut serializer = Serializer::new(w, None, false);
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
 /// Serializes struct using Serde Serializer to normal NBT
 pub fn to_bytes_named<T: Serialize>(value: &T, name: String, w: impl Write) -> Result<()> {
-    let mut serializer = Serializer::new(w, Some(name));
+    let mut serializer = Serializer::new(w, Some(name), false);
+    value.serialize(&mut serializer)?;
+    Ok(())
+}
+
+/// Serializes struct using Serde Serializer to Bedrock network NBT
+pub fn to_bytes_named_bedrock<T: Serialize>(value: &T, name: String, w: impl Write) -> Result<()> {
+    let mut serializer = Serializer::new(w, Some(name), true);
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
 pub fn to_bytes<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
     to_bytes_named(value, String::new(), w)
+}
+
+pub fn to_bytes_bedrock<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
+    to_bytes_named_bedrock(value, String::new(), w)
 }
 
 impl<W: Write> ser::Serializer for &mut Serializer<W> {
@@ -176,25 +270,41 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
 
     fn serialize_i8(self, v: i8) -> Result<()> {
         self.parse_state(BYTE_ID)?;
-        self.output.write_i8_be(v)?;
+        if self.bedrock {
+            self.output.write_i8_le(v)?;
+        } else {
+            self.output.write_i8_be(v)?;
+        }
         Ok(())
     }
 
     fn serialize_i16(self, v: i16) -> Result<()> {
         self.parse_state(SHORT_ID)?;
-        self.output.write_i16_be(v)?;
+        if self.bedrock {
+            self.output.write_i16_le(v)?;
+        } else {
+            self.output.write_i16_be(v)?;
+        }
         Ok(())
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
         self.parse_state(INT_ID)?;
-        self.output.write_i32_be(v)?;
+        if self.bedrock {
+            self.output.write_var_i32(v)?;
+        } else {
+            self.output.write_i32_be(v)?;
+        }
         Ok(())
     }
 
     fn serialize_i64(self, v: i64) -> Result<()> {
         self.parse_state(LONG_ID)?;
-        self.output.write_i64_be(v)?;
+        if self.bedrock {
+            self.output.write_var_i64(v)?;
+        } else {
+            self.output.write_i64_be(v)?;
+        }
         Ok(())
     }
 
@@ -205,7 +315,11 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             ))
         } else {
             self.parse_state(BYTE_ID)?;
-            self.output.write_u8_be(v)?;
+            if self.bedrock {
+                self.output.write_u8_le(v)?;
+            } else {
+                self.output.write_u8_be(v)?;
+            }
             Ok(())
         }
     }
@@ -224,13 +338,21 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
 
     fn serialize_f32(self, v: f32) -> Result<()> {
         self.parse_state(FLOAT_ID)?;
-        self.output.write_f32_be(v)?;
+        if self.bedrock {
+            self.output.write_f32_le(v)?;
+        } else {
+            self.output.write_f32_be(v)?;
+        }
         Ok(())
     }
 
     fn serialize_f64(self, v: f64) -> Result<()> {
         self.parse_state(DOUBLE_ID)?;
-        self.output.write_f64_be(v)?;
+        if self.bedrock {
+            self.output.write_f64_le(v)?;
+        } else {
+            self.output.write_f64_be(v)?;
+        }
         Ok(())
     }
 
@@ -244,7 +366,11 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         if self.state == State::MapKey {
             self.state = State::Named(v.to_string());
         } else {
-            NbtTag::write_string(v, &mut self.output)?;
+            if self.bedrock {
+                NbtTag::write_string_bedrock(v, &mut self.output)?;
+            } else {
+                NbtTag::write_string(v, &mut self.output)?;
+            }
         }
 
         Ok(())
@@ -259,7 +385,11 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             return Err(Error::LargeLength(len));
         }
 
-        self.output.write_i32_be(len as i32)?;
+        if self.bedrock {
+            self.output.write_var_i32(len as i32)?;
+        } else {
+            self.output.write_i32_be(len as i32)?;
+        }
         self.output.write_slice(v)?;
         Ok(())
     }
@@ -352,7 +482,12 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             };
 
             self.parse_state(id)?;
-            self.output.write_i32_be(len as i32)?;
+
+            if self.bedrock {
+                self.output.write_var_i32(len as i32)?;
+            } else {
+                self.output.write_i32_be(len as i32)?;
+            }
 
             // We can mark anything as an NBT array list, so mark as needed to be checked.
             self.expected_list_tag = expected_tag;
@@ -363,8 +498,13 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             if len == 0 {
                 // If we have no elements, the `FirstListElement` state will never be invoked, so
                 // write the (unknown) list type and length here.
-                self.output.write_u8_be(END_ID)?;
-                self.output.write_i32_be(0)?;
+                if self.bedrock {
+                    self.output.write_u8_le(END_ID)?;
+                    self.output.write_var_i32(0)?;
+                } else {
+                    self.output.write_u8_be(END_ID)?;
+                    self.output.write_i32_be(0)?;
+                }
             }
         }
 
@@ -465,7 +605,11 @@ impl<W: Write> ser::SerializeStruct for &mut Serializer<W> {
     }
 
     fn end(self) -> Result<()> {
-        self.output.write_u8_be(END_ID)?;
+        if self.bedrock {
+            self.output.write_u8_le(END_ID)?;
+        } else {
+            self.output.write_u8_be(END_ID)?;
+        }
         Ok(())
     }
 }
@@ -490,7 +634,11 @@ impl<W: Write> ser::SerializeMap for &mut Serializer<W> {
     }
 
     fn end(self) -> Result<()> {
-        self.output.write_u8_be(END_ID)?;
+        if self.bedrock {
+            self.output.write_u8_le(END_ID)?;
+        } else {
+            self.output.write_u8_be(END_ID)?;
+        }
         Ok(())
     }
 }

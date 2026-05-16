@@ -680,7 +680,7 @@ impl TextComponent {
     pub fn encode(&self) -> Box<[u8]> {
         let mut buf = Vec::new();
         // TODO: Properly handle errors
-        let mut serializer = Serializer::new(&mut buf, None);
+        let mut serializer = Serializer::new(&mut buf, None, false);
         self.0
             .clone()
             .to_translated()

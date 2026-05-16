@@ -95,7 +95,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         // serializer to use on a struct somehow from within the struct?
         if name == "TextComponent" || name == "DialogNBT" {
             let mut nbt_serializer =
-                pumpkin_nbt::serializer::Serializer::new(&mut self.write, None);
+                pumpkin_nbt::serializer::Serializer::new(&mut self.write, None, false);
             value.serialize(&mut nbt_serializer).map_err(|err| {
                 WritingError::Serde(format!("Failed to serialize {name} NBT: {err}"))
             })

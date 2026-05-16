@@ -7,7 +7,8 @@ use serializer::WriteAdaptor;
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
     LIST_ID, LONG_ARRAY_ID, LONG_ID, SHORT_ID, STRING_ID, Seek, Write, compound, deserializer,
-    get_nbt_string, io, nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
+    get_nbt_string, get_nbt_string_bedrock, io, nbt_byte_array, nbt_int_array, nbt_long_array,
+    serializer,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -43,6 +44,12 @@ impl NbtTag {
         Ok(())
     }
 
+    pub fn serialize_bedrock<W: Write>(self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
+        w.write_u8_le(self.get_type_id())?;
+        self.serialize_data_bedrock(w)?;
+        Ok(())
+    }
+
     pub fn write_string<W: Write>(string: &str, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
         let java_string = cesu8::to_java_cesu8(string);
         let len = java_string.len();
@@ -52,6 +59,21 @@ impl NbtTag {
 
         w.write_u16_be(len as u16)?;
         w.write_slice(&java_string)?;
+        Ok(())
+    }
+
+    pub fn write_string_bedrock<W: Write>(
+        string: &str,
+        w: &mut WriteAdaptor<W>,
+    ) -> serializer::Result<()> {
+        let bedrock_string = string.as_bytes();
+        let len = bedrock_string.len();
+        if len > u16::MAX as usize {
+            return Err(Error::LargeLength(len));
+        }
+
+        w.write_var_u32(len as u32)?;
+        w.write_slice(&bedrock_string)?;
         Ok(())
     }
 
@@ -189,9 +211,88 @@ impl NbtTag {
         Ok(())
     }
 
+    pub fn serialize_data_bedrock<W: Write>(
+        self,
+        w: &mut WriteAdaptor<W>,
+    ) -> serializer::Result<()> {
+        match self {
+            Self::End => {}
+            Self::Byte(byte) => w.write_i8_le(byte)?,
+            Self::Short(short) => w.write_i16_le(short)?,
+            Self::Int(int) => w.write_var_i32(int)?,
+            Self::Long(long) => w.write_var_i64(long)?,
+            Self::Float(float) => w.write_f32_le(float)?,
+            Self::Double(double) => w.write_f64_le(double)?,
+            Self::ByteArray(byte_array) => {
+                let len = byte_array.len();
+                if len > i32::MAX as usize {
+                    return Err(Error::LargeLength(len));
+                }
+
+                w.write_var_i32(len as i32)?;
+                for int in byte_array {
+                    w.write_i8_le(int)?;
+                }
+            }
+            Self::String(string) => {
+                Self::write_string_bedrock(&string, w)?;
+            }
+            Self::List(list) => {
+                let len = list.len();
+                if len > i32::MAX as usize {
+                    return Err(Error::LargeLength(len));
+                }
+
+                let list_element_id = Self::get_list_element_type_id(&list);
+
+                w.write_u8_le(list_element_id)?;
+                w.write_var_i32(len as i32)?;
+                for nbt_tag in list {
+                    // Since tags in the same list tag must have the same type,
+                    // we need to handle those of different tag types by
+                    // wrapping them in `NbtCompound`s if needed.
+                    Self::wrap_tag_if_needed(list_element_id, nbt_tag).serialize_data_bedrock(w)?;
+                }
+            }
+            Self::Compound(compound) => {
+                compound.serialize_content_bedrock(w)?;
+            }
+            Self::IntArray(int_array) => {
+                let len = int_array.len();
+                if len > i32::MAX as usize {
+                    return Err(Error::LargeLength(len));
+                }
+
+                w.write_var_i32(len as i32)?;
+                for int in int_array {
+                    w.write_var_i32(int)?;
+                }
+            }
+            Self::LongArray(long_array) => {
+                let len = long_array.len();
+                if len > i32::MAX as usize {
+                    return Err(Error::LargeLength(len));
+                }
+
+                w.write_var_i32(len as i32)?;
+                for long in long_array {
+                    w.write_var_i64(long)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn deserialize<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
         let tag_id = reader.get_u8_be()?;
         Self::deserialize_data(reader, tag_id)
+    }
+
+    pub fn deserialize_bedrock<R: Read + Seek>(
+        reader: &mut NbtReadHelper<R>,
+    ) -> Result<Self, Error> {
+        let tag_id = reader.get_u8_le()?;
+        Self::deserialize_data_bedrock(reader, tag_id)
     }
 
     pub fn skip_data<R: Read + Seek>(
@@ -239,6 +340,63 @@ impl NbtTag {
             }
             LONG_ARRAY_ID => {
                 let len = reader.get_i32_be()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                reader.skip_bytes(i64::from(len) * 8)
+            }
+            _ => Err(Error::UnknownTagId(tag_id)),
+        }
+    }
+
+    pub fn skip_data_bedrock<R: Read + Seek>(
+        reader: &mut NbtReadHelper<R>,
+        tag_id: u8,
+    ) -> Result<(), Error> {
+        match tag_id {
+            END_ID => Ok(()),
+            BYTE_ID => reader.skip_bytes(1),
+            SHORT_ID => reader.skip_bytes(2),
+            INT_ID => reader.get_var_i32().map(|_| ()),
+            LONG_ID => reader.get_var_i64().map(|_| ()),
+            FLOAT_ID => reader.skip_bytes(4),
+            DOUBLE_ID => reader.skip_bytes(8),
+            BYTE_ARRAY_ID => {
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+                reader.skip_bytes(i64::from(len))
+            }
+            STRING_ID => {
+                let len = reader.get_var_u32()?;
+                reader.skip_bytes(i64::from(len))
+            }
+            LIST_ID => {
+                let tag_type_id = reader.get_u8_le()?;
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                for _ in 0..len {
+                    Self::skip_data(reader, tag_type_id)?;
+                }
+
+                Ok(())
+            }
+            COMPOUND_ID => NbtCompound::skip_content(reader),
+            INT_ARRAY_ID => {
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                reader.skip_bytes(i64::from(len) * 4)
+            }
+            LONG_ARRAY_ID => {
+                let len = reader.get_var_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
@@ -335,6 +493,101 @@ impl NbtTag {
                 let mut long_array = Vec::with_capacity(len);
                 for _ in 0..len {
                     let long = reader.get_i64_be()?;
+                    long_array.push(long);
+                }
+                Ok(Self::LongArray(long_array))
+            }
+            _ => Err(Error::UnknownTagId(tag_id)),
+        }
+    }
+    pub fn deserialize_data_bedrock<R: Read + Seek>(
+        reader: &mut NbtReadHelper<R>,
+        tag_id: u8,
+    ) -> Result<Self, Error> {
+        match tag_id {
+            END_ID => Ok(Self::End),
+            BYTE_ID => {
+                let byte = reader.get_i8_le()?;
+                Ok(Self::Byte(byte))
+            }
+            SHORT_ID => {
+                let short = reader.get_i16_le()?;
+                Ok(Self::Short(short))
+            }
+            INT_ID => {
+                let int = reader.get_var_i32()?;
+                Ok(Self::Int(int))
+            }
+            LONG_ID => {
+                let long = reader.get_var_i64()?;
+                Ok(Self::Long(long))
+            }
+            FLOAT_ID => {
+                let float = reader.get_f32_le()?;
+                Ok(Self::Float(float))
+            }
+            DOUBLE_ID => {
+                let double = reader.get_f64_le()?;
+                Ok(Self::Double(double))
+            }
+            BYTE_ARRAY_ID => {
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                let len = len as usize;
+                let mut byte_array = Vec::with_capacity(len);
+                for _ in 0..len {
+                    let byte = reader.get_i8_le()?;
+                    byte_array.push(byte);
+                }
+                Ok(Self::ByteArray(byte_array))
+            }
+            STRING_ID => Ok(Self::String(get_nbt_string_bedrock(reader)?)),
+            LIST_ID => {
+                let tag_type_id = reader.get_u8_le()?;
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                let mut list = Vec::with_capacity(len as usize);
+                for _ in 0..len {
+                    let tag = Self::deserialize_data_bedrock(reader, tag_type_id)?;
+                    assert_eq!(tag.get_type_id(), tag_type_id);
+                    // Try unwrapping the tag.
+                    list.push(Self::flatten(tag));
+                }
+                Ok(Self::List(list))
+            }
+            COMPOUND_ID => Ok(Self::Compound(NbtCompound::deserialize_content_bedrock(
+                reader,
+            )?)),
+            INT_ARRAY_ID => {
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                let len = len as usize;
+                let mut int_array = Vec::with_capacity(len);
+                for _ in 0..len {
+                    let int = reader.get_var_i32()?;
+                    int_array.push(int);
+                }
+                Ok(Self::IntArray(int_array))
+            }
+            LONG_ARRAY_ID => {
+                let len = reader.get_var_i32()?;
+                if len < 0 {
+                    return Err(Error::NegativeLength(len));
+                }
+
+                let len = len as usize;
+                let mut long_array = Vec::with_capacity(len);
+                for _ in 0..len {
+                    let long = reader.get_var_i64()?;
                     long_array.push(long);
                 }
                 Ok(Self::LongArray(long_array))

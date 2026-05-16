@@ -3,7 +3,7 @@ use std::io::{Seek, SeekFrom};
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, END_ID, Error, INT_ARRAY_ID, INT_ID, LIST_ID,
-    LONG_ARRAY_ID, LONG_ID, NbtTag, get_nbt_string, io,
+    LONG_ARRAY_ID, LONG_ID, NbtTag, get_nbt_string, get_nbt_string_bedrock, io,
 };
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
@@ -48,7 +48,24 @@ macro_rules! define_get_number_be {
     };
 }
 
+macro_rules! define_get_number_le {
+    ($name:ident, $type:ty) => {
+        pub fn $name(&mut self) -> Result<$type> {
+            let mut buf = [0u8; std::mem::size_of::<$type>()];
+            self.reader
+                .read_exact(&mut buf)
+                .map_err(Error::Incomplete)?;
+
+            Ok(<$type>::from_le_bytes(buf))
+        }
+    };
+}
+
 impl<R: Read + Seek> NbtReadHelper<R> {
+    pub fn stream_position(&mut self) -> Result<u64> {
+        self.reader.stream_position().map_err(Error::Incomplete)
+    }
+
     pub fn skip_bytes(&mut self, count: i64) -> Result<()> {
         self.reader
             .seek(SeekFrom::Current(count))
@@ -67,6 +84,55 @@ impl<R: Read + Seek> NbtReadHelper<R> {
     define_get_number_be!(get_f32_be, f32);
     define_get_number_be!(get_f64_be, f64);
 
+    define_get_number_le!(get_u8_le, u8);
+    define_get_number_le!(get_i8_le, i8);
+    define_get_number_le!(get_u16_le, u16);
+    define_get_number_le!(get_i16_le, i16);
+    define_get_number_le!(get_u32_le, u32);
+    define_get_number_le!(get_i32_le, i32);
+    define_get_number_le!(get_u64_le, u64);
+    define_get_number_le!(get_i64_le, i64);
+    define_get_number_le!(get_f32_le, f32);
+    define_get_number_le!(get_f64_le, f64);
+
+    pub fn get_var_u32(&mut self) -> Result<u32> {
+        // LEB128
+        let mut val = 0;
+        for i in 0..5 {
+            let byte = self.get_u8_le()?;
+            val |= (u32::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
+                return Ok(val);
+            }
+        }
+        Err(Error::VarIntTooLarge)
+    }
+
+    pub fn get_var_i32(&mut self) -> Result<i32> {
+        let val = self.get_var_u32()?;
+        // ZigZag
+        Ok(((val >> 1) as i32) ^ -((val as i32) & 1))
+    }
+
+    pub fn get_var_u64(&mut self) -> Result<u64> {
+        // LEB128
+        let mut val = 0;
+        for i in 0..10 {
+            let byte = self.get_u8_le()?;
+            val |= (u64::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
+                return Ok(val);
+            }
+        }
+        Err(Error::VarLongTooLarge)
+    }
+
+    pub fn get_var_i64(&mut self) -> Result<i64> {
+        let val = self.get_var_u64()?;
+        // ZigZag
+        Ok(((val >> 1) as i64) ^ -((val as i64) & 1))
+    }
+
     pub fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>> {
         let mut buf = vec![0u8; count];
         self.reader
@@ -74,6 +140,15 @@ impl<R: Read + Seek> NbtReadHelper<R> {
             .map_err(Error::Incomplete)?;
 
         Ok(buf.into())
+    }
+
+    pub fn read_vec(&mut self, count: usize) -> Result<Vec<u8>> {
+        let mut buf = vec![0u8; count];
+        self.reader
+            .read_exact(&mut buf)
+            .map_err(Error::Incomplete)?;
+
+        Ok(buf)
     }
 }
 
@@ -83,28 +158,36 @@ pub struct Deserializer<R: Read + Seek> {
     // Yes, this breaks with recursion. Just an attempt at a sanity check
     in_list: bool,
     is_named: bool,
+    bedrock: bool,
 }
 
 impl<R: Read + Seek> Deserializer<R> {
-    pub const fn new(input: R, is_named: bool) -> Self {
+    pub const fn new(input: R, is_named: bool, bedrock: bool) -> Self {
         Self {
             input: NbtReadHelper { reader: input },
             tag_to_deserialize_stack: None,
             in_list: false,
             is_named,
+            bedrock,
         }
     }
 }
 
 /// Deserializes struct using Serde Deserializer from normal NBT
 pub fn from_bytes<'a, T: Deserialize<'a>>(r: impl Read + Seek) -> Result<T> {
-    let mut deserializer = Deserializer::new(r, true);
+    let mut deserializer = Deserializer::new(r, true, false);
     T::deserialize(&mut deserializer)
 }
 
 /// Deserializes struct using Serde Deserializer from network NBT
 pub fn from_bytes_unnamed<'a, T: Deserialize<'a>>(r: impl Read + Seek) -> Result<T> {
-    let mut deserializer = Deserializer::new(r, false);
+    let mut deserializer = Deserializer::new(r, false, false);
+    T::deserialize(&mut deserializer)
+}
+
+/// Deserializes struct using Serde Deserializer from Bedrock network NBT
+pub fn from_bytes_bedrock<'a, T: Deserialize<'a>>(r: impl Read + Seek) -> Result<T> {
+    let mut deserializer = Deserializer::new(r, true, true);
     T::deserialize(&mut deserializer)
 }
 
@@ -121,7 +204,12 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
             return Err(Error::SerdeError("Ignoring nothing!".to_string()));
         };
 
-        NbtTag::skip_data(&mut self.input, tag)?;
+        if self.bedrock {
+            NbtTag::skip_data_bedrock(&mut self.input, tag)?;
+        } else {
+            NbtTag::skip_data(&mut self.input, tag)?;
+        }
+
         visitor.visit_unit()
     }
 
@@ -138,14 +226,24 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
             )),
             LIST_ID | INT_ARRAY_ID | LONG_ARRAY_ID | BYTE_ARRAY_ID => {
                 let list_type = match tag_to_deserialize {
-                    LIST_ID => self.input.get_u8_be()?,
+                    LIST_ID => {
+                        if self.bedrock {
+                            self.input.get_u8_le()?
+                        } else {
+                            self.input.get_u8_be()?
+                        }
+                    }
                     INT_ARRAY_ID => INT_ID,
                     LONG_ARRAY_ID => LONG_ID,
                     BYTE_ARRAY_ID => BYTE_ID,
                     _ => unreachable!(),
                 };
 
-                let remaining_values = self.input.get_i32_be()?;
+                let remaining_values = if self.bedrock {
+                    self.input.get_var_i32()?
+                } else {
+                    self.input.get_i32_be()?
+                };
                 if remaining_values < 0 {
                     return Err(Error::NegativeLength(remaining_values));
                 }
@@ -179,7 +277,11 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
 
     fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         if self.in_list {
-            let value = self.input.get_u8_be()?;
+            let value = if self.bedrock {
+                self.input.get_u8_le()?
+            } else {
+                self.input.get_u8_be()?
+            };
             visitor.visit_u8::<Error>(value)
         } else {
             Err(Error::UnsupportedType(
@@ -189,23 +291,41 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
     }
 
     fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        let value = self.input.get_i16_be()?;
+        let value = if self.bedrock {
+            self.input.get_i16_le()?
+        } else {
+            self.input.get_i16_be()?
+        };
         visitor.visit_i16::<Error>(value)
     }
 
     fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        let value = self.input.get_i32_be()?;
+        let value = if self.bedrock {
+            // TODO: figure out of this makes sense or if it should be an error
+            self.input.get_var_u32()? as i32
+        } else {
+            self.input.get_i32_be()?
+        };
         visitor.visit_i32::<Error>(value)
     }
 
     fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        let value = self.input.get_i64_be()?;
+        let value = if self.bedrock {
+            // TODO: figure out of this makes sense or if it should be an error
+            self.input.get_var_u64()? as i64
+        } else {
+            self.input.get_i64_be()?
+        };
         visitor.visit_i64::<Error>(value)
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         if self.tag_to_deserialize_stack.unwrap() == BYTE_ID {
-            let value = self.input.get_u8_be()?;
+            let value = if self.bedrock {
+                self.input.get_u8_le()?
+            } else {
+                self.input.get_u8_be()?
+            };
             if value != 0 {
                 return visitor.visit_bool(true);
             }
@@ -219,7 +339,11 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
-        let variant = get_nbt_string(&mut self.input)?;
+        let variant = if self.bedrock {
+            get_nbt_string_bedrock(&mut self.input)?
+        } else {
+            get_nbt_string(&mut self.input)?
+        };
         visitor.visit_enum(variant.into_deserializer())
     }
 
@@ -236,15 +360,25 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
                 )));
             }
         } else {
-            let next_byte = self.input.get_u8_be()?;
+            let next_byte = if self.bedrock {
+                self.input.get_u8_le()?
+            } else {
+                self.input.get_u8_be()?
+            };
             if next_byte != COMPOUND_ID {
                 return Err(Error::NoRootCompound(next_byte));
             }
 
             if self.is_named {
-                // Consume struct name, similar to get_nbt_string but without cesu8::from_java_cesu8
-                let length = self.input.get_u16_be()? as usize;
-                let _ = self.input.read_boxed_slice(length)?;
+                if self.bedrock {
+                    // Consume struct name, similar to get_nbt_string_bedrock but without String::from_utf8
+                    let length = self.input.get_var_u32()? as usize;
+                    let _ = self.input.read_vec(length)?;
+                } else {
+                    // Consume struct name, similar to get_nbt_string but without cesu8::from_java_cesu8
+                    let length = self.input.get_u16_be()? as usize;
+                    let _ = self.input.read_boxed_slice(length)?;
+                }
             }
         }
 
@@ -262,7 +396,11 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
     }
 
     fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        let str = get_nbt_string(&mut self.input)?;
+        let str = if self.bedrock {
+            get_nbt_string_bedrock(&mut self.input)?
+        } else {
+            get_nbt_string(&mut self.input)?
+        };
         visitor.visit_string(str)
     }
 
@@ -279,7 +417,11 @@ impl<'de, R: Read + Seek> MapAccess<'de> for CompoundAccess<'_, R> {
     type Error = Error;
 
     fn next_key_seed<K: DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>> {
-        let tag = self.de.input.get_u8_be()?;
+        let tag = if self.de.bedrock {
+            self.de.input.get_u8_le()?
+        } else {
+            self.de.input.get_u8_be()?
+        };
         self.de.tag_to_deserialize_stack = Some(tag);
 
         if tag == END_ID {
@@ -302,7 +444,11 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for MapKey<'_, R> {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        let key = get_nbt_string(&mut self.de.input)?;
+        let key = if self.de.bedrock {
+            get_nbt_string_bedrock(&mut self.de.input)?
+        } else {
+            get_nbt_string(&mut self.de.input)?
+        };
         visitor.visit_string(key)
     }
 
