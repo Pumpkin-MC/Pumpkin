@@ -1,3 +1,4 @@
+use crate::block::blocks::amethyst::AmethystBlock;
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
@@ -293,6 +294,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SmallDripleafBlock);
     manager.register(BigDripleafStemBlock);
     manager.register(BigDripleafBlock);
+    manager.register(AmethystBlock);
 
     manager.register(FallingBlock);
 

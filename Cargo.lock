@@ -2926,7 +2926,6 @@ dependencies = [
 name = "pumpkin-inventory"
 version = "0.1.0-dev+26.1"
 dependencies = [
- "crossbeam-utils",
  "pumpkin-data",
  "pumpkin-protocol",
  "pumpkin-util",

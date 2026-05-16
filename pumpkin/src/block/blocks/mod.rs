@@ -67,6 +67,7 @@ pub mod magma;
 pub mod torches;
 
 // Plants, crops & natural blocks
+pub mod amethyst;
 pub mod carved_pumpkin;
 pub mod dripstone;
 pub mod farmland;
