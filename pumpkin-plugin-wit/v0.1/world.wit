@@ -1,5 +1,6 @@
 interface %world {
-    use common.{position, entity-pose};
+    use common.{position, entity-pose, block-pos};
+    use block-entity.{block-entity, command-block-entity, block-entity-type};
     use text.{text-component};
     use scoreboard.{scoreboard};
     use particles.{particle};
@@ -99,13 +100,6 @@ interface %world {
         id: u16,
     }
 
-    /// A position in the world grid.
-    record block-pos {
-        x: s32,
-        y: s32,
-        z: s32,
-    }
-
     resource entity {
         get-id: func() -> u32;
         get-uuid: func() -> uuid;
@@ -117,29 +111,6 @@ interface %world {
         get-yaw: func() -> f32;
         get-pitch: func() -> f32;
         get-head-yaw: func() -> f32;
-
-        is-on-ground: func() -> bool;
-        
-        is-sneaking: func() -> bool;
-        set-sneaking: func(sneaking: bool);
-        
-        is-sprinting: func() -> bool;
-        set-sprinting: func(sprinting: bool);
-        
-        is-swimming: func() -> bool;
-        set-swimming: func(swimming: bool);
-        
-        is-invisible: func() -> bool;
-        set-invisible: func(invisible: bool);
-        
-        is-glowing: func() -> bool;
-        set-glowing: func(glowing: bool);
-        
-        is-fall-flying: func() -> bool;
-        set-fall-flying: func(fall-flying: bool);
-        
-        is-on-fire: func() -> bool;
-        set-on-fire: func(on-fire: bool);
 
         teleport: func(pos: position, world-ref: %world);
         set-velocity: func(velocity: position);
@@ -158,6 +129,73 @@ interface %world {
         get-fire-ticks: func() -> s32;
         set-fire-ticks: func(ticks: s32);
 
+        get-health: func() -> f32;
+        set-health: func(health: f32);
+        get-max-health: func() -> f32;
+        damage: func(amount: f32);
+        is-dead: func() -> bool;
+
+        get-absorption: func() -> f32;
+        set-absorption: func(amount: f32);
+
+        get-age: func() -> s32;
+        set-age: func(age: s32);
+
+        get-fall-distance: func() -> f32;
+        set-fall-distance: func(distance: f32);
+
+        get-ticks-lived: func() -> s32;
+        set-ticks-lived: func(ticks: s32);
+
+        is-sneaking: func() -> bool;
+        set-sneaking: func(sneaking: bool);
+        is-sprinting: func() -> bool;
+        set-sprinting: func(sprinting: bool);
+        is-swimming: func() -> bool;
+        set-swimming: func(swimming: bool);
+        is-invisible: func() -> bool;
+        set-invisible: func(invisible: bool);
+        is-glowing: func() -> bool;
+        set-glowing: func(glowing: bool);
+        is-fall-flying: func() -> bool;
+        set-fall-flying: func(fall-flying: bool);
+
+        get-width: func() -> f32;
+        get-height: func() -> f32;
+
+        set-rotation: func(yaw: f32, pitch: f32);
+
+        is-on-ground: func() -> bool;
+        is-on-fire: func() -> bool;
+        set-on-fire: func(on-fire: bool);
+        has-visual-fire: func() -> bool;
+        set-visual-fire: func(visual-fire: bool);
+
+        get-portal-cooldown: func() -> u32;
+        set-portal-cooldown: func(cooldown: u32);
+
+        get-remaining-air: func() -> s32;
+        set-remaining-air: func(air: s32);
+        get-max-air: func() -> s32;
+
+        send-system-message: func(message: text-component);
+
+        get-eye-height: func() -> f32;
+        get-eye-position: func() -> position;
+
+        get-nearby-entities: func(x: f64, y: f64, z: f64) -> list<entity>;
+
+        get-vehicle: func() -> option<entity>;
+        get-passengers: func() -> list<entity>;
+        add-passenger: func(passenger: entity);
+        remove-passenger: func(passenger: entity);
+        eject-passengers: func();
+
+        get-bounding-box: func() -> bounding-box;
+
+        is-in-water: func() -> bool;
+        is-in-lava: func() -> bool;
+
         remove: func();
 
         /// Performs a raycast from the entity's eye position in its looking direction.
@@ -170,6 +208,12 @@ interface %world {
         pos: block-pos,
         /// The face of the block that was hit.
         face: block-direction,
+    }
+
+    /// Represents an axis-aligned bounding box.
+    record bounding-box {
+        min: position,
+        max: position,
     }
 
     /// Represents a cardinal direction or block face.
@@ -267,5 +311,8 @@ interface %world {
 
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;
+
+        /// Returns the block entity at the specified position, if any.
+        get-block-entity: func(pos: block-pos) -> option<block-entity-type>;
     }
 }

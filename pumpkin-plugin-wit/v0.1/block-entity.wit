@@ -1,22 +1,12 @@
 interface block-entity {
-    use common.{block-position};
+    use common.{block-pos};
 
     resource block-entity {
         resource-location: func() -> string;
-        get-position: func() -> block-position;
+        get-position: func() -> block-pos;
         get-id: func() -> u32;
-        // write-nbt: func(nbt: nbt-compound);
-        // from-nbt: func(nbt: nbt-compound, position: block-position) -> entity;
-        // tick: func(world: simple-world);
-        // write-internal: func(nbt: nbt-compound);
-        // chunk-data-nbt: func() -> option<nbt-compound;
-        // get-inventory: func() -> option<inventory>;
-        // set-block-state: func(block-state: block-state-id);
-        // on-block-replaced: func(world: simple-world, position: block-position);
         is-dirty: func() -> bool;
         clear-dirty: func();
-        // to-property-delegate: func() -> option<property-delegate>;
-        // to-experience-container: func() -> option<experience-container>;
     }
 
     resource command-block-entity {
@@ -30,7 +20,65 @@ interface block-entity {
         powered: func() -> bool;
     }
 
+    enum dye-color {
+        white,
+        orange,
+        magenta,
+        light-blue,
+        yellow,
+        lime,
+        pink,
+        gray,
+        light-gray,
+        cyan,
+        purple,
+        blue,
+        brown,
+        green,
+        red,
+        black,
+    }
+
+    record sign-text {
+        messages: list<string>,
+        color: dye-color,
+        has-glowing-text: bool,
+    }
+
+    resource sign-block-entity {
+        get-block-entity: func() -> block-entity;
+        get-front-text: func() -> sign-text;
+        set-front-text: func(text: sign-text);
+        get-back-text: func() -> sign-text;
+        set-back-text: func(text: sign-text);
+        is-waxed: func() -> bool;
+        set-waxed: func(waxed: bool);
+    }
+
+    resource jukebox-block-entity {
+        get-block-entity: func() -> block-entity;
+        is-playing: func() -> bool;
+        stop-playing: func();
+        start-playing: func(length-in-ticks: u64);
+    }
+
+    resource chest-block-entity {
+        get-block-entity: func() -> block-entity;
+        viewer-count: func() -> u32;
+    }
+
+    resource mob-spawner-block-entity {
+        get-block-entity: func() -> block-entity;
+        get-spawn-count: func() -> s32;
+        get-spawn-range: func() -> s32;
+        get-delay: func() -> s32;
+    }
+
     variant block-entity-type {
         command-block-entity(command-block-entity),
+        sign-block-entity(sign-block-entity),
+        jukebox-block-entity(jukebox-block-entity),
+        chest-block-entity(chest-block-entity),
+        mob-spawner-block-entity(mob-spawner-block-entity),
     }
 }

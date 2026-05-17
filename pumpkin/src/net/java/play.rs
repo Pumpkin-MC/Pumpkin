@@ -1936,6 +1936,7 @@ impl JavaClient {
             .await;
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
         player: &Arc<Player>,
@@ -1984,6 +1985,26 @@ impl JavaClient {
         let entity = &player.living_entity.entity;
         let world = entity.world.load_full();
         let block = world.get_block(&position);
+
+        let event = PlayerInteractEvent::new(
+            player,
+            InteractAction::RightClickBlock,
+            block,
+            Some(position),
+        );
+
+        send_cancellable! {{
+            server;
+            event;
+            'cancelled: {
+                self.enqueue_packet(&CBlockUpdate::new(
+                    position,
+                    VarInt(block.id as i32),
+                ))
+                .await;
+                return Ok(());
+            }
+        }}
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
 

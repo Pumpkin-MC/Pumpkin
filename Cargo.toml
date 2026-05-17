@@ -169,7 +169,6 @@ tracing-subscriber = { version = "0.3.23", features = [
     "time",
 ] }
 slotmap = "1.1"
-take_mut = "0.2.2"
 temp-dir = "0.2.0"
 thread_local = "1.1.9"
 time = "0.3"

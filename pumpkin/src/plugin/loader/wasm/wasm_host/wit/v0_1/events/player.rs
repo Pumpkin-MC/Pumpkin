@@ -5,10 +5,11 @@ use crate::plugin::{
         wit::v0_1::{
             events::{
                 ToFromWasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_click_type, from_wasm_entity_interaction_action, from_wasm_entity_type,
-                from_wasm_game_mode, from_wasm_hand, from_wasm_position, to_wasm_block_position,
-                to_wasm_click_type, to_wasm_entity_interaction_action, to_wasm_entity_type,
-                to_wasm_game_mode, to_wasm_hand, to_wasm_position,
+                from_wasm_block_name, from_wasm_block_position, from_wasm_click_type,
+                from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
+                from_wasm_hand, from_wasm_position, to_wasm_block_position, to_wasm_click_type,
+                to_wasm_entity_interaction_action, to_wasm_entity_type, to_wasm_game_mode,
+                to_wasm_hand, to_wasm_position,
             },
             pumpkin::plugin::event::{
                 BedrockFormResponseEventData, CustomClickActionEventData, Event,
@@ -647,6 +648,15 @@ const fn to_wasm_interact_action(action: &InteractAction) -> WasmInteractAction 
     }
 }
 
+const fn from_wasm_interact_action(action: WasmInteractAction) -> InteractAction {
+    match action {
+        WasmInteractAction::LeftClickBlock => InteractAction::LeftClickBlock,
+        WasmInteractAction::LeftClickAir => InteractAction::LeftClickAir,
+        WasmInteractAction::RightClickAir => InteractAction::RightClickAir,
+        WasmInteractAction::RightClickBlock => InteractAction::RightClickBlock,
+    }
+}
+
 impl ToFromWasmEvent for PlayerInteractEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
@@ -662,11 +672,15 @@ impl ToFromWasmEvent for PlayerInteractEvent {
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
-            Event::PlayerInteractEvent(_data) => {
-                panic!("from_wasm_event for PlayerInteractEvent is not supported")
-            }
+            Event::PlayerInteractEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                action: from_wasm_interact_action(data.action),
+                clicked_pos: data.clicked_pos.map(from_wasm_block_position),
+                block: from_wasm_block_name(&data.block),
+                cancelled: data.cancelled,
+            },
             _ => panic!("unexpected event type"),
         }
     }

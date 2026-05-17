@@ -6,9 +6,14 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
+use crate::block::entities::chest::ChestBlockEntity as InternalChestBlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity as InternalCommandBlockEntity;
+use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
+use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
+use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
-    BlockDirection as WitBlockDirection, BlockFlags as WitBlockFlags, BlockPos as WitBlockPos,
-    BlockState as WitBlockState, PistonBehavior as WitPistonBehavior,
+    BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
+    BlockPos as WitBlockPos, BlockState as WitBlockState, PistonBehavior as WitPistonBehavior,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, TextComponentResource, WorldResource},
@@ -484,6 +489,69 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
 
         Ok(entities)
+    }
+
+    async fn get_block_entity(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<Option<BlockEntityType>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        let block_entity = world_provider.get_block_entity(&internal_pos);
+
+        if let Some(be) = block_entity {
+            if be
+                .as_any()
+                .downcast_ref::<InternalCommandBlockEntity>()
+                .is_some()
+            {
+                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                Ok(Some(BlockEntityType::CommandBlockEntity(
+                    Resource::new_own(res.rep()),
+                )))
+            } else if be
+                .as_any()
+                .downcast_ref::<InternalSignBlockEntity>()
+                .is_some()
+            {
+                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                Ok(Some(BlockEntityType::SignBlockEntity(Resource::new_own(
+                    res.rep(),
+                ))))
+            } else if be
+                .as_any()
+                .downcast_ref::<InternalJukeboxBlockEntity>()
+                .is_some()
+            {
+                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                Ok(Some(BlockEntityType::JukeboxBlockEntity(
+                    Resource::new_own(res.rep()),
+                )))
+            } else if be
+                .as_any()
+                .downcast_ref::<InternalChestBlockEntity>()
+                .is_some()
+            {
+                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                Ok(Some(BlockEntityType::ChestBlockEntity(Resource::new_own(
+                    res.rep(),
+                ))))
+            } else if be
+                .as_any()
+                .downcast_ref::<InternalMobSpawnerBlockEntity>()
+                .is_some()
+            {
+                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+                Ok(Some(BlockEntityType::MobSpawnerBlockEntity(
+                    Resource::new_own(res.rep()),
+                )))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {

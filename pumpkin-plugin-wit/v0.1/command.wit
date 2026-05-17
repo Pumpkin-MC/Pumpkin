@@ -2,7 +2,7 @@ interface command {
     use %world.{%world, entity};
     use player.{player};
     use block-entity.{command-block-entity};
-    use common.{position, block-position, locale, game-mode};
+    use common.{position, block-pos, locale, game-mode};
     use item-stack.{item-stack};
     use server.{server, difficulty};
     use text.{text-component};
@@ -145,7 +145,7 @@ interface command {
         block-predicate(string),
         time(s32),
         num(result<number, not-in-bounds>),
-        block-pos(tuple<s32, s32, s32>),
+        block-pos(block-pos),
         pos3d(tuple<f64, f64, f64>),
         pos2d(tuple<f64, f64>),
         rotation(tuple<f32, bool, f32, bool>),

@@ -5,7 +5,11 @@ interface common {
     type raw-text-component = list<u8>;
 
     /// A position in the world grid (integers).
-    type block-position = tuple<s32, s32, s32>;
+    record block-pos {
+        x: s32,
+        y: s32,
+        z: s32,
+    }
 
     /// A precise coordinate in the world (floats).
     type position = tuple<f64, f64, f64>;
