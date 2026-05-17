@@ -63,6 +63,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{
@@ -2265,8 +2266,9 @@ impl World {
             java_client
                 .send_packet_now(&CRecipeBookSettings::default_closed())
                 .await;
+            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes().await;
             java_client
-                .send_packet_now(&CRecipeBookAdd::new(true))
+                .send_packet_now(&CRecipeBookAdd::new(true, &dynamic_recipes))
                 .await;
         }
 
@@ -3426,6 +3428,37 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
+        let _ = self
+            .level
+            .light_engine
+            .set_block_light_level(&self.level, position, light_level);
+    }
+
+    pub fn set_sky_light_level(&self, position: &BlockPos, light_level: u8) {
+        let _ = self
+            .level
+            .light_engine
+            .set_sky_light_level(&self.level, position, light_level);
+    }
+
+    pub fn get_biome(&self, position: &BlockPos) -> &'static Biome {
+        let chunk_pos = position.chunk_position();
+        if let Some(chunk) = self.level.loaded_chunks.get(&chunk_pos) {
+            let id = chunk
+                .section
+                .get_rough_biome_absolute_y(
+                    (position.0.x & 15) as usize,
+                    position.0.y,
+                    (position.0.z & 15) as usize,
+                )
+                .unwrap_or(0);
+            Biome::from_id(id).unwrap_or(&Biome::PLAINS)
+        } else {
+            &Biome::PLAINS
+        }
     }
 
     pub fn schedule_block_tick(

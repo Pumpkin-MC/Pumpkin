@@ -1,5 +1,6 @@
 interface event {
-    use common.{block-position, game-mode, hand, item-stack, position, click-type};
+    use common.{block-position, game-mode, hand, position, click-type};
+    use item-stack.{item-stack};
     use player.{player};
     use text.{text-component};
     use %world.{%world};
@@ -293,6 +294,10 @@ interface event {
         cancelled: bool
     }
 
+    record server-tick-start-event-data {
+        tick: s32
+    }
+
     record packet-received-event-data {
         player: player,
         packet: serverbound-packet,
@@ -345,6 +350,7 @@ interface event {
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
+        server-tick-start-event,
         packet-received-event,
         packet-sent-event,
         server-tick-end-event,
@@ -385,6 +391,7 @@ interface event {
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),
+        server-tick-start-event(server-tick-start-event-data),
         packet-received-event(packet-received-event-data),
         packet-sent-event(packet-sent-event-data),
         server-tick-end-event(server-tick-end-event-data),

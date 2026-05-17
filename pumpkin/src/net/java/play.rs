@@ -926,80 +926,19 @@ impl JavaClient {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn handle_place_recipe(&self, player: &Arc<Player>, packet: SPlaceRecipe) {
-        use pumpkin_data::recipes::{
-            CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
-            RecipeIngredientTypes,
+    pub async fn handle_place_recipe(
+        &self,
+        server: &Arc<Server>,
+        player: &Arc<Player>,
+        packet: SPlaceRecipe,
+    ) {
+        use super::recipe_helper::{
+            GenericIngredient, compute_biggest_craftable, take_n_ingredient,
         };
+        use crate::server::recipe::DynamicRecipe;
+        use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING};
         use pumpkin_data::screen::WindowType;
-
-        // Take `amount` items matching `ingredient` from inventory, committing to one item type.
-        async fn take_n_ingredient(
-            inventory: &PlayerInventory,
-            ingredient: &RecipeIngredientTypes,
-            amount: u8,
-        ) -> ItemStack {
-            let mut remaining = amount;
-            let mut result: Option<ItemStack> = None;
-            for slot in &inventory.main_inventory {
-                if remaining == 0 {
-                    break;
-                }
-                let mut stack = slot.lock().await;
-                if stack.is_empty() || !ingredient.match_item(stack.item) {
-                    continue;
-                }
-                // Commit to the first item type encountered.
-                if result.as_ref().is_some_and(|r| r.item.id != stack.item.id) {
-                    continue;
-                }
-                let take = remaining.min(stack.item_count);
-                let taken = stack.split(take);
-                remaining -= taken.item_count;
-                match &mut result {
-                    None => result = Some(taken),
-                    Some(r) => r.increment(taken.item_count),
-                }
-            }
-            result.unwrap_or_else(|| ItemStack::EMPTY.clone())
-        }
-
-        // Compute the maximum number of times all ingredients can be supplied from inventory.
-        // Each ingredient slot commits to one item type (no mixing within a slot).
-        async fn compute_biggest_craftable(
-            ingredients: &[&RecipeIngredientTypes],
-            inventory: &PlayerInventory,
-        ) -> u8 {
-            // Aggregate inventory by item id -> (item, count).
-            let mut available: Vec<(&'static pumpkin_data::item::Item, u32)> = Vec::new();
-            for slot in &inventory.main_inventory {
-                let stack = slot.lock().await;
-                if !stack.is_empty() {
-                    if let Some(e) = available.iter_mut().find(|(i, _)| i.id == stack.item.id) {
-                        e.1 += u32::from(stack.item_count);
-                    } else {
-                        available.push((stack.item, u32::from(stack.item_count)));
-                    }
-                }
-            }
-
-            // From 64 down to 1, find the highest amount where every slot can be satisfied.
-            'outer: for amount in (1u32..=64).rev() {
-                let mut budget = available.clone();
-                for ing in ingredients {
-                    // Pick the first item type that satisfies this slot and has enough.
-                    let Some(idx) = budget
-                        .iter()
-                        .position(|(item, count)| *count >= amount && ing.match_item(item))
-                    else {
-                        continue 'outer;
-                    };
-                    budget[idx].1 -= amount;
-                }
-                return amount as u8;
-            }
-            0
-        }
+        use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
         let target_id = packet.recipe_display_id.0 as usize;
         let use_max = packet.use_max_items;
@@ -1015,6 +954,8 @@ impl JavaClient {
                 )
             })
             .count();
+        let cooking_display_count = RECIPES_COOKING.len();
+        let dynamic_recipes = server.recipe_manager.get_dynamic_recipes().await;
 
         let (grid_width, crafting_inv) = {
             let screen_handler_arc = player.current_screen_handler.lock().await.clone();
@@ -1026,6 +967,9 @@ impl JavaClient {
             };
             (grid_width, handler.get_behaviour().slots[1].get_inventory())
         };
+
+        let grid_size = grid_width * grid_width;
+        let mut ingredient_slots: Vec<Option<GenericIngredient<'_>>> = vec![None; grid_size];
 
         if target_id < crafting_display_count {
             // Crafting recipe
@@ -1044,10 +988,6 @@ impl JavaClient {
             });
             let Some(recipe) = recipe else { return };
 
-            let grid_size = grid_width * grid_width;
-
-            // Map each grid position to its required ingredient (None = empty/unused).
-            let mut ingredient_slots: Vec<Option<&RecipeIngredientTypes>> = vec![None; grid_size];
             match recipe {
                 CraftingRecipeTypes::CraftingShaped { pattern, key, .. } => {
                     for (row, row_str) in pattern.iter().enumerate() {
@@ -1055,159 +995,147 @@ impl JavaClient {
                             if ch != ' '
                                 && let Some(ing) =
                                     key.iter().find_map(|(k, v)| (*k == ch).then_some(v))
+                                && row * grid_width + col < grid_size
                             {
-                                ingredient_slots[row * grid_width + col] = Some(ing);
+                                ingredient_slots[row * grid_width + col] =
+                                    Some(GenericIngredient::Vanilla(ing));
                             }
                         }
                     }
                 }
                 CraftingRecipeTypes::CraftingShapeless { ingredients, .. } => {
                     for (i, ing) in ingredients.iter().enumerate().take(grid_size) {
-                        ingredient_slots[i] = Some(ing);
+                        ingredient_slots[i] = Some(GenericIngredient::Vanilla(ing));
                     }
                 }
                 CraftingRecipeTypes::CraftingTransmute {
                     input, material, ..
                 } => {
-                    ingredient_slots[0] = Some(input);
-                    ingredient_slots[1] = Some(material);
+                    if grid_size >= 2 {
+                        ingredient_slots[0] = Some(GenericIngredient::Vanilla(input));
+                        ingredient_slots[1] = Some(GenericIngredient::Vanilla(material));
+                    }
                 }
                 _ => return,
             }
+        } else if target_id < crafting_display_count + cooking_display_count {
+            // TODO: cooking recipes
+            return;
+        } else {
+            let dynamic_id = target_id - crafting_display_count - cooking_display_count;
+            let Some(DynamicRecipe::Crafting(crafting)) = dynamic_recipes.get(dynamic_id) else {
+                return;
+            };
 
-            // Check if this exact recipe is already placed (determines stacking vs fresh fill).
-            let recipe_matches = {
-                let mut ok = true;
-                for (idx, ing) in ingredient_slots.iter().enumerate() {
+            match crafting {
+                pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped {
+                    pattern,
+                    key,
+                    ..
+                } => {
+                    for (row, row_str) in pattern.iter().enumerate() {
+                        for (col, ch) in row_str.chars().enumerate() {
+                            if ch != ' '
+                                && let Some((_, ing)) = key.iter().find(|(k, _)| *k == ch)
+                                && row * grid_width + col < grid_size
+                            {
+                                ingredient_slots[row * grid_width + col] =
+                                    Some(GenericIngredient::Dynamic(ing));
+                            }
+                        }
+                    }
+                }
+
+                pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shapeless {
+                    ingredients,
+                    ..
+                } => {
+                    for (i, ing) in ingredients.iter().enumerate().take(grid_size) {
+                        ingredient_slots[i] = Some(GenericIngredient::Dynamic(ing));
+                    }
+                }
+            }
+        }
+
+        // Check if this exact recipe is already placed (determines stacking vs fresh fill).
+        let recipe_matches = {
+            let mut ok = true;
+            for (idx, ing) in ingredient_slots.iter().enumerate() {
+                let slot_arc = crafting_inv.get_stack(idx).await;
+                let stack = slot_arc.lock().await;
+                match ing {
+                    None => {
+                        if !stack.is_empty() {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    Some(ingredient) => {
+                        if stack.is_empty() || !ingredient.match_item(stack.item) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            ok
+        };
+
+        // Read minimum count from occupied slots before clearing (needed for stacking).
+        let current_min = if recipe_matches && !use_max {
+            let mut min = u8::MAX;
+            for (idx, ing) in ingredient_slots.iter().enumerate() {
+                if ing.is_some() {
                     let slot_arc = crafting_inv.get_stack(idx).await;
                     let stack = slot_arc.lock().await;
-                    match ing {
-                        None => {
-                            if !stack.is_empty() {
-                                ok = false;
-                                break;
-                            }
-                        }
-                        Some(ingredient) => {
-                            if stack.is_empty() || !ingredient.match_item(stack.item) {
-                                ok = false;
-                                break;
-                            }
-                        }
+                    if !stack.is_empty() {
+                        min = min.min(stack.item_count);
                     }
                 }
-                ok
-            };
-
-            // Read minimum count from occupied slots before clearing (needed for stacking).
-            let current_min = if recipe_matches && !use_max {
-                let mut min = u8::MAX;
-                for (idx, ing) in ingredient_slots.iter().enumerate() {
-                    if ing.is_some() {
-                        let slot_arc = crafting_inv.get_stack(idx).await;
-                        let stack = slot_arc.lock().await;
-                        if !stack.is_empty() {
-                            min = min.min(stack.item_count);
-                        }
-                    }
-                }
-                if min == u8::MAX { 0 } else { min }
-            } else {
-                0
-            };
-
-            // Always clear the grid first, returning items to inventory.
-            for i in 0..grid_size {
-                let stack = crafting_inv.remove_stack(i).await;
-                if !stack.is_empty() {
-                    player.inventory.offer(stack, false, player.as_ref()).await;
-                }
             }
-
-            // Determine how many of each ingredient to place per slot.
-            let active_ingredients: Vec<&RecipeIngredientTypes> =
-                ingredient_slots.iter().flatten().copied().collect();
-            let amount_to_craft = if use_max {
-                compute_biggest_craftable(&active_ingredients, &player.inventory).await
-            } else if recipe_matches {
-                current_min.saturating_add(1)
-            } else {
-                1
-            };
-
-            if amount_to_craft == 0 {
-                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
-                screen_handler_arc.lock().await.send_content_updates().await;
-                return;
-            }
-
-            // Fill each grid slot with exactly `amount_to_craft` matching items.
-            for (idx, ing) in ingredient_slots.iter().enumerate() {
-                let Some(ingredient) = ing else { continue };
-                let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
-                if !taken.is_empty() {
-                    crafting_inv.set_stack(idx, taken).await;
-                }
-            }
+            if min == u8::MAX { 0 } else { min }
         } else {
-            // Cooking recipe
-            let cooking_index = target_id - crafting_display_count;
-            let Some(recipe) = RECIPES_COOKING.get(cooking_index) else {
-                return;
-            };
+            0
+        };
 
-            let furnace_inv = {
-                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
-                let handler = screen_handler_arc.lock().await;
-                match handler.window_type() {
-                    Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {
-                        handler.get_behaviour().slots[0].get_inventory()
-                    }
-                    _ => return,
-                }
-            };
-
-            let ingredient = match recipe {
-                CookingRecipeType::Smelting(r)
-                | CookingRecipeType::Blasting(r)
-                | CookingRecipeType::Smoking(r)
-                | CookingRecipeType::CampfireCooking(r) => &r.ingredient,
-            };
-
-            // Check if ingredient already matches (for stacking).
-            let (recipe_matches, current_count) = {
-                let slot_arc = furnace_inv.get_stack(0).await;
-                let stack = slot_arc.lock().await;
-                let matches = !stack.is_empty() && ingredient.match_item(stack.item);
-                let count = if matches { stack.item_count } else { 0 };
-                (matches, count)
-            };
-
-            // Always clear slot 0 first, returning item to inventory.
-            let old = furnace_inv.remove_stack(0).await;
-            if !old.is_empty() {
-                player.inventory.offer(old, false, player.as_ref()).await;
+        // Always clear the grid first, returning items to inventory.
+        for i in 0..grid_size {
+            let stack = crafting_inv.remove_stack(i).await;
+            if !stack.is_empty() {
+                player.inventory.offer(stack, false, player.as_ref()).await;
             }
+        }
 
-            let amount_to_craft = if use_max {
-                compute_biggest_craftable(&[ingredient], &player.inventory).await
-            } else if recipe_matches {
-                current_count.saturating_add(1)
-            } else {
-                1
-            };
+        // Determine how many of each ingredient to place per slot.
+        let active_ingredients: Vec<GenericIngredient<'_>> =
+            ingredient_slots.iter().flatten().copied().collect();
+        let amount_to_craft = if use_max {
+            compute_biggest_craftable(&active_ingredients, &player.inventory).await
+        } else if recipe_matches {
+            current_min.saturating_add(1)
+        } else {
+            1
+        };
 
-            if amount_to_craft > 0 {
-                let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
-                if !taken.is_empty() {
-                    furnace_inv.set_stack(0, taken).await;
-                }
+        if amount_to_craft == 0 {
+            let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+            screen_handler_arc.lock().await.send_content_updates().await;
+            return;
+        }
+
+        // Fill each grid slot with exactly `amount_to_craft` matching items.
+        for (idx, ing) in ingredient_slots.iter().enumerate() {
+            let Some(ingredient) = ing else { continue };
+            let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
+            if !taken.is_empty() {
+                *crafting_inv.get_stack(idx).await.lock().await = taken;
             }
         }
 
         let screen_handler_arc = player.current_screen_handler.lock().await.clone();
         screen_handler_arc.lock().await.send_content_updates().await;
     }
+
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
         player.update_last_action_time();
         let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
@@ -2661,7 +2589,7 @@ impl JavaClient {
 
         let (final_block_pos, final_face, replacing) =
             if let Some(replacing) = replace_clicked_block {
-                (clicked_block_pos, face, replacing)
+                (clicked_block_pos, face.opposite(), replacing)
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
                 let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);

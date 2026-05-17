@@ -229,7 +229,7 @@ async fn register_server_event(
 ) {
     use crate::plugin::server::{
         server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
-        server_tick_end::ServerTickEndEvent,
+        server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
     };
 
     match event_type {
@@ -242,6 +242,10 @@ async fn register_server_event(
         }
         EventType::ServerTickEndEvent => {
             register_typed_event::<ServerTickEndEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::ServerTickStartEvent => {
+            register_typed_event::<ServerTickStartEvent>(resource, handler, priority, blocking)
+                .await;
         }
         _ => unreachable!("non-server event should not be routed to register_server_event"),
     }
@@ -308,7 +312,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         match event_type {
             event_type @ (EventType::ServerCommandEvent
             | EventType::ServerBroadcastEvent
-            | EventType::ServerTickEndEvent) => {
+            | EventType::ServerTickEndEvent
+            | EventType::ServerTickStartEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type @ EventType::SpawnChangeEvent => {

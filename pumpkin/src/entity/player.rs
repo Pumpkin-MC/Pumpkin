@@ -536,7 +536,13 @@ impl Player {
         let ender_chest_inventory = Arc::new(EnderChestInventory::new());
 
         let player_screen_handler = Arc::new(Mutex::new(
-            PlayerScreenHandler::new(&inventory, None, 0).await,
+            PlayerScreenHandler::new(
+                &inventory,
+                None,
+                0,
+                Some(world.server.upgrade().unwrap().recipe_manager.clone()),
+            )
+            .await,
         ));
 
         // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())

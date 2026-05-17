@@ -47,6 +47,26 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::version::{BedrockMinecraftVersion, JavaMinecraftVersion};
 
+use pumpkin_protocol::ser::ReadingError;
+use pumpkin_protocol::ser::deserializer::Deserializer;
+use serde::de::SeqAccess;
+
+pub(crate) struct WitSeqAccess<'a> {
+    pub(crate) deserializer: &'a mut Deserializer<&'a [u8]>,
+}
+
+impl<'de> SeqAccess<'de> for WitSeqAccess<'_> {
+    type Error = ReadingError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: serde::de::DeserializeSeed<'de>,
+    {
+        let val = seed.deserialize(&mut *self.deserializer)?;
+        Ok(Some(val))
+    }
+}
+
 const fn to_wasm_java_version(
     version: JavaMinecraftVersion,
 ) -> pumpkin::plugin::player::JavaMinecraftVersion {
@@ -478,19 +498,6 @@ fn world_from_resource(
         .clone()
 }
 
-pub(super) fn to_wit_item_stack(
-    stack: &pumpkin_data::item_stack::ItemStack,
-) -> Option<pumpkin::plugin::common::ItemStack> {
-    if stack.item_count == 0 {
-        return None;
-    }
-
-    Some(pumpkin::plugin::common::ItemStack {
-        registry_key: stack.item.registry_key.to_string(),
-        count: stack.item_count,
-    })
-}
-
 const fn to_wit_permission_level(
     level: PermissionLvl,
 ) -> pumpkin::plugin::permission::PermissionLevel {
@@ -571,7 +578,98 @@ impl pumpkin::plugin::player::Host for PluginHostState {
         Ok(players)
     }
 }
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::events::from_wasm_hand;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::java::client::play::CSetContainerSlot;
+use pumpkin_world::inventory::Inventory;
+
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
+
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
+    async fn set_item_in_hand(
+        &mut self,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let stack = if let Some(stack_res) = stack {
+            self.get_item_stack(&stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        let hand = from_wasm_hand(hand);
+        let slot = match hand {
+            pumpkin_util::Hand::Right => player.inventory().get_selected_slot() as usize,
+            pumpkin_util::Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+        };
+
+        player.inventory().set_stack(slot, stack.clone()).await;
+
+        // Sync to client
+        let stack_serializer = ItemStackSerializer::from(stack);
+        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
+        player.client.enqueue_packet(&packet).await;
+
+        Ok(())
+    }
+
+    async fn set_inventory_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let stack = if let Some(stack_res) = stack {
+            self.get_item_stack(&stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        player
+            .inventory()
+            .set_stack(slot as usize, stack.clone())
+            .await;
+
+        // Sync to client
+        let stack_serializer = ItemStackSerializer::from(stack);
+        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
+        player.client.enqueue_packet(&packet).await;
+
+        Ok(())
+    }
+
+    async fn get_inventory_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let stack = player.inventory().get_stack(slot as usize).await;
+        if stack.lock().await.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add_item_stack(stack)?))
+        }
+    }
+
+    async fn get_item_in_hand(
+        &mut self,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let hand = from_wasm_hand(hand);
+        let stack = player.inventory().get_stack_in_hand(hand).await;
+        if stack.lock().await.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add_item_stack(stack)?))
+        }
+    }
+
     async fn as_entity(
         &mut self,
         player: Resource<Player>,
@@ -999,35 +1097,6 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_selected_slot(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
         let player = player_from_resource(self, &player)?;
         Ok(player.inventory.get_selected_slot())
-    }
-
-    async fn get_item_in_hand(
-        &mut self,
-        player: Resource<Player>,
-        hand: pumpkin::plugin::common::Hand,
-    ) -> wasmtime::Result<Option<pumpkin::plugin::common::ItemStack>> {
-        let player = player_from_resource(self, &player)?;
-        let inventory = player.inventory();
-        let item_stack = match hand {
-            pumpkin::plugin::common::Hand::Left => inventory.off_hand_item().await,
-            pumpkin::plugin::common::Hand::Right => inventory.held_item(),
-        };
-        let item_stack = item_stack.lock().await.clone();
-        Ok(to_wit_item_stack(&item_stack))
-    }
-
-    async fn get_inventory_item(
-        &mut self,
-        player: Resource<Player>,
-        slot: u8,
-    ) -> wasmtime::Result<Option<pumpkin::plugin::common::ItemStack>> {
-        let player = player_from_resource(self, &player)?;
-        let slot = slot as usize;
-        if slot >= PlayerInventory::MAIN_SIZE {
-            return Ok(None);
-        }
-        let item_stack = player.inventory.main_inventory[slot].lock().await.clone();
-        Ok(to_wit_item_stack(&item_stack))
     }
 
     async fn get_health(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {

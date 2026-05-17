@@ -1,4 +1,10 @@
-use crate::{STOP_INTERRUPT, plugin::server::server_tick_end::ServerTickEndEvent, server::Server};
+use crate::{
+    STOP_INTERRUPT,
+    plugin::server::{
+        server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
+    },
+    server::Server,
+};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -17,6 +23,12 @@ impl Ticker {
             let manager = &server.tick_rate_manager;
 
             manager.tick();
+
+            let tick_number = server.tick_count.load(Ordering::Relaxed);
+            let _ = server
+                .plugin_manager
+                .fire(ServerTickStartEvent::new(tick_number))
+                .await;
 
             if manager.is_sprinting() {
                 manager.start_sprint_tick_work();

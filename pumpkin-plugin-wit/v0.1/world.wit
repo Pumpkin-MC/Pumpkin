@@ -5,6 +5,7 @@ interface %world {
     use particles.{particle};
     use sounds.{sound};
     use entity-types.{entity-type};
+    use biomes.{biome};
     use uuid.{uuid};
 
     /// Defines how a block reacts when pushed by a piston.
@@ -245,6 +246,24 @@ interface %world {
 
         /// Returns the minimum Y coordinate (bottom of the world).
         get-min-y: func() -> s32;
+
+        /// Returns the sky light level at the specified position.
+        get-sky-light: func(pos: block-pos) -> u8;
+
+        /// Sets the sky light level at the specified position.
+        set-sky-light: func(pos: block-pos, level: u8);
+
+        /// Returns the block light level at the specified position.
+        get-block-light: func(pos: block-pos) -> u8;
+
+        /// Sets the block light level at the specified position.
+        set-block-light: func(pos: block-pos, level: u8);
+
+        /// Returns the biome at the specified position.
+        get-biome: func(pos: block-pos) -> biome;
+
+        /// Spawns an entity of the specified type at the given position.
+        spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
 
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;

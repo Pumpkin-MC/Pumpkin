@@ -60,6 +60,7 @@ pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod play;
+pub mod recipe_helper;
 pub mod status;
 
 use crate::entity::player::Player;
@@ -945,8 +946,8 @@ impl JavaClient {
                     .await;
             }
             id if id == SPlaceRecipe::to_id(version) => {
-                self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)
-                    .await;
+                let packet = SPlaceRecipe::read(payload, &version)?;
+                self.handle_place_recipe(server, player, packet).await;
             }
             id if id
                 == pumpkin_protocol::java::server::play::SCustomClickAction::to_id(version) =>
