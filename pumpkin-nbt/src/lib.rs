@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    io::{self, Read, Seek, Write},
+    io::{self, Write},
     ops::Deref,
 };
 
@@ -8,7 +8,7 @@ use bytes::Bytes;
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use serde::{de, ser};
-use serializer::WriteAdaptor;
+use serializer::{NbtWriteHelper, NbtWriteHelperBedrock, NbtWriteHelperJava};
 use tag::NbtTag;
 use thiserror::Error;
 
@@ -91,35 +91,22 @@ impl Nbt {
         }
     }
 
-    pub fn read<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
-        let tag_type_id = reader.get_u8_be()?;
+    pub fn read<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+        let tag_type_id = reader.get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
         }
 
         Ok(Self {
-            name: get_nbt_string(reader)?,
+            name: reader.get_string()?,
             root_tag: NbtCompound::deserialize_content(reader)?,
         })
     }
 
-    pub fn read_bedrock<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
-        let tag_type_id = reader.get_u8_le()?;
-
-        if tag_type_id != COMPOUND_ID {
-            return Err(Error::NoRootCompound(tag_type_id));
-        }
-
-        Ok(Self {
-            name: get_nbt_string_bedrock(reader)?,
-            root_tag: NbtCompound::deserialize_content_bedrock(reader)?,
-        })
-    }
-
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
-        let tag_type_id = reader.get_u8_be()?;
+    pub fn read_unnamed<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+        let tag_type_id = reader.get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
@@ -134,8 +121,8 @@ impl Nbt {
     #[must_use]
     pub fn write(self) -> Bytes {
         let mut bytes = Vec::new();
-        let mut writer = WriteAdaptor::new(&mut bytes);
-        writer.write_u8_be(COMPOUND_ID).unwrap();
+        let mut writer = NbtWriteHelperJava::new(&mut bytes);
+        writer.write_u8(COMPOUND_ID).unwrap();
         NbtTag::String(self.name)
             .serialize_data(&mut writer)
             .unwrap();
@@ -147,14 +134,12 @@ impl Nbt {
     #[must_use]
     pub fn write_bedrock(self) -> Bytes {
         let mut bytes = Vec::new();
-        let mut writer = WriteAdaptor::new(&mut bytes);
-        writer.write_u8_le(COMPOUND_ID).unwrap();
+        let mut writer = NbtWriteHelperBedrock::new(&mut bytes);
+        writer.write_u8(COMPOUND_ID).unwrap();
         NbtTag::String(self.name)
-            .serialize_data_bedrock(&mut writer)
+            .serialize_data(&mut writer)
             .unwrap();
-        self.root_tag
-            .serialize_content_bedrock(&mut writer)
-            .unwrap();
+        self.root_tag.serialize_content(&mut writer).unwrap();
 
         bytes.into()
     }
@@ -173,9 +158,9 @@ impl Nbt {
     #[must_use]
     pub fn write_unnamed(self) -> Bytes {
         let mut bytes = Vec::new();
-        let mut writer = WriteAdaptor::new(&mut bytes);
+        let mut writer = NbtWriteHelperJava::new(&mut bytes);
 
-        writer.write_u8_be(COMPOUND_ID).unwrap();
+        writer.write_u8(COMPOUND_ID).unwrap();
         self.root_tag.serialize_content(&mut writer).unwrap();
 
         bytes.into()
@@ -217,22 +202,6 @@ impl AsMut<NbtCompound> for Nbt {
     }
 }
 
-pub fn get_nbt_string<R: Read + Seek>(bytes: &mut NbtReadHelper<R>) -> Result<String, Error> {
-    let len = bytes.get_u16_be()? as usize;
-    let string_bytes = bytes.read_boxed_slice(len)?;
-    let string = cesu8::from_java_cesu8(&string_bytes).map_err(|_| Error::Cesu8DecodingError)?;
-    Ok(string.into_owned())
-}
-
-pub fn get_nbt_string_bedrock<R: Read + Seek>(
-    bytes: &mut NbtReadHelper<R>,
-) -> Result<String, Error> {
-    let len = bytes.get_var_u32()? as usize;
-    let string_bytes = bytes.read_vec(len)?;
-    let string = String::from_utf8(string_bytes).map_err(|_| Error::Utf8DecodingError)?;
-    Ok(string)
-}
-
 // TODO: This is a bit hacky
 pub(crate) const NBT_ARRAY_TAG: &str = "__nbt_array";
 pub(crate) const NBT_INT_ARRAY_TAG: &str = "__nbt_int_array";
@@ -266,7 +235,7 @@ mod test {
     use crate::nbt_int_array;
     use crate::nbt_long_array;
     use crate::serializer::to_bytes_named;
-    use crate::serializer::{WriteAdaptor, to_bytes};
+    use crate::serializer::{NbtWriteHelperJava, to_bytes};
     use crate::tag::NbtTag;
     use crate::{deserializer::from_bytes_unnamed, serializer::to_bytes_unnamed};
     use serde::{Deserialize, Serialize};
@@ -531,7 +500,7 @@ mod test {
         ];
 
         let mut bytes = Vec::new();
-        let mut write_adaptor = WriteAdaptor::new(&mut bytes);
+        let mut write_adaptor = NbtWriteHelperJava::new(&mut bytes);
         NbtTag::List(vec)
             .serialize(&mut write_adaptor)
             .expect("Expected serialization to succeed");

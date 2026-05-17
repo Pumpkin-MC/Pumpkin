@@ -7,7 +7,7 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use pumpkin_nbt::serializer::Serializer;
+use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
@@ -679,8 +679,9 @@ impl TextComponent {
     #[must_use]
     pub fn encode(&self) -> Box<[u8]> {
         let mut buf = Vec::new();
+        let writer = NbtWriteHelperJava::new(&mut buf);
         // TODO: Properly handle errors
-        let mut serializer = Serializer::new(&mut buf, None, false);
+        let mut serializer = Serializer::new(writer, None);
         self.0
             .clone()
             .to_translated()
