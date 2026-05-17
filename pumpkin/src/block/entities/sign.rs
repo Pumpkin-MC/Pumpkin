@@ -160,7 +160,7 @@ impl From<Text> for NbtTag {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|s| Self::String(s.clone()))
+                .map(|s| Self::String(s.clone().into()))
                 .collect(),
         );
         Self::Compound(nbt)

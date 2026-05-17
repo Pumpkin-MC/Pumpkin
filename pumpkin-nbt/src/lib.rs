@@ -119,7 +119,7 @@ impl Nbt {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);
         writer.write_u8_be(COMPOUND_ID).unwrap();
-        NbtTag::String(self.name)
+        NbtTag::String(self.name.into())
             .serialize_data(&mut writer)
             .unwrap();
         self.root_tag.serialize_content(&mut writer).unwrap();
@@ -418,7 +418,7 @@ mod test {
         // These tags will be wrapped during serialization.
         vec.push(NbtTag::Int(-1823));
         vec.push(NbtTag::Int(123));
-        vec.push(NbtTag::String("Not an int".to_string()));
+        vec.push(NbtTag::String("Not an int".into()));
         vec.push(NbtTag::Byte(2));
 
         // This compound will not, since the list is already a list of compound tags.

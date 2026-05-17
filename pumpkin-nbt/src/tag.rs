@@ -21,7 +21,7 @@ pub enum NbtTag {
     Float(f32) = FLOAT_ID,
     Double(f64) = DOUBLE_ID,
     ByteArray(Vec<i8>) = BYTE_ARRAY_ID,
-    String(String) = STRING_ID,
+    String(Box<str>) = STRING_ID,
     List(Vec<Self>) = LIST_ID,
     Compound(NbtCompound) = COMPOUND_ID,
     IntArray(Vec<i32>) = INT_ARRAY_ID,
@@ -296,7 +296,7 @@ impl NbtTag {
                 }
                 Ok(Self::ByteArray(byte_array))
             }
-            STRING_ID => Ok(Self::String(get_nbt_string(reader)?)),
+            STRING_ID => Ok(Self::String(get_nbt_string(reader)?.into())),
             LIST_ID => {
                 let tag_type_id = reader.get_u8_be()?;
                 let len = reader.get_i32_be()?;
@@ -464,7 +464,7 @@ impl NbtTag {
 
 impl From<&str> for NbtTag {
     fn from(value: &str) -> Self {
-        Self::String(value.to_string())
+        Self::String(value.into())
     }
 }
 
@@ -559,7 +559,7 @@ impl<'de> Deserialize<'de> for NbtTag {
             }
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(NbtTag::String(v.to_string()))
+                Ok(NbtTag::String(v.into()))
             }
 
             fn visit_seq<A: serde::de::SeqAccess<'de>>(

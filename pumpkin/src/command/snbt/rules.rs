@@ -661,7 +661,7 @@ impl SnbtParser<'_, '_> {
         } else if literal.eq_ignore_ascii_case("false") {
             Some(NbtTag::Byte(0))
         } else {
-            Some(NbtTag::String(literal))
+            Some(NbtTag::String(literal.into()))
         }
     }
 
@@ -716,7 +716,7 @@ impl SnbtParser<'_, '_> {
         })?;
 
         Some(NbtTag::Compound(NbtCompound {
-            child_tags: entries,
+            child_tags: entries.into_iter().map(|(k, v)| (k.into(), v)).collect(),
         }))
     }
 
@@ -844,7 +844,7 @@ impl SnbtParser<'_, '_> {
                     ),
                 }
             }
-            Literal::String(string) => NbtTag::String(string),
+            Literal::String(string) => NbtTag::String(string.into()),
         })
     }
 

@@ -103,7 +103,11 @@ pub fn place_template(
 
             if let Some(template_nbt) = &block.nbt {
                 for (key, value) in &template_nbt.child_tags {
-                    if key != "x" && key != "y" && key != "z" && key != "id" {
+                    if key.as_ref() != "x"
+                        && key.as_ref() != "y"
+                        && key.as_ref() != "z"
+                        && key.as_ref() != "id"
+                    {
                         block_entity_nbt
                             .child_tags
                             .insert(key.clone(), value.clone());

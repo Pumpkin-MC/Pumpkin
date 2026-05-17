@@ -125,8 +125,8 @@ mod tests {
         compound.put_long("long_value", 123456789);
         compound.put_float("float_value", 123.456);
         compound.put_double("double_value", 123456.789);
-        compound.put_bool("bool_value", true);
-        compound.put("string_value", NbtTag::String("test string".to_string()));
+        compound.put("bool_value", true);
+        compound.put("string_value", NbtTag::String("test string".into()));
 
         // Create a nested compound
         let mut nested = NbtCompound::new();
@@ -268,7 +268,7 @@ mod tests {
 
         // Create a compound with repetitive data (should compress well)
         for _i in 0..1000 {
-            compound.put("repeated_key", NbtTag::String("this is a test string that will be repeated many times to demonstrate compression".to_string()));
+            compound.put("repeated_key", NbtTag::String("this is a test string that will be repeated many times to demonstrate compression".into()));
         }
 
         let uncompressed = compound.child_tags.len() * 100; // rough estimate

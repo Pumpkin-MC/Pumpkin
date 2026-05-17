@@ -174,7 +174,7 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
                     NbtTag::Long(value) => visitor.visit_i64::<Error>(value)?,
                     NbtTag::Float(value) => visitor.visit_f32::<Error>(value)?,
                     NbtTag::Double(value) => visitor.visit_f64::<Error>(value)?,
-                    NbtTag::String(value) => visitor.visit_string::<Error>(value)?,
+                    NbtTag::String(value) => visitor.visit_string::<Error>(value.into())?,
                     _ => unreachable!(),
                 };
                 Ok(result)

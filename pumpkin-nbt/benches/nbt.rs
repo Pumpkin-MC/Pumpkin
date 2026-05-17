@@ -59,9 +59,9 @@ fn create_large_compound(depth: usize) -> NbtCompound {
     );
 
     let list = vec![
-        NbtTag::String("one".to_string()),
-        NbtTag::String("two".to_string()),
-        NbtTag::String("three".to_string()),
+        NbtTag::String("one".into()),
+        NbtTag::String("two".into()),
+        NbtTag::String("three".into()),
     ];
     compound.put_list("list_string", list);
 

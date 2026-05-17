@@ -55,7 +55,7 @@ impl DynamicOps for NbtOps {
     }
 
     fn create_string(&self, data: &str) -> Self::Value {
-        NbtTag::String(data.to_string())
+        NbtTag::String(data.into())
     }
 
     fn create_list<I>(&self, values: I) -> Self::Value
@@ -284,7 +284,7 @@ impl DynamicOps for NbtOps {
                 compound
                     .child_tags
                     .into_iter()
-                    .filter(|s| s.0 != key)
+                    .filter(|s| s.0.as_ref() != key)
                     .collect(),
             )
         } else {
@@ -705,14 +705,14 @@ mod test {
         let mut collector = ListCollector::new_collector();
 
         collector = collector.accept(NbtTag::Byte(99));
-        collector = collector.accept(NbtTag::String("99".to_string()));
+        collector = collector.accept(NbtTag::String("99".into()));
         collector = collector.accept(NbtTag::LongArray(vec![1, 2, 3]));
 
         assert_eq!(
             collector.result(),
             NbtTag::List(vec![
                 NbtTag::Byte(99),
-                NbtTag::String("99".to_string()),
+                NbtTag::String("99".into()),
                 NbtTag::LongArray(vec![1, 2, 3])
             ])
         );
