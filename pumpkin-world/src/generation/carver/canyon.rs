@@ -297,10 +297,6 @@ impl CanyonCarver {
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
-            return false;
-        }
-
         if !config.replaceable.1.contains(&block.id) {
             return false;
         }

@@ -366,10 +366,6 @@ impl CaveCarver {
             *has_grass = true;
         }
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
-            return false;
-        }
-
         if !config.replaceable.1.contains(&block.id) {
             return false;
         }
