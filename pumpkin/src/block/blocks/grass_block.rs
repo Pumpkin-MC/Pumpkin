@@ -1,6 +1,7 @@
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, GrassBlockLikeProperties},
+    tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
@@ -19,9 +20,7 @@ impl BlockBehaviour for GrassBlock {
             let block_above = args.world.get_block(&args.position.up());
             let mut props =
                 GrassBlockLikeProperties::from_state_id(args.state_id, &Block::GRASS_BLOCK);
-            let should_be_snowy = block_above == &Block::SNOW
-                || block_above == &Block::POWDER_SNOW
-                || block_above == &Block::SNOW_BLOCK;
+            let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
             if props.snowy == should_be_snowy {
                 args.state_id;
             } else {
