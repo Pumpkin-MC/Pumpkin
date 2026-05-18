@@ -23,9 +23,8 @@ impl BlockBehaviour for GrassBlock {
             let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
             if props.snowy == should_be_snowy {
                 return args.state_id;
-            } else {
-                props.snowy = should_be_snowy;
             }
+            props.snowy = should_be_snowy;
 
             props.to_state_id(&Block::GRASS_BLOCK)
         })
