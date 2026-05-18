@@ -1511,9 +1511,8 @@ impl Player {
             && !entity.has_vehicle().await
     }
 
-    const fn is_auto_spin_attack() -> bool {
-        // TODO: Track active auto-spin/riptide state and return true while it is active.
-        false
+    fn is_auto_spin_attack(&self) -> bool {
+        self.living_entity.is_riptide_spinning()
     }
 
     fn can_fit_pose(&self, pose: EntityPose) -> bool {
@@ -1540,7 +1539,7 @@ impl Player {
             EntityPose::Swimming
         } else if entity.fall_flying.load(Ordering::Relaxed) {
             EntityPose::FallFlying
-        } else if Self::is_auto_spin_attack() {
+        } else if self.is_auto_spin_attack() {
             EntityPose::SpinAttack
         } else if entity.sneaking.load(Ordering::Relaxed) && !flying {
             EntityPose::Crouching

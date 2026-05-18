@@ -13,7 +13,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
-    AtomicBool, AtomicU8,
+    AtomicBool, AtomicU8, AtomicU32,
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
@@ -110,6 +110,12 @@ pub struct LivingEntity {
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 
+    /// Ticks remaining of an active Riptide spin attack (0 when not spinning).
+    pub riptide_ticks: AtomicI32,
+    /// Damage dealt by the active spin attack each time it hits an entity.
+    /// Stored as raw `f32::to_bits()` so it can live in an atomic.
+    pub riptide_attack_damage: AtomicU32,
+
     /// The attributes of the entity
     pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
 }
@@ -117,7 +123,6 @@ pub struct LivingEntity {
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
-    #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
     const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
@@ -176,6 +181,8 @@ impl LivingEntity {
             last_attacked_time: AtomicI32::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
+            riptide_ticks: AtomicI32::new(0),
+            riptide_attack_damage: AtomicU32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
         }
@@ -233,6 +240,19 @@ impl LivingEntity {
             MetaDataType::BYTE,
             b,
         )]);
+    }
+
+    /// Begin a Riptide spin attack for `ticks`, dealing `damage` to any
+    /// non-self entity inside an expanded bounding box each tick.
+    pub fn start_riptide(&self, ticks: i32, damage: f32) {
+        self.riptide_ticks.store(ticks, Ordering::Relaxed);
+        self.riptide_attack_damage
+            .store(damage.to_bits(), Ordering::Relaxed);
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, true);
+    }
+
+    pub fn is_riptide_spinning(&self) -> bool {
+        self.riptide_ticks.load(Ordering::Relaxed) > 0
     }
 
     pub async fn clear_active_hand(&self) {
@@ -1352,6 +1372,37 @@ impl LivingEntity {
         }
     }
 
+    /// Apply one tick of an active Riptide spin attack: damage every non-self
+    /// living entity inside the player's expanded bounding box, then count
+    /// down. When it reaches zero, clear the spin pose flag.
+    async fn tick_riptide_spin(&self, caller: &Arc<dyn EntityBase>) {
+        let damage = f32::from_bits(self.riptide_attack_damage.load(Ordering::Relaxed));
+        let world = self.entity.world.load();
+        let bbox = self.entity.bounding_box.load().expand(1.0, 0.5, 1.0);
+        let candidates = world.get_entities_at_box(&bbox);
+        let self_id = self.entity.entity_id;
+        for cand in candidates {
+            if cand.get_entity().entity_id == self_id {
+                continue;
+            }
+            if cand.get_living_entity().is_none() {
+                continue;
+            }
+            cand.damage(&*cand, damage, pumpkin_data::damage::DamageType::TRIDENT)
+                .await;
+        }
+
+        let remaining = self.riptide_ticks.fetch_sub(1, Ordering::Relaxed) - 1;
+        if remaining <= 0 {
+            self.riptide_ticks.store(0, Ordering::Relaxed);
+            self.set_living_flag(Self::USING_RIPTIDE_FLAG, false);
+            // Refresh the player's pose so they exit SpinAttack.
+            if let Some(player) = caller.get_player() {
+                player.update_player_pose().await;
+            }
+        }
+    }
+
     async fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
         let mut effects_to_apply = Vec::new();
@@ -2185,6 +2236,11 @@ impl EntityBase for LivingEntity {
             }
 
             self.tick_effects().await;
+
+            // Riptide spin attack
+            if self.riptide_ticks.load(Ordering::Relaxed) > 0 {
+                self.tick_riptide_spin(caller).await;
+            }
 
             // Current active item
             {
