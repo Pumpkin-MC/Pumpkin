@@ -21,6 +21,7 @@ pub mod shulker_bullet;
 pub mod small_fireball;
 pub mod snowball;
 pub mod splash_potion;
+pub mod trident;
 pub mod wind_charge;
 
 #[must_use]
@@ -37,6 +38,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::FIREBALL
         || *entity_type == EntityType::SMALL_FIREBALL
         || *entity_type == EntityType::FISHING_BOBBER
+        || *entity_type == EntityType::TRIDENT
 }
 
 pub struct ThrownItemEntity {
