@@ -554,19 +554,39 @@ impl PluginManager {
             .clone()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
+        let server = Arc::clone(
+            &self
+                .server
+                .read()
+                .await
+                .clone()
+                .ok_or(ManagerError::ServerNotInitialized)?,
+        );
+        let command_server = Arc::clone(&server);
+        let command_registrar = Arc::new(move |tree, permission| {
+            let mut dispatcher = command_server
+                .command_dispatcher
+                .try_write()
+                .expect("command dispatcher lock held during plugin initialization");
+            dispatcher.fallback_dispatcher.register(tree, permission);
+        });
+
+        let handler_map = Arc::clone(&self.handlers);
+        let handler_registrar = Arc::new(move |name, handler| {
+            let mut handlers = handler_map
+                .try_write()
+                .expect("handler map lock held during plugin initialization");
+            handlers.entry(name).or_default().push(handler);
+        });
+
         let context = Arc::new(Context::new(
             metadata.clone(),
-            Arc::clone(
-                &self
-                    .server
-                    .read()
-                    .await
-                    .clone()
-                    .ok_or(ManagerError::ServerNotInitialized)?,
-            ),
+            server,
             Arc::clone(&self.handlers),
             Arc::clone(&self_ref),
             Arc::clone(&LOGGER_IMPL),
+            command_registrar,
+            handler_registrar,
         ));
 
         // Create the plugin structure first
