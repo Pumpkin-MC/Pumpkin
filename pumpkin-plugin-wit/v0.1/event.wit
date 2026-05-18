@@ -310,6 +310,11 @@ interface event {
         cancelled: bool
     }
 
+    record server-tick-end-event-data {
+        tick: s32,
+        duration-nanos: s64
+    }
+
     enum event-type {
         player-join-event,
         player-leave-event,
@@ -348,6 +353,7 @@ interface event {
         server-tick-start-event,
         packet-received-event,
         packet-sent-event,
+        server-tick-end-event,
     }
 
     variant event {
@@ -388,5 +394,6 @@ interface event {
         server-tick-start-event(server-tick-start-event-data),
         packet-received-event(packet-received-event-data),
         packet-sent-event(packet-sent-event-data),
+        server-tick-end-event(server-tick-end-event-data),
     }
 }
