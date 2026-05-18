@@ -1,6 +1,6 @@
 mod acknowledge_block;
-mod award_stats;
 mod actionbar;
+mod award_stats;
 mod block_destroy_stage;
 mod block_entity_data;
 mod block_event;
@@ -104,8 +104,8 @@ mod update_score;
 mod worldevent;
 
 pub use acknowledge_block::*;
-pub use award_stats::*;
 pub use actionbar::*;
+pub use award_stats::*;
 pub use block_destroy_stage::*;
 pub use block_entity_data::*;
 pub use block_event::*;

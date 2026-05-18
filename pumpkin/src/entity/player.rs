@@ -91,8 +91,8 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
-use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::entity::statistics;
+use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -1161,8 +1161,7 @@ impl Player {
         if damage > 0 {
             let broken = self.damage_held_item(damage).await;
             if broken {
-                let key =
-                    statistics::item_key("broken", &format!("minecraft:{item_name}"));
+                let key = statistics::item_key("broken", &format!("minecraft:{item_name}"));
                 self.statistics_manager.increment(&key, 1).await;
             }
         }
@@ -1866,10 +1865,7 @@ impl Player {
 
         // Statistics: play_time increments every tick (vanilla counts in ticks)
         self.statistics_manager
-            .increment(
-                &statistics::custom_key(statistics::custom::PLAY_TIME),
-                1,
-            )
+            .increment(&statistics::custom_key(statistics::custom::PLAY_TIME), 1)
             .await;
         self.statistics_manager
             .increment(
@@ -1982,7 +1978,10 @@ impl Player {
                 // Elytra gliding
                 if horiz_cm > 0 {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::AVIATE_ONE_CM), horiz_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::AVIATE_ONE_CM),
+                            horiz_cm,
+                        )
                         .await;
                 }
             } else if touching_water {
@@ -1990,35 +1989,53 @@ impl Player {
                 let swim_cm = horiz_cm + vert_cm;
                 if swim_cm > 0 {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::SWIM_ONE_CM), swim_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::SWIM_ONE_CM),
+                            swim_cm,
+                        )
                         .await;
                 }
             } else if climbing {
                 // Ladder / vine climbing (vertical)
                 if vert_cm > 0 {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::CLIMB_ONE_CM), vert_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::CLIMB_ONE_CM),
+                            vert_cm,
+                        )
                         .await;
                 }
             } else if flying {
                 if horiz_cm > 0 {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::FLY_ONE_CM), horiz_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::FLY_ONE_CM),
+                            horiz_cm,
+                        )
                         .await;
                 }
             } else if on_ground && horiz_cm > 0 {
                 if sprinting {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::SPRINT_ONE_CM), horiz_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::SPRINT_ONE_CM),
+                            horiz_cm,
+                        )
                         .await;
                     self.add_exhaustion(0.1 * horiz_cm as f32 * 0.01).await;
                 } else if sneaking {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::CROUCH_ONE_CM), horiz_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::CROUCH_ONE_CM),
+                            horiz_cm,
+                        )
                         .await;
                 } else {
                     self.statistics_manager
-                        .increment(&statistics::custom_key(statistics::custom::WALK_ONE_CM), horiz_cm)
+                        .increment(
+                            &statistics::custom_key(statistics::custom::WALK_ONE_CM),
+                            horiz_cm,
+                        )
                         .await;
                 }
             }
@@ -2029,7 +2046,10 @@ impl Player {
             let fall_cm = (-delta_pos.y * 100.0).round() as i32;
             if fall_cm > 0 {
                 self.statistics_manager
-                    .increment(&statistics::custom_key(statistics::custom::FALL_ONE_CM), fall_cm)
+                    .increment(
+                        &statistics::custom_key(statistics::custom::FALL_ONE_CM),
+                        fall_cm,
+                    )
                     .await;
             }
         }

@@ -95,8 +95,7 @@ pub mod custom {
     pub const INTERACT_WITH_SMOKER: &str = "minecraft:interact_with_smoker";
     pub const INTERACT_WITH_LECTERN: &str = "minecraft:interact_with_lectern";
     pub const INTERACT_WITH_CAMPFIRE: &str = "minecraft:interact_with_campfire";
-    pub const INTERACT_WITH_CARTOGRAPHY_TABLE: &str =
-        "minecraft:interact_with_cartography_table";
+    pub const INTERACT_WITH_CARTOGRAPHY_TABLE: &str = "minecraft:interact_with_cartography_table";
     pub const INTERACT_WITH_LOOM: &str = "minecraft:interact_with_loom";
     pub const INTERACT_WITH_STONECUTTER: &str = "minecraft:interact_with_stonecutter";
     pub const BELL_RING: &str = "minecraft:bell_ring";
@@ -207,83 +206,83 @@ fn parse_stat_entry(key: &str, value: i32) -> Option<Statistic> {
 /// Order matches Minestom's `StatisticTypes.java` (latest vanilla 1.21.x).
 fn custom_stat_id(name: &str) -> Option<i32> {
     const CUSTOM_STATS: &[&str] = &[
-        "minecraft:leave_game",              // 0
-        "minecraft:play_time",               // 1
-        "minecraft:total_world_time",        // 2
-        "minecraft:time_since_death",        // 3
-        "minecraft:time_since_rest",         // 4
-        "minecraft:sneak_time",              // 5
-        "minecraft:walk_one_cm",             // 6
-        "minecraft:crouch_one_cm",           // 7
-        "minecraft:sprint_one_cm",           // 8
-        "minecraft:walk_on_water_one_cm",    // 9
-        "minecraft:fall_one_cm",             // 10
-        "minecraft:climb_one_cm",            // 11
-        "minecraft:fly_one_cm",              // 12
-        "minecraft:walk_under_water_one_cm", // 13
-        "minecraft:minecart_one_cm",         // 14
-        "minecraft:boat_one_cm",             // 15
-        "minecraft:pig_one_cm",              // 16
-        "minecraft:happy_ghast_one_cm",      // 17
-        "minecraft:horse_one_cm",            // 18
-        "minecraft:aviate_one_cm",           // 19
-        "minecraft:swim_one_cm",             // 20
-        "minecraft:strider_one_cm",          // 21
-        "minecraft:nautilus_one_cm",         // 22
-        "minecraft:jump",                    // 23
-        "minecraft:drop",                    // 24
-        "minecraft:damage_dealt",            // 25
-        "minecraft:damage_dealt_absorbed",   // 26
-        "minecraft:damage_dealt_resisted",   // 27
-        "minecraft:damage_taken",            // 28
-        "minecraft:damage_blocked_by_shield",// 29
-        "minecraft:damage_absorbed",         // 30
-        "minecraft:damage_resisted",         // 31
-        "minecraft:deaths",                  // 32
-        "minecraft:mob_kills",               // 33
-        "minecraft:animals_bred",            // 34
-        "minecraft:player_kills",            // 35
-        "minecraft:fish_caught",             // 36
-        "minecraft:talked_to_villager",      // 37
-        "minecraft:traded_with_villager",    // 38
-        "minecraft:eat_cake_slice",          // 39
-        "minecraft:fill_cauldron",           // 40
-        "minecraft:use_cauldron",            // 41
-        "minecraft:clean_armor",             // 42
-        "minecraft:clean_banner",            // 43
-        "minecraft:clean_shulker_box",       // 44
-        "minecraft:interact_with_brewingstand", // 45
-        "minecraft:interact_with_beacon",    // 46
-        "minecraft:inspect_dropper",         // 47
-        "minecraft:inspect_hopper",          // 48
-        "minecraft:inspect_dispenser",       // 49
-        "minecraft:play_noteblock",          // 50
-        "minecraft:tune_noteblock",          // 51
-        "minecraft:pot_flower",              // 52
-        "minecraft:trigger_trapped_chest",   // 53
-        "minecraft:open_enderchest",         // 54
-        "minecraft:enchant_item",            // 55
-        "minecraft:play_record",             // 56
-        "minecraft:interact_with_furnace",   // 57
-        "minecraft:interact_with_crafting_table", // 58
-        "minecraft:open_chest",              // 59
-        "minecraft:sleep_in_bed",            // 60
-        "minecraft:open_shulker_box",        // 61
-        "minecraft:open_barrel",             // 62
-        "minecraft:interact_with_blast_furnace", // 63
-        "minecraft:interact_with_smoker",    // 64
-        "minecraft:interact_with_lectern",   // 65
-        "minecraft:interact_with_campfire",  // 66
+        "minecraft:leave_game",                      // 0
+        "minecraft:play_time",                       // 1
+        "minecraft:total_world_time",                // 2
+        "minecraft:time_since_death",                // 3
+        "minecraft:time_since_rest",                 // 4
+        "minecraft:sneak_time",                      // 5
+        "minecraft:walk_one_cm",                     // 6
+        "minecraft:crouch_one_cm",                   // 7
+        "minecraft:sprint_one_cm",                   // 8
+        "minecraft:walk_on_water_one_cm",            // 9
+        "minecraft:fall_one_cm",                     // 10
+        "minecraft:climb_one_cm",                    // 11
+        "minecraft:fly_one_cm",                      // 12
+        "minecraft:walk_under_water_one_cm",         // 13
+        "minecraft:minecart_one_cm",                 // 14
+        "minecraft:boat_one_cm",                     // 15
+        "minecraft:pig_one_cm",                      // 16
+        "minecraft:happy_ghast_one_cm",              // 17
+        "minecraft:horse_one_cm",                    // 18
+        "minecraft:aviate_one_cm",                   // 19
+        "minecraft:swim_one_cm",                     // 20
+        "minecraft:strider_one_cm",                  // 21
+        "minecraft:nautilus_one_cm",                 // 22
+        "minecraft:jump",                            // 23
+        "minecraft:drop",                            // 24
+        "minecraft:damage_dealt",                    // 25
+        "minecraft:damage_dealt_absorbed",           // 26
+        "minecraft:damage_dealt_resisted",           // 27
+        "minecraft:damage_taken",                    // 28
+        "minecraft:damage_blocked_by_shield",        // 29
+        "minecraft:damage_absorbed",                 // 30
+        "minecraft:damage_resisted",                 // 31
+        "minecraft:deaths",                          // 32
+        "minecraft:mob_kills",                       // 33
+        "minecraft:animals_bred",                    // 34
+        "minecraft:player_kills",                    // 35
+        "minecraft:fish_caught",                     // 36
+        "minecraft:talked_to_villager",              // 37
+        "minecraft:traded_with_villager",            // 38
+        "minecraft:eat_cake_slice",                  // 39
+        "minecraft:fill_cauldron",                   // 40
+        "minecraft:use_cauldron",                    // 41
+        "minecraft:clean_armor",                     // 42
+        "minecraft:clean_banner",                    // 43
+        "minecraft:clean_shulker_box",               // 44
+        "minecraft:interact_with_brewingstand",      // 45
+        "minecraft:interact_with_beacon",            // 46
+        "minecraft:inspect_dropper",                 // 47
+        "minecraft:inspect_hopper",                  // 48
+        "minecraft:inspect_dispenser",               // 49
+        "minecraft:play_noteblock",                  // 50
+        "minecraft:tune_noteblock",                  // 51
+        "minecraft:pot_flower",                      // 52
+        "minecraft:trigger_trapped_chest",           // 53
+        "minecraft:open_enderchest",                 // 54
+        "minecraft:enchant_item",                    // 55
+        "minecraft:play_record",                     // 56
+        "minecraft:interact_with_furnace",           // 57
+        "minecraft:interact_with_crafting_table",    // 58
+        "minecraft:open_chest",                      // 59
+        "minecraft:sleep_in_bed",                    // 60
+        "minecraft:open_shulker_box",                // 61
+        "minecraft:open_barrel",                     // 62
+        "minecraft:interact_with_blast_furnace",     // 63
+        "minecraft:interact_with_smoker",            // 64
+        "minecraft:interact_with_lectern",           // 65
+        "minecraft:interact_with_campfire",          // 66
         "minecraft:interact_with_cartography_table", // 67
-        "minecraft:interact_with_loom",      // 68
-        "minecraft:interact_with_stonecutter", // 69
-        "minecraft:bell_ring",               // 70
-        "minecraft:raid_trigger",            // 71
-        "minecraft:raid_win",                // 72
-        "minecraft:interact_with_anvil",     // 73
-        "minecraft:interact_with_grindstone", // 74
-        "minecraft:target_hit",              // 75
-        "minecraft:interact_with_smithing_table", // 76
+        "minecraft:interact_with_loom",              // 68
+        "minecraft:interact_with_stonecutter",       // 69
+        "minecraft:bell_ring",                       // 70
+        "minecraft:raid_trigger",                    // 71
+        "minecraft:raid_win",                        // 72
+        "minecraft:interact_with_anvil",             // 73
+        "minecraft:interact_with_grindstone",        // 74
+        "minecraft:target_hit",                      // 75
+        "minecraft:interact_with_smithing_table",    // 76
     ];
     CUSTOM_STATS
         .iter()
@@ -321,8 +320,10 @@ impl NBTStorage for StatisticsManager {
                     .insert(key.as_str().into(), pumpkin_nbt::tag::NbtTag::Int(value));
             }
             // Insert into parent, overwriting any previous value
-            nbt.child_tags
-                .insert("Statistics".into(), pumpkin_nbt::tag::NbtTag::Compound(stats_nbt));
+            nbt.child_tags.insert(
+                "Statistics".into(),
+                pumpkin_nbt::tag::NbtTag::Compound(stats_nbt),
+            );
         })
     }
 

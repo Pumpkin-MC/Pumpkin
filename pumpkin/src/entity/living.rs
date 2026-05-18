@@ -1354,9 +1354,7 @@ impl LivingEntity {
         let killed_by_player =
             cause.is_some_and(|c| c.get_entity().entity_type == &EntityType::PLAYER);
 
-        if is_player_death
-            && let Some(player) = dyn_self.get_player()
-        {
+        if is_player_death && let Some(player) = dyn_self.get_player() {
             player
                 .statistics_manager
                 .increment(
