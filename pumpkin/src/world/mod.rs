@@ -2748,10 +2748,37 @@ impl World {
                         warn!("Entity has no valid Entity Type {id}");
                         continue;
                     };
+
+                    // Check if this entity already exists in the world (e.g. another player
+                    // is still online and tracking it). If so, just send the spawn packet
+                    // for the existing entity to the reconnecting player instead of
+                    // creating a duplicate with a different entity_id.
+                    let existing = world
+                        .entities
+                        .load()
+                        .iter()
+                        .find(|e| e.get_entity().entity_uuid == *uuid)
+                        .cloned();
+                    if let Some(existing_entity) = existing {
+                        let base_entity = existing_entity.get_entity();
+                        player
+                            .client
+                            .enqueue_packet(&base_entity.create_spawn_packet())
+                            .await;
+                        existing_entity.init_data_tracker().await;
+                        continue;
+                    }
+
                     // Pos is zero since it will read from nbt
                     let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
                     entity.read_nbt_non_mut(entity_nbt).await;
                     let base_entity = entity.get_entity();
+
+                    // Clear velocity so the client does not replay the drop animation.
+                    // Items at rest on the ground should have zero velocity; any
+                    // residual velocity from the original drop is stale data.
+                    base_entity.velocity.store(Vector3::default());
+
                     player
                         .client
                         .enqueue_packet(&base_entity.create_spawn_packet())
@@ -3194,6 +3221,18 @@ impl World {
 
     pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
+
+        // Guard against duplicate entities with the same UUID.
+        // This can happen when chunk entity data is loaded while the entity
+        // already exists in the world (e.g. another player is still tracking it).
+        let already_exists = self
+            .entities
+            .load()
+            .iter()
+            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
+        if already_exists {
+            return;
+        }
 
         let block_pos = base_entity.block_pos.load();
         let chunk_coordinate = block_pos.chunk_position();
