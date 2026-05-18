@@ -93,6 +93,75 @@ interface %world {
         piston-behavior: piston-behavior,
         /// Whether this block receives random ticks.
         has-random-ticks: bool,
+
+        /// Whether this block can catch fire.
+        burnable: bool,
+        /// Whether a specific tool is required to mine this block and get drops.
+        tool-required: bool,
+        /// Whether this block has transparency on its sides.
+        sided-transparency: bool,
+        /// Whether this block can be replaced by another block (e.g., grass).
+        replaceable: bool,
+        /// Whether this block is considered a solid block for redstone purposes.
+        is-solid-block: bool,
+        /// The numerical ID of the block entity type, if any.
+        block-entity-type: u16,
+        /// The instrument used for note blocks when placed on top of this block.
+        instrument: noteblock-instrument,
+        /// The collision shapes of this block.
+        collision-shapes: list<bounding-box>,
+        /// The outline shapes of this block.
+        outline-shapes: list<bounding-box>,
+
+        /// Whether the bottom side of the block is solid.
+        down-side-solid: bool,
+        /// Whether the top side of the block is solid.
+        up-side-solid: bool,
+        /// Whether the north side of the block is solid.
+        north-side-solid: bool,
+        /// Whether the south side of the block is solid.
+        south-side-solid: bool,
+        /// Whether the west side of the block is solid.
+        west-side-solid: bool,
+        /// Whether the east side of the block is solid.
+        east-side-solid: bool,
+        /// Whether the center of the bottom side is solid.
+        down-center-solid: bool,
+        /// Whether the center of the top side is solid.
+        up-center-solid: bool,
+        /// The color of this block when displayed on a map.
+        map-color: u8,
+    }
+
+    /// Musical instruments used by note blocks.
+    enum noteblock-instrument {
+        harp,
+        basedrum,
+        snare,
+        hat,
+        bass,
+        flute,
+        bell,
+        guitar,
+        chime,
+        xylophone,
+        iron-xylophone,
+        cow-bell,
+        didgeridoo,
+        bit,
+        banjo,
+        pling,
+        trumpet,
+        trumpet-exposed,
+        trumpet-oxidized,
+        trumpet-weathered,
+        zombie,
+        skeleton,
+        creeper,
+        dragon,
+        wither-skeleton,
+        piglin,
+        custom-head,
     }
 
     /// A simple wrapper for a block state ID.
