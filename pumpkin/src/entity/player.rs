@@ -1873,6 +1873,12 @@ impl Player {
                 1,
             )
             .await;
+        // sneak_time increments every tick while sneaking (vanilla behaviour)
+        if self.living_entity.entity.sneaking.load(Ordering::Relaxed) {
+            self.statistics_manager
+                .increment(&statistics::custom_key(statistics::custom::SNEAK_TIME), 1)
+                .await;
+        }
 
         // experience handling
         self.tick_experience().await;

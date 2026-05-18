@@ -1501,8 +1501,8 @@ impl JavaClient {
                 player.send_abilities_update().await;
             }
             1 => {
-                // Request stats
-                debug!("todo");
+                // Request stats — send all statistics to the client
+                player.send_statistics().await;
             }
             _ => {
                 self.kick(TextComponent::text("Invalid client status"))
