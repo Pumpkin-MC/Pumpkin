@@ -111,6 +111,7 @@ use pumpkin_protocol::{
         CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
     },
 };
+pub use pumpkin_storage::world_info::LevelData;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -123,13 +124,13 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::inventory::Clearable;
+pub use pumpkin_world::world::BlockFlags;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
-pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
 use scoreboard::Scoreboard;

@@ -24,6 +24,7 @@ pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
 pumpkin-inventory.workspace = true
+pumpkin-storage.workspace = true
 pumpkin-world.workspace = true
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
