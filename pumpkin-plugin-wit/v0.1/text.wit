@@ -3,6 +3,8 @@ interface text {
 
     resource text-component {
         text: static func(plain: string) -> text-component;
+        text-colored: static func(plain: string, color: named-color) -> text-component;
+        text-rgb: static func(plain: string, color: rgb-color) -> text-component;
         translate: static func(key: string, %with: list<text-component>) -> text-component;
 
         add-child: func(child: text-component);
