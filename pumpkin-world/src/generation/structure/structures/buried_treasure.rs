@@ -17,6 +17,7 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
+            template::{BlockMirror, BlockRotation},
         },
     },
 };
@@ -36,7 +37,13 @@ impl StructureGenerator for BuriedTreasureGenerator {
         let mut collector = StructurePiecesCollector::default();
 
         collector.add_piece(Box::new(BuriedTreasurePiece {
-            piece: StructurePiece::new(StructurePieceType::BuriedTreasure, bounding_box, 0),
+            piece: StructurePiece::new(
+                StructurePieceType::BuriedTreasure,
+                bounding_box,
+                0,
+                BlockRotation::None,
+                BlockMirror::None,
+            ),
         }));
 
         Some(StructurePosition {

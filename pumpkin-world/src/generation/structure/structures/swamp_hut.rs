@@ -33,9 +33,9 @@ impl StructureGenerator for SwampHutGenerator {
     ) -> Option<StructurePosition> {
         let x = get_center_x(context.chunk_x);
         let z = get_center_z(context.chunk_z);
-
+        let facing = BlockDirection::get_random_horizontal_direction(&mut context.random);
         let mut collector = StructurePiecesCollector::default();
-        collector.add_piece(Box::new(SwampHutPiece {
+        let mut piece = SwampHutPiece {
             shiftable_structure_piece: ShiftableStructurePiece::new(
                 StructurePieceType::SwampHut,
                 x,
@@ -44,9 +44,14 @@ impl StructureGenerator for SwampHutGenerator {
                 7,
                 7,
                 9,
-                BlockDirection::get_random_horizontal_direction(&mut context.random).get_axis(),
+                facing.get_axis(),
             ),
-        }));
+        };
+        piece
+            .shiftable_structure_piece
+            .piece
+            .set_facing(Some(facing));
+        collector.add_piece(Box::new(piece));
 
         Some(StructurePosition {
             start_pos: BlockPos::new(x, 64, z),

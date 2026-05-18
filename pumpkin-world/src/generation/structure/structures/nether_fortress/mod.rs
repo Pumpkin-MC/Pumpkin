@@ -9,9 +9,13 @@ use serde::Deserialize;
 
 use crate::generation::{
     section_coords,
-    structure::structures::{
-        StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePiecesCollector,
-        StructurePosition, nether_fortress::bridge_crossing::BridgeCrossingPiece,
+    structure::{
+        structures::{
+            StructureGenerator, StructureGeneratorContext, StructurePiece,
+            StructurePiecesCollector, StructurePosition,
+            nether_fortress::bridge_crossing::BridgeCrossingPiece,
+        },
+        template::{BlockMirror, BlockRotation},
     },
 };
 
@@ -189,7 +193,13 @@ impl NetherFortressPiece {
         bbox: BlockBox,
     ) -> Self {
         Self {
-            piece: StructurePiece::new(r#type, bbox, chain_length),
+            piece: StructurePiece::new(
+                r#type,
+                bbox,
+                chain_length,
+                BlockRotation::None,
+                BlockMirror::None,
+            ),
         }
     }
 

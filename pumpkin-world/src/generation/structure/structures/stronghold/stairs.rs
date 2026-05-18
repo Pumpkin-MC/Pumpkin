@@ -43,7 +43,6 @@ impl StairsPiece {
         {
             return None;
         }
-
         let mut piece = StrongholdPiece::new(
             StructurePieceType::StrongholdStairs,
             chain_length,
