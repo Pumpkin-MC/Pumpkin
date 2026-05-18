@@ -80,6 +80,7 @@ pub mod effect;
 pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
+pub mod statistics;
 pub mod item;
 pub mod living;
 pub mod mob;

@@ -1340,6 +1340,65 @@ impl LivingEntity {
             }
 
             self.reset_effects_and_attributes().await;
+
+            self.award_death_statistics(&*dyn_self, cause).await;
+        }
+    }
+
+    async fn award_death_statistics(
+        &self,
+        dyn_self: &dyn EntityBase,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        let is_player_death = self.entity.entity_type == &EntityType::PLAYER;
+        let killed_by_player =
+            cause.is_some_and(|c| c.get_entity().entity_type == &EntityType::PLAYER);
+
+        if is_player_death
+            && let Some(player) = dyn_self.get_player()
+        {
+            player
+                .statistics_manager
+                .increment(
+                    &crate::entity::statistics::custom_key(
+                        crate::entity::statistics::custom::DEATHS,
+                    ),
+                    1,
+                )
+                .await;
+        }
+
+        if let Some(killer) = killed_by_player
+            .then(|| cause.and_then(|c| c.get_player()))
+            .flatten()
+        {
+            if is_player_death {
+                killer
+                    .statistics_manager
+                    .increment(
+                        &crate::entity::statistics::custom_key(
+                            crate::entity::statistics::custom::PLAYER_KILLS,
+                        ),
+                        1,
+                    )
+                    .await;
+            } else {
+                killer
+                    .statistics_manager
+                    .increment(
+                        &crate::entity::statistics::custom_key(
+                            crate::entity::statistics::custom::MOB_KILLS,
+                        ),
+                        1,
+                    )
+                    .await;
+                let entity_name = self.entity.entity_type.resource_name;
+                let key = crate::entity::statistics::entity_key(
+                    "killed",
+                    &format!("minecraft:{entity_name}"),
+                );
+                killer.statistics_manager.increment(&key, 1).await;
+            }
         }
     }
 
@@ -2072,6 +2131,20 @@ impl EntityBase for LivingEntity {
             let clamped_health = new_health.max(0.0).min(max_h);
             if remaining > 0.0 {
                 self.set_health(clamped_health);
+
+                // Statistics: damage_taken for players (in tenths, like vanilla)
+                if let Some(player) = caller.get_player() {
+                    let tenths = (remaining * 10.0).round() as i32;
+                    player
+                        .statistics_manager
+                        .increment(
+                            &crate::entity::statistics::custom_key(
+                                crate::entity::statistics::custom::DAMAGE_TAKEN,
+                            ),
+                            tenths,
+                        )
+                        .await;
+                }
 
                 // Track attacker for RevengeGoal (only after confirming damage)
                 if let Some(attacker) = cause.or(source) {
