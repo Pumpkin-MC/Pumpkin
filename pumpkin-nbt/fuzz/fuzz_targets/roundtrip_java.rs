@@ -24,10 +24,29 @@ struct RoundtripStruct {
 }
 
 fuzz_target!(|data: RoundtripStruct| {
+    let mut fixed_data = data;
+
+    let mut struct_to_fixup = &mut fixed_data;
+    loop {
+        // prevent NaN != NaN issues
+        if struct_to_fixup.float != struct_to_fixup.float {
+            struct_to_fixup.float = 0.0;
+        }
+        if struct_to_fixup.double != struct_to_fixup.double {
+            struct_to_fixup.double = 0.0;
+        }
+
+        if struct_to_fixup.nested.is_none() {
+            break;
+        }
+        struct_to_fixup = struct_to_fixup.nested.as_mut().unwrap();
+    }
+
     let mut bytes = Vec::new();
-    if to_bytes(&data, &mut bytes).is_ok() {
+    if to_bytes(&fixed_data, &mut bytes).is_ok() {
         let cursor = Cursor::new(bytes);
-        let reconstructed: RoundtripStruct = from_bytes(cursor).expect("Failed to deserialize valid NBT");
-        assert_eq!(data, reconstructed);
+        let reconstructed: RoundtripStruct =
+            from_bytes(cursor).expect("Failed to deserialize valid NBT");
+        assert_eq!(fixed_data, reconstructed);
     }
 });

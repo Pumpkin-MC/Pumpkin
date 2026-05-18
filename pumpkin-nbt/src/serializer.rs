@@ -195,7 +195,7 @@ pub struct Serializer<W: NbtWriteHelper> {
 impl<W: NbtWriteHelper> Serializer<W> {
     pub const fn new(output: W, name: Option<String>) -> Self {
         Self {
-            output: output,
+            output,
             state: State::Root(name),
             handled_root: false,
             expected_list_tag: 0,
