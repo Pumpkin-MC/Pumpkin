@@ -5,8 +5,8 @@ use serializer::NbtWriteHelper;
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
-    LIST_ID, LONG_ARRAY_ID, LONG_ID, SHORT_ID, STRING_ID, compound, deserializer, nbt_byte_array,
-    nbt_int_array, nbt_long_array, serializer,
+    LIST_ID, LONG_ARRAY_ID, LONG_ID, MAX_ARRAY_LENGTH, SHORT_ID, STRING_ID, compound, deserializer,
+    nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -20,7 +20,7 @@ pub enum NbtTag {
     Float(f32) = FLOAT_ID,
     Double(f64) = DOUBLE_ID,
     ByteArray(Vec<i8>) = BYTE_ARRAY_ID,
-    String(String) = STRING_ID,
+    String(Box<str>) = STRING_ID,
     List(Vec<Self>) = LIST_ID,
     Compound(NbtCompound) = COMPOUND_ID,
     IntArray(Vec<i32>) = INT_ARRAY_ID,
@@ -273,6 +273,9 @@ impl NbtTag {
                 }
 
                 let len = len as usize;
+                if len > MAX_ARRAY_LENGTH {
+                    return Err(Error::LargeLength(len));
+                }
                 let mut byte_array = Vec::with_capacity(len);
                 for _ in 0..len {
                     let byte = reader.get_i8()?;
@@ -280,10 +283,7 @@ impl NbtTag {
                 }
                 Ok(Self::ByteArray(byte_array))
             }
-            STRING_ID => {
-                let string = reader.get_string()?;
-                Ok(Self::String(string))
-            }
+            STRING_ID => Ok(Self::String(reader.get_string()?.into())),
             LIST_ID => {
                 let tag_type_id = reader.get_u8()?;
                 let len = reader.get_i32()?;
@@ -291,7 +291,12 @@ impl NbtTag {
                     return Err(Error::NegativeLength(len));
                 }
 
-                let mut list = Vec::with_capacity(len as usize);
+                let len = len as usize;
+                if len > MAX_ARRAY_LENGTH {
+                    return Err(Error::LargeLength(len));
+                }
+
+                let mut list = Vec::with_capacity(len);
                 for _ in 0..len {
                     let tag = Self::deserialize_data(reader, tag_type_id)?;
                     assert_eq!(tag.get_type_id(), tag_type_id);
@@ -308,6 +313,9 @@ impl NbtTag {
                 }
 
                 let len = len as usize;
+                if len > MAX_ARRAY_LENGTH {
+                    return Err(Error::LargeLength(len));
+                }
                 let mut int_array = Vec::with_capacity(len);
                 for _ in 0..len {
                     let int = reader.get_i32()?;
@@ -322,6 +330,9 @@ impl NbtTag {
                 }
 
                 let len = len as usize;
+                if len > MAX_ARRAY_LENGTH {
+                    return Err(Error::LargeLength(len));
+                }
                 let mut long_array = Vec::with_capacity(len);
                 for _ in 0..len {
                     let long = reader.get_i64()?;
@@ -440,7 +451,7 @@ impl NbtTag {
 
 impl From<&str> for NbtTag {
     fn from(value: &str) -> Self {
-        Self::String(value.to_string())
+        Self::String(value.into())
     }
 }
 
@@ -535,7 +546,7 @@ impl<'de> Deserialize<'de> for NbtTag {
             }
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(NbtTag::String(v.to_string()))
+                Ok(NbtTag::String(v.into()))
             }
 
             fn visit_seq<A: serde::de::SeqAccess<'de>>(

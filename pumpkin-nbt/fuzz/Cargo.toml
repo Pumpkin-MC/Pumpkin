@@ -1,0 +1,46 @@
+[package]
+name = "pumpkin-nbt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+arbitrary = { version = "1.3", features = ["derive"] }
+
+[dependencies.pumpkin-nbt]
+path = ".."
+
+[[bin]]
+name = "deserialize"
+path = "fuzz_targets/deserialize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_serde"
+path = "fuzz_targets/deserialize_serde.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decompress_gzip"
+path = "fuzz_targets/decompress_gzip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip"
+path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false

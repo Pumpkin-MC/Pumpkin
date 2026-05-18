@@ -5,12 +5,12 @@ use crate::plugin::{
         wit::v0_1::{
             events::{
                 ToFromWasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_click_type, from_wasm_entity_interaction_action, from_wasm_entity_type,
-                from_wasm_game_mode, from_wasm_hand, from_wasm_position, to_wasm_block_position,
-                to_wasm_click_type, to_wasm_entity_interaction_action, to_wasm_entity_type,
-                to_wasm_game_mode, to_wasm_hand, to_wasm_position,
+                from_wasm_block_name, from_wasm_block_position, from_wasm_click_type,
+                from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
+                from_wasm_hand, from_wasm_position, to_wasm_block_position, to_wasm_click_type,
+                to_wasm_entity_interaction_action, to_wasm_entity_type, to_wasm_game_mode,
+                to_wasm_hand, to_wasm_position,
             },
-            player::to_wit_item_stack,
             pumpkin::plugin::event::{
                 BedrockFormResponseEventData, CustomClickActionEventData, Event,
                 InteractAction as WasmInteractAction, InventoryClickEventData,
@@ -105,6 +105,9 @@ impl ToFromWasmEvent for InventoryCloseEvent {
     }
 }
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 impl ToFromWasmEvent for InventoryClickEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
@@ -117,8 +120,16 @@ impl ToFromWasmEvent for InventoryClickEvent {
             click_type: to_wasm_click_type(self.click_type),
             slot: self.slot,
             raw_slot: self.raw_slot,
-            clicked_item: self.clicked_item.as_ref().and_then(to_wit_item_stack),
-            cursor: self.cursor.as_ref().and_then(to_wit_item_stack),
+            clicked_item: self.clicked_item.as_ref().map(|stack| {
+                state
+                    .add_item_stack(Arc::new(Mutex::new(stack.clone())))
+                    .expect("failed to add item stack resource")
+            }),
+            cursor: self.cursor.as_ref().map(|stack| {
+                state
+                    .add_item_stack(Arc::new(Mutex::new(stack.clone())))
+                    .expect("failed to add item stack resource")
+            }),
             hotbar_button: self.hotbar_button,
             cancelled: self.cancelled,
         })
@@ -637,6 +648,15 @@ const fn to_wasm_interact_action(action: &InteractAction) -> WasmInteractAction 
     }
 }
 
+const fn from_wasm_interact_action(action: WasmInteractAction) -> InteractAction {
+    match action {
+        WasmInteractAction::LeftClickBlock => InteractAction::LeftClickBlock,
+        WasmInteractAction::LeftClickAir => InteractAction::LeftClickAir,
+        WasmInteractAction::RightClickAir => InteractAction::RightClickAir,
+        WasmInteractAction::RightClickBlock => InteractAction::RightClickBlock,
+    }
+}
+
 impl ToFromWasmEvent for PlayerInteractEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
@@ -652,11 +672,15 @@ impl ToFromWasmEvent for PlayerInteractEvent {
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
-            Event::PlayerInteractEvent(_data) => {
-                panic!("from_wasm_event for PlayerInteractEvent is not supported")
-            }
+            Event::PlayerInteractEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                action: from_wasm_interact_action(data.action),
+                clicked_pos: data.clicked_pos.map(from_wasm_block_position),
+                block: from_wasm_block_name(&data.block),
+                cancelled: data.cancelled,
+            },
             _ => panic!("unexpected event type"),
         }
     }

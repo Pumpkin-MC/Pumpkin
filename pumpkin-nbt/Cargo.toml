@@ -17,6 +17,12 @@ tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+
+[[bench]]
+name = "nbt"
+harness = false
 
 [lints]
 workspace = true

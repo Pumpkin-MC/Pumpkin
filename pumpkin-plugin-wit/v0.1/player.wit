@@ -1,6 +1,7 @@
 /// Represents a player connected to the Minecraft server.
 interface player {
-    use common.{hand, item-stack, position, game-mode};
+    use common.{hand, position, game-mode};
+    use item-stack.{item-stack};
     use %world.{%world, entity};
     use permission.{permission-level};
     use text.{text-component};
@@ -643,6 +644,11 @@ interface player {
         get-item-in-hand: func (hand: hand) -> option<item-stack>;
         /// Returns the item in the specified inventory slot.
         get-inventory-item: func (slot: u8) -> option<item-stack>;
+
+        /// Sets the item in the specified hand.
+        set-item-in-hand: func (hand: hand, stack: option<item-stack>);
+        /// Sets the item in the specified inventory slot.
+        set-inventory-item: func (slot: u8, stack: option<item-stack>);
 
         // Status
 

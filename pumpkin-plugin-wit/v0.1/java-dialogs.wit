@@ -3,7 +3,7 @@
 /// and interactive inputs (checkboxes, text fields, sliders).
 interface java-dialogs {
     use text.{text-component};
-    use common.{item-stack};
+    use item-stack.{item-stack};
 
     /// Represents the layout and button configuration of a dialog.
     enum dialog-type {

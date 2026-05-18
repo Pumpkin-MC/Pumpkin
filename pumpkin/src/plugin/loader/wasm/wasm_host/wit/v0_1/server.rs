@@ -2,6 +2,7 @@ use pumpkin_util::text::TextComponent;
 use wasmtime::component::Resource;
 
 use crate::command::CommandSender;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 
 use super::player::text_component_from_resource;
@@ -378,6 +379,17 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         Ok(super::events::to_wasm_game_mode(
             server.basic_config.default_gamemode,
         ))
+    }
+
+    async fn get_recipe_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitRecipeManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_recipe_manager(server.recipe_manager.clone())
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {

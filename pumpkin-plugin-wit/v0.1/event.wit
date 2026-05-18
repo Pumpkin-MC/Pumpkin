@@ -1,5 +1,6 @@
 interface event {
-    use common.{block-position, game-mode, hand, item-stack, position, click-type};
+    use common.{block-pos, game-mode, hand, position, click-type};
+    use item-stack.{item-stack};
     use player.{player};
     use text.{text-component};
     use %world.{%world};
@@ -162,7 +163,7 @@ interface event {
     record player-interact-event-data {
         player: player,
         action: interact-action,
-        clicked-pos: option<block-position>,
+        clicked-pos: option<block-pos>,
         block: string,
         cancelled: bool
     }
@@ -212,7 +213,7 @@ interface event {
     record block-redstone-event-data {
         target-world: %world,
         state-id: u16,
-        block-position: block-position,
+        block-pos: block-pos,
         old-current: s32,
         new-current: s32,
         cancelled: bool
@@ -221,7 +222,7 @@ interface event {
     record block-break-event-data {
         player: option<player>,
         block: string,
-        block-position: block-position,
+        block-pos: block-pos,
         exp: u32,
         should-drop: bool,
         cancelled: bool
@@ -247,7 +248,7 @@ interface event {
         old-state-id: u16,
         new-block: string,
         new-state-id: u16,
-        block-position: block-position,
+        block-pos: block-pos,
         cancelled: bool
     }
 
@@ -255,7 +256,7 @@ interface event {
         player: player,
         block-placed: string,
         block-placed-against: string,
-        block-position: block-position,
+        block-pos: block-pos,
         can-build: bool,
         cancelled: bool
     }
@@ -279,10 +280,10 @@ interface event {
 
     record spawn-change-event-data {
         target-world: %world,
-        previous-position: block-position,
+        previous-position: block-pos,
         previous-yaw: f32,
         previous-pitch: f32,
-        new-position: block-position,
+        new-position: block-pos,
         new-yaw: f32,
         new-pitch: f32
     }
@@ -291,6 +292,10 @@ interface event {
         message: text-component,
         sender: text-component,
         cancelled: bool
+    }
+
+    record server-tick-start-event-data {
+        tick: s32
     }
 
     record packet-received-event-data {
@@ -340,6 +345,7 @@ interface event {
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
+        server-tick-start-event,
         packet-received-event,
         packet-sent-event,
     }
@@ -379,6 +385,7 @@ interface event {
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),
+        server-tick-start-event(server-tick-start-event-data),
         packet-received-event(packet-received-event-data),
         packet-sent-event(packet-sent-event-data),
     }

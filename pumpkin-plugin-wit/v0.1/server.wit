@@ -4,6 +4,7 @@ interface server {
     use %world.{%world};
     use text.{text-component};
     use uuid.{uuid};
+    use recipe.{recipe-manager};
 
     /// Represents the difficulty setting of a Minecraft server.
     enum difficulty {
@@ -114,5 +115,8 @@ interface server {
 
         /// Returns the server's default gamemode.
         get-default-gamemode: func() -> game-mode;
+
+        /// Returns the recipe manager to register custom recipes.
+        get-recipe-manager: func() -> recipe-manager;
     }
 }

@@ -222,28 +222,25 @@ fn floats() {
 
 #[test]
 fn quoted_string_literals() {
-    assert_parse_ok!("''", NbtTag::String(String::new()));
-    assert_parse_ok!("\"\"", NbtTag::String(String::new()));
+    assert_parse_ok!("''", NbtTag::String("".into()));
+    assert_parse_ok!("\"\"", NbtTag::String("".into()));
 
-    assert_parse_ok!("\"'hello'\"", NbtTag::String("'hello'".to_string()));
-    assert_parse_ok!("'\"hello\"'", NbtTag::String("\"hello\"".to_string()));
-    assert_parse_ok!("'\\\\'", NbtTag::String("\\".to_string()));
+    assert_parse_ok!("\"'hello'\"", NbtTag::String("'hello'".into()));
+    assert_parse_ok!("'\"hello\"'", NbtTag::String("\"hello\"".into()));
+    assert_parse_ok!("'\\\\'", NbtTag::String("\\".into()));
     assert_parse_ok_but_trailing!("'\"'\"", "\"");
 
     assert_parse_err!("'\\'", "Invalid string contents", 3, ["\"", "'", "\\"]);
 
-    assert_parse_ok!("'\\b'", NbtTag::String("\u{8}".to_string()));
-    assert_parse_ok!("'hello\\sword'", NbtTag::String("hello word".to_string()));
-    assert_parse_ok!(
-        "'hello\\tword\n'",
-        NbtTag::String("hello\tword\n".to_string())
-    );
-    assert_parse_ok!("'\\f\\r'", NbtTag::String("\u{c}\r".to_string()));
+    assert_parse_ok!("'\\b'", NbtTag::String("\u{8}".into()));
+    assert_parse_ok!("'hello\\sword'", NbtTag::String("hello word".into()));
+    assert_parse_ok!("'hello\\tword\n'", NbtTag::String("hello\tword\n".into()));
+    assert_parse_ok!("'\\f\\r'", NbtTag::String("\u{c}\r".into()));
 
-    assert_parse_ok!("'hello \\x65!'", NbtTag::String("hello e!".to_string()));
+    assert_parse_ok!("'hello \\x65!'", NbtTag::String("hello e!".into()));
     assert_parse_ok!(
         "'\\x53\\x65\\u0063\\U00000072\\x65\\x74\\x21'",
-        NbtTag::String("Secret!".to_string())
+        NbtTag::String("Secret!".into())
     );
 
     assert_parse_err!(
@@ -255,7 +252,7 @@ fn quoted_string_literals() {
 
     assert_parse_ok!(
         "'\\uD83C\\uDF83 or \\U0001F383'",
-        NbtTag::String("🎃 or 🎃".to_string())
+        NbtTag::String("🎃 or 🎃".into())
     );
 
     // TODO: make tests for when \N is implemented
@@ -263,19 +260,19 @@ fn quoted_string_literals() {
 
 #[test]
 fn unquoted_string_literals() {
-    assert_parse_ok!("abc", NbtTag::String("abc".to_string()));
+    assert_parse_ok!("abc", NbtTag::String("abc".into()));
     assert_parse_ok!(
         "abc-def_ghi+jkl.mno",
-        NbtTag::String("abc-def_ghi+jkl.mno".to_string())
+        NbtTag::String("abc-def_ghi+jkl.mno".into())
     );
-    assert_parse_ok!("_1234", NbtTag::String("_1234".to_string()));
-    assert_parse_ok!("x+1", NbtTag::String("x+1".to_string()));
+    assert_parse_ok!("_1234", NbtTag::String("_1234".into()));
+    assert_parse_ok!("x+1", NbtTag::String("x+1".into()));
     assert_parse_ok_but_trailing!("x*1", "*1");
 
     assert_parse_ok!("true", NbtTag::Byte(1));
     assert_parse_ok!("false", NbtTag::Byte(0));
-    assert_parse_ok!("maybe", NbtTag::String("maybe".to_string()));
-    assert_parse_ok!("bool", NbtTag::String("bool".to_string()));
+    assert_parse_ok!("maybe", NbtTag::String("maybe".into()));
+    assert_parse_ok!("bool", NbtTag::String("bool".into()));
 }
 
 #[test]
@@ -340,36 +337,36 @@ fn maps() {
     assert_parse_ok!(
         "{x:5}",
         NbtTag::Compound(NbtCompound {
-            child_tags: HashMap::from([("x".to_string(), NbtTag::Int(5))])
+            child_tags: HashMap::from([("x".into(), NbtTag::Int(5))])
         })
     );
     assert_parse_ok!(
         "{ a:1b,B :2uS , c:3L  }",
         NbtTag::Compound(NbtCompound {
             child_tags: HashMap::from([
-                ("a".to_string(), NbtTag::Byte(1)),
-                ("B".to_string(), NbtTag::Short(2)),
-                ("c".to_string(), NbtTag::Long(3))
+                ("a".into(), NbtTag::Byte(1)),
+                ("B".into(), NbtTag::Short(2)),
+                ("c".into(), NbtTag::Long(3))
             ])
         })
     );
     assert_parse_ok!(
         "{ a:1b, \"a\":2b, 'a':\"hi\" }",
         nbt_compound_tag! {
-            "a": NbtTag::String("hi".to_string())
+            "a": NbtTag::String("hi".into())
         }
     );
     assert_parse_ok!(
         "{ elem: 'this', next: { elem: 'is', next: { elem: 'a', next: { elem: 'linked', next: 'list' } } } }",
         nbt_compound_tag! {
-            "elem": NbtTag::String("this".to_string()),
+            "elem": NbtTag::String("this".into()),
             "next": nbt_compound_tag! {
-                "elem": NbtTag::String("is".to_string()),
+                "elem": NbtTag::String("is".into()),
                 "next": nbt_compound_tag! {
-                    "elem": NbtTag::String("a".to_string()),
+                    "elem": NbtTag::String("a".into()),
                     "next": nbt_compound_tag! {
-                        "elem": NbtTag::String("linked".to_string()),
-                        "next": NbtTag::String("list".to_string()),
+                        "elem": NbtTag::String("linked".into()),
+                        "next": NbtTag::String("list".into()),
                     }
                 }
             }
@@ -418,22 +415,22 @@ fn lists() {
     assert_parse_ok!("[  ]", NbtTag::List(Vec::new()));
     assert_parse_ok!(
         "[5, _]",
-        NbtTag::List(vec![NbtTag::Int(5), NbtTag::String("_".to_string())])
+        NbtTag::List(vec![NbtTag::Int(5), NbtTag::String("_".into())])
     );
     assert_parse_ok!(
         "[a, [true, c], [4s, uuid(f-0-0-0-0), f, [[], 7f, [\"\\n\", [200Ub, {x: 1e1}]]]]]",
         NbtTag::List(vec![
-            NbtTag::String("a".to_string()),
-            NbtTag::List(vec![NbtTag::Byte(1), NbtTag::String("c".to_string())]),
+            NbtTag::String("a".into()),
+            NbtTag::List(vec![NbtTag::Byte(1), NbtTag::String("c".into())]),
             NbtTag::List(vec![
                 NbtTag::Short(4),
                 NbtTag::IntArray(vec![15, 0, 0, 0]),
-                NbtTag::String("f".to_string()),
+                NbtTag::String("f".into()),
                 NbtTag::List(vec![
                     NbtTag::List(Vec::new()),
                     NbtTag::Float(7.0),
                     NbtTag::List(vec![
-                        NbtTag::String("\n".to_string()),
+                        NbtTag::String("\n".into()),
                         NbtTag::List(vec![
                             NbtTag::Byte(-56),
                             nbt_compound_tag! {

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
+use pumpkin_util::math::vector3::Vector3;
+
 use crate::plugin::loader::wasm::wasm_host::{
     state::{EntityResource, PluginHostState},
     wit::v0_1::events::to_wasm_position,
@@ -11,7 +13,8 @@ use crate::plugin::loader::wasm::wasm_host::{
         text::TextComponent,
         uuid::Uuid,
         world::{
-            BlockPos as WitBlockPos, Entity, HostEntity, RaycastResult as WitRaycastResult, World,
+            BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity, HostEntity,
+            RaycastResult as WitRaycastResult, World,
         },
     },
     wit::v0_1::uuid::UuidExt,
@@ -72,32 +75,23 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<entity_types::EntityType> {
         let entity = entity_from_resource(self, &entity)?;
-        let name = entity.get_entity().entity_type.resource_name.to_string();
-        // Standard WIT enum mapping: kebab-case
-        let _wit_name = name.replace('_', "-");
-        // We need to find the variant in the generated enum.
-        // Since we don't have a direct mapping function yet, we use debug format or similar if available,
-        // but for now let's just use the fact that it's an enum.
-        // Actually, the easiest way is to use the generated `from_name` or similar if we added it,
-        // but here we are returning it TO the guest.
+        let original_name = entity.get_entity().entity_type.resource_name;
 
-        // Wait, I need to CONSTRUCT the EntityType enum.
-        // I can't easily do it by string unless I have a mapping.
-        // But wit-bindgen generates the enum.
+        let mut names: Vec<String> = serde_json::from_str::<
+            std::collections::BTreeMap<String, serde_json::Value>,
+        >(&std::fs::read_to_string("assets/entities.json")?)?
+        .keys()
+        .cloned()
+        .collect();
+        names.sort();
 
-        // Let's assume there is a way to construct it.
-        // Actually, I can use the fact that it's a simple enum.
-        // I'll use a hack for now if I don't have a better way, but wait!
-        // I can just use `serde_json` to parse the string into the enum if it implements Deserialize!
-        // Or just a match.
+        let index = names
+            .iter()
+            .position(|n| n == original_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
 
-        // Better: let's see if pumpkin_data has a way.
-        // For now, I'll just return a placeholder or implement a basic match for the most common ones
-        // OR better: use the generated code.
-
-        Err(wasmtime::Error::msg(
-            "get_type implementation pending full enum mapping",
-        ))
+        // Safety: The WIT enum is generated from the sorted keys of assets/entities.json.
+        Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
     }
 
     async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
@@ -292,8 +286,9 @@ impl HostEntity for PluginHostState {
         let entity = entity_from_resource(self, &entity)?;
         Ok(entity
             .get_entity()
-            .has_visual_fire
-            .load(std::sync::atomic::Ordering::Relaxed))
+            .fire_ticks
+            .load(std::sync::atomic::Ordering::Relaxed)
+            > 0)
     }
 
     async fn set_on_fire(
@@ -416,6 +411,370 @@ impl HostEntity for PluginHostState {
             .get_entity()
             .fire_ticks
             .store(ticks, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    async fn get_health(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_living_entity()
+            .map_or(0.0, |living| living.health.load()))
+    }
+
+    async fn set_health(&mut self, entity: Resource<Entity>, health: f32) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.health.store(health);
+        }
+        Ok(())
+    }
+
+    async fn get_max_health(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_living_entity()
+            .map_or(0.0, crate::entity::living::LivingEntity::get_max_health))
+    }
+
+    async fn damage(&mut self, entity: Resource<Entity>, amount: f32) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity
+            .damage(&*entity, amount, pumpkin_data::damage::DamageType::GENERIC)
+            .await;
+        Ok(())
+    }
+
+    async fn is_dead(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity.get_living_entity().map_or_else(
+            || entity.get_entity().removal_reason.load().is_some(),
+            |living| living.dead.load(std::sync::atomic::Ordering::Relaxed),
+        ))
+    }
+
+    async fn get_absorption(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_living_entity()
+            .map_or(0.0, |living| living.absorption.load()))
+    }
+
+    async fn set_absorption(
+        &mut self,
+        entity: Resource<Entity>,
+        amount: f32,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.absorption.store(amount);
+        }
+        Ok(())
+    }
+
+    async fn get_age(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_age(&mut self, entity: Resource<Entity>, age: i32) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity
+            .get_entity()
+            .age
+            .store(age, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    async fn get_fall_distance(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_living_entity()
+            .map_or(0.0, |living| living.fall_distance.load()))
+    }
+
+    async fn set_fall_distance(
+        &mut self,
+        entity: Resource<Entity>,
+        distance: f32,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.fall_distance.store(distance);
+        }
+        Ok(())
+    }
+
+    async fn get_eye_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity.get_entity().entity_dimension.load().eye_height)
+    }
+
+    async fn get_eye_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(to_wasm_position(entity.get_eye_pos()))
+    }
+
+    async fn get_nearby_entities(
+        &mut self,
+        entity: Resource<Entity>,
+        x: f64,
+        y: f64,
+        z: f64,
+    ) -> wasmtime::Result<Vec<Resource<Entity>>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let pos = entity.get_entity().pos.load();
+        let box_range = pumpkin_util::math::boundingbox::BoundingBox::new(
+            Vector3::new(pos.x - x, pos.y - y, pos.z - z),
+            Vector3::new(pos.x + x, pos.y + y, pos.z + z),
+        );
+        let world = entity.get_entity().world.load_full();
+        let entities = world.get_entities_at_box(&box_range);
+
+        let mut result = Vec::new();
+        for e in entities {
+            // Don't include the entity itself
+            if e.get_entity().entity_id != entity.get_entity().entity_id {
+                result.push(
+                    self.add_entity(e)
+                        .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
+                );
+            }
+        }
+        Ok(result)
+    }
+
+    async fn get_vehicle(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let vehicle = entity.get_entity().vehicle.lock().await;
+        if let Some(v) = vehicle.as_ref() {
+            Ok(Some(self.add_entity(Arc::clone(v)).map_err(|_| {
+                wasmtime::Error::msg("failed to add entity resource")
+            })?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_passengers(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Vec<Resource<Entity>>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let passengers = entity.get_entity().passengers.lock().await;
+        let mut result = Vec::new();
+        for p in passengers.iter() {
+            result.push(
+                self.add_entity(Arc::clone(p))
+                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
+            );
+        }
+        Ok(result)
+    }
+
+    async fn add_passenger(
+        &mut self,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let passenger = entity_from_resource(self, &passenger)?;
+        entity
+            .get_entity()
+            .add_passenger(Arc::clone(&entity), passenger)
+            .await;
+        Ok(())
+    }
+
+    async fn remove_passenger(
+        &mut self,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let passenger = entity_from_resource(self, &passenger)?;
+        entity
+            .get_entity()
+            .remove_passenger(passenger.get_entity().entity_id)
+            .await;
+        Ok(())
+    }
+
+    async fn eject_passengers(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let ids: Vec<i32> = entity
+            .get_entity()
+            .passengers
+            .lock()
+            .await
+            .iter()
+            .map(|p| p.get_entity().entity_id)
+            .collect();
+        for id in ids {
+            entity.get_entity().remove_passenger(id).await;
+        }
+        Ok(())
+    }
+
+    async fn get_bounding_box(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<WitBoundingBox> {
+        let entity = entity_from_resource(self, &entity)?;
+        let bb = entity.get_entity().bounding_box.load();
+        Ok(WitBoundingBox {
+            min: to_wasm_position(bb.min),
+            max: to_wasm_position(bb.max),
+        })
+    }
+
+    async fn is_in_water(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .touching_water
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn is_in_lava(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .touching_lava
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn get_ticks_lived(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_ticks_lived(
+        &mut self,
+        entity: Resource<Entity>,
+        ticks: i32,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity
+            .get_entity()
+            .age
+            .store(ticks, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    async fn get_width(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity.get_entity().entity_dimension.load().width)
+    }
+
+    async fn get_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity.get_entity().entity_dimension.load().height)
+    }
+
+    async fn set_rotation(
+        &mut self,
+        entity: Resource<Entity>,
+        yaw: f32,
+        pitch: f32,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_rotation(yaw, pitch);
+        Ok(())
+    }
+
+    async fn has_visual_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .has_visual_fire
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_visual_fire(
+        &mut self,
+        entity: Resource<Entity>,
+        visual_fire: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_on_fire(visual_fire).await;
+        Ok(())
+    }
+
+    async fn get_portal_cooldown(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .portal_cooldown
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_portal_cooldown(
+        &mut self,
+        entity: Resource<Entity>,
+        cooldown: u32,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity
+            .get_entity()
+            .portal_cooldown
+            .store(cooldown, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    async fn get_remaining_air(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity.get_player().map_or(0, |player| {
+            player
+                .breath_manager
+                .air_supply
+                .load(std::sync::atomic::Ordering::Relaxed)
+        }))
+    }
+
+    async fn set_remaining_air(
+        &mut self,
+        entity: Resource<Entity>,
+        air: i32,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(player) = entity.get_player() {
+            player
+                .breath_manager
+                .air_supply
+                .store(air, std::sync::atomic::Ordering::Relaxed);
+            player.breath_manager.send_air_supply(player);
+        }
+        Ok(())
+    }
+
+    async fn get_max_air(&mut self, _entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        Ok(crate::entity::breath::MAX_AIR)
+    }
+
+    async fn send_system_message(
+        &mut self,
+        entity: Resource<Entity>,
+        message: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(player) = entity.get_player() {
+            let text_res = self
+                .resource_table
+                .get::<crate::plugin::loader::wasm::wasm_host::state::TextComponentResource>(
+                    &Resource::new_own(message.rep()),
+                )
+                .map_err(|_| wasmtime::Error::msg("invalid text component resource handle"))?;
+            player.send_system_message(&text_res.provider).await;
+        }
         Ok(())
     }
 

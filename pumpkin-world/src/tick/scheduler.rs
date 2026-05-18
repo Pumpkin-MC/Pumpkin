@@ -41,6 +41,9 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
                     .queued_ticks
                     .remove(&(next_tick.position, next_tick.value));
             }
+            if inner.queued_ticks.is_empty() {
+                *inner_guard = None;
+            }
         }
         res
     }

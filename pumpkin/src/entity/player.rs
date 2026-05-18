@@ -142,7 +142,7 @@ pub struct ChunkManager {
     chunks_per_tick: usize,
     center: Vector2<i32>,
     view_distance: u8,
-    chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+    chunk_listener: Receiver<(Vector2<i32>, Weak<ChunkData>)>,
     chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
@@ -159,7 +159,7 @@ impl ChunkManager {
     #[must_use]
     pub fn new(
         chunks_per_tick: usize,
-        chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+        chunk_listener: Receiver<(Vector2<i32>, Weak<ChunkData>)>,
         world: Arc<World>,
     ) -> Self {
         Self {
@@ -201,14 +201,15 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
+        while let Ok((pos, chunk_weak)) = self.chunk_listener.try_recv() {
             let dst = Self::chebyshev(pos, self.center);
             if dst > i32::from(self.view_distance) {
                 continue;
             }
-            if self.should_enqueue_chunk(pos, &chunk) {
-                self.chunk_queue
-                    .push(HeapNode(dst, pos, Arc::downgrade(&chunk)));
+            if let Some(chunk) = chunk_weak.upgrade()
+                && self.should_enqueue_chunk(pos, &chunk)
+            {
+                self.chunk_queue.push(HeapNode(dst, pos, chunk_weak));
             }
         }
     }
@@ -536,7 +537,13 @@ impl Player {
         let ender_chest_inventory = Arc::new(EnderChestInventory::new());
 
         let player_screen_handler = Arc::new(Mutex::new(
-            PlayerScreenHandler::new(&inventory, None, 0).await,
+            PlayerScreenHandler::new(
+                &inventory,
+                None,
+                0,
+                Some(world.server.upgrade().unwrap().recipe_manager.clone()),
+            )
+            .await,
         ));
 
         // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())
@@ -795,7 +802,7 @@ impl Player {
         // Remove chunks with no watchers from the cache
         if !chunks_to_clean.is_empty() {
             level.clean_entity_chunks(&chunks_to_clean);
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
+            world.remove_entities_in_chunks(&chunks_to_clean);
         }
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
