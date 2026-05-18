@@ -1,6 +1,7 @@
 use super::cave::get_height;
-use super::{Carver, CarverAquiferContext, get_carve_state};
+use super::{Carver, CarvingContext, get_carve_state};
 use crate::ProtoChunk;
+use crate::generation::noise::aquifer_sampler::AquiferSampler;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -17,7 +18,8 @@ impl Carver for CanyonCarver {
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
         legacy_random_source: bool,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let CarverAdditionalConfig::Canyon(ref canyon_config) = config.additional else {
             return;
@@ -54,6 +56,7 @@ impl Carver for CanyonCarver {
             y_scale,
             legacy_random_source,
             ctx,
+            aquifer,
         );
     }
 }
@@ -75,7 +78,8 @@ impl CanyonCarver {
         distance: i32,
         y_scale: f64,
         legacy_random_source: bool,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let mut random = if legacy_random_source {
             RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
@@ -140,6 +144,7 @@ impl CanyonCarver {
                     vertical_radius,
                     &width_factor_per_height,
                     ctx,
+                    aquifer,
                 );
             }
         }
@@ -214,7 +219,8 @@ impl CanyonCarver {
         horizontal_radius: f64,
         vertical_radius: f64,
         width_factor_per_height: &[f32],
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let center_x = (chunk.x << 4) as f64 + 8.0;
         let center_z = (chunk.z << 4) as f64 + 8.0;
@@ -260,7 +266,9 @@ impl CanyonCarver {
                         ) && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            self.carve_block(chunk, config, world_x, world_y, world_z, ctx);
+                            self.carve_block(
+                                chunk, config, world_x, world_y, world_z, ctx, aquifer,
+                            );
                         }
                     }
                 }
@@ -284,6 +292,7 @@ impl CanyonCarver {
         (xd * xd + zd * zd) * width_factor_per_height[y_index - 1] as f64 + yd * yd / 6.0 >= 1.0
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn carve_block(
         &self,
         chunk: &mut ProtoChunk,
@@ -291,21 +300,32 @@ impl CanyonCarver {
         x: i32,
         y: i32,
         z: i32,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
 
         if !config.replaceable.1.contains(&block.id) {
-            return false;
-        }
+            false
+        } else {
+            match get_carve_state(chunk, config, x, y, z, ctx, aquifer) {
+                None => false,
+                Some(state) => {
+                    chunk.set_block_state(x & 15, y, z & 15, state);
 
-        match get_carve_state(chunk, config, x, y, z, ctx) {
-            None => false,
-            Some(state) => {
-                chunk.set_block_state(x & 15, y, z & 15, state);
-                true
+                    // TODO(vanilla 26.1): if aquifer.should_schedule_fluid_update()
+                    //                     && !state.fluid_state().is_empty()
+                    //                     { chunk.mark_pos_for_postprocessing(blockPos); }
+
+                    // TODO(vanilla 26.1): canyon inherits hasGrass top-material
+                    // from `WorldCarver.carveBlock`. We don't track hasGrass in
+                    // canyon yet — needs CarvingContext + biome surface rule
+                    // at carver time.
+
+                    true
+                }
             }
         }
     }

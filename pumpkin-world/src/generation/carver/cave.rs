@@ -1,5 +1,6 @@
-use super::{Carver, CarverAquiferContext, get_carve_state};
+use super::{Carver, CarvingContext, get_carve_state};
 use crate::ProtoChunk;
+use crate::generation::noise::aquifer_sampler::AquiferSampler;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -16,7 +17,8 @@ impl Carver for CaveCarver {
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
         legacy_random_source: bool,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -59,6 +61,7 @@ impl Carver for CaveCarver {
                     config,
                     floor_level,
                     ctx,
+                    aquifer,
                 );
                 tunnels += random.next_bounded_i32(4);
             }
@@ -87,6 +90,7 @@ impl Carver for CaveCarver {
                     floor_level,
                     legacy_random_source,
                     ctx,
+                    aquifer,
                 );
             }
         }
@@ -117,7 +121,8 @@ impl CaveCarver {
         y_scale: f64,
         config: &CarverConfig,
         floor_level: f64,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let horizontal_radius = 1.5 + (PI / 2.0).sin() * thickness;
         let vertical_radius = horizontal_radius as f64 * y_scale;
@@ -131,6 +136,7 @@ impl CaveCarver {
             vertical_radius,
             floor_level,
             ctx,
+            aquifer,
         );
     }
 
@@ -153,7 +159,8 @@ impl CaveCarver {
         y_scale: f64,
         floor_level: f64,
         legacy_random_source: bool,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let mut random = if legacy_random_source {
             RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
@@ -205,6 +212,7 @@ impl CaveCarver {
                     floor_level,
                     legacy_random_source,
                     ctx,
+                    aquifer,
                 );
                 self.create_tunnel(
                     config,
@@ -224,6 +232,7 @@ impl CaveCarver {
                     floor_level,
                     legacy_random_source,
                     ctx,
+                    aquifer,
                 );
                 return;
             }
@@ -243,6 +252,7 @@ impl CaveCarver {
                     vertical_radius * vertical_radius_multiplier,
                     floor_level,
                     ctx,
+                    aquifer,
                 );
             }
         }
@@ -279,7 +289,8 @@ impl CaveCarver {
         horizontal_radius: f64,
         vertical_radius: f64,
         floor_level: f64,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
     ) {
         let center_x = (chunk.x << 4) as f64 + 8.0;
         let center_z = (chunk.z << 4) as f64 + 8.0;
@@ -328,6 +339,7 @@ impl CaveCarver {
                                 world_y,
                                 world_z,
                                 ctx,
+                                aquifer,
                                 &mut has_grass,
                             );
                         }
@@ -353,7 +365,8 @@ impl CaveCarver {
         x: i32,
         y: i32,
         z: i32,
-        ctx: &mut CarverAquiferContext,
+        ctx: &mut CarvingContext,
+        aquifer: &mut AquiferSampler,
         has_grass: &mut bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
@@ -367,20 +380,26 @@ impl CaveCarver {
         }
 
         if !config.replaceable.1.contains(&block.id) {
-            return false;
-        }
+            false
+        } else {
+            match get_carve_state(chunk, config, x, y, z, ctx, aquifer) {
+                None => false,
+                Some(state) => {
+                    chunk.set_block_state(x & 15, y, z & 15, state);
 
-        match get_carve_state(chunk, config, x, y, z, ctx) {
-            None => false,
-            Some(state) => {
-                chunk.set_block_state(x & 15, y, z & 15, state);
-                // TODO(vanilla parity): when `has_grass` is set and the block
-                // directly below is DIRT, vanilla places the biome's surface
-                // top material there (`CarvingContext.topMaterial(...)`). We
-                // don't run the biome surface rule at carver time yet, so the
-                // exposed dirt is left bare. Cosmetic only.
-                let _ = has_grass;
-                true
+                    // TODO(vanilla 26.1): schedule fluid tick — not done.
+                    // Vanilla: `if aquifer.shouldScheduleFluidUpdate() &&
+                    // !state.getFluidState().isEmpty() { chunk.markPosForPostprocessing(pos) }`.
+                    // Aquifer doesn't track the 4th-anchor flag yet.
+
+                    if *has_grass {
+                        // TODO(vanilla 26.1): place biome top material on DIRT
+                        // below (grass/podzol/mycelium). Not done — needs
+                        // surface-rule eval at carver time (see `CarvingContext`).
+                    }
+
+                    true
+                }
             }
         }
     }
