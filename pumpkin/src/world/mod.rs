@@ -2264,6 +2264,7 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        player.send_statistics().await;
         self.send_player_equipment(player).await;
 
         if let crate::net::ClientPlatform::Java(java_client) = &player.client

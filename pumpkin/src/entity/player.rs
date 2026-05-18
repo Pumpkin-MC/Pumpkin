@@ -59,7 +59,7 @@ use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
+    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
     CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
     CKeepAlive, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
@@ -91,6 +91,7 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
 use crate::data::SaveJSONConfiguration;
+use crate::entity::statistics;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -419,6 +420,8 @@ pub struct Player {
     pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
+    /// Manages the player's statistics (blocks mined, distance walked, etc.).
+    pub statistics_manager: statistics::StatisticsManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The block position of the currently open container screen (if any).
@@ -559,6 +562,7 @@ impl Player {
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
+            statistics_manager: statistics::StatisticsManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
@@ -925,6 +929,15 @@ impl Player {
             return;
         }
 
+        // Statistics: damage dealt (in tenths, like vanilla)
+        let damage_tenths = (damage * 10.0).round() as i32;
+        self.statistics_manager
+            .increment(
+                &statistics::custom_key(statistics::custom::DAMAGE_DEALT),
+                damage_tenths,
+            )
+            .await;
+
         if let Some(enchantments) = item_stack
             .lock()
             .await
@@ -1136,16 +1149,21 @@ impl Player {
             return;
         }
 
-        let damage = {
+        let (damage, item_name) = {
             let stack = self.inventory.held_item();
             let stack = stack.lock().await;
-            stack
+            let dmg = stack
                 .get_data_component::<ToolImpl>()
-                .map_or(0, |tool| tool.damage_per_block as i32)
+                .map_or(0, |tool| tool.damage_per_block as i32);
+            (dmg, stack.item.registry_key)
         };
 
         if damage > 0 {
-            self.damage_held_item(damage).await;
+            let broken = self.damage_held_item(damage).await;
+            if broken {
+                let key = statistics::item_key("broken", &format!("minecraft:{item_name}"));
+                self.statistics_manager.increment(&key, 1).await;
+            }
         }
     }
 
@@ -1845,6 +1863,23 @@ impl Player {
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
 
+        // Statistics: play_time increments every tick (vanilla counts in ticks)
+        self.statistics_manager
+            .increment(&statistics::custom_key(statistics::custom::PLAY_TIME), 1)
+            .await;
+        self.statistics_manager
+            .increment(
+                &statistics::custom_key(statistics::custom::TOTAL_WORLD_TIME),
+                1,
+            )
+            .await;
+        // sneak_time increments every tick while sneaking (vanilla behaviour)
+        if self.living_entity.entity.sneaking.load(Ordering::Relaxed) {
+            self.statistics_manager
+                .increment(&statistics::custom_key(statistics::custom::SNEAK_TIME), 1)
+                .await;
+        }
+
         // experience handling
         self.tick_experience().await;
         self.tick_health().await;
@@ -1924,18 +1959,104 @@ impl Player {
         } else {
             self.add_exhaustion(0.05).await;
         }
+        self.statistics_manager
+            .increment(&statistics::custom_key(statistics::custom::JUMP), 1)
+            .await;
     }
 
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
-        // TODO: Swimming, gliding...
-        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
-            let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
-            if delta > 0.0 {
-                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
-                    self.add_exhaustion(0.1 * delta * 0.01).await;
-                } else {
-                    self.add_exhaustion(0.0 * delta * 0.01).await;
+        let entity = &self.living_entity.entity;
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let sprinting = entity.sprinting.load(Ordering::Relaxed);
+        let sneaking = entity.sneaking.load(Ordering::Relaxed);
+        let flying = self.is_flying().await;
+        let fall_flying = entity.fall_flying.load(Ordering::Relaxed);
+        let touching_water = entity.touching_water.load(Ordering::Relaxed);
+        let climbing = self.living_entity.climbing.load(Ordering::Relaxed);
+
+        // Horizontal distance in centimetres (vanilla uses cm for stats)
+        let horiz_cm = (delta_pos.horizontal_length() * 100.0).round() as i32;
+        // Vertical distance for climbing/falling
+        let vert_cm = (delta_pos.y.abs() * 100.0).round() as i32;
+
+        if horiz_cm > 0 || vert_cm > 0 {
+            if fall_flying {
+                // Elytra gliding
+                if horiz_cm > 0 {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::AVIATE_ONE_CM),
+                            horiz_cm,
+                        )
+                        .await;
                 }
+            } else if touching_water {
+                // Swimming (horizontal + vertical)
+                let swim_cm = horiz_cm + vert_cm;
+                if swim_cm > 0 {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::SWIM_ONE_CM),
+                            swim_cm,
+                        )
+                        .await;
+                }
+            } else if climbing {
+                // Ladder / vine climbing (vertical)
+                if vert_cm > 0 {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::CLIMB_ONE_CM),
+                            vert_cm,
+                        )
+                        .await;
+                }
+            } else if flying {
+                if horiz_cm > 0 {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::FLY_ONE_CM),
+                            horiz_cm,
+                        )
+                        .await;
+                }
+            } else if on_ground && horiz_cm > 0 {
+                if sprinting {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::SPRINT_ONE_CM),
+                            horiz_cm,
+                        )
+                        .await;
+                    self.add_exhaustion(0.1 * horiz_cm as f32 * 0.01).await;
+                } else if sneaking {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::CROUCH_ONE_CM),
+                            horiz_cm,
+                        )
+                        .await;
+                } else {
+                    self.statistics_manager
+                        .increment(
+                            &statistics::custom_key(statistics::custom::WALK_ONE_CM),
+                            horiz_cm,
+                        )
+                        .await;
+                }
+            }
+        }
+
+        // Fall distance (downward movement while not on ground)
+        if !on_ground && delta_pos.y < 0.0 {
+            let fall_cm = (-delta_pos.y * 100.0).round() as i32;
+            if fall_cm > 0 {
+                self.statistics_manager
+                    .increment(
+                        &statistics::custom_key(statistics::custom::FALL_ONE_CM),
+                        fall_cm,
+                    )
+                    .await;
             }
         }
     }
@@ -2351,6 +2472,14 @@ impl Player {
     pub async fn heal(&self, additional_health: f32) {
         self.living_entity.heal(additional_health);
         self.send_health().await;
+    }
+
+    /// Send all statistics to the client (called on join and when stats change).
+    pub async fn send_statistics(&self) {
+        if let ClientPlatform::Java(client) = &self.client {
+            let packet = self.statistics_manager.build_full_packet().await;
+            client.enqueue_packet(&packet).await;
+        }
     }
 
     pub async fn send_health(&self) {
@@ -2800,6 +2929,19 @@ impl Player {
 
             (dropped_stack, updated_stack, selected_slot)
         };
+
+        // Statistics: track dropped items per type
+        let item_name = dropped_stack.item.registry_key;
+        let key = statistics::item_key("dropped", &format!("minecraft:{item_name}"));
+        self.statistics_manager
+            .increment(&key, i32::from(dropped_stack.item_count))
+            .await;
+        self.statistics_manager
+            .increment(
+                &statistics::custom_key(statistics::custom::DROP),
+                i32::from(dropped_stack.item_count),
+            )
+            .await;
 
         self.drop_item(dropped_stack).await;
 
@@ -3781,6 +3923,7 @@ impl NBTStorage for Player {
 
             // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
+            self.statistics_manager.write_nbt(nbt).await;
 
             nbt.put_string(
                 "Dimension",
@@ -3832,6 +3975,7 @@ impl NBTStorage for Player {
             );
 
             self.hunger_manager.read_nbt(nbt).await;
+            self.statistics_manager.read_nbt(nbt).await;
 
             // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
             if let (Some(x), Some(y), Some(z)) = (

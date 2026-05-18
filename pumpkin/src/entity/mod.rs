@@ -87,6 +87,7 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
+pub mod statistics;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;

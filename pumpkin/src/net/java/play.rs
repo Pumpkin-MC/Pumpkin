@@ -1501,8 +1501,8 @@ impl JavaClient {
                 player.send_abilities_update().await;
             }
             1 => {
-                // Request stats
-                debug!("todo");
+                // Request stats — send all statistics to the client
+                player.send_statistics().await;
             }
             _ => {
                 self.kick(TextComponent::text("Invalid client status"))
@@ -1830,6 +1830,13 @@ impl JavaClient {
                             .broken(&world, block, player, &location, server, state)
                             .await;
                         player.apply_tool_damage_for_block_break(state).await;
+
+                        // Statistics: mined:<block>
+                        {
+                            use crate::entity::statistics::mined_key;
+                            let key = mined_key(&format!("minecraft:{}", block.name));
+                            player.statistics_manager.increment(&key, 1).await;
+                        }
                     }
                     self.sync_block_state_to_client(&world, location).await;
 
@@ -2240,6 +2247,12 @@ impl JavaClient {
             event;
             'after: {
                 server.item_registry.on_use(&stack_for_use, player).await;
+                // Statistics: used:<item>
+                {
+                    use crate::entity::statistics::item_key;
+                    let key = item_key("used", &format!("minecraft:{}", stack_for_use.item.registry_key));
+                    player.statistics_manager.increment(&key, 1).await;
+                }
             }
         }}
     }

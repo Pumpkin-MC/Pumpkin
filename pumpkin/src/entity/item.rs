@@ -457,10 +457,20 @@ impl EntityBase for ItemEntity {
             };
 
             if inserted || player.is_creative() {
-                let (item_count, is_empty) = {
+                let (item_count, is_empty, item_name) = {
                     let stack = self.item_stack.lock().await;
-                    (stack.item_count, stack.is_empty())
+                    (stack.item_count, stack.is_empty(), stack.item.registry_key)
                 };
+
+                // Statistics: picked_up:<item>
+                let key = crate::entity::statistics::item_key(
+                    "picked_up",
+                    &format!("minecraft:{item_name}"),
+                );
+                player
+                    .statistics_manager
+                    .increment(&key, i32::from(item_count))
+                    .await;
 
                 player
                     .client
