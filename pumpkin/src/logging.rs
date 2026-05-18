@@ -439,13 +439,14 @@ impl Completer for PumpkinCommandCompleter {
                 }
             }
 
-            {
+            // Not sure if this is necessary, but I guess we better be safe than sorry.
+            if let Some(cursor) = pos.checked_sub(usize::from(has_slash)) {
                 let mut reader = StringReader::new(cmd);
                 if reader.peek() == Some('/') {
                     reader.skip();
                 }
                 let parsed = dispatcher.parse(&mut reader, &source).await;
-                let suggestions = dispatcher.get_completion_suggestions(parsed, pos).await;
+                let suggestions = dispatcher.get_completion_suggestions(parsed, cursor).await;
 
                 if !suggestions.is_empty() {
                     let start = suggestions.range.start;
@@ -454,7 +455,7 @@ impl Completer for PumpkinCommandCompleter {
                         .into_iter()
                         .map(|s| s.text.cached_text().clone())
                         .collect();
-                    return Ok((start, suggestions));
+                    return Ok((start + usize::from(has_slash), suggestions));
                 }
             }
 
