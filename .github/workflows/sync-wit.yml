@@ -1,0 +1,40 @@
+name: Sync WIT API to `pumpkin-plugin-wit`
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "pumpkin-plugin-wit/**"
+
+jobs:
+  sync-wit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+          sparse-checkout: pumpkin-plugin-wit
+
+      - name: Checkout WIT repo
+        uses: actions/checkout@v4
+        with:
+          repository: "PumpkinMC/pumpkin-plugin-wit"
+          token: ${{ secrets.WIT_SYNC_TOKEN }}
+          path: wit-repo
+
+      - name: Sync and commit changes
+        run: |
+          cd wit-repo
+          rsync -av --delete --exclude='.git' --exclude='.github' ../main-repo/pumpkin-plugin-wit/ .
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "sync: update WIT to PumpkinMC/Pumpkin@${{ github.sha }}"
+            git push origin master
+          else
+            echo "No changes detected in WIT files. Skipping push."
+          fi
