@@ -10,6 +10,7 @@ use crate::{
 };
 
 const EXPLOSION_POWER: f32 = 1.0;
+const GRAVITY: f64 = 0.0;
 
 pub struct FireballEntity {
     pub thrown: ThrownItemEntity,
@@ -24,6 +25,7 @@ impl FireballEntity {
             owner_id: None,
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity: GRAVITY,
         };
 
         Self {
@@ -34,7 +36,7 @@ impl FireballEntity {
 
     #[must_use]
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
         Self {
             thrown,
             explosion_power: EXPLOSION_POWER,

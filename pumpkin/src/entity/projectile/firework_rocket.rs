@@ -15,6 +15,8 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
+const GRAVITY: f64 = 0.0;
+
 pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
     shooter_id: Option<i32>,
@@ -37,6 +39,7 @@ impl FireworkRocketEntity {
                 owner_id: None,
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
+                gravity: GRAVITY,
             },
             shooter_id: None,
             life: 0.into(),
@@ -51,7 +54,7 @@ impl FireworkRocketEntity {
 
         // Set random initial velocity
         // Set on the inner entity after constructing ThrownItemEntity
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
         thrown.entity.set_velocity(Vector3::new(
             random.next_triangular(0.0, 0.002_297),
             0.05,

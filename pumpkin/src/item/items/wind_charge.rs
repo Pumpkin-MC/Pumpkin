@@ -8,7 +8,7 @@ use pumpkin_data::sound::Sound;
 
 use crate::entity::Entity;
 use crate::entity::projectile::ThrownItemEntity;
-use crate::entity::projectile::wind_charge::WindChargeEntity;
+use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
 use crate::item::{ItemBehaviour, ItemMetadata};
 
 pub struct WindChargeItem;
@@ -41,7 +41,8 @@ impl ItemBehaviour for WindChargeItem {
 
             let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
-            let wind_charge = ThrownItemEntity::new(entity, &player.living_entity.entity);
+            let wind_charge =
+                ThrownItemEntity::new(entity, &player.living_entity.entity, WIND_CHARGE_GRAVITY);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
 

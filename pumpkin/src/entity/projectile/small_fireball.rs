@@ -9,6 +9,8 @@ use crate::{
     server::Server,
 };
 
+const GRAVITY: f64 = 0.0;
+
 pub struct SmallFireballEntity {
     pub thrown: ThrownItemEntity,
 }
@@ -21,6 +23,7 @@ impl SmallFireballEntity {
             owner_id: None,
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity: GRAVITY,
         };
 
         Self { thrown }
@@ -28,7 +31,7 @@ impl SmallFireballEntity {
 
     #[must_use]
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
         Self { thrown }
     }
 }
