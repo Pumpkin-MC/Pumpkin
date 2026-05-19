@@ -1,11 +1,15 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
-use crate::ProtoChunk;
-use crate::chunk::format::LightContainer;
-use crate::chunk::io::LoadedData;
-use crate::chunk::io::LoadedData::Loaded;
 use crate::level::Level;
+use pumpkin_world::{
+	ProtoChunk,
+	chunk::ChunkData,
+	chunk::format::LightContainer,
+	chunk::io::LoadedData,
+	chunk::io::LoadedData::Loaded,
+};
+
 use crossfire::compat::AsyncRx;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
@@ -28,7 +32,7 @@ pub enum RecvChunk {
 /// Checks if a chunk needs relighting based on the current lighting configuration
 /// Returns true if the chunk has uniform lighting (from full/dark mode) but the server
 /// is now running in default mode (which needs proper lighting calculation)
-fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConfig) -> bool {
+fn needs_relighting(chunk: &ChunkData, config: &LightingEngineConfig) -> bool {
     if *config != LightingEngineConfig::Default {
         return false;
     }

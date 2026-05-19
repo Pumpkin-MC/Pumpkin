@@ -1,0 +1,30 @@
+[package]
+name = "pumpkin-chunk-system"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+pumpkin-world.workspace = true
+pumpkin-data.workspace = true
+pumpkin-config.workspace = true
+pumpkin-util.workspace = true
+pumpkin-nbt.workspace = true
+
+rand.workspace = true
+arc-swap.workspace = true
+rustc-hash.workspace = true
+dashmap.workspace = true
+slotmap.workspace = true
+crossfire.workspace = true
+crossbeam.workspace = true
+tracing.workspace = true
+itertools.workspace = true
+
+rayon.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+
+[lints]
+workspace = true

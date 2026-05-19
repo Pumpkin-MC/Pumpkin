@@ -8,7 +8,8 @@ use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
 };
-use crate::chunk::io::Dirtiable;
+
+use pumpkin_world::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;

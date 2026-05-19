@@ -1,5 +1,6 @@
 use super::ChunkPos;
 use crate::level::SyncChunk;
+use pumpkin_world::chunk::ChunkData;
 use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
 use std::sync::{Mutex, Weak};
@@ -8,7 +9,7 @@ use tokio::sync::oneshot;
 #[expect(clippy::type_complexity)]
 pub struct ChunkListener {
     single: Mutex<Vec<(ChunkPos, oneshot::Sender<SyncChunk>)>>,
-    global: Mutex<Vec<Sender<(ChunkPos, Weak<crate::chunk::ChunkData>)>>>,
+    global: Mutex<Vec<Sender<(ChunkPos, Weak<ChunkData>)>>>,
 }
 
 impl Default for ChunkListener {
@@ -32,7 +33,7 @@ impl ChunkListener {
         rx
     }
 
-    pub fn add_global_chunk_listener(&self) -> Receiver<(ChunkPos, Weak<crate::chunk::ChunkData>)> {
+    pub fn add_global_chunk_listener(&self) -> Receiver<(ChunkPos, Weak<ChunkData>)> {
         let (tx, rx) = crossbeam::channel::unbounded();
         self.global.lock().unwrap().push(tx);
         rx

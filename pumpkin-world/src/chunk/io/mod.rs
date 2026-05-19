@@ -4,7 +4,7 @@ use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
 
 use super::{ChunkReadingError, ChunkWritingError};
-use crate::level::LevelFolder;
+use crate::chunk_system_data::LevelFolder;
 
 pub mod file_manager;
 

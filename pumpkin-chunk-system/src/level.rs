@@ -1,9 +1,9 @@
-use crate::chunk::format::linear::LinearV2File;
-use crate::chunk::format::pump::PumpFile;
-use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
-use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
-use crate::{
+use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
+use pumpkin_world::chunk::format::linear::LinearV2File;
+use pumpkin_world::chunk::format::pump::PumpFile;
+use pumpkin_world::generation::generator::VanillaGenerator;
+use pumpkin_world::{
     BlockStateId,
     block::RawBlockState,
     chunk::{
@@ -45,6 +45,8 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
+
+pub use pumpkin_world::chunk_system_data::LevelFolder;
 
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
@@ -115,12 +117,6 @@ pub struct RandomTickSample {
     pub position: BlockPos,
     pub tick_block: bool,
     pub tick_fluid: bool,
-}
-
-pub struct LevelFolder {
-    pub root_folder: PathBuf,
-    pub region_folder: PathBuf,
-    pub entities_folder: PathBuf,
 }
 
 impl Level {

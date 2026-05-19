@@ -22,7 +22,7 @@ use crate::{
         io::{Dirtiable, file_manager::PathFromLevelFolder},
     },
     generation::section_coords,
-    level::LevelFolder,
+    chunk_system_data::LevelFolder,
     tick::{ScheduledTick, scheduler::ChunkTickScheduler},
 };
 use pumpkin_util::math::position::BlockPos;

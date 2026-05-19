@@ -20,12 +20,12 @@ use crate::{
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
+use pumpkin_chunk_system::dimension::into_level;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_world::dimension::into_level;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -385,7 +385,7 @@ impl Server {
             let seed = server.level_info.load().world_gen_settings.seed;
 
             // TODO: gen_pool should be reused
-            let level = pumpkin_world::dimension::into_level(
+            let level = into_level(
                 dimension.clone(),
                 &config,
                 world_path,
