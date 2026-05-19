@@ -259,7 +259,7 @@ impl ThrownItemEntity {
     const fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
-    fn get_gravity(&self) -> f64 {
+    const fn get_gravity(&self) -> f64 {
         self.gravity
     }
 }
