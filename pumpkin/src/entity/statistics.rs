@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CAwardStats, Statistic};
+use pumpkin_protocol::java::client::play::Statistic;
 use tokio::sync::Mutex;
 
 use super::{NBTStorage, NBTStorageInit, NbtFuture};
@@ -154,16 +154,16 @@ impl StatisticsManager {
         self.dirty.load()
     }
 
-    /// Build a `CAwardStats` packet containing all current statistics.
+    /// Build a [`pumpkin_protocol::java::client::play::CAwardStats`] packet containing all current statistics.
     /// Clears the dirty flag.
-    pub async fn build_full_packet(&self) -> CAwardStats {
+    pub async fn build_full_packet(&self) -> pumpkin_protocol::java::client::play::CAwardStats {
         self.dirty.store(false);
         let map = self.stats.lock().await;
         let statistics = map
             .iter()
             .filter_map(|(key, &value)| parse_stat_entry(key, value))
             .collect();
-        CAwardStats::new(statistics)
+        pumpkin_protocol::java::client::play::CAwardStats::new(statistics)
     }
 }
 
