@@ -56,7 +56,7 @@ impl ItemBehaviour for WindChargeItem {
             );
             // TODO: player.incrementStat(Stats.USED)
 
-            // TODO: Implement that the projectile will explode on impact on ground
+            // TODO: Implement that the projectile will explode on impact
             world
                 .spawn_entity(Arc::new(WindChargeEntity::new(wind_charge)))
                 .await;
