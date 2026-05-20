@@ -44,7 +44,7 @@ impl VegetationPatchFeature {
         block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature_name: &str,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -200,7 +200,7 @@ impl VegetationPatchFeature {
         random: &mut RandomGenerator,
         min_y: i8,
         height: u16,
-        feature_name: &str,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
         surface: &HashSet<BlockPos>,
     ) {
         let opposite_dir = self.surface_direction().opposite();

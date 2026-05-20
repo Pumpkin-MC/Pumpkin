@@ -848,9 +848,11 @@ impl World {
         let entity_elapsed = entity_start.elapsed();
 
         let block_entity_start = tokio::time::Instant::now();
+        let active_chunks = self.active_chunks.load();
         let block_entities: Vec<Arc<dyn BlockEntity>> = self
             .block_entities
             .iter()
+            .filter(|e| active_chunks.contains(&e.key().chunk_position()))
             .map(|e| e.value().clone())
             .collect();
         let block_entity_count = block_entities.len();
@@ -943,6 +945,10 @@ impl World {
             // Auto-save logic
             if level_time.world_age % 100 == 0 {
                 self.level.should_unload.store(true, Relaxed);
+                let cleaned_chunks = self.level.clean_memory();
+                if !cleaned_chunks.is_empty() {
+                    self.remove_entities_in_chunks(&cleaned_chunks);
+                }
                 // If autosave is configured and this tick will trigger an autosave, don't double notify
                 if self.level.autosave_ticks == 0 {
                     self.level.level_channel.notify();
@@ -2661,9 +2667,14 @@ impl World {
                     }
                 };
 
-                let Some((chunk, _first_load)) = recv_result else {
+                let Some((chunk_weak, first_load)) = recv_result else {
                     break;
                 };
+
+                let Some(chunk) = chunk_weak.upgrade() else {
+                    continue;
+                };
+
                 let position = Vector2::new(chunk.x, chunk.z);
 
                 if !level.is_chunk_watched(&position) {
@@ -2692,24 +2703,27 @@ impl World {
 
                         ids_to_remove.push(VarInt(base_entity.entity_id));
 
-                        let mut nbt = NbtCompound::new();
-                        entity.write_nbt(&mut nbt).await;
-                        if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
-                            let old_chunk = old_chunk.to_vec2_i32();
-                            let chunk = world.level.get_entity_chunk(old_chunk).await;
-                            chunk.mark_dirty(true);
-                            let base_entity = entity.get_entity();
-                            let current_chunk_coordinate =
-                                base_entity.block_pos.load().chunk_position();
+                        if first_load {
+                            let mut nbt = NbtCompound::new();
+                            entity.write_nbt(&mut nbt).await;
+                            if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load()
+                            {
+                                let old_chunk = old_chunk.to_vec2_i32();
+                                let chunk = world.level.get_entity_chunk(old_chunk).await;
+                                chunk.mark_dirty(true);
+                                let base_entity = entity.get_entity();
+                                let current_chunk_coordinate =
+                                    base_entity.block_pos.load().chunk_position();
 
-                            let mut data = chunk.data.lock().await;
-                            if old_chunk == current_chunk_coordinate {
-                                data.insert(*uuid, nbt);
-                                continue;
+                                let mut data = chunk.data.lock().await;
+                                if old_chunk == current_chunk_coordinate {
+                                    data.insert(*uuid, nbt);
+                                    continue;
+                                }
+
+                                // The chunk has changed, lets remove the entity from the old chunk
+                                data.remove(uuid);
                             }
-
-                            // The chunk has changed, lets remove the entity from the old chunk
-                            data.remove(uuid);
                         }
                     }
                     if !ids_to_remove.is_empty() {
@@ -2744,9 +2758,11 @@ impl World {
                         .await;
                     entity.init_data_tracker().await;
 
-                    entities_to_add.push(entity);
+                    if first_load {
+                        entities_to_add.push(entity);
+                    }
                 }
-                if !entities_to_add.is_empty() {
+                if first_load && !entities_to_add.is_empty() {
                     world.entities.rcu(|current_entities| {
                         let mut new_entities = (**current_entities).clone();
                         new_entities.extend(entities_to_add.iter().cloned());
@@ -3215,7 +3231,7 @@ impl World {
         self.remove_entity_data(base_entity).await;
     }
 
-    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
+    pub fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
         let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
         let mut entities_to_remove = Vec::new();
 
@@ -3236,8 +3252,12 @@ impl World {
 
         for entity in entities_to_remove {
             self.spawn_state.load().remove_entity(self, entity.as_ref());
-            self.remove_entity_data(entity.get_entity()).await;
+            // Important: We do NOT call remove_entity_data here because we want the entities
+            // to persist in the chunk data on disk. We only remove them from the active world (RAM).
         }
+
+        self.block_entities
+            .retain(|pos, _| !chunks_set.contains(&pos.chunk_position()));
     }
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {

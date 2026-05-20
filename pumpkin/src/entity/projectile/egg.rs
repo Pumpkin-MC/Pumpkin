@@ -21,6 +21,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 const MAX_EGG_HATCH_EVENT_SPAWNS: usize = 16;
+const GRAVITY: f64 = 0.03;
 
 pub struct EggEntity {
     pub thrown: ThrownItemEntity,
@@ -36,6 +37,7 @@ impl EggEntity {
             owner_id: None,
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity: GRAVITY,
         };
 
         Self {
@@ -45,7 +47,7 @@ impl EggEntity {
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
         // Default slight upward velocity
         thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 

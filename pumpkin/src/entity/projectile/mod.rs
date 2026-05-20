@@ -44,10 +44,11 @@ pub struct ThrownItemEntity {
     pub owner_id: Option<i32>,
     pub collides_with_projectiles: bool,
     pub has_hit: AtomicBool,
+    pub gravity: f64,
 }
 
 impl ThrownItemEntity {
-    pub fn new(entity: Entity, owner: &Entity) -> Self {
+    pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
         entity.pos.store(owner_pos);
@@ -56,6 +57,7 @@ impl ThrownItemEntity {
             owner_id: Some(owner.entity_id),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity,
         }
     }
 
@@ -257,9 +259,8 @@ impl ThrownItemEntity {
     const fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
-    #[allow(clippy::unused_self)]
     const fn get_gravity(&self) -> f64 {
-        0.03
+        self.gravity
     }
 }
 

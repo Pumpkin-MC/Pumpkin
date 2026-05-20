@@ -524,7 +524,7 @@ macro_rules! impl_block_entity_for_cooking {
                 if let Some(recipes_compound) = nbt.get_compound("RecipesUsed") {
                     for (recipe_id, tag) in &recipes_compound.child_tags {
                         if let pumpkin_nbt::tag::NbtTag::Int(count) = tag {
-                            recipes_used_map.insert(recipe_id.clone(), *count as u32);
+                            recipes_used_map.insert(recipe_id.to_string(), *count as u32);
                         }
                     }
                 }

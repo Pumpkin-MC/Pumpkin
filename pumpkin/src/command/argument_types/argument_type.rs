@@ -12,6 +12,9 @@ use std::any::Any;
 use std::pin::Pin;
 
 pub type JavaClientArgumentType<'a> = pumpkin_protocol::java::client::play::ArgumentType<'a>;
+pub type ParseWithSourceAnyResult<'a> = Pin<
+    Box<dyn Future<Output = Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>> + Send + 'a>,
+>;
 
 /// Represents an argument type that parses a particular type `Item`.
 pub trait ArgumentType: Send + Sync {
@@ -29,21 +32,21 @@ pub trait ArgumentType: Send + Sync {
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse_with_source(
-        &self,
-        reader: &mut StringReader,
-        _source: &CommandSource,
-    ) -> Result<Self::Item, CommandSyntaxError> {
-        self.parse(reader)
+    fn parse_with_source<'a>(
+        &'a self,
+        reader: &'a mut StringReader,
+        _source: &'a CommandSource,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Item, CommandSyntaxError>> + Send + 'a>> {
+        Box::pin(async move { self.parse(reader) })
     }
 
     /// Provides a list of suggestions from this argument type.
     #[must_use]
-    fn list_suggestions(
-        &self,
-        _context: &CommandContext,
-        _suggestions_builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
+    fn list_suggestions<'a>(
+        &'a self,
+        _context: &'a CommandContext,
+        _builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
         Box::pin(async move { Suggestions::empty() })
     }
 
@@ -87,23 +90,23 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
         reader: &mut StringReader,
     ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
 
-    /// Parses a value by using a [`StringReader`]. Call this only if you have no source.
+    /// Parses a value by using a [`StringReader`], with a given source.
     ///
     /// Errors should be propagated using the `?` operator, which will
     /// replicate Brigadier's behavior of exceptions.
-    fn parse_with_source(
-        &self,
-        reader: &mut StringReader,
-        source: &CommandSource,
-    ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>;
+    fn parse_with_source<'a>(
+        &'a self,
+        reader: &'a mut StringReader,
+        source: &'a CommandSource,
+    ) -> ParseWithSourceAnyResult<'a>;
 
     /// Provides a list of suggestions from this argument type.
     #[must_use]
-    fn list_suggestions(
-        &self,
-        context: &CommandContext,
-        suggestions_builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>>;
+    fn list_suggestions<'a>(
+        &'a self,
+        context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>>;
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
@@ -140,23 +143,28 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
         }
     }
 
-    fn parse_with_source(
-        &self,
-        reader: &mut StringReader,
-        source: &CommandSource,
-    ) -> Result<Box<dyn Any + Send + Sync>, CommandSyntaxError> {
-        match self.parse_with_source(reader, source) {
-            Ok(value) => Ok(Box::new(value)),
-            Err(error) => Err(error),
-        }
+    fn parse_with_source<'a>(
+        &'a self,
+        reader: &'a mut StringReader,
+        source: &'a CommandSource,
+    ) -> ParseWithSourceAnyResult<'a> {
+        Box::pin(async move {
+            match self.parse_with_source(reader, source).await {
+                Ok(value) => {
+                    let value: Box<dyn Any + Send + Sync> = Box::new(value);
+                    Ok(value)
+                }
+                Err(error) => Err(error),
+            }
+        })
     }
 
-    fn list_suggestions(
-        &self,
-        context: &CommandContext,
-        suggestions_builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
-        self.list_suggestions(context, suggestions_builder)
+    fn list_suggestions<'a>(
+        &'a self,
+        context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        self.list_suggestions(context, builder)
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {

@@ -745,7 +745,7 @@ mod test {
             NbtTag::List(vec![
                 NbtTag::Int(1),
                 NbtTag::Float(2.0),
-                NbtTag::String("69".to_string())
+                NbtTag::String("69".into())
             ]),
             NbtOps,
             is_error

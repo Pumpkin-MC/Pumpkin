@@ -60,10 +60,10 @@ impl PlayerInteractEvent {
 /// Enum representing possible player interaction actions.
 #[derive(Clone, PartialEq, Eq)]
 pub enum InteractAction {
-    /// Left-clicking the air
+    /// Left-clicking a block
     LeftClickBlock,
 
-    /// Left-clicking a block
+    /// Left-clicking the air
     LeftClickAir,
 
     /// Right-clicking the air

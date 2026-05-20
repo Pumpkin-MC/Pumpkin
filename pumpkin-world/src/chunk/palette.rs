@@ -106,6 +106,11 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> HeterogeneousPaletteData<V
             self.palette.swap_remove(original_index);
             self.counts.swap_remove(original_index);
 
+            if self.palette.capacity() > 16 && self.palette.len() < self.palette.capacity() / 2 {
+                self.palette.shrink_to_fit();
+                self.counts.shrink_to_fit();
+            }
+
             // If we are indexed, we need to update all indices because swap_remove changed indices
             if !upgraded && let PaletteStorage::Indexed(indices) = &mut self.storage {
                 for row in indices.iter_mut() {

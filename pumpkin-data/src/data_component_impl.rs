@@ -198,7 +198,7 @@ pub struct CustomNameImpl {
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone())
+        NbtTag::String(self.name.clone().into())
     }
 
     fn get_hash(&self) -> i32 {
@@ -228,7 +228,7 @@ impl ItemModelImpl {
 }
 impl DataComponentImpl for ItemModelImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.id.clone())
+        NbtTag::String(self.id.clone().into())
     }
 
     fn get_hash(&self) -> i32 {
@@ -250,7 +250,7 @@ impl EnchantmentsImpl {
         let data = &data.extract_compound()?.child_tags;
         let mut enc = Vec::with_capacity(data.len());
         for (name, level) in data {
-            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
+            enc.push((Enchantment::from_name(name.as_ref())?, level.extract_int()?));
         }
         Some(Self {
             enchantment: Cow::from(enc),
@@ -987,14 +987,14 @@ impl<T: IDSetContent + 'static> IDSet<T> {
                 if tag.starts_with("#") {
                     Some(Self::Tag(Cow::Owned(tag.strip_prefix("#")?.to_string())))
                 } else {
-                    Some(Self::IDs(Cow::Owned([T::from_str(tag.as_str())?].to_vec())))
+                    Some(Self::IDs(Cow::Owned([T::from_str(tag.as_ref())?].to_vec())))
                 }
             }
             NbtTag::List(nbt_tags) => {
                 let mut ids = Vec::<&T>::new();
                 for nbt in nbt_tags {
                     if let NbtTag::String(id) = nbt
-                        && let Some(instance) = T::from_str(id.as_str())
+                        && let Some(instance) = T::from_str(id.as_ref())
                     {
                         ids.push(instance);
                     }
@@ -1013,8 +1013,10 @@ impl<T: IDSetContent + 'static> IDSet<T> {
                 compound.put_string(key, tag);
             }
             Self::IDs(arr) => {
-                let id_vec: Vec<NbtTag> =
-                    arr.iter().map(|x| NbtTag::String(x.to_string())).collect();
+                let id_vec: Vec<NbtTag> = arr
+                    .iter()
+                    .map(|x| NbtTag::String(x.to_string().into()))
+                    .collect();
                 compound.put_list(key, id_vec);
             }
         }
@@ -1466,7 +1468,7 @@ impl StoredEnchantmentsImpl {
         let data = &data.extract_compound()?.child_tags;
         let mut enc = Vec::with_capacity(data.len());
         for (name, level) in data {
-            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
+            enc.push((Enchantment::from_name(name.as_ref())?, level.extract_int()?));
         }
         Some(Self {
             enchantment: Cow::from(enc),

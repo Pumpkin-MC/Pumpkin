@@ -104,21 +104,25 @@ impl SnbtParser<'_, '_> {
     }
 
     // Parses SNBT with a given [`StringReader`], giving the suggestions to fix errors from parsing.
-    pub fn parse_for_suggestions(
-        reader: &mut StringReader,
-        mut builder: SuggestionsBuilder,
-    ) -> Suggestions {
-        let mut parser = SnbtParser {
-            reader,
-            errors: ParserErrors::default(),
+    #[must_use]
+    pub fn parse_for_suggestions(mut builder: SuggestionsBuilder) -> Suggestions {
+        let errors = {
+            let mut reader = StringReader::new(&builder.input);
+            reader.set_cursor(builder.start);
+
+            let mut parser = SnbtParser {
+                reader: &mut reader,
+                errors: ParserErrors::default(),
+            };
+
+            let _ = parser.parse();
+            parser.errors
         };
 
-        let _ = parser.parse();
-
-        if !parser.errors.suggestions.is_empty() {
-            builder = builder.create_offset(parser.errors.cursor);
-            for suggestion in &parser.errors.suggestions {
-                builder = builder.suggest(suggestion.to_string());
+        if !errors.suggestions.is_empty() {
+            builder = builder.create_offset(errors.cursor);
+            for suggestion in &errors.suggestions {
+                builder = builder.filter_and_suggest_one(suggestion.to_string());
             }
         }
 

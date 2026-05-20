@@ -55,6 +55,7 @@ pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
 pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
 pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
 pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
+pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
 
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
@@ -238,6 +239,14 @@ impl PluginHostState {
         let resource = self
             .resource_table
             .push(RecipeManagerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_block_entity<T>(
+        &mut self,
+        provider: Arc<dyn crate::block::entities::BlockEntity>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(BlockEntityResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 }

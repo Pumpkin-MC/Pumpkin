@@ -2951,6 +2951,7 @@ version = "0.1.0-dev+26.1"
 dependencies = [
  "bytes",
  "cesu8",
+ "criterion",
  "flate2",
  "pumpkin-codecs",
  "serde",
@@ -2987,7 +2988,6 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "serde",
- "take_mut",
  "thiserror 2.0.18",
  "tokio",
  "uuid",
@@ -3758,12 +3758,6 @@ dependencies = [
  "windows-sys 0.59.0",
  "winx",
 ]
-
-[[package]]
-name = "take_mut"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 
 [[package]]
 name = "target-lexicon"

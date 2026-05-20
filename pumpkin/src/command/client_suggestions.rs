@@ -606,7 +606,7 @@ const fn bedrock_param_type(arg: &ArgumentType<'_>) -> u32 {
         ArgumentType::ItemSlot | ArgumentType::ItemSlots => arg_types::ARG_TYPE_EQUIPMENT_SLOT,
         ArgumentType::Component
         | ArgumentType::Style
-        | ArgumentType::Nbt
+        | ArgumentType::NbtCompound
         | ArgumentType::NbtTag
         | ArgumentType::NbtPath => arg_types::ARG_TYPE_JSON,
         ArgumentType::Operation => arg_types::ARG_TYPE_OPERATOR,

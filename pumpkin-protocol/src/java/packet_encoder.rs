@@ -81,7 +81,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 /// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
-    writer: EncryptionWriter<W>,
+    writer: Option<EncryptionWriter<W>>,
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
     // Reused compressor to avoid constructing zlib state per packet.
@@ -93,7 +93,7 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     pub const fn new(writer: W) -> Self {
         Self {
-            writer: EncryptionWriter::None(writer),
+            writer: Some(EncryptionWriter::None(writer)),
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
@@ -109,14 +109,17 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketEncodeError> {
-        if matches!(self.writer, EncryptionWriter::Encrypt(_)) {
+        if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {
             return Err(PacketEncodeError::Message(
                 "Encryption already enabled".into(),
             ));
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
             .map_err(|_| PacketEncodeError::Message("Invalid key".into()))?;
-        take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
+
+        if let Some(writer) = self.writer.take() {
+            self.writer = Some(writer.upgrade(cipher));
+        }
         Ok(())
     }
 
@@ -242,14 +245,16 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
+                    .as_mut()
+                    .unwrap()
                     .write_all(&self.compression_scratch)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -274,14 +279,16 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
+                    .as_mut()
+                    .unwrap()
                     .write_all(&packet_data)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -299,10 +306,12 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             }
 
             full_packet_len_var_int
-                .encode_async(&mut self.writer)
+                .encode_async(self.writer.as_mut().unwrap())
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
             self.writer
+                .as_mut()
+                .unwrap()
                 .write_all(&packet_data)
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -313,6 +322,8 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
     pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
         self.writer
+            .as_mut()
+            .unwrap()
             .flush()
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))

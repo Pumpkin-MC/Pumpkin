@@ -43,7 +43,7 @@ use crate::{
                         Arg, ArgumentType, Command, CommandNode, CommandSender, CommandSenderType,
                         ConsumedArgs, PermissionLevel, StringType,
                     },
-                    common::{Locale, Position},
+                    common::{BlockPos as WitBlockPos, Locale, Position},
                     player::Player,
                     server::Server,
                     text::TextComponent,
@@ -149,7 +149,11 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                     }
                 }))
             }
-            OwnedArg::BlockPos(p) => Arg::BlockPos((p.0.x, p.0.y, p.0.z)),
+            OwnedArg::BlockPos(p) => Arg::BlockPos(WitBlockPos {
+                x: p.0.x,
+                y: p.0.y,
+                z: p.0.z,
+            }),
             OwnedArg::Pos3D(v) => Arg::Pos3d((v.x, v.y, v.z)),
             OwnedArg::Pos2D(v) => Arg::Pos2d((v.x, v.y)),
             OwnedArg::Rotation(a, b, c, d) => Arg::Rotation((a, b, c, d)),
