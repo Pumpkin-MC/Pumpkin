@@ -6,34 +6,13 @@ use pumpkin_util::text::TextContent::Translate;
 use quote::{ToTokens, format_ident, quote};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::BTreeMap, fs};
+use std::cmp::PartialEq;
+use std::collections::HashSet;
+use std::fmt::Display;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, RwLock};
 
-
-#[derive(Deserialize, Default)]
-pub struct AdvancementStruct {
-    pub parent: Option<ResourceLocation>,
-    #[serde(default)]
-    pub display: Option<AdvancementDisplay>,
-    //pub criteria : Vec<Criterion>,
-    #[serde(default)]
-    pub rewards: AdvancementRewards,
-    #[serde(default, rename = "sends_telemetry_event")]
-    pub sends_telemetry: bool,
-}
-
-#[derive(Deserialize)]
-struct DisplayIcon {
-    id: ResourceLocation,
-}
-
-fn deserialize_icon_id<'de, D>(deserializer: D) -> Result<ResourceLocation, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let icon = DisplayIcon::deserialize(deserializer)?;
-    Ok(icon.id)
-}
-
-fn r#true() -> bool {
+const fn r#true() -> bool {
     true
 }
 
@@ -53,6 +32,10 @@ pub struct AdvancementDisplay {
     pub hidden: bool,
     #[serde(default = "r#true")]
     pub announce_to_chat: bool,
+    #[serde(skip)]
+    pub x:f32,
+    #[serde(skip)]
+    pub y:f32,
 }
 
 fn as_translate(text: &TextComponent) -> TokenStream {
@@ -149,6 +132,386 @@ impl ToTokens for AdvancementRewards {
             }
         })
     }
+}
+
+pub struct AdvancementNode {
+    pub children: RwLock<HashSet<Arc<Self>>>,
+    pub parent: Option<Arc<Self>>,
+    pub value: &AdvancementStruct,
+}
+
+impl AdvancementNode {
+    pub fn add_child(&self, child: Arc<Self>) {
+        self.children.write().unwrap().insert(child);
+    }
+
+    #[must_use]
+    pub fn new(value:&AdvancementStruct, parent: Option<Arc<Self>>) -> Self {
+        Self {
+            value,
+            parent,
+            children: RwLock::new(HashSet::new()),
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn has_display(&self) -> bool {
+        self.value.display.is_some()
+    }
+
+    #[inline]
+    pub const fn set_location(&self,x:f32,y:f32) {
+        self.value.display.inspect(|mut val| val.set_location(x, y));
+    }
+}
+
+impl PartialEq for &AdvancementStruct {
+    fn eq(&self, other: &Self) -> bool {
+        self
+    }
+}
+
+impl PartialEq<Self> for AdvancementNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for AdvancementNode {}
+
+impl Display for AdvancementNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value.id)
+    }
+}
+
+impl Hash for AdvancementNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+struct LayoutNode<'a> {
+    node: &'a AdvancementNode,
+    parent: Option<usize>,
+    previous_sibling: Option<usize>,
+    child_index: usize,
+    children: Vec<usize>,
+    ancestor: usize,
+    thread: Option<usize>,
+    x: i32,
+    y: f32,
+    mod_field: f32,
+    change: f32,
+    shift: f32,
+}
+
+pub struct TreePositioner;
+
+impl TreePositioner {
+    pub fn run(root_node: &AdvancementNode) {
+        if !root_node.has_display() {
+            panic!("Can't position children of an invisible root!");
+        }
+        let mut nodes: Vec<LayoutNode> = Vec::with_capacity(32);
+
+        let root_idx = nodes.len();
+        nodes.push(LayoutNode {
+            node: root_node,
+            parent: None,
+            previous_sibling: None,
+            child_index: 1,
+            children: Vec::new(),
+            ancestor: root_idx,
+            thread: None,
+            x: 0,
+            y: -1.0,
+            mod_field: 0.0,
+            change: 0.0,
+            shift: 0.0,
+        });
+
+        let mut previous_idx = None;
+        for child in root_node.children() {
+            previous_idx = Self::add_child(&mut nodes, root_idx, child, previous_idx);
+        }
+
+        Self::first_walk(&mut nodes, root_idx);
+
+        let root_y = nodes[root_idx].y;
+        let min = Self::second_walk(&mut nodes, root_idx, 0.0, 0, root_y);
+
+        if min < 0.0 {
+            Self::third_walk(&mut nodes, root_idx, -min);
+        }
+
+        // Application finale des positions
+        Self::finalize_position(&nodes, root_idx);
+    }
+
+    fn add_child<'a>(
+        nodes: &mut Vec<LayoutNode<'a>>,
+        parent_idx: usize,
+        adv_node: &'a AdvancementNode,
+        mut previous_idx: Option<usize>,
+    ) -> Option<usize> {
+        if adv_node.has_display() {
+            let child_idx = nodes.len();
+            let next_child_index = nodes[parent_idx].children.len() + 1;
+            let depth = nodes[parent_idx].x + 1;
+
+            nodes.push(LayoutNode {
+                node: adv_node,
+                parent: Some(parent_idx),
+                previous_sibling: previous_idx,
+                child_index: next_child_index,
+                children: Vec::new(),
+                ancestor: child_idx,
+                thread: None,
+                x: depth,
+                y: -1.0,
+                mod_field: 0.0,
+                change: 0.0,
+                shift: 0.0,
+            });
+
+            nodes[parent_idx].children.push(child_idx);
+
+            let mut child_prev = None;
+            for child in adv_node.children() {
+                child_prev = Self::add_child(nodes, child_idx, child, child_prev);
+            }
+
+            Some(child_idx)
+        } else {
+            for grandchild in adv_node.children() {
+                previous_idx = Self::add_child(nodes, parent_idx, grandchild, previous_idx);
+            }
+            previous_idx
+        }
+    }
+
+    fn first_walk(nodes: &mut Vec<LayoutNode>, idx: usize) {
+        let num_children = nodes[idx].children.len();
+
+        if num_children == 0 {
+            if let Some(prev_sib) = nodes[idx].previous_sibling {
+                nodes[idx].y = nodes[prev_sib].y + 1.0;
+            } else {
+                nodes[idx].y = 0.0;
+            }
+        } else {
+            let mut default_ancestor = None;
+            for i in 0..num_children {
+                let child_idx = nodes[idx].children[i];
+                Self::first_walk(nodes, child_idx);
+                let arg_ancestor = default_ancestor.unwrap_or(child_idx);
+                default_ancestor = Some(Self::apportion(nodes, child_idx, arg_ancestor));
+            }
+
+            Self::execute_shifts(nodes, idx);
+
+            let first_child_idx = nodes[idx].children[0];
+            let last_child_idx = nodes[idx].children[num_children - 1];
+            let midpoint = (nodes[first_child_idx].y + nodes[last_child_idx].y) / 2.0;
+
+            if let Some(prev_sib) = nodes[idx].previous_sibling {
+                nodes[idx].y = nodes[prev_sib].y + 1.0;
+                nodes[idx].mod_field = nodes[idx].y - midpoint;
+            } else {
+                nodes[idx].y = midpoint;
+            }
+        }
+    }
+
+    fn second_walk<>(
+        nodes: &mut Vec<LayoutNode>,
+        idx: usize,
+        mod_sum: f32,
+        depth: i32,
+        mut min: f32,
+    ) -> f32 {
+        nodes[idx].y += mod_sum;
+        nodes[idx].x = depth;
+
+        if nodes[idx].y < min {
+            min = nodes[idx].y;
+        }
+
+        let num_children = nodes[idx].children.len();
+        let current_mod = nodes[idx].mod_field;
+
+        for i in 0..num_children {
+            let child_idx = nodes[idx].children[i];
+            min = Self::second_walk(nodes, child_idx, mod_sum + current_mod, depth + 1, min);
+        }
+
+        min
+    }
+
+    fn third_walk(nodes: &mut Vec<LayoutNode>, idx: usize, offset: f32) {
+        nodes[idx].y += offset;
+
+        let num_children = nodes[idx].children.len();
+        for i in 0..num_children {
+            let child_idx = nodes[idx].children[i];
+            Self::third_walk(nodes, child_idx, offset);
+        }
+    }
+
+    fn execute_shifts(nodes: &mut [LayoutNode], idx: usize) {
+        let mut shift = 0.0;
+        let mut change = 0.0;
+
+        for &child_idx in nodes[idx].children.iter().rev() {
+            nodes[child_idx].y += shift;
+            nodes[child_idx].mod_field += shift;
+            change += nodes[child_idx].change;
+            shift += nodes[child_idx].shift + change;
+        }
+    }
+
+    #[inline]
+    fn previous_or_thread(nodes: &[LayoutNode], idx: usize) -> Option<usize> {
+        nodes[idx].thread.or_else(|| nodes[idx].children.first().copied())
+    }
+
+    #[inline]
+    fn next_or_thread(nodes: &[LayoutNode], idx: usize) -> Option<usize> {
+        nodes[idx].thread.or_else(|| nodes[idx].children.last().copied())
+    }
+
+    fn apportion(
+        nodes: &mut [LayoutNode],
+        idx: usize,
+        mut default_ancestor: usize,
+    ) -> usize {
+        let prev_sib = match nodes[idx].previous_sibling {
+            Some(p) => p,
+            None => return default_ancestor,
+        };
+
+        let mut vir = idx;
+        let mut vor = idx;
+        let mut vil = prev_sib;
+
+        let parent_idx = nodes[idx].parent.expect("Tree invariant broken: no parent");
+        let mut vol = nodes[parent_idx].children[0];
+
+        let mut sir = nodes[vir].mod_field;
+        let mut sor = nodes[vor].mod_field;
+        let mut sil = nodes[vil].mod_field;
+        let mut sol = nodes[vol].mod_field;
+
+        while let (Some(next_vil), Some(next_vir)) = (Self::next_or_thread(nodes, vil), Self::previous_or_thread(nodes, vir)) {
+            vil = next_vil;
+            vir = next_vir;
+            vol = Self::previous_or_thread(nodes, vol).expect("Tree invariant broken");
+            vor = Self::next_or_thread(nodes, vor).expect("Tree invariant broken");
+
+            nodes[vor].ancestor = idx;
+
+            let shift = (nodes[vil].y + sil) - (nodes[vir].y + sir) + 1.0;
+            if shift > 0.0 {
+                let ancestor_idx = Self::get_ancestor(nodes, vil, idx, default_ancestor);
+                Self::move_subtree(nodes, ancestor_idx, idx, shift);
+                sir += shift;
+                sor += shift;
+            }
+
+            sil += nodes[vil].mod_field;
+            sir += nodes[vir].mod_field;
+            sol += nodes[vol].mod_field;
+            sor += nodes[vor].mod_field;
+        }
+
+        if Self::next_or_thread(nodes, vil).is_some() && Self::next_or_thread(nodes, vor).is_none() {
+            nodes[vor].thread = Self::next_or_thread(nodes, vil);
+            nodes[vor].mod_field += sil - sor;
+        } else {
+            if Self::previous_or_thread(nodes, vir).is_some() && Self::previous_or_thread(nodes, vol).is_none() {
+                nodes[vol].thread = Self::previous_or_thread(nodes, vir);
+                nodes[vol].mod_field += sir - sol;
+            }
+            default_ancestor = idx;
+        }
+
+        default_ancestor
+    }
+
+    fn move_subtree(nodes: &mut [LayoutNode], left: usize, right: usize, shift: f32) {
+        let subtrees = (nodes[right].child_index as f32) - (nodes[left].child_index as f32);
+        if subtrees != 0.0 {
+            nodes[right].change -= shift / subtrees;
+            nodes[left].change += shift / subtrees;
+        }
+        nodes[right].shift += shift;
+        nodes[right].y += shift;
+        nodes[right].mod_field += shift;
+    }
+
+    fn get_ancestor(
+        nodes: &[LayoutNode],
+        vil: usize,
+        idx: usize,
+        default_ancestor: usize,
+    ) -> usize {
+        let ancestor = nodes[vil].ancestor;
+        let parent_idx = nodes[idx].parent.unwrap();
+
+        if nodes[parent_idx].children.contains(&ancestor) {
+            ancestor
+        } else {
+            default_ancestor
+        }
+    }
+
+    fn finalize_position(nodes: &[LayoutNode], idx: usize) {
+        nodes[idx].node.set_location(nodes[idx].x as f32, nodes[idx].y);
+        for &child_idx in &nodes[idx].children {
+            Self::finalize_position(nodes, child_idx);
+        }
+    }
+}
+
+#[derive(Deserialize, Default)]
+pub struct AdvancementStruct {
+    pub parent: Option<ResourceLocation>,
+    #[serde(default)]
+    pub display: Option<AdvancementDisplay>,
+    //pub criteria : Vec<Criterion>,
+    #[serde(default)]
+    pub rewards: AdvancementRewards,
+    #[serde(default, rename = "sends_telemetry_event")]
+    pub sends_telemetry: bool,
+}
+pub struct AdvancementHolder(String,AdvancementStruct);
+
+impl PartialEq for AdvancementHolder {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+impl Eq for AdvancementHolder {}
+
+impl Hash for AdvancementHolder {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+#[derive(Deserialize)]
+struct DisplayIcon {
+    id: ResourceLocation,
+}
+
+fn deserialize_icon_id<'de, D>(deserializer: D) -> Result<ResourceLocation, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let icon = DisplayIcon::deserialize(deserializer)?;
+    Ok(icon.id)
 }
 
 pub(crate) fn build() -> TokenStream {

@@ -49,6 +49,7 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
+pub mod advancement;
 
 pub struct LoggingConfig {
     pub color: bool,

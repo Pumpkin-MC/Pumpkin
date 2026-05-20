@@ -550,7 +550,7 @@ impl Player {
                 server
                     .advancement_manager
                     .clone()
-                    .new_advancement(gameprofile.id),
+                    .new_player_advancement(gameprofile.id),
             )),
             gameprofile,
             client,

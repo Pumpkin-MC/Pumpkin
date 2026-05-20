@@ -49,6 +49,7 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
+pub mod advancement;
 
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
