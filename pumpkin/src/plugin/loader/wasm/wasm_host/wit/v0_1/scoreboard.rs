@@ -47,7 +47,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .add_objective(&world, objective);
+            .add_objective(&world, objective)
+            .await;
         Ok(())
     }
 
@@ -61,7 +62,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_objective(&world, &name);
+            .remove_objective(&world, &name)
+            .await;
         Ok(())
     }
 
@@ -145,7 +147,12 @@ impl scoreboard::HostScoreboard for PluginHostState {
             None,
             None,
         );
-        world.scoreboard.lock().await.update_score(&world, score);
+        world
+            .scoreboard
+            .lock()
+            .await
+            .update_score(&world, score)
+            .await;
         Ok(())
     }
 
@@ -160,7 +167,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_score(&world, &entity_name, &objective_name);
+            .remove_score(&world, &entity_name, &objective_name)
+            .await;
         Ok(())
     }
 

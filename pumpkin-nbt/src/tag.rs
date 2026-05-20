@@ -1,13 +1,12 @@
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
-use io::Read;
 use serde::{Deserialize, Serialize};
-use serializer::WriteAdaptor;
+use serializer::NbtWriteHelper;
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
-    LIST_ID, LONG_ARRAY_ID, LONG_ID, MAX_ARRAY_LENGTH, SHORT_ID, STRING_ID, Seek, Write, compound,
-    deserializer, get_nbt_string, io, nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
+    LIST_ID, LONG_ARRAY_ID, LONG_ID, MAX_ARRAY_LENGTH, SHORT_ID, STRING_ID, compound, deserializer,
+    nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,21 +36,9 @@ impl NbtTag {
         unsafe { *std::ptr::from_ref::<Self>(self).cast::<u8>() }
     }
 
-    pub fn serialize<W: Write>(self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
-        w.write_u8_be(self.get_type_id())?;
+    pub fn serialize<W: NbtWriteHelper>(self, w: &mut W) -> serializer::Result<()> {
+        w.write_u8(self.get_type_id())?;
         self.serialize_data(w)?;
-        Ok(())
-    }
-
-    pub fn write_string<W: Write>(string: &str, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
-        let java_string = cesu8::to_java_cesu8(string);
-        let len = java_string.len();
-        if len > u16::MAX as usize {
-            return Err(Error::LargeLength(len));
-        }
-
-        w.write_u16_be(len as u16)?;
-        w.write_slice(&java_string)?;
         Ok(())
     }
 
@@ -119,28 +106,28 @@ impl NbtTag {
         Self::Compound(compound)
     }
 
-    pub fn serialize_data<W: Write>(self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
+    pub fn serialize_data<W: NbtWriteHelper>(self, w: &mut W) -> serializer::Result<()> {
         match self {
             Self::End => {}
-            Self::Byte(byte) => w.write_i8_be(byte)?,
-            Self::Short(short) => w.write_i16_be(short)?,
-            Self::Int(int) => w.write_i32_be(int)?,
-            Self::Long(long) => w.write_i64_be(long)?,
-            Self::Float(float) => w.write_f32_be(float)?,
-            Self::Double(double) => w.write_f64_be(double)?,
+            Self::Byte(byte) => w.write_i8(byte)?,
+            Self::Short(short) => w.write_i16(short)?,
+            Self::Int(int) => w.write_i32(int)?,
+            Self::Long(long) => w.write_i64(long)?,
+            Self::Float(float) => w.write_f32(float)?,
+            Self::Double(double) => w.write_f64(double)?,
             Self::ByteArray(byte_array) => {
                 let len = byte_array.len();
                 if len > i32::MAX as usize {
                     return Err(Error::LargeLength(len));
                 }
 
-                w.write_i32_be(len as i32)?;
+                w.write_i32(len as i32)?;
                 for int in byte_array {
-                    w.write_i8_be(int)?;
+                    w.write_i8(int)?;
                 }
             }
             Self::String(string) => {
-                Self::write_string(&string, w)?;
+                w.write_string(&string)?;
             }
             Self::List(list) => {
                 let len = list.len();
@@ -150,8 +137,8 @@ impl NbtTag {
 
                 let list_element_id = Self::get_list_element_type_id(&list);
 
-                w.write_u8_be(list_element_id)?;
-                w.write_i32_be(len as i32)?;
+                w.write_u8(list_element_id)?;
+                w.write_i32(len as i32)?;
                 for nbt_tag in list {
                     // Since tags in the same list tag must have the same type,
                     // we need to handle those of different tag types by
@@ -168,9 +155,9 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                w.write_i32_be(len as i32)?;
+                w.write_i32(len as i32)?;
                 for int in int_array {
-                    w.write_i32_be(int)?;
+                    w.write_i32(int)?;
                 }
             }
             Self::LongArray(long_array) => {
@@ -179,45 +166,40 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                w.write_i32_be(len as i32)?;
-
+                w.write_i32(len as i32)?;
                 for long in long_array {
-                    w.write_i64_be(long)?;
+                    w.write_i64(long)?;
                 }
             }
         }
         Ok(())
     }
 
-    pub fn deserialize<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
-        let tag_id = reader.get_u8_be()?;
+    pub fn deserialize<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+        let tag_id = reader.get_u8()?;
         Self::deserialize_data(reader, tag_id)
     }
 
-    pub fn skip_data<R: Read + Seek>(
-        reader: &mut NbtReadHelper<R>,
-        tag_id: u8,
-    ) -> Result<(), Error> {
+    pub fn skip_data<R: NbtReadHelper>(reader: &mut R, tag_id: u8) -> Result<(), Error> {
         match tag_id {
             END_ID => Ok(()),
-            BYTE_ID => reader.skip_bytes(1),
-            SHORT_ID => reader.skip_bytes(2),
-            INT_ID | FLOAT_ID => reader.skip_bytes(4),
-            LONG_ID | DOUBLE_ID => reader.skip_bytes(8),
+            BYTE_ID => reader.skip_i8(),
+            SHORT_ID => reader.skip_i16(),
+            INT_ID => reader.skip_i32(),
+            LONG_ID => reader.skip_i64(),
+            FLOAT_ID => reader.skip_f32(),
+            DOUBLE_ID => reader.skip_f64(),
             BYTE_ARRAY_ID => {
-                let len = reader.get_i32_be()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
                 reader.skip_bytes(i64::from(len))
             }
-            STRING_ID => {
-                let len = reader.get_u16_be()?;
-                reader.skip_bytes(i64::from(len))
-            }
+            STRING_ID => reader.skip_string(),
             LIST_ID => {
-                let tag_type_id = reader.get_u8_be()?;
-                let len = reader.get_i32_be()?;
+                let tag_type_id = reader.get_u8()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
@@ -230,57 +212,62 @@ impl NbtTag {
             }
             COMPOUND_ID => NbtCompound::skip_content(reader),
             INT_ARRAY_ID => {
-                let len = reader.get_i32_be()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
 
-                reader.skip_bytes(i64::from(len) * 4)
+                for _ in 0..len {
+                    reader.skip_i32()?;
+                }
+
+                Ok(())
             }
             LONG_ARRAY_ID => {
-                let len = reader.get_i32_be()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
 
-                reader.skip_bytes(i64::from(len) * 8)
+                for _ in 0..len {
+                    reader.skip_i64()?;
+                }
+
+                Ok(())
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }
     }
 
-    pub fn deserialize_data<R: Read + Seek>(
-        reader: &mut NbtReadHelper<R>,
-        tag_id: u8,
-    ) -> Result<Self, Error> {
+    pub fn deserialize_data<R: NbtReadHelper>(reader: &mut R, tag_id: u8) -> Result<Self, Error> {
         match tag_id {
             END_ID => Ok(Self::End),
             BYTE_ID => {
-                let byte = reader.get_i8_be()?;
+                let byte = reader.get_i8()?;
                 Ok(Self::Byte(byte))
             }
             SHORT_ID => {
-                let short = reader.get_i16_be()?;
+                let short = reader.get_i16()?;
                 Ok(Self::Short(short))
             }
             INT_ID => {
-                let int = reader.get_i32_be()?;
+                let int = reader.get_i32()?;
                 Ok(Self::Int(int))
             }
             LONG_ID => {
-                let long = reader.get_i64_be()?;
+                let long = reader.get_i64()?;
                 Ok(Self::Long(long))
             }
             FLOAT_ID => {
-                let float = reader.get_f32_be()?;
+                let float = reader.get_f32()?;
                 Ok(Self::Float(float))
             }
             DOUBLE_ID => {
-                let double = reader.get_f64_be()?;
+                let double = reader.get_f64()?;
                 Ok(Self::Double(double))
             }
             BYTE_ARRAY_ID => {
-                let len = reader.get_i32_be()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
@@ -291,15 +278,15 @@ impl NbtTag {
                 }
                 let mut byte_array = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let byte = reader.get_i8_be()?;
+                    let byte = reader.get_i8()?;
                     byte_array.push(byte);
                 }
                 Ok(Self::ByteArray(byte_array))
             }
-            STRING_ID => Ok(Self::String(get_nbt_string(reader)?.into())),
+            STRING_ID => Ok(Self::String(reader.get_string()?.into())),
             LIST_ID => {
-                let tag_type_id = reader.get_u8_be()?;
-                let len = reader.get_i32_be()?;
+                let tag_type_id = reader.get_u8()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
@@ -320,7 +307,7 @@ impl NbtTag {
             }
             COMPOUND_ID => Ok(Self::Compound(NbtCompound::deserialize_content(reader)?)),
             INT_ARRAY_ID => {
-                let len = reader.get_i32_be()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
@@ -331,13 +318,13 @@ impl NbtTag {
                 }
                 let mut int_array = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let int = reader.get_i32_be()?;
+                    let int = reader.get_i32()?;
                     int_array.push(int);
                 }
                 Ok(Self::IntArray(int_array))
             }
             LONG_ARRAY_ID => {
-                let len = reader.get_i32_be()?;
+                let len = reader.get_i32()?;
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
@@ -348,7 +335,7 @@ impl NbtTag {
                 }
                 let mut long_array = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let long = reader.get_i64_be()?;
+                    let long = reader.get_i64()?;
                     long_array.push(long);
                 }
                 Ok(Self::LongArray(long_array))

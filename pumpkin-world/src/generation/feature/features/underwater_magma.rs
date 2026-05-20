@@ -79,7 +79,7 @@ impl UnderwaterMagmaFeature {
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
-        _feature_name: &str,
+        _feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

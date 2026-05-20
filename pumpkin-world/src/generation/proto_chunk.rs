@@ -995,8 +995,7 @@ impl ProtoChunk {
                     && let Some(features_at_step) = biome.features.get(step)
                 {
                     for &feature_id in *features_at_step {
-                        features_to_run
-                            .push(feature_id.strip_prefix("minecraft:").unwrap_or(feature_id));
+                        features_to_run.push(feature_id);
                     }
                 }
             }
@@ -1004,8 +1003,8 @@ impl ProtoChunk {
             features_to_run.sort_unstable();
             features_to_run.dedup();
 
-            for (p, feature_id) in features_to_run.into_iter().enumerate() {
-                if let Some(feature) = PLACED_FEATURES.get(feature_id) {
+            for (p, feature_enum) in features_to_run.into_iter().enumerate() {
+                if let Some(feature) = PLACED_FEATURES.get(&feature_enum) {
                     let decorator_seed = get_decorator_seed(population_seed, p as u64, step as u64);
                     let mut random =
                         RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
@@ -1015,7 +1014,7 @@ impl ProtoChunk {
                         block_registry,
                         min_y as i8,
                         height as u16,
-                        feature_id,
+                        feature_enum,
                         &mut random,
                         origin_pos,
                     );

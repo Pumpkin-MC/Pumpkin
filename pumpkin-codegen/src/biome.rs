@@ -1,3 +1,4 @@
+use heck::ToPascalCase;
 use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
@@ -225,7 +226,22 @@ pub fn build() -> TokenStream {
         let temperature = biome.temperature;
         let downfall = biome.downfall;
         //  let carvers = &biome.carvers;
-        let features = &biome.features;
+        let features: Vec<TokenStream> = biome
+            .features
+            .iter()
+            .map(|step| {
+                let step_features: Vec<TokenStream> = step
+                    .iter()
+                    .map(|f| {
+                        let name = f.strip_prefix("minecraft:").unwrap_or(f);
+                        let variant_name = format_ident!("{}", name.to_pascal_case());
+                        quote! { crate::placed_feature::PlacedFeature::#variant_name }
+                    })
+                    .collect();
+                quote! { &[#(#step_features),*] }
+            })
+            .collect();
+
         let creature_spawn_probability = &biome.creature_spawn_probability.unwrap_or(0.1);
 
         let temperature_modifier = biome
@@ -317,7 +333,7 @@ pub fn build() -> TokenStream {
                      #temperature_modifier,
                      #downfall
                 ),
-                features: &[#(&[#(#features),*]),*],
+                features: &[#(#features),*],
                 creature_spawn_probability: #creature_spawn_probability,
                 spawners: #spawners,
                 spawn_costs: phf::phf_map! {
@@ -347,7 +363,7 @@ pub fn build() -> TokenStream {
             pub registry_id: &'static str,
             pub weather: Weather,
             // carvers: &'static [&str],
-            pub features: &'static [&'static [&'static str]],
+            pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
             pub creature_spawn_probability: f32,
             pub spawners: SpawnGroups,
             pub spawn_costs: phf::Map<&'static str, SpawnCosts>,

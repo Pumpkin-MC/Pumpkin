@@ -12,7 +12,7 @@ impl FallenTreeFeature {
         _chunk: &mut ProtoChunk,
         _min_y: i8,
         _height: u16,
-        _feature: &str, // This placed feature
+        _feature: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         _random: &mut RandomGenerator,
         _pos: BlockPos,
     ) -> bool {

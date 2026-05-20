@@ -94,7 +94,7 @@ impl<'a> PistonHandler<'a> {
     }
 
     async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
-        let (block, block_state) = self.world.get_block_and_state(&pos);
+        let (mut block, block_state) = self.world.get_block_and_state(&pos);
         if block_state.is_air() {
             return true;
         }
@@ -114,12 +114,12 @@ impl<'a> PistonHandler<'a> {
         while Self::is_block_sticky(block) {
             let block_pos = pos.offset_dir(self.motion_direction.opposite().to_offset(), i as i32);
             let block2 = block;
-            let (block, block_state) = self.world.get_block_and_state(&block_pos);
-            if block_state.is_air()
-                || !Self::is_adjacent_block_stuck(block2, block)
+            let (next_block, next_state) = self.world.get_block_and_state(&block_pos);
+            if next_state.is_air()
+                || !Self::is_adjacent_block_stuck(block2, next_block)
                 || !PistonBlock::is_movable(
-                    block,
-                    block_state,
+                    next_block,
+                    next_state,
                     self.motion_direction,
                     false,
                     self.motion_direction.opposite(),
@@ -128,6 +128,7 @@ impl<'a> PistonHandler<'a> {
             {
                 break;
             }
+            block = next_block;
             i += 1;
             if i + self.moved_blocks.len() > MAX_MOVABLE_BLOCKS {
                 return false;

@@ -1,9 +1,12 @@
 use crate::command::argument_types::FromStringReader;
-use crate::command::argument_types::entity_selector::parser::{EntitySelectorParser, Flags};
+use crate::command::argument_types::entity_selector::parser::{
+    EntitySelectorParser, EntitySelectorParserSuggestions, Flags,
+};
 use crate::command::argument_types::entity_selector::{EntitySelectorPredicate, Order};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use pumpkin_data::translation;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
@@ -65,6 +68,31 @@ pub enum EntitySelectorOption {
     Scores,
     Advancements,
     Predicate,
+}
+
+impl EntitySelectorOption {
+    pub const VALUES: [Self; 20] = [
+        Self::Distance,
+        Self::Level,
+        Self::X,
+        Self::Y,
+        Self::Z,
+        Self::Dx,
+        Self::Dy,
+        Self::Dz,
+        Self::XRotation,
+        Self::YRotation,
+        Self::Limit,
+        Self::Sort,
+        Self::Gamemode,
+        Self::Team,
+        Self::Type,
+        Self::Tag,
+        Self::Nbt,
+        Self::Scores,
+        Self::Advancements,
+        Self::Predicate,
+    ];
 }
 
 /// Implements parsing for a coordinate option.
@@ -208,6 +236,7 @@ impl EntitySelectorOption {
             }
             Self::Sort => {
                 let string = parser.reader.read_unquoted_string();
+                parser.suggestions = EntitySelectorParserSuggestions::Sort;
                 parser.order = match string.as_str() {
                     "nearest" => Ok(Order::Nearest),
                     "furthest" => Ok(Order::Furthest),
@@ -223,8 +252,11 @@ impl EntitySelectorOption {
                 Ok(())
             }
             Self::Gamemode => {
+                parser.suggestions = EntitySelectorParserSuggestions::Gamemode;
+                let start = parser.reader.cursor();
                 let invert = parser.consume_inverted_start();
                 if parser.has_flag(Flags::GAMEMODE_NOT_EQUALS_SET) && !invert {
+                    parser.reader.set_cursor(start);
                     return Err(self.inapplicable_error(parser.reader));
                 }
                 let string = parser.reader.read_unquoted_string();
@@ -241,6 +273,7 @@ impl EntitySelectorOption {
                     );
                     Ok(())
                 } else {
+                    parser.reader.set_cursor(start);
                     Err(GAMEMODE_INVALID_ERROR_TYPE
                         .create(parser.reader, TextComponent::text(string)))
                 }
@@ -275,5 +308,22 @@ impl EntitySelectorOption {
             Self::Advancements => !parser.has_flag(Flags::ADVANCEMENTS_SET),
             Self::Tag | Self::Nbt | Self::Predicate => true,
         }
+    }
+
+    pub fn suggest_names(
+        parser: &EntitySelectorParser,
+        mut builder: SuggestionsBuilder,
+    ) -> SuggestionsBuilder {
+        for option in Self::VALUES {
+            let lower_prefix = builder.remaining_lowercase();
+            if option.name().starts_with(lower_prefix) && option.can_use(parser) {
+                let key = format!("argument.entity.options.{}.description", option.name());
+                builder = builder.suggest_with_tooltip(
+                    format!("{}=", option.name()),
+                    TextComponent::translate_cross(key.clone(), key, []),
+                );
+            }
+        }
+        builder
     }
 }

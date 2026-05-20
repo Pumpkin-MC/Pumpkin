@@ -83,12 +83,12 @@ impl ParsedMappings {
     /// `Some(ParsedMappings)` if the section exists, or `None` if the section is absent.
     pub fn parse_mapping_file(path: &str, section: &str) -> Option<Self> {
         use pumpkin_nbt::Nbt;
-        use pumpkin_nbt::deserializer::NbtReadHelper;
+        use pumpkin_nbt::deserializer::NbtReadHelperJava;
         use std::fs;
         use std::io::Cursor;
 
         let bytes = fs::read(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
-        let mut reader = NbtReadHelper::new(Cursor::new(bytes));
+        let mut reader = NbtReadHelperJava::new(Cursor::new(bytes));
         let nbt =
             Nbt::read(&mut reader).unwrap_or_else(|_| panic!("Failed to parse NBT at {path}"));
 

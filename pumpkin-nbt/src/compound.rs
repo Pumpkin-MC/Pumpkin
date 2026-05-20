@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::deserializer::NbtReadHelper;
-use crate::serializer::WriteAdaptor;
+use crate::serializer::NbtWriteHelper;
 use crate::tag::NbtTag;
-use crate::{END_ID, Error, Nbt, get_nbt_string};
+use crate::{END_ID, Error, Nbt};
 use std::collections::hash_map::IntoIter;
-use std::io::{ErrorKind, Read, Seek, Write};
+use std::io::ErrorKind;
 
 #[macro_export]
 macro_rules! nbt_compound_tag {
@@ -42,9 +42,9 @@ impl NbtCompound {
         }
     }
 
-    pub fn skip_content<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<(), Error> {
+    pub fn skip_content<R: NbtReadHelper>(reader: &mut R) -> Result<(), Error> {
         loop {
-            let tag_id = match reader.get_u8_be() {
+            let tag_id = match reader.get_u8() {
                 Ok(id) => id,
                 Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(e),
@@ -54,8 +54,7 @@ impl NbtCompound {
                 break;
             }
 
-            let len = reader.get_u16_be()?;
-            reader.skip_bytes(i64::from(len))?;
+            reader.skip_string()?;
 
             // Skip Value
             NbtTag::skip_data(reader, tag_id)?;
@@ -64,13 +63,11 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn deserialize_content<R: Read + Seek>(
-        reader: &mut NbtReadHelper<R>,
-    ) -> Result<Self, Error> {
+    pub fn deserialize_content<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
         let mut compound = Self::new();
 
         loop {
-            let tag_id = match reader.get_u8_be() {
+            let tag_id = match reader.get_u8() {
                 Ok(id) => id,
                 Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(e),
@@ -80,7 +77,7 @@ impl NbtCompound {
                 break;
             }
 
-            let name = get_nbt_string(reader)?;
+            let name = reader.get_string()?;
             let tag = NbtTag::deserialize_data(reader, tag_id)?;
 
             compound.child_tags.insert(name.into(), tag);
@@ -89,13 +86,13 @@ impl NbtCompound {
         Ok(compound)
     }
 
-    pub fn serialize_content<W: Write>(self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
+    pub fn serialize_content<W: NbtWriteHelper>(self, w: &mut W) -> Result<(), Error> {
         for (name, tag) in self.child_tags {
-            w.write_u8_be(tag.get_type_id())?;
-            NbtTag::write_string(&name, w)?;
+            w.write_u8(tag.get_type_id())?;
+            w.write_string(&name)?;
             tag.serialize_data(w)?;
         }
-        w.write_u8_be(END_ID)?;
+        w.write_u8(END_ID)?;
         Ok(())
     }
 

@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub mod deserializer;
-use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
+use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 pub mod serializer;
@@ -421,7 +421,7 @@ impl<W: Write> NetworkWriteExt for W {
     }
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        let mut write_adaptor = WriteAdaptor::new(self);
+        let mut write_adaptor = NbtWriteHelperJava::new(self);
         data.serialize(&mut write_adaptor)
             .map_err(|e| WritingError::Message(e.to_string()))?;
 
