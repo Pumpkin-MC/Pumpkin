@@ -1,3 +1,5 @@
+use rand::{RngExt, rng};
+
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -17,7 +19,10 @@ impl ItemMetadata for EnderPearlItem {
     }
 }
 
+const ROLL: f32 = 0.0;
 const POWER: f32 = 1.5;
+const DIVERGENCE: f32 = 1.0;
+const THROW_SOUND_VOLUME: f32 = 0.5;
 
 impl ItemBehaviour for EnderPearlItem {
     fn normal_use<'a>(
@@ -28,10 +33,12 @@ impl ItemBehaviour for EnderPearlItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
+            world.play_sound_fine(
                 Sound::EntityEnderPearlThrow,
                 pumpkin_data::sound::SoundCategory::Neutral,
                 &position,
+                THROW_SOUND_VOLUME,
+                0.4 / (rng().random::<f32>() * 0.4 + 0.8),
             );
 
             let entity = Entity::new(world.clone(), position, &EntityType::ENDER_PEARL);
@@ -42,9 +49,9 @@ impl ItemBehaviour for EnderPearlItem {
                 &player.living_entity.entity,
                 pitch,
                 yaw,
-                0.0,
+                ROLL,
                 POWER,
-                1.0,
+                DIVERGENCE,
             );
             world.spawn_entity(Arc::new(pearl)).await;
 
