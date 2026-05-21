@@ -3,6 +3,7 @@ use std::io::{Error, Write};
 
 use crate::serial::PacketWrite;
 
+#[derive(PacketWrite)]
 #[packet(85)]
 pub struct CTransfer {
     pub address: String,
@@ -18,14 +19,5 @@ impl CTransfer {
             port,
             reload_world,
         }
-    }
-}
-
-impl PacketWrite for CTransfer {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.address.write(writer)?;
-        self.port.write(writer)?;
-        self.reload_world.write(writer)?;
-        Ok(())
     }
 }
