@@ -106,9 +106,6 @@ impl CommandExecutor for TargetPlayerExecutor {
             }
 
             for p in players {
-                p.client
-                    .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
-                    .await;
 
                 match &p.client {
                     ClientPlatform::Java(client) => {
