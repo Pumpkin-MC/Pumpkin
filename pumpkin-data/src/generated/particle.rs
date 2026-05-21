@@ -121,6 +121,8 @@ pub enum Particle {
 }
 impl Particle {
     #[doc = r" Try to parse a `Particle` from a resource location string."]
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "angry_villager" => Some(Self::AngryVillager),
@@ -243,6 +245,8 @@ impl Particle {
             _ => None,
         }
     }
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub const fn to_name(&self) -> &'static str {
         match self {
             Self::AngryVillager => "angry_villager",

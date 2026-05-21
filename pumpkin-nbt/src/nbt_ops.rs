@@ -467,7 +467,7 @@ impl ListCollector {
                     NbtTag::IntArray(list) => list.len(),
                     NbtTag::LongArray(list) => list.len(),
 
-                    _ => unreachable!(),
+                    _ => return None,
                 };
 
                 if len == 0 {
@@ -481,7 +481,7 @@ impl ListCollector {
                     NbtTag::IntArray(list) => Some(Self::Int(InnerIntListCollector::new(list))),
                     NbtTag::LongArray(list) => Some(Self::Long(InnerLongListCollector::new(list))),
 
-                    _ => unreachable!(),
+                    _ => None,
                 }
             }
 
@@ -546,9 +546,8 @@ impl InnerListCollector for InnerGenericListCollector {
     where
         Self: Sized,
     {
-        match &mut self.result {
-            NbtTag::List(list) => list.push(tag),
-            _ => unreachable!(),
+        if let NbtTag::List(list) = &mut self.result {
+            list.push(tag);
         }
         ListCollector::Generic(self)
     }

@@ -283,13 +283,17 @@ impl From<&BlockBox> for IntStream {
 
 impl FlatTryFrom<IntStream> for BlockBox {
     fn flat_try_from(value: IntStream) -> DataResult<Self> {
-        validate_fixed_size(value.0, 6).map(|v| {
-            let [min_x, min_y, min_z, max_x, max_y, max_z]: [i32; 6] =
-                v.try_into().unwrap_or_else(|_| unreachable!());
-            Self {
-                min: Vector3::new(min_x, min_y, min_z),
-                max: Vector3::new(max_x, max_y, max_z),
-            }
+        validate_fixed_size(value.0, 6).flat_map(|v| {
+            v.try_into().map_or_else(
+                |_| DataResult::new_error("Expected 6 elements"),
+                |arr| {
+                    let [min_x, min_y, min_z, max_x, max_y, max_z]: [i32; 6] = arr;
+                    DataResult::new_success(Self {
+                        min: Vector3::new(min_x, min_y, min_z),
+                        max: Vector3::new(max_x, max_y, max_z),
+                    })
+                },
+            )
         })
     }
 }

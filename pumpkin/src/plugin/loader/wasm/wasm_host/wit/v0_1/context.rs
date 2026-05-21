@@ -149,7 +149,9 @@ async fn register_player_event(
             register_typed_event::<PlayerToggleSprintEvent>(resource, handler, priority, blocking)
                 .await;
         }
-        _ => unreachable!("non-player event should not be routed to register_player_event"),
+        _ => {
+            tracing::error!("non-player event should not be routed to register_player_event");
+        }
     }
 }
 
@@ -181,7 +183,9 @@ async fn register_world_event(
         EventType::SpawnChangeEvent => {
             register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
         }
-        _ => unreachable!("non-world event should not be routed to register_world_event"),
+        _ => {
+            tracing::error!("non-world event should not be routed to register_world_event");
+        }
     }
 }
 
@@ -217,7 +221,9 @@ async fn register_block_event(
         EventType::BlockPlaceEvent => {
             register_typed_event::<BlockPlaceEvent>(resource, handler, priority, blocking).await;
         }
-        _ => unreachable!("non-block event should not be routed to register_block_event"),
+        _ => {
+            tracing::error!("non-block event should not be routed to register_block_event");
+        }
     }
 }
 async fn register_server_event(
@@ -247,7 +253,9 @@ async fn register_server_event(
             register_typed_event::<ServerTickStartEvent>(resource, handler, priority, blocking)
                 .await;
         }
-        _ => unreachable!("non-server event should not be routed to register_server_event"),
+        _ => {
+            tracing::error!("non-server event should not be routed to register_server_event");
+        }
     }
 }
 

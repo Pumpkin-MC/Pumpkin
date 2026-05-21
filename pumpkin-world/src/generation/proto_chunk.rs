@@ -408,7 +408,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -416,7 +416,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -424,7 +424,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -432,7 +432,11 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_motion_blocking_block_no_leaves_height_exclusive(
+        &self,
+        x: i32,
+        z: i32,
+    ) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);

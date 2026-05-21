@@ -247,7 +247,7 @@ pub fn build() -> TokenStream {
     quote! {
         use serde::Serialize;
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct VillagerTradeItem {
             pub item: &'static crate::item::Item,
             pub count: i32,
@@ -279,7 +279,7 @@ pub fn build() -> TokenStream {
 
         impl VillagerProfession {
             #[must_use]
-            pub fn from_i32(id: i32) -> Option<Self> {
+            pub const fn from_i32(id: i32) -> Option<Self> {
                 match id {
                     #(#profession_from_i32,)*
                     _ => None,
@@ -287,28 +287,31 @@ pub fn build() -> TokenStream {
             }
 
             #[must_use]
-            pub fn work_sound(&self) -> Option<crate::sound::Sound> {
+            #[allow(clippy::match_same_arms)]
+            pub const fn work_sound(&self) -> Option<crate::sound::Sound> {
                 match self {
                     #(#work_sounds),*
                 }
             }
 
             #[must_use]
-            pub fn requested_items(&self) -> &'static [&'static crate::item::Item] {
+            #[allow(clippy::match_same_arms)]
+            pub const fn requested_items(&self) -> &'static [&'static crate::item::Item] {
                 match self {
                     #(#requested_items),*
                 }
             }
 
             #[must_use]
-            pub fn translation_key(&self) -> &'static str {
+            pub const fn translation_key(&self) -> &'static str {
                 match self {
                     #(#profession_names),*
                 }
             }
 
             #[must_use]
-            pub fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
+            #[allow(clippy::too_many_lines, clippy::match_same_arms)]
+            pub const fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
                 match self {
                     #(#profession_trade_sets,)*
                 }
@@ -331,7 +334,7 @@ pub fn build() -> TokenStream {
 
         impl VillagerType {
             #[must_use]
-            pub fn from_i32(id: i32) -> Option<Self> {
+            pub const fn from_i32(id: i32) -> Option<Self> {
                 match id {
                     #(#type_from_i32,)*
                     _ => None,

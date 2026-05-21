@@ -1682,7 +1682,9 @@ impl World {
         drop(level_info);
         drop(weather);
 
-        let client = player.client.bedrock();
+        let Some(client) = player.client.bedrock() else {
+            return;
+        };
 
         client
             .send_game_packet(&CStartGame {
@@ -1885,7 +1887,9 @@ impl World {
             player.gameprofile.name, entity_id
         );
 
-        let client = player.client.java();
+        let Some(client) = player.client.java() else {
+            return;
+        };
         // Send the login packet for our new player
         client
             .send_packet_now(&CLogin::new(
@@ -3426,8 +3430,7 @@ impl World {
 
         self.level
             .light_engine
-            .update_lighting_at(&self.level, *position)
-            .await;
+            .update_lighting_at(&self.level, *position);
 
         replaced_block_state_id
     }

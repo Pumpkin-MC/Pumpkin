@@ -162,13 +162,11 @@ trait LootPoolEntryTypesExt {
 impl LootPoolEntryTypesExt for LootPoolEntryTypes {
     fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack> {
         match self {
-            Self::Empty => Vec::new(),
+            Self::Empty | Self::LootTable | Self::Dynamic => Vec::new(),
             Self::Item(item_entry) => {
                 let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
                 vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
             }
-            Self::LootTable => todo!(),
-            Self::Dynamic => todo!(),
             Self::Tag(tag) => {
                 let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
 

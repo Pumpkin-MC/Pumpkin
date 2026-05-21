@@ -125,7 +125,9 @@ pub(crate) fn build() -> TokenStream {
         #static_values
 
         impl Registry {
+            #[must_use]
             pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
+                #[allow(clippy::match_same_arms)]
                 let static_regs = match version {
                     #match_arms
                     _ => #latest_registry,

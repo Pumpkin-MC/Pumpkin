@@ -645,7 +645,7 @@ impl GenerationSchedule {
     fn save_all_chunk(&mut self, save_proto_chunk: bool) {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
 
-        for (pos, holder) in self.chunk_map.iter_mut() {
+        for (pos, holder) in &mut self.chunk_map {
             if let Some(chunk) = holder.chunk.take() {
                 let should_save = match &chunk {
                     Chunk::Level(sync_chunk) => sync_chunk.is_dirty(),

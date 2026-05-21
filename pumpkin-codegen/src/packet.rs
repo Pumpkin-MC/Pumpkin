@@ -104,7 +104,9 @@ fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStre
         impl PacketId {
             /// Converts the requested protocol version into the corresponding packet ID.
             /// Returns -1 if the packet does not exist in that version.
-            pub fn to_id(&self, version: JavaMinecraftVersion) -> i32 {
+            #[must_use]
+            pub const fn to_id(&self, version: JavaMinecraftVersion) -> i32 {
+                #[allow(clippy::match_same_arms)]
                 match version {
                     #match_arms
                     _ => self.#latest_field_ident,

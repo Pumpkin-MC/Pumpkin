@@ -92,6 +92,7 @@ pub mod meta_data_type;
 pub mod noise_parameter;
 
 #[cfg(feature = "biome")]
+#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/biome.rs"]
 pub mod biome;
@@ -208,6 +209,7 @@ pub mod damage;
 pub mod fluid;
 
 #[cfg(feature = "block")]
+#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;

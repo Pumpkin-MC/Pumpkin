@@ -400,7 +400,10 @@ impl Suggestions {
                 (Some(text), Some(integer)) => match text.0.cmp(&integer.0) {
                     Ordering::Less => PushSide::Text,
                     Ordering::Greater => PushSide::Integer,
-                    Ordering::Equal => unreachable!(),
+                    Ordering::Equal => {
+                        tracing::error!("Duplicate suggestion found during merge");
+                        PushSide::Text
+                    }
                 },
                 (Some(_), None) => PushSide::Text,
                 (None, Some(_)) => PushSide::Integer,

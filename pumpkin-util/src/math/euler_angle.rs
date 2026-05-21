@@ -93,13 +93,18 @@ impl From<&EulerAngle> for Vec<f32> {
 
 impl FlatTryFrom<Vec<f32>> for EulerAngle {
     fn flat_try_from(value: Vec<f32>) -> DataResult<Self> {
-        validate_fixed_size(value, 6).map(|v| {
-            let [x, y, z]: [f32; 3] = v.try_into().unwrap_or_else(|_| unreachable!());
-            Self {
-                pitch: x,
-                yaw: y,
-                roll: z,
-            }
+        validate_fixed_size(value, 3).flat_map(|v| {
+            v.try_into().map_or_else(
+                |_| DataResult::new_error("Expected 3 elements"),
+                |arr| {
+                    let [x, y, z]: [f32; 3] = arr;
+                    DataResult::new_success(Self {
+                        pitch: x,
+                        yaw: y,
+                        roll: z,
+                    })
+                },
+            )
         })
     }
 }

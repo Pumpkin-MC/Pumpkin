@@ -57,32 +57,35 @@ pub enum CookingRecipeKind {
     CampfireCooking,
 }
 impl From<&CookingRecipeType> for CookingRecipeKind {
+    
     fn from(recipe_type: &CookingRecipeType) -> Self {
         match recipe_type {
-            CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
-            CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
-            CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
-            CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+            CookingRecipeType::Blasting(_) => Self::Blasting,
+            CookingRecipeType::Smelting(_) => Self::Smelting,
+            CookingRecipeType::Smoking(_) => Self::Smoking,
+            CookingRecipeType::CampfireCooking(_) => Self::CampfireCooking,
         }
     }
 }
 impl From<CookingRecipeType> for CookingRecipeKind {
+    
     fn from(recipe_type: CookingRecipeType) -> Self {
         match recipe_type {
-            CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
-            CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
-            CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
-            CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+            CookingRecipeType::Blasting(_) => Self::Blasting,
+            CookingRecipeType::Smelting(_) => Self::Smelting,
+            CookingRecipeType::Smoking(_) => Self::Smoking,
+            CookingRecipeType::CampfireCooking(_) => Self::CampfireCooking,
         }
     }
 }
 impl CookingRecipeKind {
-    pub fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
+    #[must_use]
+    pub const fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
         match self {
-            CookingRecipeKind::Blasting => CookingRecipeType::Blasting(recipe),
-            CookingRecipeKind::Smelting => CookingRecipeType::Smelting(recipe),
-            CookingRecipeKind::Smoking => CookingRecipeType::Smoking(recipe),
-            CookingRecipeKind::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
+            Self::Blasting => CookingRecipeType::Blasting(recipe),
+            Self::Smelting => CookingRecipeType::Smelting(recipe),
+            Self::Smoking => CookingRecipeType::Smoking(recipe),
+            Self::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
         }
     }
 }
@@ -104,16 +107,17 @@ pub enum RecipeIngredientTypes {
     OneOf(&'static [&'static str]),
 }
 impl RecipeIngredientTypes {
+    #[must_use]
     pub fn match_item(&self, item: &Item) -> bool {
         match self {
-            RecipeIngredientTypes::Simple(ingredient) => {
+            Self::Simple(ingredient) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 name == *ingredient
             }
-            RecipeIngredientTypes::Tagged(tag) => item
+            Self::Tagged(tag) => item
                 .is_tagged_with(tag)
                 .expect("Crafting recipe used invalid tag"),
-            RecipeIngredientTypes::OneOf(ingredients) => {
+            Self::OneOf(ingredients) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 ingredients.contains(&name.as_str())
             }
@@ -20478,6 +20482,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         },
     },
 ];
+#[must_use]
 pub fn get_cooking_recipe_with_ingredient(
     ingredient: &Item,
     recipe_type: CookingRecipeKind,
@@ -20500,7 +20505,8 @@ pub fn get_cooking_recipe_with_ingredient(
 }
 #[doc = r" Get the experience value for a recipe by its recipe ID."]
 #[doc = r" Used for calculating XP when extracting from furnace."]
-#[doc = r#" Recipe IDs are in vanilla format like "minecraft:iron_ingot_from_smelting_iron_ore""#]
+#[doc = r#" Recipe IDs are in vanilla format like `"minecraft:iron_ingot_from_smelting_iron_ore"`"#]
+#[must_use]
 pub fn get_recipe_experience(recipe_id: &str) -> Option<f32> {
     RECIPES_COOKING.iter().find_map(|recipe| {
         let cooking_recipe = match recipe {

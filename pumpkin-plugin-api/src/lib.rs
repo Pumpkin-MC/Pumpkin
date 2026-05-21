@@ -136,13 +136,14 @@ impl wit::Guest for Component {
         args: command::ConsumedArgs,
     ) -> Result<i32, command::CommandError> {
         let handlers = COMMAND_HANDLERS.lock().unwrap();
-        if let Some(handler) = handlers.get(&command_id) {
-            handler.handle(sender, server, args)
-        } else {
-            Err(command::CommandError::CommandFailed(TextComponent::text(
-                &format!("no handler registered for command id {command_id}"),
-            )))
-        }
+        handlers.get(&command_id).map_or_else(
+            || {
+                Err(command::CommandError::CommandFailed(TextComponent::text(
+                    &format!("no handler registered for command id {command_id}"),
+                )))
+            },
+            |handler| handler.handle(sender, server, args),
+        )
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.

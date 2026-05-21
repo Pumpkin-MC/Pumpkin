@@ -922,7 +922,7 @@ pub fn build() -> TokenStream {
         // block_with_descriptors.property_descriptors = property_descriptors;
 
         constants_list.push(quote! {
-            pub const #const_ident: Block = #block;
+            pub const #const_ident: Self = #block;
         });
 
         type_from_raw_id_array.push((block.id, quote! { &Self::#const_ident }));
@@ -1119,6 +1119,7 @@ pub fn build() -> TokenStream {
     );
 
     quote! {
+        #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
         use crate::{BlockState, Block, blocks::Flammable};
@@ -1166,20 +1167,24 @@ pub fn build() -> TokenStream {
         ];
 
         #[inline(always)]
-        pub fn is_air(state_id: u16) -> bool {
+        #[must_use]
+        pub const fn is_air(state_id: u16) -> bool {
             matches!(state_id, #air_state_ids)
         }
 
          #[inline(always)]
-        pub fn is_liquid(state_id: u16) -> bool {
+         #[must_use]
+        pub const fn is_liquid(state_id: u16) -> bool {
             matches!(state_id, #liquid_state_ids)
         }
 
         #[inline(always)]
+        #[must_use]
         pub fn has_random_ticks(state_id: u16) -> bool {
             #mod_ident::#contains_ident(state_id)
         }
 
+        #[must_use]
         pub fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
             if block_state.is_solid() {
                 return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
@@ -1195,6 +1200,7 @@ pub fn build() -> TokenStream {
             #[doc = r" Get a block state from a state id."]
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
+            #[must_use]
             pub fn from_id(id: u16) -> &'static Self {
                 // In debug, this avoids the slow range-checking logic
                 unsafe {
@@ -1204,13 +1210,15 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
             #[inline]
+            #[must_use]
             pub fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
                 let block = Block::from_state_id(id);
                 let state: &Self = Block::STATE_FROM_STATE_ID[id as usize];
                 (block, state)
             }
 
-            pub fn to_be_network_id(id: u16) -> u16 {
+            #[must_use]
+            pub const fn to_be_network_id(id: u16) -> u16 {
                 Self::STATE_ID_TO_BEDROCK[id as usize]
             }
         }
@@ -1226,7 +1234,7 @@ pub fn build() -> TokenStream {
                 #raw_id_from_state_id
             ];
 
-            const TYPE_FROM_RAW_ID: [&'static Block; #max_type_id] = [
+            const TYPE_FROM_RAW_ID: [&'static Self; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
@@ -1236,11 +1244,13 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Try to parse a block from a resource location string."]
             #[inline]
+            #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 Self::BLOCK_FROM_NAME_MAP.get(name)
             }
 
             #[doc = r" Try to get a block from a namespace prefixed name."]
+            #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 let key = name.strip_prefix("minecraft:").unwrap_or(name);
                 Self::BLOCK_FROM_NAME_MAP.get(key)
@@ -1248,6 +1258,7 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a block from a raw block id."]
             #[inline]
+            #[must_use]
             pub const fn from_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
@@ -1258,7 +1269,8 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a raw ID from an State ID."]
             #[inline]
-           pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+            #[must_use]
+            pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
                 let index = state_id as usize;
                 if index >= Self::RAW_ID_FROM_STATE_ID.len() {
                     0
@@ -1269,6 +1281,7 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a block from a state id."]
             #[inline]
+            #[must_use]
             pub fn from_state_id(id: u16) -> &'static Self {
                 let index = id as usize;
                 if index >= Self::RAW_ID_FROM_STATE_ID.len() {
@@ -1279,6 +1292,7 @@ pub fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a block from an item id."]
+            #[must_use]
             pub const fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {
@@ -1311,28 +1325,31 @@ pub fn build() -> TokenStream {
         #(#block_props)*
 
         impl Facing {
-            pub fn opposite(&self) -> Self {
+            #[must_use]
+            pub const fn opposite(&self) -> Self {
                 match self {
-                    Facing::North => Facing::South,
-                    Facing::South => Facing::North,
-                    Facing::East => Facing::West,
-                    Facing::West => Facing::East,
-                    Facing::Up => Facing::Down,
-                    Facing::Down => Facing::Up,
+                    Self::North => Self::South,
+                    Self::South => Self::North,
+                    Self::East => Self::West,
+                    Self::West => Self::East,
+                    Self::Up => Self::Down,
+                    Self::Down => Self::Up,
                 }
             }
         }
 
         impl HorizontalFacing {
-            pub fn all() -> [HorizontalFacing; 4] {
+            #[must_use]
+            pub fn all() -> [Self; 4] {
                 [
-                    HorizontalFacing::North,
-                    HorizontalFacing::South,
-                    HorizontalFacing::West,
-                    HorizontalFacing::East,
+                    Self::North,
+                    Self::South,
+                    Self::West,
+                    Self::East,
                 ]
             }
 
+            #[must_use]
             pub fn to_offset(&self) -> Vector3<i32> {
                 match self {
                     Self::North => (0, 0, -1),
@@ -1343,7 +1360,8 @@ pub fn build() -> TokenStream {
                 .into()
             }
 
-            pub fn opposite(&self) -> Self {
+            #[must_use]
+            pub const fn opposite(&self) -> Self {
                 match self {
                     Self::North => Self::South,
                     Self::South => Self::North,
@@ -1352,7 +1370,8 @@ pub fn build() -> TokenStream {
                 }
             }
 
-            pub fn rotate_clockwise(&self) -> Self {
+            #[must_use]
+            pub const fn rotate_clockwise(&self) -> Self {
                 match self {
                     Self::North => Self::East,
                     Self::South => Self::West,
@@ -1361,7 +1380,8 @@ pub fn build() -> TokenStream {
                 }
             }
 
-            pub fn rotate_counter_clockwise(&self) -> Self {
+            #[must_use]
+            pub const fn rotate_counter_clockwise(&self) -> Self {
                 match self {
                     Self::North => Self::West,
                     Self::South => Self::East,
@@ -1372,13 +1392,15 @@ pub fn build() -> TokenStream {
         }
 
         impl RailShape {
-            pub fn is_ascending(&self) -> bool {
+            #[must_use]
+            pub const fn is_ascending(&self) -> bool {
                 matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }
         }
 
         impl RailShapeStraight {
-            pub fn is_ascending(&self) -> bool {
+            #[must_use]
+            pub const fn is_ascending(&self) -> bool {
                 matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }
         }

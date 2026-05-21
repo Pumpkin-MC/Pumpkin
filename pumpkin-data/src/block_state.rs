@@ -127,7 +127,7 @@ impl BlockState {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
-            _ => unreachable!(),
+            _ => false,
         }
     }
 
