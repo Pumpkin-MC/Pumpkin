@@ -2,6 +2,7 @@ use super::Carver;
 use crate::ProtoChunk;
 use crate::generation::noise::aquifer_sampler::FluidLevelSamplerImpl;
 use pumpkin_data::block_state::BlockState;
+use pumpkin_data::chunk::Biome;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -362,8 +363,8 @@ impl CaveCarver {
                 let below_block = pumpkin_data::Block::from_state_id(below_state_id);
 
                 if below_block.id == pumpkin_data::Block::DIRT.id {
-                    let top_material =
-                        BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id);
+                    let biome = chunk.get_biome(x, y, z);
+                    let top_material = Self::get_top_material(biome);
                     chunk.set_block_state(x & 15, local_y - 1, z & 15, top_material);
                 }
             }
@@ -371,6 +372,23 @@ impl CaveCarver {
             return true;
         }
         false
+    }
+
+    fn get_top_material(biome: &Biome) -> &'static BlockState {
+        match biome.id {
+            // Mushroom Fields
+            14 | 15 => BlockState::from_id(pumpkin_data::Block::MYCELIUM.default_state.id),
+            // Desert & Beach
+            2 | 17 | 26 => BlockState::from_id(pumpkin_data::Block::SAND.default_state.id),
+            // Badlands
+            37 | 38 | 39 | 165 | 166 | 167 => {
+                BlockState::from_id(pumpkin_data::Block::RED_SAND.default_state.id)
+            }
+            // Stony Biomes
+            25 | 182 => BlockState::from_id(pumpkin_data::Block::STONE.default_state.id),
+            // Default
+            _ => BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id),
+        }
     }
 }
 

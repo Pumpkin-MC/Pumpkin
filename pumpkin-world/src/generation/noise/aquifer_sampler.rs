@@ -36,7 +36,8 @@ impl FluidLevel {
         self.max_y
     }
 
-    const fn get_block(&self, y: i32) -> &'static Block {
+    #[must_use]
+    pub const fn get_block(&self, y: i32) -> &'static Block {
         if y < self.max_y {
             self.block
         } else {
