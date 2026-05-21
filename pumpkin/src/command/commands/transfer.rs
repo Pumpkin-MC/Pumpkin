@@ -1,5 +1,6 @@
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::CTransfer;
+use pumpkin_protocol::java::client::play::CTransfer as JavaCTransfer;
+use pumpkin_protocol::bedrock::client::transfer::CTransfer as BedrockCTransfer;
 use pumpkin_util::text::TextComponent;
 use tracing::info;
 
@@ -109,13 +110,13 @@ impl CommandExecutor for TargetPlayerExecutor {
                 match &p.client {
                     ClientPlatform::Java(client) => {
                         client
-                            .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
+                            .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))
                             .await;
                     }
                     ClientPlatform::Bedrock(client) => {
                         client
                             .send_game_packet(
-                                &pumpkin_protocol::bedrock::client::transfer::CTransfer::new(
+                                &BedrockCTransfer::new(
                                     hostname.to_string(),
                                     port as u16,
                                     false,
