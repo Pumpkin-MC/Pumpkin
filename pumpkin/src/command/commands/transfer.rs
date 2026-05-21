@@ -12,6 +12,7 @@ use crate::command::dispatcher::CommandError::{self, InvalidConsumption, Invalid
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 use crate::entity::EntityBase;
+use crate::net::ClientPlatform;
 
 const NAMES: [&str; 1] = ["transfer"];
 
@@ -108,6 +109,26 @@ impl CommandExecutor for TargetPlayerExecutor {
                 p.client
                     .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
                     .await;
+
+                match &p.client {
+                    ClientPlatform::Java(client) => {
+                        client
+                            .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
+                            .await;
+                    }
+                    ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(
+                                &pumpkin_protocol::bedrock::client::transfer::CTransfer::new(
+                                    hostname.to_string(),
+                                    port as u16,
+                                    false,
+                                )
+                            )
+                            .await;
+                    }
+                }
+
                 info!(
                     "[{sender}: Transferring {} to {hostname}:{port}]",
                     p.gameprofile.name

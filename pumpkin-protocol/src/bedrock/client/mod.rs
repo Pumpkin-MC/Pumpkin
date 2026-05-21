@@ -27,6 +27,7 @@ pub mod set_title;
 pub mod start_game;
 pub mod update_abilities;
 pub mod update_attributes;
+pub mod transfer;
 
 pub use available_commands::*;
 pub use chunk_radius_update::*;
@@ -57,3 +58,4 @@ pub use set_title::*;
 pub use start_game::*;
 pub use update_abilities::*;
 pub use update_attributes::*;
+pub use transfer::*;
