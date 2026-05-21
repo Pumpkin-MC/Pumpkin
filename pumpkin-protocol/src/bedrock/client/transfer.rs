@@ -1,5 +1,4 @@
 use pumpkin_macros::packet;
-use std::io::{Error, Write};
 
 use crate::serial::PacketWrite;
 
