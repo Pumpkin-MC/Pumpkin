@@ -30,6 +30,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
@@ -1752,6 +1753,55 @@ impl LivingEntity {
         self.entity.movement.load()
     }
 
+    async fn compute_epf(&self, damage_type: &DamageType) -> i32 {
+        let is_fire = *damage_type == DamageType::IN_FIRE
+            || *damage_type == DamageType::ON_FIRE
+            || *damage_type == DamageType::LAVA
+            || *damage_type == DamageType::HOT_FLOOR
+            || *damage_type == DamageType::CAMPFIRE
+            || *damage_type == DamageType::UNATTRIBUTED_FIREBALL
+            || *damage_type == DamageType::FIREBALL;
+        let is_explosion = *damage_type == DamageType::EXPLOSION
+            || *damage_type == DamageType::PLAYER_EXPLOSION
+            || *damage_type == DamageType::BAD_RESPAWN_POINT;
+        let is_projectile = *damage_type == DamageType::ARROW
+            || *damage_type == DamageType::TRIDENT
+            || *damage_type == DamageType::MOB_PROJECTILE
+            || *damage_type == DamageType::FIREBALL
+            || *damage_type == DamageType::UNATTRIBUTED_FIREBALL
+            || *damage_type == DamageType::WITHER_SKULL
+            || *damage_type == DamageType::THROWN
+            || *damage_type == DamageType::WIND_CHARGE;
+        let is_fall = *damage_type == DamageType::FALL || *damage_type == DamageType::STALAGMITE;
+
+        let mut epf = 0i32;
+        let equipment = self.entity_equipment.lock().await;
+        let armor_slots = [
+            EquipmentSlot::HEAD,
+            EquipmentSlot::CHEST,
+            EquipmentSlot::LEGS,
+            EquipmentSlot::FEET,
+        ];
+        for slot in &armor_slots {
+            let stack_arc = equipment.get(slot);
+            let stack = stack_arc.lock().await;
+            epf += stack.get_enchantment_level(&Enchantment::PROTECTION);
+            if is_fire {
+                epf += stack.get_enchantment_level(&Enchantment::FIRE_PROTECTION) * 2;
+            }
+            if is_explosion {
+                epf += stack.get_enchantment_level(&Enchantment::BLAST_PROTECTION) * 2;
+            }
+            if is_projectile {
+                epf += stack.get_enchantment_level(&Enchantment::PROJECTILE_PROTECTION) * 2;
+            }
+            if is_fall {
+                epf += stack.get_enchantment_level(&Enchantment::FEATHER_FALLING) * 3;
+            }
+        }
+        epf
+    }
+
     fn hurt_sound(&self) -> Sound {
         if self.entity.entity_type == &EntityType::SLIME {
             SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
@@ -1907,8 +1957,49 @@ impl EntityBase for LivingEntity {
                     0.0
                 };
 
-            // Total damage after reductions
-            let effective_amount = amount * (1.0 - resistance_reduction);
+            let armor_value = self.get_attribute_value(&Attributes::ARMOR) as f32;
+            let toughness_value = self.get_attribute_value(&Attributes::ARMOR_TOUGHNESS) as f32;
+            let bypasses_armor = damage_type == DamageType::FALL
+                || damage_type == DamageType::FLY_INTO_WALL
+                || damage_type == DamageType::ON_FIRE
+                || damage_type == DamageType::IN_WALL
+                || damage_type == DamageType::CRAMMING
+                || damage_type == DamageType::DROWN
+                || damage_type == DamageType::GENERIC
+                || damage_type == DamageType::WITHER
+                || damage_type == DamageType::DRAGON_BREATH
+                || damage_type == DamageType::STARVE
+                || damage_type == DamageType::ENDER_PEARL
+                || damage_type == DamageType::FREEZE
+                || damage_type == DamageType::STALAGMITE
+                || damage_type == DamageType::MAGIC
+                || damage_type == DamageType::INDIRECT_MAGIC
+                || damage_type == DamageType::OUT_OF_WORLD
+                || damage_type == DamageType::GENERIC_KILL
+                || damage_type == DamageType::SONIC_BOOM
+                || damage_type == DamageType::OUTSIDE_BORDER;
+            let bypasses_enchantments =
+                damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
+            let epf = if bypasses_enchantments {
+                0
+            } else {
+                self.compute_epf(&damage_type).await
+            };
+
+            let mut effective_amount = amount * (1.0 - resistance_reduction);
+            if !bypasses_armor && armor_value > 0.0 {
+                let denominator = 2.0 + toughness_value / 4.0;
+                let protection = (armor_value - effective_amount / denominator)
+                    .floor()
+                    .max(armor_value * 0.2)
+                    .min(20.0);
+                effective_amount *= 1.0 - protection / 25.0;
+            }
+            if !bypasses_enchantments && epf > 0 {
+                let epf_reduction = (epf as f32).min(20.0) / 25.0;
+                effective_amount *= 1.0 - epf_reduction;
+            }
+            effective_amount = effective_amount.max(0.0);
 
             // Check for shield blocking
             if self.is_blocking().await
@@ -2000,7 +2091,7 @@ impl EntityBase for LivingEntity {
                 };
 
             // Finalize state
-            self.last_damage_taken.store(amount);
+            self.last_damage_taken.store(effective_amount);
             let damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
@@ -2094,6 +2185,43 @@ impl EntityBase for LivingEntity {
             // Not applied when the source is in `#minecraft:bypasses_armor`.
             if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
                 self.damage_armor_items(caller, damage_amount).await;
+            }
+
+            if damage_amount > 0.0
+                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_AVOIDS_GUARDIAN_THORNS)
+                && let Some(attacker) = cause.or(source)
+            {
+                let attacker_entity = attacker.get_entity();
+                let equipment = self.entity_equipment.lock().await;
+                let armor_slots = [
+                    EquipmentSlot::HEAD,
+                    EquipmentSlot::CHEST,
+                    EquipmentSlot::LEGS,
+                    EquipmentSlot::FEET,
+                ];
+                let mut thorns_level = 0;
+                for slot in &armor_slots {
+                    let stack_arc = equipment.get(slot);
+                    let stack = stack_arc.lock().await;
+                    let lvl = stack.get_enchantment_level(&Enchantment::THORNS);
+                    if lvl > thorns_level {
+                        thorns_level = lvl;
+                    }
+                }
+                drop(equipment);
+                if thorns_level > 0 && rand::random::<f32>() < 0.15 * thorns_level as f32 {
+                    let reflect = 1.max(rand::random::<i32>().abs() % 4 + 1);
+                    attacker_entity
+                        .damage_with_context(
+                            attacker_entity,
+                            reflect as f32,
+                            DamageType::THORNS,
+                            None,
+                            Some(caller),
+                            None,
+                        )
+                        .await;
+                }
             }
 
             true
