@@ -31,12 +31,12 @@ pub fn build() -> TokenStream {
         });
 
         id_to_enum.extend(quote! {
-            #raw_value => Some(DataComponent::#pascal_case),
+            #raw_value => Some(Self::#pascal_case),
         });
 
         // TODO use phf
         name_to_enum.extend(quote! {
-            #raw_name => Some(DataComponent::#pascal_case),
+            #raw_name => Some(Self::#pascal_case),
         });
 
         // Enum -> &str
@@ -55,21 +55,31 @@ pub fn build() -> TokenStream {
         }
 
         impl DataComponent {
+            #[must_use]
             pub const fn to_id(self) -> u8 {
                 self as u8
             }
-            pub const fn try_from_id(id: u8) -> Option<DataComponent> {
+
+            #[must_use]
+            #[allow(clippy::too_many_lines)]
+            pub const fn try_from_id(id: u8) -> Option<Self> {
                 match id {
                     #id_to_enum
                     _ => None,
                 }
             }
-            pub fn try_from_name(name: &str) -> Option<DataComponent> {
+
+            #[must_use]
+            #[allow(clippy::too_many_lines)]
+            pub fn try_from_name(name: &str) -> Option<Self> {
                 match name {
                     #name_to_enum
                     _ => None,
                 }
             }
+
+            #[must_use]
+            #[allow(clippy::too_many_lines)]
             pub const fn to_name(self) -> &'static str {
                 match self {
                     #enum_to_name

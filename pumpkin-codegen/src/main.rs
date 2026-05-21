@@ -14,6 +14,7 @@ mod biome;
 mod bitsets;
 mod block;
 mod carver;
+pub mod chest_loot;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -123,14 +124,32 @@ pub fn main() {
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
         (recipe_remainder::build, "recipe_remainder.rs"),
+        (placed_feature::build_enum, "placed_feature.rs"),
         (placed_feature::build, "placed_features_generated.rs"),
+        (configured_feature::build_enum, "configured_feature.rs"),
         (
             configured_feature::build,
             "configured_features_generated.rs",
         ),
         (carver::build, "carver.rs"),
+        (chest_loot::build, "chest_loot.rs"),
     ];
     build_functions.extend(remap::build());
+
+    // If any arguments are given, treat them as file-stem filters.
+    // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
+    let filters: Vec<String> = std::env::args().skip(1).collect();
+    let build_functions: Vec<_> = if filters.is_empty() {
+        build_functions
+    } else {
+        build_functions
+            .into_iter()
+            .filter(|(_, file)| {
+                let stem = file.trim_end_matches(".rs");
+                filters.iter().any(|f| f == stem || f == *file)
+            })
+            .collect()
+    };
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
         println!("Parsing {}", file);

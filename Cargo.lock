@@ -969,9 +969,9 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "6.1.0"
+version = "6.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+checksum = "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -1112,9 +1112,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
 name = "elliptic-curve"
@@ -1663,9 +1663,9 @@ checksum = "135b12329e5e3ce057a9f972339ea52bc954fe1e9358ef27f95e89716fbc5424"
 
 [[package]]
 name = "hybrid-array"
-version = "0.4.11"
+version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d46837a0ed51fe95bd3b05de33cd64a1ee88fc797477ca48446872504507c5"
+checksum = "9155a582abd142abc056962c29e3ce5ff2ad5469f4246b537ed42c5deba857da"
 dependencies = [
  "typenum",
 ]
@@ -2925,7 +2925,6 @@ dependencies = [
 name = "pumpkin-inventory"
 version = "0.1.0-dev+26.1"
 dependencies = [
- "crossbeam-utils",
  "pumpkin-data",
  "pumpkin-protocol",
  "pumpkin-util",
@@ -2952,6 +2951,7 @@ version = "0.1.0-dev+26.1"
 dependencies = [
  "bytes",
  "cesu8",
+ "criterion",
  "flate2",
  "pumpkin-codecs",
  "serde",
@@ -2965,6 +2965,7 @@ name = "pumpkin-plugin-api"
 version = "0.1.0"
 dependencies = [
  "postcard",
+ "serde_json",
  "tracing",
  "tracing-serde-structured",
  "wit-bindgen 0.57.1",
@@ -2987,7 +2988,6 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "serde",
- "take_mut",
  "thiserror 2.0.18",
  "tokio",
  "uuid",
@@ -3008,6 +3008,7 @@ dependencies = [
  "num-traits",
  "p384",
  "proc-macro2",
+ "pumpkin-codecs",
  "pumpkin-nbt",
  "quote",
  "rsa",
@@ -3757,12 +3758,6 @@ dependencies = [
  "windows-sys 0.59.0",
  "winx",
 ]
-
-[[package]]
-name = "take_mut"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 
 [[package]]
 name = "target-lexicon"

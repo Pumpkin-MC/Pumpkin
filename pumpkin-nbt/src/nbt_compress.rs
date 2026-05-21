@@ -1,4 +1,4 @@
-use crate::deserializer::NbtReadHelper;
+use crate::deserializer::NbtReadHelperJava;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::io::{Cursor, Read, Seek, Write};
@@ -14,10 +14,10 @@ use std::io::{Cursor, Read, Seek, Write};
 /// A Result containing either the parsed `NbtCompound` or an Error
 pub fn read_gzip_compound_tag(input: impl Read + Seek) -> Result<NbtCompound, Error> {
     // Create a GZip decoder and directly chain it to the NBT reader
-    let mut decoder = GzDecoder::new(input);
+    let mut decoder = GzDecoder::new(input).take(64 * 1024 * 1024); // 64 MB limit
     let mut buf = Vec::new();
     decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
-    let mut reader = NbtReadHelper::new(Cursor::new(buf));
+    let mut reader = NbtReadHelperJava::new(Cursor::new(buf));
 
     // Read the NBT data directly from the decoder stream
     let nbt = Nbt::read(&mut reader)?;
@@ -69,7 +69,7 @@ pub fn write_gzip_compound_tag_to_bytes(compound: NbtCompound) -> Result<Vec<u8>
 /// A Result containing either the deserialized type or an Error
 pub fn from_gzip_bytes<'a, T: serde::Deserialize<'a>, R: Read>(input: R) -> Result<T, Error> {
     // Create a GZip decoder and directly use it for deserialization
-    let mut decoder = GzDecoder::new(input);
+    let mut decoder = GzDecoder::new(input).take(64 * 1024 * 1024); // 64 MB limit
     let mut buf = Vec::new();
     decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
     deserializer::from_bytes(Cursor::new(buf))
@@ -125,8 +125,8 @@ mod tests {
         compound.put_long("long_value", 123456789);
         compound.put_float("float_value", 123.456);
         compound.put_double("double_value", 123456.789);
-        compound.put_bool("bool_value", true);
-        compound.put("string_value", NbtTag::String("test string".to_string()));
+        compound.put("bool_value", true);
+        compound.put("string_value", NbtTag::String("test string".into()));
 
         // Create a nested compound
         let mut nested = NbtCompound::new();
@@ -268,7 +268,7 @@ mod tests {
 
         // Create a compound with repetitive data (should compress well)
         for _i in 0..1000 {
-            compound.put("repeated_key", NbtTag::String("this is a test string that will be repeated many times to demonstrate compression".to_string()));
+            compound.put("repeated_key", NbtTag::String("this is a test string that will be repeated many times to demonstrate compression".into()));
         }
 
         let uncompressed = compound.child_tags.len() * 100; // rough estimate

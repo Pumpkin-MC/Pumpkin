@@ -79,8 +79,6 @@ harness = false
 name = "noise_router"
 harness = false
 
-[features]
-tokio_taskdump = []
 
 # [lints]
 # workspace = true

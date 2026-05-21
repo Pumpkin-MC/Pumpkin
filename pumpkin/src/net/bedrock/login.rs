@@ -17,6 +17,7 @@ use pumpkin_protocol::bedrock::{
     server::{login::ClientData, resource_pack_response::SResourcePackResponse},
 };
 use pumpkin_util::jwt::AuthError;
+use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
@@ -94,6 +95,11 @@ impl BedrockClient {
             self.send_game_packet(&CPlayStatus::OutdatedServer).await;
             return;
         }
+
+        self.version.store(BedrockMinecraftVersion::from_protocol(
+            packet.protocol_version as u32,
+        ));
+
         let compression = server
             .advanced_config
             .networking
@@ -222,11 +228,14 @@ impl BedrockClient {
         {
             // TODO: kinda sad we don't use more of client_data, we should store it somewhere, at least for plugin devs
             let new_config = PlayerConfig {
-                locale: client_data.language_code,
+                locale: client_data.language_code.clone(),
                 ..Default::default()
             };
 
             player.config.store(std::sync::Arc::new(new_config));
+
+            self.client_data
+                .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
             // player spawn happens after resource packs are resolved
             *self.player.lock().await = Some(player);

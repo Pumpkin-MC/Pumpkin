@@ -16,7 +16,6 @@ use crate::{
 };
 
 /// Small 3-way crossing for the exterior bridge network (7 × 9 × 7).
-#[derive(Clone)]
 pub struct BridgeSmallCrossingPiece {
     pub piece: NetherFortressPiece,
 }
@@ -155,9 +154,5 @@ impl StructurePieceBase for BridgeSmallCrossingPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

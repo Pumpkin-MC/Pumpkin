@@ -13,24 +13,30 @@ pub struct ItemRecipe {
     to: &'static Item,
 }
 impl PotionRecipe {
-    pub fn from(&self) -> &'static Potion {
+    #[must_use]
+    pub const fn from(&self) -> &'static Potion {
         self.from
     }
-    pub fn ingredient(&self) -> &'static [&'static Item] {
+    #[must_use]
+    pub const fn ingredient(&self) -> &'static [&'static Item] {
         self.ingredient
     }
-    pub fn to(&self) -> &'static Potion {
+    #[must_use]
+    pub const fn to(&self) -> &'static Potion {
         self.to
     }
 }
 impl ItemRecipe {
-    pub fn from(&self) -> &'static Item {
+    #[must_use]
+    pub const fn from(&self) -> &'static Item {
         self.from
     }
-    pub fn ingredient(&self) -> &'static [&'static Item] {
+    #[must_use]
+    pub const fn ingredient(&self) -> &'static [&'static Item] {
         self.ingredient
     }
-    pub fn to(&self) -> &'static Item {
+    #[must_use]
+    pub const fn to(&self) -> &'static Item {
         self.to
     }
 }

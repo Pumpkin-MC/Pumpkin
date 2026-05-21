@@ -14,7 +14,7 @@ impl GlowstoneBlobFeature {
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
-        _feature: &str,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

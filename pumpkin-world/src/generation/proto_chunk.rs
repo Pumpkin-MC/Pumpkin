@@ -150,7 +150,6 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 12. full: Generation is done and a chunk can now be loaded. The proto-chunk is now converted to a level chunk and all block updates deferred in the above steps are executed.
 ///
-#[derive(Clone)]
 pub struct ProtoChunk {
     pub x: i32,
     pub z: i32,
@@ -162,10 +161,10 @@ pub struct ProtoChunk {
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
-    pub flat_surface_height_map: Box<[i16]>,
-    flat_ocean_floor_height_map: Box<[i16]>,
-    pub flat_motion_blocking_height_map: Box<[i16]>,
-    pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
+    pub flat_surface_height_map: [i16; CHUNK_AREA],
+    flat_ocean_floor_height_map: [i16; CHUNK_AREA],
+    pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
+    pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
 
     // Height of the chunk for indexing
@@ -214,7 +213,7 @@ impl ProtoChunk {
         let height = dimension.logical_height as u16;
         let section_count = (height as usize) / 16;
 
-        let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
+        let default_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
             x,
             z,
@@ -228,9 +227,9 @@ impl ProtoChunk {
                     * biome_coords::from_block(height as i32) as usize
             ]
             .into_boxed_slice(),
-            flat_surface_height_map: default_heightmap.clone(),
-            flat_ocean_floor_height_map: default_heightmap.clone(),
-            flat_motion_blocking_height_map: default_heightmap.clone(),
+            flat_surface_height_map: default_heightmap,
+            flat_ocean_floor_height_map: default_heightmap,
+            flat_motion_blocking_height_map: default_heightmap,
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
             height,
@@ -409,7 +408,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -417,7 +416,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -425,7 +424,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -433,7 +432,11 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_motion_blocking_block_no_leaves_height_exclusive(
+        &self,
+        x: i32,
+        z: i32,
+    ) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -996,8 +999,7 @@ impl ProtoChunk {
                     && let Some(features_at_step) = biome.features.get(step)
                 {
                     for &feature_id in *features_at_step {
-                        features_to_run
-                            .push(feature_id.strip_prefix("minecraft:").unwrap_or(feature_id));
+                        features_to_run.push(feature_id);
                     }
                 }
             }
@@ -1005,8 +1007,8 @@ impl ProtoChunk {
             features_to_run.sort_unstable();
             features_to_run.dedup();
 
-            for (p, feature_id) in features_to_run.into_iter().enumerate() {
-                if let Some(feature) = PLACED_FEATURES.get(feature_id) {
+            for (p, feature_enum) in features_to_run.into_iter().enumerate() {
+                if let Some(feature) = PLACED_FEATURES.get(&feature_enum) {
                     let decorator_seed = get_decorator_seed(population_seed, p as u64, step as u64);
                     let mut random =
                         RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
@@ -1016,7 +1018,7 @@ impl ProtoChunk {
                         block_registry,
                         min_y as i8,
                         height as u16,
-                        feature_id,
+                        feature_enum,
                         &mut random,
                         origin_pos,
                     );

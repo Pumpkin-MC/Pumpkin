@@ -42,12 +42,17 @@ pub fn build() -> TokenStream {
 
         impl Particle {
             #[doc = r" Try to parse a `Particle` from a resource location string."]
+            #[must_use]
+            #[allow(clippy::too_many_lines)]
             pub fn from_name(name: &str) -> Option<Self> {
                 match name {
                     #type_from_name
                     _ => None
                 }
             }
+
+            #[must_use]
+            #[allow(clippy::too_many_lines)]
             pub const fn to_name(&self) -> &'static str {
                 match self {
                     #type_to_name

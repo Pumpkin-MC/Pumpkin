@@ -16,7 +16,6 @@ rand.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
-crossbeam-utils.workspace = true
 
 [lints]
 workspace = true

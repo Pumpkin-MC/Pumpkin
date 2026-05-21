@@ -67,6 +67,7 @@ pub mod magma;
 pub mod torches;
 
 // Plants, crops & natural blocks
+pub mod amethyst;
 pub mod carved_pumpkin;
 pub mod dripstone;
 pub mod farmland;
@@ -82,6 +83,7 @@ pub mod cobweb;
 pub mod dirt_path;
 pub mod dragon_egg;
 pub mod falling;
+pub mod grass_block;
 pub mod infested;
 pub mod powder_snow;
 pub mod snow;
@@ -95,6 +97,8 @@ pub mod ladder;
 pub mod slime;
 pub mod spawner;
 pub mod tnt;
+
+pub mod coral;
 
 // Misc / abstract
 pub mod abstract_wall_mounting;

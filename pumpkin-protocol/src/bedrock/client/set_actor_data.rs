@@ -120,7 +120,7 @@ impl MetadataValue {
             Self::Int(v) => VarInt(*v).write(writer),
             Self::Float(v) => writer.write_all(&v.to_le_bytes()),
             Self::String(v) => v.write(writer),
-            Self::CompoundTag => todo!(),
+            Self::CompoundTag => Err(Error::other("CompoundTag not implemented")),
             Self::BlockPos(v) => v.write(writer),
             Self::Long(v) => VarLong(*v).write(writer),
             Self::Vec3(v) => {

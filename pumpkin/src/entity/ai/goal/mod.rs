@@ -123,7 +123,8 @@ impl Controls {
                 return i;
             }
         }
-        unreachable!()
+        tracing::error!("Controls::idx called with no controls set");
+        0
     }
 }
 

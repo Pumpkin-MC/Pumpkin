@@ -54,10 +54,13 @@ use tokio_util::task::TaskTracker;
 
 mod connection_cache;
 mod key_store;
+pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
+
+pub use recipe::RecipeManager;
 
 use crate::command::args::entities::{
     EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
@@ -99,6 +102,7 @@ pub struct Server {
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
+    pub recipe_manager: Arc<recipe::RecipeManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
@@ -223,6 +227,7 @@ impl Server {
             ))),
             permission_registry,
             container_id: 0.into(),
+            recipe_manager: Arc::new(recipe::RecipeManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions: vec![

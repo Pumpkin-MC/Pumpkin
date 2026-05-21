@@ -13,7 +13,11 @@ use std::{
 
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{Hand, ProfileAction, text::TextComponent, version::MinecraftVersion};
+use pumpkin_util::{
+    Hand, ProfileAction,
+    text::TextComponent,
+    version::{BedrockMinecraftVersion, JavaMinecraftVersion},
+};
 use serde::{Deserialize, Deserializer};
 use sha1::Digest;
 use sha2::Sha256;
@@ -122,21 +126,21 @@ impl ClientPlatform {
     /// This function should only be used where you know that the client is bedrock!
     #[inline]
     #[must_use]
-    pub fn bedrock(&self) -> &Arc<BedrockClient> {
+    pub const fn bedrock(&self) -> Option<&Arc<BedrockClient>> {
         if let Self::Bedrock(client) = self {
-            return client;
+            return Some(client);
         }
-        unreachable!()
+        None
     }
 
     /// This function should only be used where you know that the client is java!
     #[inline]
     #[must_use]
-    pub fn java(&self) -> &JavaClient {
+    pub const fn java(&self) -> Option<&JavaClient> {
         if let Self::Java(client) = self {
-            return client;
+            return Some(client);
         }
-        unreachable!()
+        None
     }
 
     #[must_use]
@@ -147,11 +151,17 @@ impl ClientPlatform {
         }
     }
 
-    pub fn version(&self) -> MinecraftVersion {
+    pub fn java_version(&self) -> JavaMinecraftVersion {
         match self {
             Self::Java(java) => java.version.load(),
-            // TODO
-            Self::Bedrock(_) => MinecraftVersion::V_1_21_7,
+            Self::Bedrock(_) => JavaMinecraftVersion::Unknown,
+        }
+    }
+
+    pub fn bedrock_version(&self) -> BedrockMinecraftVersion {
+        match self {
+            Self::Java(_) => BedrockMinecraftVersion::Unknown,
+            Self::Bedrock(bedrock) => bedrock.version.load(),
         }
     }
 

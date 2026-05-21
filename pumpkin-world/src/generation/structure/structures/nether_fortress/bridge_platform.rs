@@ -17,7 +17,6 @@ use crate::{
 };
 
 /// Exterior platform with a Blaze mob-spawner (7 × 8 × 9).
-#[derive(Clone)]
 pub struct BridgePlatformPiece {
     pub piece: NetherFortressPiece,
     pub has_blaze_spawner: bool,
@@ -162,9 +161,5 @@ impl StructurePieceBase for BridgePlatformPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

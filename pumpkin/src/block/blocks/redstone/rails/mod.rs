@@ -152,10 +152,14 @@ impl Rail {
                 }
             }
 
-            _ => unreachable!(
-                "Invalid rail direction combination: {:?}, {:?}",
-                first, second
-            ),
+            _ => {
+                tracing::error!(
+                    "Invalid rail direction combination: {:?}, {:?}",
+                    first,
+                    second
+                );
+                RailShape::NorthSouth
+            }
         }
     }
 }
@@ -259,7 +263,10 @@ impl RailProperties {
                     RailShape::AscendingWest => RailShapeStraight::AscendingWest,
                     RailShape::AscendingNorth => RailShapeStraight::AscendingNorth,
                     RailShape::AscendingSouth => RailShapeStraight::AscendingSouth,
-                    _ => unreachable!("Trying to make a straight rail curved: {:?}", shape),
+                    _ => {
+                        tracing::error!("Trying to make a straight rail curved: {:?}", shape);
+                        return;
+                    }
                 }
             }
         }

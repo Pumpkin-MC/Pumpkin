@@ -211,7 +211,7 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
         impl #impl_generics crate::packet::MultiVersionJavaPacket for #name #ty_generics #where_clause {
             #[must_use]
             #[inline]
-            fn to_id(version: pumpkin_util::version::MinecraftVersion) -> i32 {
+            fn to_id(version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
                 #packet_id_expr.to_id(version)
             }
         }
@@ -484,7 +484,9 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        unimplemented!()
+        return syn::Error::new(name.span(), "Only structs are supported")
+            .to_compile_error()
+            .into();
     };
 
     let expanded = quote! {
@@ -539,7 +541,9 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        unimplemented!()
+        return syn::Error::new(name.span(), "Only structs are supported")
+            .to_compile_error()
+            .into();
     };
 
     let expanded = quote! {

@@ -133,6 +133,75 @@ where
     }
 }
 
+/// A wrapper around a `Vec` that cannot have it be empty, similar to Minecraft's `ExtraCodecs.nonEmptyList`.
+pub struct NonEmptyVec<T>(Vec<T>);
+
+impl<T> From<NonEmptyVec<T>> for Vec<T> {
+    /// Returns the wrapped `Vec` of this `NonEmptyVec`.
+    fn from(value: NonEmptyVec<T>) -> Self {
+        value.0
+    }
+}
+
+impl<T> Encode for NonEmptyVec<T>
+where
+    T: Encode,
+{
+    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
+        if self.0.is_empty() {
+            DataResult::new_error("List must have contents")
+        } else {
+            self.0.encode(ops, prefix)
+        }
+    }
+}
+
+impl<T> Decode for NonEmptyVec<T>
+where
+    T: Decode,
+{
+    fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
+        Vec::<T>::decode(input, ops).flat_map(|(v, c)| Self::flat_try_from(v).map(|v| (v, c)))
+    }
+}
+
+impl<T> FlatTryFrom<Vec<T>> for NonEmptyVec<T> {
+    fn flat_try_from(value: Vec<T>) -> DataResult<Self> {
+        if value.is_empty() {
+            DataResult::new_error("List must have contents")
+        } else {
+            DataResult::new_success(Self(value))
+        }
+    }
+}
+
+// Utility functions
+
+/// Tries to check a list to have a fixed size `size`, returning the appropriate
+/// [`DataResult`].
+///
+/// # Arguments
+/// - `list`: The list to validate.
+/// - `size`: The required size.
+///
+/// # Returns
+/// A successful result if `list.len() == size`; otherwise, it returns a partial/non-result.
+/// If this result is partial, it will also be `size` elements long.
+pub fn validate_fixed_size<T>(list: Vec<T>, size: usize) -> DataResult<Vec<T>> {
+    if list.len() == size {
+        DataResult::new_success(list)
+    } else {
+        let message = format!("Input is not a list of {size} elements");
+        if list.len() > size {
+            DataResult::new_partial_error(message, list.into_iter().take(size).collect())
+        } else {
+            DataResult::new_error(message)
+        }
+    }
+}
+
+//
+
 #[cfg(test)]
 mod test {
     use crate::assert_decode;

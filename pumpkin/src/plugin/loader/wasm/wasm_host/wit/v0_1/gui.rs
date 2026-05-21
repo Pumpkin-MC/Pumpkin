@@ -6,11 +6,10 @@ use crate::plugin::api::gui::{PluginGui, PluginInventory};
 use crate::plugin::loader::wasm::wasm_host::{
     state::{GuiResource, PluginHostState},
     wit::v0_1::pumpkin::plugin::{
-        common::ItemStack as WitItemStack,
         gui::{self, Gui, GuiType},
+        item_stack::ItemStack as WitHostItemStack,
     },
 };
-use pumpkin_data::item_stack::ItemStack;
 
 impl PluginHostState {
     fn get_gui_res(&self, res: &Resource<Gui>) -> wasmtime::Result<&GuiResource> {
@@ -85,14 +84,12 @@ impl gui::HostGui for PluginHostState {
         &mut self,
         res: Resource<Gui>,
         slot: u32,
-        item: WitItemStack,
+        item: Resource<WitHostItemStack>,
     ) -> wasmtime::Result<()> {
         let gui = self.get_gui_res(&res)?.provider.lock().await;
         if (slot as usize) < gui.inventory.slots.len() {
-            let item_id = item.registry_key;
-            let item_data = pumpkin_data::item::Item::from_registry_key(&item_id)
-                .ok_or_else(|| wasmtime::Error::msg("Invalid item"))?;
-            let item_stack = ItemStack::new(item.count, item_data);
+            let item_stack = self.get_item_stack(&item)?;
+            let item_stack = item_stack.lock().await.clone();
             *gui.inventory.slots[slot as usize].lock().await = item_stack;
         }
         Ok(())
@@ -102,18 +99,23 @@ impl gui::HostGui for PluginHostState {
         &mut self,
         res: Resource<Gui>,
         slot: u32,
-    ) -> wasmtime::Result<Option<WitItemStack>> {
-        let gui = self.get_gui_res(&res)?.provider.lock().await;
-        if (slot as usize) < gui.inventory.slots.len() {
-            let stack = gui.inventory.slots[slot as usize].lock().await;
-            if stack.is_empty() {
-                Ok(None)
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let stack = {
+            let gui = self.get_gui_res(&res)?.provider.lock().await;
+            if (slot as usize) < gui.inventory.slots.len() {
+                let stack = gui.inventory.slots[slot as usize].lock().await;
+                if stack.is_empty() {
+                    None
+                } else {
+                    Some(stack.clone())
+                }
             } else {
-                Ok(Some(WitItemStack {
-                    registry_key: stack.get_item().registry_key.to_string(),
-                    count: stack.item_count,
-                }))
+                None
             }
+        };
+
+        if let Some(stack) = stack {
+            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
         } else {
             Ok(None)
         }

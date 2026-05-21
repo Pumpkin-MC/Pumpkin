@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use pumpkin_nbt::serializer::NbtWriteHelperJava;
 use serde::{
     Serialize,
     ser::{self},
@@ -93,11 +94,13 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     ) -> Result<Self::Ok, Self::Error> {
         // TODO: This is super sketchy... is there a way to do it better? Can we choose what
         // serializer to use on a struct somehow from within the struct?
-        if name == "TextComponent" {
-            let mut nbt_serializer =
-                pumpkin_nbt::serializer::Serializer::new(&mut self.write, None);
+        if name == "TextComponent" || name == "DialogNBT" {
+            let mut nbt_serializer = pumpkin_nbt::serializer::Serializer::new(
+                NbtWriteHelperJava::new(&mut self.write),
+                None,
+            );
             value.serialize(&mut nbt_serializer).map_err(|err| {
-                WritingError::Serde(format!("Failed to serialize TextComponent NBT: {err}"))
+                WritingError::Serde(format!("Failed to serialize {name} NBT: {err}"))
             })
         } else {
             value.serialize(self)

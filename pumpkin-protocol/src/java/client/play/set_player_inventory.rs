@@ -6,7 +6,7 @@ use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use pumpkin_data::packet::clientbound::PLAY_SET_PLAYER_INVENTORY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PLAY_SET_PLAYER_INVENTORY)]
 pub struct CSetPlayerInventory<'a> {
@@ -25,7 +25,7 @@ impl ClientPacket for CSetPlayerInventory<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_var_int(&self.slot)?;

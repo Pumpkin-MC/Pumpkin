@@ -21,7 +21,7 @@ impl RandomPatchFeature {
         block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature: &str,
+        feature: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

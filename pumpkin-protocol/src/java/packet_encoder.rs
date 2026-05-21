@@ -81,7 +81,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 /// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
-    writer: EncryptionWriter<W>,
+    writer: Option<EncryptionWriter<W>>,
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
     // Reused compressor to avoid constructing zlib state per packet.
@@ -93,7 +93,7 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     pub const fn new(writer: W) -> Self {
         Self {
-            writer: EncryptionWriter::None(writer),
+            writer: Some(EncryptionWriter::None(writer)),
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
@@ -109,14 +109,17 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketEncodeError> {
-        if matches!(self.writer, EncryptionWriter::Encrypt(_)) {
+        if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {
             return Err(PacketEncodeError::Message(
                 "Encryption already enabled".into(),
             ));
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
             .map_err(|_| PacketEncodeError::Message("Invalid key".into()))?;
-        take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
+
+        if let Some(writer) = self.writer.take() {
+            self.writer = Some(writer.upgrade(cipher));
+        }
         Ok(())
     }
 
@@ -242,14 +245,16 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
+                    .as_mut()
+                    .unwrap()
                     .write_all(&self.compression_scratch)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -274,14 +279,16 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(&mut self.writer)
+                    .encode_async(self.writer.as_mut().unwrap())
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
+                    .as_mut()
+                    .unwrap()
                     .write_all(&packet_data)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -299,10 +306,12 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             }
 
             full_packet_len_var_int
-                .encode_async(&mut self.writer)
+                .encode_async(self.writer.as_mut().unwrap())
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
             self.writer
+                .as_mut()
+                .unwrap()
                 .write_all(&packet_data)
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -313,6 +322,8 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
     pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
         self.writer
+            .as_mut()
+            .unwrap()
             .flush()
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))
@@ -337,7 +348,7 @@ mod tests {
     use flate2::read::ZlibDecoder;
     use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
     use pumpkin_macros::java_packet;
-    use pumpkin_util::version::MinecraftVersion;
+    use pumpkin_util::version::JavaMinecraftVersion;
     use serde::Serialize;
 
     /// Define a custom packet for testing maximum packet size
@@ -398,8 +409,8 @@ mod tests {
 
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        writer.write_var_int(&VarInt(T::to_id(MinecraftVersion::V_1_21_11)))?;
-        packet.write_packet_data(writer, &MinecraftVersion::V_1_21_11)?;
+        writer.write_var_int(&VarInt(T::to_id(JavaMinecraftVersion::V_1_21_11)))?;
+        packet.write_packet_data(writer, &JavaMinecraftVersion::V_1_21_11)?;
 
         encoder
             .write_packet(packet_buf.into())
@@ -434,13 +445,13 @@ mod tests {
         let decoded_packet_id = decode_varint(&mut buffer).map_err(|e| e.to_string())?;
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload
         // We need to obtain the expected payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
 
         assert_eq!(buffer, expected_payload);
         Ok(())
@@ -469,10 +480,10 @@ mod tests {
         // Read data length VarInt (uncompressed data length)
         let data_length = decode_varint(&mut buffer).map_err(|e| e.to_string())?;
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
-        let uncompressed_data_length = VarInt(CStatusResponse::to_id(MinecraftVersion::V_1_21_11))
-            .written_size()
-            + expected_payload.len();
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
+        let uncompressed_data_length =
+            VarInt(CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)).written_size()
+                + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
 
         // Remaining buffer is the compressed data
@@ -489,7 +500,7 @@ mod tests {
             decode_varint(&mut decompressed_buffer).map_err(|e| e.to_string())?;
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload
@@ -527,12 +538,12 @@ mod tests {
         let decoded_packet_id = decode_varint(&mut buffer).map_err(|e| e.to_string())?;
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
         assert_eq!(buffer, expected_payload);
         Ok(())
     }
@@ -567,10 +578,10 @@ mod tests {
         // Read data length VarInt (uncompressed data length)
         let data_length = decode_varint(&mut buffer).map_err(|e| e.to_string())?;
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
-        let uncompressed_data_length = VarInt(CStatusResponse::to_id(MinecraftVersion::V_1_21_11))
-            .written_size()
-            + expected_payload.len();
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
+        let uncompressed_data_length =
+            VarInt(CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)).written_size()
+                + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
 
         // Remaining buffer is the compressed data
@@ -587,7 +598,7 @@ mod tests {
             decode_varint(&mut decompressed_buffer).map_err(|e| e.to_string())?;
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload
@@ -619,12 +630,12 @@ mod tests {
         let decoded_packet_id = decode_varint(&mut buffer).map_err(|e| e.to_string())?;
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload (empty)
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
 
         assert_eq!(
             buffer.len(),
@@ -668,12 +679,12 @@ mod tests {
         // Assume packet ID is 0 for CStatusResponse
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
 
         assert_eq!(buffer, expected_payload);
         Ok(())
@@ -726,12 +737,12 @@ mod tests {
         let decoded_packet_id = decode_varint(&mut buffer).map_err(|e| e.to_string())?;
         assert_eq!(
             decoded_packet_id,
-            CStatusResponse::to_id(MinecraftVersion::V_1_21_11)
+            CStatusResponse::to_id(JavaMinecraftVersion::V_1_21_11)
         );
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)?;
+        packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
 
         assert_eq!(buffer, expected_payload);
         Ok(())

@@ -5,7 +5,7 @@ use pumpkin_data::{
     sound_id_remap::remap_sound_id_for_version,
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
+use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -48,7 +48,7 @@ impl ClientPacket for CSoundEffect {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let sound_event = match &self.sound_event {
             IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
@@ -70,13 +70,13 @@ mod tests {
 
     use pumpkin_data::sound::SoundCategory;
     use pumpkin_data::sound_id_remap::remap_sound_id_for_version;
-    use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
+    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
     use crate::{ClientPacket, IdOr, SoundEvent, VarInt};
 
     use super::CSoundEffect;
 
-    fn first_remapped_sound_id(version: MinecraftVersion) -> u16 {
+    fn first_remapped_sound_id(version: JavaMinecraftVersion) -> u16 {
         (0..=u16::MAX)
             .find(|id| remap_sound_id_for_version(*id, version) != *id)
             .expect("sound remap table should contain at least one changed id")
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn numeric_sound_id_remaps_for_1_21_11() {
-        let sound_id = first_remapped_sound_id(MinecraftVersion::V_1_21_11);
+        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
         let packet = CSoundEffect::new(
             IdOr::Id(sound_id),
             SoundCategory::Players,
@@ -100,18 +100,18 @@ mod tests {
         let mut bytes = Vec::new();
 
         packet
-            .write_packet_data(&mut bytes, &MinecraftVersion::V_1_21_11)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
             .unwrap();
 
         assert_eq!(
             first_var_int(bytes),
-            VarInt::from(remap_sound_id_for_version(sound_id, MinecraftVersion::V_1_21_11) + 1)
+            VarInt::from(remap_sound_id_for_version(sound_id, JavaMinecraftVersion::V_1_21_11) + 1)
         );
     }
 
     #[test]
     fn numeric_sound_id_stays_latest_for_26_1() {
-        let sound_id = first_remapped_sound_id(MinecraftVersion::V_1_21_11);
+        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
         let packet = CSoundEffect::new(
             IdOr::Id(sound_id),
             SoundCategory::Players,
@@ -123,7 +123,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         packet
-            .write_packet_data(&mut bytes, &MinecraftVersion::V_26_1)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_1)
             .unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(sound_id + 1));
@@ -145,7 +145,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         packet
-            .write_packet_data(&mut bytes, &MinecraftVersion::V_1_21_11)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
             .unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(0));

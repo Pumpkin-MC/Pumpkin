@@ -82,11 +82,6 @@ impl UDPNetworkDecoder {
         &mut self,
         _key: &[u8; 16],
     ) -> Result<(), EncryptionAlreadyEnabledError> {
-        // if matches!(self.reader, DecryptionReader::Decrypt(_)) {
-        //     return Err(EncryptionAlreadyEnabledError);
-        // }
-        // let cipher = Aes128Cfb8Dec::new_from_slices(key, key).map_err(|_| ());
-        // take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
         Ok(())
     }
 

@@ -63,6 +63,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{
@@ -112,7 +113,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -424,13 +425,11 @@ impl World {
     }
 
     pub async fn flush_synced_block_events(self: &Arc<Self>) {
-        let events;
         // THIS IS IMPORTANT
         // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
-        {
+        let events = {
             let mut queue = self.synced_block_event_queue.lock().await;
-            events = queue.clone();
-            queue.clear();
+            std::mem::take(&mut *queue)
         };
 
         for event in events {
@@ -457,8 +456,8 @@ impl World {
 
     fn collect_java_recipients_by_version<'a>(
         players: impl Iterator<Item = &'a Arc<Player>>,
-    ) -> BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> {
-        let mut recipients_by_version: BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> =
+    ) -> BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> {
+        let mut recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> =
             BTreeMap::new();
         for player in players {
             if let ClientPlatform::Java(java_client) = &player.client {
@@ -473,7 +472,7 @@ impl World {
 
     fn broadcast_java_grouped<P: ClientPacket>(
         packet: &P,
-        recipients_by_version: BTreeMap<MinecraftVersion, Vec<&JavaClient>>,
+        recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&JavaClient>>,
     ) {
         for (version, recipients) in recipients_by_version {
             let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
@@ -849,9 +848,11 @@ impl World {
         let entity_elapsed = entity_start.elapsed();
 
         let block_entity_start = tokio::time::Instant::now();
+        let active_chunks = self.active_chunks.load();
         let block_entities: Vec<Arc<dyn BlockEntity>> = self
             .block_entities
             .iter()
+            .filter(|e| active_chunks.contains(&e.key().chunk_position()))
             .map(|e| e.value().clone())
             .collect();
         let block_entity_count = block_entities.len();
@@ -944,6 +945,10 @@ impl World {
             // Auto-save logic
             if level_time.world_age % 100 == 0 {
                 self.level.should_unload.store(true, Relaxed);
+                let cleaned_chunks = self.level.clean_memory();
+                if !cleaned_chunks.is_empty() {
+                    self.remove_entities_in_chunks(&cleaned_chunks);
+                }
                 // If autosave is configured and this tick will trigger an autosave, don't double notify
                 if self.level.autosave_ticks == 0 {
                     self.level.level_channel.notify();
@@ -1599,6 +1604,8 @@ impl World {
             (position, yaw, pitch)
         } else {
             let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
+            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
             let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
@@ -1675,7 +1682,9 @@ impl World {
         drop(level_info);
         drop(weather);
 
-        let client = player.client.bedrock();
+        let Some(client) = player.client.bedrock() else {
+            return;
+        };
 
         client
             .send_game_packet(&CStartGame {
@@ -1878,7 +1887,9 @@ impl World {
             player.gameprofile.name, entity_id
         );
 
-        let client = player.client.java();
+        let Some(client) = player.client.java() else {
+            return;
+        };
         // Send the login packet for our new player
         client
             .send_packet_now(&CLogin::new(
@@ -1937,6 +1948,8 @@ impl World {
         } else {
             let info = &self.level_info.load();
             let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
             let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
@@ -2263,8 +2276,9 @@ impl World {
             java_client
                 .send_packet_now(&CRecipeBookSettings::default_closed())
                 .await;
+            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes().await;
             java_client
-                .send_packet_now(&CRecipeBookAdd::new(true))
+                .send_packet_now(&CRecipeBookAdd::new(true, &dynamic_recipes))
                 .await;
         }
 
@@ -2428,6 +2442,8 @@ impl World {
                 // FIXME: This spawn position calculation is incorrect. Should use vanilla's
                 // proper spawn position calculation (see #1381). The y-level calculation
                 // needs to account for spawn radius and find a safe spawn position.
+                let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+                self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
                 let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
 
                 (
@@ -2496,6 +2512,8 @@ impl World {
             );
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
+            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
             let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
             let fallback_pos = Vector3::new(
                 f64::from(spawn_x) + 0.5,
@@ -2653,9 +2671,14 @@ impl World {
                     }
                 };
 
-                let Some((chunk, _first_load)) = recv_result else {
+                let Some((chunk_weak, first_load)) = recv_result else {
                     break;
                 };
+
+                let Some(chunk) = chunk_weak.upgrade() else {
+                    continue;
+                };
+
                 let position = Vector2::new(chunk.x, chunk.z);
 
                 if !level.is_chunk_watched(&position) {
@@ -2684,24 +2707,27 @@ impl World {
 
                         ids_to_remove.push(VarInt(base_entity.entity_id));
 
-                        let mut nbt = NbtCompound::new();
-                        entity.write_nbt(&mut nbt).await;
-                        if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
-                            let old_chunk = old_chunk.to_vec2_i32();
-                            let chunk = world.level.get_entity_chunk(old_chunk).await;
-                            chunk.mark_dirty(true);
-                            let base_entity = entity.get_entity();
-                            let current_chunk_coordinate =
-                                base_entity.block_pos.load().chunk_position();
+                        if first_load {
+                            let mut nbt = NbtCompound::new();
+                            entity.write_nbt(&mut nbt).await;
+                            if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load()
+                            {
+                                let old_chunk = old_chunk.to_vec2_i32();
+                                let chunk = world.level.get_entity_chunk(old_chunk).await;
+                                chunk.mark_dirty(true);
+                                let base_entity = entity.get_entity();
+                                let current_chunk_coordinate =
+                                    base_entity.block_pos.load().chunk_position();
 
-                            let mut data = chunk.data.lock().await;
-                            if old_chunk == current_chunk_coordinate {
-                                data.insert(*uuid, nbt);
-                                continue;
+                                let mut data = chunk.data.lock().await;
+                                if old_chunk == current_chunk_coordinate {
+                                    data.insert(*uuid, nbt);
+                                    continue;
+                                }
+
+                                // The chunk has changed, lets remove the entity from the old chunk
+                                data.remove(uuid);
                             }
-
-                            // The chunk has changed, lets remove the entity from the old chunk
-                            data.remove(uuid);
                         }
                     }
                     if !ids_to_remove.is_empty() {
@@ -2763,9 +2789,11 @@ impl World {
                         .await;
                     entity.init_data_tracker().await;
 
-                    entities_to_add.push(entity);
+                    if first_load {
+                        entities_to_add.push(entity);
+                    }
                 }
-                if !entities_to_add.is_empty() {
+                if first_load && !entities_to_add.is_empty() {
                     world.entities.rcu(|current_entities| {
                         let mut new_entities = (**current_entities).clone();
                         new_entities.extend(entities_to_add.iter().cloned());
@@ -3246,7 +3274,7 @@ impl World {
         self.remove_entity_data(base_entity).await;
     }
 
-    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
+    pub fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
         let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
         let mut entities_to_remove = Vec::new();
 
@@ -3267,8 +3295,12 @@ impl World {
 
         for entity in entities_to_remove {
             self.spawn_state.load().remove_entity(self, entity.as_ref());
-            self.remove_entity_data(entity.get_entity()).await;
+            // Important: We do NOT call remove_entity_data here because we want the entities
+            // to persist in the chunk data on disk. We only remove them from the active world (RAM).
         }
+
+        self.block_entities
+            .retain(|pos, _| !chunks_set.contains(&pos.chunk_position()));
     }
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
@@ -3437,8 +3469,7 @@ impl World {
 
         self.level
             .light_engine
-            .update_lighting_at(&self.level, *position)
-            .await;
+            .update_lighting_at(&self.level, *position);
 
         replaced_block_state_id
     }
@@ -3459,6 +3490,37 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
+        let _ = self
+            .level
+            .light_engine
+            .set_block_light_level(&self.level, position, light_level);
+    }
+
+    pub fn set_sky_light_level(&self, position: &BlockPos, light_level: u8) {
+        let _ = self
+            .level
+            .light_engine
+            .set_sky_light_level(&self.level, position, light_level);
+    }
+
+    pub fn get_biome(&self, position: &BlockPos) -> &'static Biome {
+        let chunk_pos = position.chunk_position();
+        if let Some(chunk) = self.level.loaded_chunks.get(&chunk_pos) {
+            let id = chunk
+                .section
+                .get_rough_biome_absolute_y(
+                    (position.0.x & 15) as usize,
+                    position.0.y,
+                    (position.0.z & 15) as usize,
+                )
+                .unwrap_or(0);
+            Biome::from_id(id).unwrap_or(&Biome::PLAINS)
+        } else {
+            &Biome::PLAINS
+        }
     }
 
     pub fn schedule_block_tick(

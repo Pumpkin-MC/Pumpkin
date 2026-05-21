@@ -1,14 +1,13 @@
 use std::{
     fmt::Display,
-    io::{self, Read, Seek, Write},
+    io::{self, Write},
     ops::Deref,
 };
 
 use bytes::Bytes;
-use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use serde::{de, ser};
-use serializer::WriteAdaptor;
+use serializer::{NbtWriteHelper, NbtWriteHelperBedrock, NbtWriteHelperJava};
 use tag::NbtTag;
 use thiserror::Error;
 
@@ -19,6 +18,7 @@ pub mod nbt_ops;
 pub mod serializer;
 pub mod tag;
 
+pub use compound::NbtCompound;
 pub use deserializer::{from_bytes, from_bytes_unnamed};
 pub use serializer::{to_bytes, to_bytes_named, to_bytes_unnamed};
 
@@ -38,6 +38,8 @@ pub const COMPOUND_ID: u8 = 0x0A;
 pub const INT_ARRAY_ID: u8 = 0x0B;
 pub const LONG_ARRAY_ID: u8 = 0x0C;
 
+pub const MAX_ARRAY_LENGTH: usize = 2_000_000;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("The root tag of the NBT file is not a compound tag. Received tag id: {0}")]
@@ -46,6 +48,8 @@ pub enum Error {
     UnknownTagId(u8),
     #[error("Failed to Cesu 8 Decode")]
     Cesu8DecodingError,
+    #[error("Failed to UTF-8 Decode")]
+    Utf8DecodingError,
     #[error("Serde error: {0}")]
     SerdeError(String),
     #[error("NBT doesn't support this type: {0}")]
@@ -56,6 +60,10 @@ pub enum Error {
     NegativeLength(i32),
     #[error("Length too large: {0}")]
     LargeLength(usize),
+    #[error("Failed to decode varint - value too large")]
+    VarIntTooLarge,
+    #[error("Failed to decode varlong - value too large")]
+    VarLongTooLarge,
 }
 
 impl ser::Error for Error {
@@ -85,22 +93,22 @@ impl Nbt {
         }
     }
 
-    pub fn read<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
-        let tag_type_id = reader.get_u8_be()?;
+    pub fn read<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+        let tag_type_id = reader.get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
         }
 
         Ok(Self {
-            name: get_nbt_string(reader)?,
+            name: reader.get_string()?,
             root_tag: NbtCompound::deserialize_content(reader)?,
         })
     }
 
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
-        let tag_type_id = reader.get_u8_be()?;
+    pub fn read_unnamed<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+        let tag_type_id = reader.get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
@@ -115,9 +123,22 @@ impl Nbt {
     #[must_use]
     pub fn write(self) -> Bytes {
         let mut bytes = Vec::new();
-        let mut writer = WriteAdaptor::new(&mut bytes);
-        writer.write_u8_be(COMPOUND_ID).unwrap();
-        NbtTag::String(self.name)
+        let mut writer = NbtWriteHelperJava::new(&mut bytes);
+        writer.write_u8(COMPOUND_ID).unwrap();
+        NbtTag::String(self.name.into())
+            .serialize_data(&mut writer)
+            .unwrap();
+        self.root_tag.serialize_content(&mut writer).unwrap();
+
+        bytes.into()
+    }
+
+    #[must_use]
+    pub fn write_bedrock(self) -> Bytes {
+        let mut bytes = Vec::new();
+        let mut writer = NbtWriteHelperBedrock::new(&mut bytes);
+        writer.write_u8(COMPOUND_ID).unwrap();
+        NbtTag::String(self.name.into())
             .serialize_data(&mut writer)
             .unwrap();
         self.root_tag.serialize_content(&mut writer).unwrap();
@@ -130,13 +151,18 @@ impl Nbt {
         Ok(())
     }
 
+    pub fn write_to_writer_bedrock<W: Write>(self, mut writer: W) -> Result<(), io::Error> {
+        writer.write_all(&self.write_bedrock())?;
+        Ok(())
+    }
+
     /// Writes an NBT tag without a root `Compound` name.
     #[must_use]
     pub fn write_unnamed(self) -> Bytes {
         let mut bytes = Vec::new();
-        let mut writer = WriteAdaptor::new(&mut bytes);
+        let mut writer = NbtWriteHelperJava::new(&mut bytes);
 
-        writer.write_u8_be(COMPOUND_ID).unwrap();
+        writer.write_u8(COMPOUND_ID).unwrap();
         self.root_tag.serialize_content(&mut writer).unwrap();
 
         bytes.into()
@@ -178,13 +204,6 @@ impl AsMut<NbtCompound> for Nbt {
     }
 }
 
-pub fn get_nbt_string<R: Read + Seek>(bytes: &mut NbtReadHelper<R>) -> Result<String, Error> {
-    let len = bytes.get_u16_be()? as usize;
-    let string_bytes = bytes.read_boxed_slice(len)?;
-    let string = cesu8::from_java_cesu8(&string_bytes).map_err(|_| Error::Cesu8DecodingError)?;
-    Ok(string.into_owned())
-}
-
 // TODO: This is a bit hacky
 pub(crate) const NBT_ARRAY_TAG: &str = "__nbt_array";
 pub(crate) const NBT_INT_ARRAY_TAG: &str = "__nbt_int_array";
@@ -214,11 +233,15 @@ mod test {
     use crate::Error;
     use crate::compound::NbtCompound;
     use crate::deserializer::from_bytes;
+    use crate::deserializer::from_bytes_bedrock;
     use crate::nbt_byte_array;
     use crate::nbt_int_array;
     use crate::nbt_long_array;
+    use crate::serializer::NbtWriteHelperBedrock;
+    use crate::serializer::to_bytes_bedrock;
     use crate::serializer::to_bytes_named;
-    use crate::serializer::{WriteAdaptor, to_bytes};
+    use crate::serializer::to_bytes_named_bedrock;
+    use crate::serializer::{NbtWriteHelperJava, to_bytes};
     use crate::tag::NbtTag;
     use crate::{deserializer::from_bytes_unnamed, serializer::to_bytes_unnamed};
     use serde::{Deserialize, Serialize};
@@ -251,6 +274,25 @@ mod test {
         assert_eq!(test, recreated_struct);
     }
 
+    #[test]
+    fn simple_ser_de_unnamed_bedrock() {
+        let test = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+
+        // Bedrock doesn't actually use unnamed NBT (AFAIK). `to_bytes_bedrock` actually encodes empty name.
+        let mut bytes = Vec::new();
+        to_bytes_bedrock(&test, &mut bytes).unwrap();
+        let recreated_struct: Test = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
+
+        assert_eq!(test, recreated_struct);
+    }
+
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     #[expect(clippy::struct_field_names)]
     struct TestArray {
@@ -278,6 +320,21 @@ mod test {
     }
 
     #[test]
+    fn simple_ser_de_array_bedrock() {
+        let test = TestArray {
+            byte_array: vec![0, 3, 2],
+            int_array: vec![13, 1321, 2],
+            long_array: vec![1, 0, 200301, 1],
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_bedrock(&test, &mut bytes).unwrap();
+        let recreated_struct: TestArray = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
+
+        assert_eq!(test, recreated_struct);
+    }
+
+    #[test]
     fn simple_ser_de_named() {
         let name = String::from("Test");
         let test = Test {
@@ -297,6 +354,25 @@ mod test {
     }
 
     #[test]
+    fn simple_ser_de_named_bedrock() {
+        let name = String::from("Test");
+        let test = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_named_bedrock(&test, name, &mut bytes).unwrap();
+        let recreated_struct: Test = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
+
+        assert_eq!(test, recreated_struct);
+    }
+
+    #[test]
     fn simple_ser_de_array_named() {
         let name = String::from("Test");
         let test = TestArray {
@@ -308,6 +384,22 @@ mod test {
         let mut bytes = Vec::new();
         to_bytes_named(&test, name, &mut bytes).unwrap();
         let recreated_struct: TestArray = from_bytes(Cursor::new(bytes)).unwrap();
+
+        assert_eq!(test, recreated_struct);
+    }
+
+    #[test]
+    fn simple_ser_de_array_named_bedrock() {
+        let name = String::from("Test");
+        let test = TestArray {
+            byte_array: vec![0, 3, 2],
+            int_array: vec![13, 1321, 2],
+            long_array: vec![1, 0, 200301, 1],
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_named_bedrock(&test, name, &mut bytes).unwrap();
+        let recreated_struct: TestArray = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
 
         assert_eq!(test, recreated_struct);
     }
@@ -372,6 +464,46 @@ mod test {
     }
 
     #[test]
+    fn list_bedrock() {
+        let test1 = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+
+        let test2 = Test {
+            byte: 13,
+            short: 342,
+            int: -4313,
+            long: -132334,
+            float: -69.420,
+            string: "Hello compounds".to_string(),
+        };
+
+        let list_compound = TestList {
+            option: Some(Egg {
+                food: "Skibid".to_string(),
+            }),
+            nested_compound: Breakfast {
+                food: Egg {
+                    food: "Over easy".to_string(),
+                },
+            },
+            compounds: vec![test1, test2],
+            list_string: vec![String::new(), "abcbcbcbbc".to_string()],
+            empty: vec![],
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_bedrock(&list_compound, &mut bytes).unwrap();
+        let recreated_struct: TestList = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
+        assert_eq!(list_compound, recreated_struct);
+    }
+
+    #[test]
     fn list_named() {
         let test1 = Test {
             byte: 123,
@@ -410,13 +542,51 @@ mod test {
     }
 
     #[test]
+    fn list_named_bedrock() {
+        let test1 = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Hello test".to_string(),
+        };
+
+        let test2 = Test {
+            byte: 13,
+            short: 342,
+            int: -4313,
+            long: -132334,
+            float: -69.420,
+            string: "Hello compounds".to_string(),
+        };
+
+        let list_compound = TestList {
+            option: None,
+            nested_compound: Breakfast {
+                food: Egg {
+                    food: "Over easy".to_string(),
+                },
+            },
+            compounds: vec![test1, test2],
+            list_string: vec![String::new(), "abcbcbcbbc".to_string()],
+            empty: vec![],
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_named_bedrock(&list_compound, "a".to_string(), &mut bytes).unwrap();
+        let recreated_struct: TestList = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
+        assert_eq!(list_compound, recreated_struct);
+    }
+
+    #[test]
     fn wrapper_compound_lists() {
         let mut vec: Vec<NbtTag> = Vec::new();
 
         // These tags will be wrapped during serialization.
         vec.push(NbtTag::Int(-1823));
         vec.push(NbtTag::Int(123));
-        vec.push(NbtTag::String("Not an int".to_string()));
+        vec.push(NbtTag::String("Not an int".into()));
         vec.push(NbtTag::Byte(2));
 
         // This compound will not, since the list is already a list of compound tags.
@@ -483,7 +653,89 @@ mod test {
         ];
 
         let mut bytes = Vec::new();
-        let mut write_adaptor = WriteAdaptor::new(&mut bytes);
+        let mut write_adaptor = NbtWriteHelperJava::new(&mut bytes);
+        NbtTag::List(vec)
+            .serialize(&mut write_adaptor)
+            .expect("Expected serialization to succeed");
+
+        assert_eq!(bytes, expected_bytes);
+    }
+
+    #[test]
+    fn wrapper_compound_lists_bedrock() {
+        let mut vec: Vec<NbtTag> = Vec::new();
+
+        // These tags will be wrapped during serialization.
+        vec.push(NbtTag::Int(-1823));
+        vec.push(NbtTag::Int(123));
+        vec.push(NbtTag::String("Not an int".into()));
+        vec.push(NbtTag::Byte(2));
+
+        // This compound will not, since the list is already a list of compound tags.
+        // This compound cannot be unwrapped in any way, so it is preserved
+        // on deserialization.
+        vec.push(NbtTag::Compound({
+            let mut compound = NbtCompound::new();
+            compound.put_short("example", 1234);
+            compound
+        }));
+
+        // This wrapper compound will be wrapped because we want to preserve the
+        // original data during deserialization.
+        //
+        // Suppose we had {"": `tag`}. If we didn't wrap this, on deserialization,
+        // we would get `tag`, which doesn't match the serialized compound tag.
+        // Therefore, we must wrap it and serialize {"": {"": `tag`}}.
+        // Then on deserialization, we get {"": `tag`}, which matches what we wanted
+        // to serialize in the first place.
+        //
+        // This compound represents {"": 1L}.
+        vec.push(NbtTag::Compound({
+            let mut compound = NbtCompound::new();
+            compound.put_long("", 1);
+            compound
+        }));
+
+        let expected_bytes = [
+            0x09, // List type
+            0x0A, // This list is a compound tag list
+            0xC,  // This list has 6 elements.
+            // Now for parsing each compound tag:
+            0x03, // Int type
+            0x00, // Empty key
+            0xBD, 0x1C, // -1823
+            0x00, // End
+            0x03, // Int type
+            0x00, // Empty key
+            0xF6, 0x01, // 123
+            0x00, // End
+            0x08, // String type
+            0x00, // Empty key
+            0x0A, // The string is 10 characters long.
+            0x4E, 0x6F, 0x74, 0x20, 0x61, 0x6E, 0x20, 0x69, 0x6E, 0x74, // "Not an int"
+            0x00, // End
+            0x01, // Byte type
+            0x00, // Empty key
+            0x02, // 2b
+            0x00, // End
+            // For the first (unwrapped) compound:
+            0x02, // Short type
+            0x07, // The key is 7 characters long.
+            0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, // "example"
+            0xD2, 0x04, // 1234
+            0x00, // End
+            // For the second (wrapped) wrapper compound:
+            0x0A, // Compound type
+            0x00, // Empty key
+            0x04, // Long type
+            0x00, // Empty key
+            0x02, // 1L
+            0x00, // End
+            0x00, // End
+        ];
+
+        let mut bytes = Vec::new();
+        let mut write_adaptor = NbtWriteHelperBedrock::new(&mut bytes);
         NbtTag::List(vec)
             .serialize(&mut write_adaptor)
             .expect("Expected serialization to succeed");
@@ -574,6 +826,88 @@ mod test {
     }
 
     #[test]
+    fn nbt_arrays_bedrock() {
+        #[derive(Serialize)]
+        struct Tagged {
+            #[serde(serialize_with = "nbt_long_array")]
+            l: [i64; 1],
+            #[serde(serialize_with = "nbt_int_array")]
+            i: [i32; 1],
+            #[serde(serialize_with = "nbt_byte_array")]
+            b: [u8; 1],
+        }
+        #[derive(Serialize)]
+        struct NotTagged {
+            l: [i64; 1],
+            i: [i32; 1],
+            b: [u8; 1],
+        }
+
+        let value = Tagged {
+            l: [0],
+            i: [0],
+            b: [0],
+        };
+        let expected_bytes = [
+            0x0A, // Component Tag
+            0x00, // Empty root name
+            0x0C, // Long Array Type
+            0x01, // Key length
+            0x6C, // Key (l)
+            0x02, // Array Length
+            0x00, // Value(s)
+            0x0B, // Int Array Tag
+            0x01, // Key length
+            0x69, // Key (i)
+            0x02, // Array Length
+            0x00, // Value(s)
+            0x07, // Byte Array Tag
+            0x01, // Key length
+            0x62, // Key (b)
+            0x02, // Array Length
+            0x00, // Value(s)
+            0x00, // End Tag
+        ];
+
+        let mut bytes = Vec::new();
+        to_bytes_bedrock(&value, &mut bytes).unwrap();
+        assert_eq!(bytes, expected_bytes);
+
+        let value = NotTagged {
+            l: [0],
+            i: [0],
+            b: [0],
+        };
+        let expected_bytes = [
+            0x0A, // Component Tag
+            0x00, // Empty root name
+            0x09, // List Tag
+            0x01, // Key length
+            0x6C, // Key (l)
+            0x04, // Array Type
+            0x02, // Array Length
+            0x00, // Value(s)
+            0x09, // List Tag
+            0x01, // Key length
+            0x69, // Key (i)
+            0x03, // Array Type
+            0x02, // Array Length
+            0x00, // Value(s)
+            0x09, // List Tag
+            0x01, // Key length
+            0x62, // Key (b)
+            0x01, // Array Type
+            0x02, // Array Length
+            0x00, // Value(s)
+            0x00, // End Tag
+        ];
+
+        let mut bytes = Vec::new();
+        to_bytes_bedrock(&value, &mut bytes).unwrap();
+        assert_eq!(bytes, expected_bytes);
+    }
+
+    #[test]
     fn tuple_fail() {
         #[derive(Serialize)]
         struct BadData {
@@ -583,6 +917,23 @@ mod test {
         let value = BadData { x: (0, 0) };
         let mut bytes = Vec::new();
         let err = to_bytes(&value, &mut bytes);
+
+        match err {
+            Err(Error::SerdeError(_)) => (),
+            _ => panic!("Expected to fail serialization!"),
+        }
+    }
+
+    #[test]
+    fn tuple_fail_bedrock() {
+        #[derive(Serialize)]
+        struct BadData {
+            x: (i32, i64),
+        }
+
+        let value = BadData { x: (0, 0) };
+        let mut bytes = Vec::new();
+        let err = to_bytes_bedrock(&value, &mut bytes);
 
         match err {
             Err(Error::SerdeError(_)) => (),
@@ -602,6 +953,21 @@ mod test {
         to_bytes(&value, &mut bytes).unwrap();
 
         let reconstructed = from_bytes(Cursor::new(bytes)).unwrap();
+        assert_eq!(value, reconstructed);
+    }
+
+    #[test]
+    fn tuple_ok_bedrock() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct GoodData {
+            x: (i32, i32),
+        }
+
+        let value = GoodData { x: (1, 2) };
+        let mut bytes = Vec::new();
+        to_bytes_bedrock(&value, &mut bytes).unwrap();
+
+        let reconstructed = from_bytes_bedrock(Cursor::new(bytes)).unwrap();
         assert_eq!(value, reconstructed);
     }
 

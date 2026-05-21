@@ -51,6 +51,7 @@ pub fn build() -> TokenStream {
 
     // --- Final Assembly ---
     quote! {
+        #![allow(clippy::doc_markdown)]
         pub mod java {
             #java_constants
         }
