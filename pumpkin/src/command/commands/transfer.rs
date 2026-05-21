@@ -123,7 +123,7 @@ impl CommandExecutor for TargetPlayerExecutor {
                                     hostname.to_string(),
                                     port as u16,
                                     false,
-                                )
+                                ),
                             )
                             .await;
                     }
