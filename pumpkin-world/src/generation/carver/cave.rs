@@ -308,7 +308,14 @@ impl CaveCarver {
                             && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            Self::carve_block(chunk, config, world_x, world_y, world_z, &mut has_grass);
+                            Self::carve_block(
+                                chunk,
+                                config,
+                                world_x,
+                                world_y,
+                                world_z,
+                                &mut has_grass,
+                            );
                         }
                     }
                 }
@@ -324,7 +331,14 @@ impl CaveCarver {
         }
     }
 
-    fn carve_block(chunk: &mut ProtoChunk, config: &CarverConfig, x: i32, y: i32, z: i32, has_grass: &mut bool) -> bool {
+    fn carve_block(
+        chunk: &mut ProtoChunk,
+        config: &CarverConfig,
+        x: i32,
+        y: i32,
+        z: i32,
+        has_grass: &mut bool,
+    ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
