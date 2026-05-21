@@ -45,15 +45,15 @@ pub fn build() -> TokenStream {
     let single_slot_names_len = slot_range_single_slot_names_tokens.len();
 
     quote! {
-        pub const SLOT_RANGES: [(&'static str, &'static [usize]); #slot_ranges_len] = [
+        pub const SLOT_RANGES: [(&str, &[usize]); #slot_ranges_len] = [
             #(#slot_range_tuples_tokens),*
         ];
 
-        pub const SLOT_RANGE_ALL_NAMES: [&'static str; #slot_ranges_len] = [
+        pub const SLOT_RANGE_ALL_NAMES: [&str; #slot_ranges_len] = [
             #(#slot_range_all_names_tokens),*
         ];
 
-        pub const SLOT_RANGE_SINGLE_SLOT_NAMES: [&'static str; #single_slot_names_len] = [
+        pub const SLOT_RANGE_SINGLE_SLOT_NAMES: [&str; #single_slot_names_len] = [
             #(#slot_range_single_slot_names_tokens),*
         ];
 

@@ -318,3 +318,8 @@ pub mod carver;
 #[rustfmt::skip]
 #[path = "generated/villager.rs"]
 pub mod villager;
+
+#[cfg(feature = "slot_ranges")]
+#[rustfmt::skip]
+#[path = "generated/slot_ranges.rs"]
+pub mod slot_ranges;

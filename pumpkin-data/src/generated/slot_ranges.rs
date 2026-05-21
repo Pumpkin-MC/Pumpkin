@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-pub const SLOT_RANGES: [(&'static str, &'static [usize]); 165usize] = [
+pub const SLOT_RANGES: [(&str, &[usize]); 165usize] = [
     (
         "armor.*",
         &[103usize, 102usize, 101usize, 100usize, 105usize],
@@ -213,7 +213,7 @@ pub const SLOT_RANGES: [(&'static str, &'static [usize]); 165usize] = [
     ("weapon.mainhand", &[98usize]),
     ("weapon.offhand", &[99usize]),
 ];
-pub const SLOT_RANGE_ALL_NAMES: [&'static str; 165usize] = [
+pub const SLOT_RANGE_ALL_NAMES: [&str; 165usize] = [
     "armor.*",
     "armor.body",
     "armor.chest",
@@ -380,7 +380,7 @@ pub const SLOT_RANGE_ALL_NAMES: [&'static str; 165usize] = [
     "weapon.mainhand",
     "weapon.offhand",
 ];
-pub const SLOT_RANGE_SINGLE_SLOT_NAMES: [&'static str; 156usize] = [
+pub const SLOT_RANGE_SINGLE_SLOT_NAMES: [&str; 156usize] = [
     "armor.body",
     "armor.chest",
     "armor.feet",
