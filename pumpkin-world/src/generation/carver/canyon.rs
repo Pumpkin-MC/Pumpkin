@@ -285,23 +285,12 @@ impl CanyonCarver {
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
-            return false;
-        }
-
         if config.replaceable.1.contains(&block.id) {
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
+            let fluid_level = chunk.fluid_level_sampler.get_fluid_level(x, y, z);
+            let replacement_block = fluid_level.get_block(y);
+            let replacement_state = BlockState::from_id(replacement_block.default_state.id);
 
-            let lava_y = config
-                .lava_level
-                .get_y(chunk.bottom_y() as i16, chunk.height());
-
-            if y <= lava_y {
-                chunk.set_block_state(x & 15, local_y, z & 15, lava);
-            } else {
-                chunk.set_block_state(x & 15, local_y, z & 15, air);
-            }
+            chunk.set_block_state(x & 15, local_y, z & 15, replacement_state);
 
             return true;
         }

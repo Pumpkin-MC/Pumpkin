@@ -94,6 +94,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 
 const AIR_BLOCK: Block = Block::AIR;
 
+#[derive(Clone)]
 pub struct StandardChunkFluidLevelSampler {
     top_fluid: FluidLevel,
     bottom_fluid: FluidLevel,
@@ -177,6 +178,7 @@ pub struct ProtoChunk {
     /// Block entities pending creation when the chunk is finalized.
     /// These are created from structure templates during world generation.
     pub pending_block_entities: Vec<NbtCompound>,
+    pub fluid_level_sampler: StandardChunkFluidLevelSampler,
 }
 
 pub struct TerrainCache {
@@ -258,6 +260,13 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            fluid_level_sampler: StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    generator.settings.sea_level,
+                    Block::from_state_id(generator.settings.default_fluid.id),
+                ),
+                FluidLevel::new(-54, &Block::LAVA),
+            ),
         }
     }
     #[must_use]
@@ -573,14 +582,6 @@ impl ProtoChunk {
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
 
-        let sampler = StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(
-                settings.sea_level,
-                Block::from_state_id(settings.default_fluid.id),
-            ),
-            FluidLevel::new(-54, &Block::LAVA),
-        );
-
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &generator.base_router.noise,
             &generator.random_config,
@@ -588,7 +589,7 @@ impl ProtoChunk {
             start_x,
             start_z,
             generation_shape,
-            sampler,
+            self.fluid_level_sampler.clone(),
             settings.aquifers_enabled,
             settings.ore_veins_enabled,
         );
