@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::{collections::BTreeMap, fs};
-/// Generates the `TokenStream` for the `FUELS` constant array, `get_item_burn_ticks`, and `is_fuel`.
+/// Generates the `TokenStream` for some slot range constants and a function to get one from the name of a range.
 pub fn build() -> TokenStream {
     let slot_ranges: BTreeMap<String, Box<[usize]>> =
         serde_json::from_str(&fs::read_to_string("../assets/slot_ranges.json").unwrap())
