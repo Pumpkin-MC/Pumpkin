@@ -1,6 +1,7 @@
 use super::Carver;
 use super::cave::get_height;
 use crate::ProtoChunk;
+use crate::generation::noise::aquifer_sampler::FluidLevelSamplerImpl;
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
