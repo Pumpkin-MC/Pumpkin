@@ -550,6 +550,7 @@ impl ProtoChunk {
     }
 
     pub fn step_to_biomes(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::None);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
         let horizontal_biome_end = biome_coords::from_block(16);
@@ -566,7 +567,7 @@ impl ProtoChunk {
     }
 
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
-        //debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
 
         let settings = generator.settings;
         let generation_shape = &settings.shape;
@@ -1135,6 +1136,7 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
         let random_config = &generator.random_config;
         let settings = generator.settings;
         let global_cache = &generator.global_structure_cache;
@@ -1220,6 +1222,7 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
         let random_config = &generator.random_config;
         let settings = generator.settings;
         let dimension = &generator.dimension;
