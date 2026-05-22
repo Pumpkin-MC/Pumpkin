@@ -550,7 +550,7 @@ impl ProtoChunk {
     }
 
     pub fn step_to_biomes(&mut self, generator: &super::generator::VanillaGenerator) {
-        debug_assert_eq!(self.stage, StagedChunkEnum::None);
+        debug_assert_eq!(self.stage, StagedChunkEnum::Empty);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
         let horizontal_biome_end = biome_coords::from_block(16);
