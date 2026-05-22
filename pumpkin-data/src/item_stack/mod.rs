@@ -93,6 +93,7 @@ impl ItemStack {
         }
         None
     }
+    #[must_use]
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
         let to_get_id = T::get_enum();
         if let Some(index) = self.patch.iter().position(|(id, _)| *id == to_get_id) {
@@ -148,6 +149,7 @@ impl ItemStack {
         patch: Vec::new(),
     };
 
+    #[must_use]
     pub fn split_off(&mut self, amount: u8) -> Self {
         let count = amount.min(self.item_count);
         let result = self.copy_with_count(count);
@@ -235,7 +237,7 @@ impl ItemStack {
     /// Core logic: apply Unbreaking chance with precomputed armor category and level.
     /// Extracted for use in damage_item where these values are hoisted outside the loop.
     /// Private to prevent incorrect usage; only call through damage_item.
-    fn should_apply_durability_damage_with(&self, is_armor: bool, unbreaking_level: i32) -> bool {
+    fn should_apply_durability_damage_with(is_armor: bool, unbreaking_level: i32) -> bool {
         if unbreaking_level <= 0 {
             return true;
         }
@@ -251,8 +253,8 @@ impl ItemStack {
 
     /// Apply durability damage to this item and return the outcome.
     /// Callers must check the return value to handle break broadcasts and item stack updates.
-    /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
-    /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
+    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
+    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
     /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
     #[must_use]
     pub fn damage_item(&mut self, amount: i32) -> DamageResult {
@@ -272,7 +274,7 @@ impl ItemStack {
         // TODO: Short-circuit once applied >= (max_damage - current_damage) to avoid
         // iterating the full amount for high-damage hits on high-durability items.
         for _ in 0..amount {
-            if self.should_apply_durability_damage_with(is_armor, unbreaking_level) {
+            if Self::should_apply_durability_damage_with(is_armor, unbreaking_level) {
                 applied += 1;
             }
         }

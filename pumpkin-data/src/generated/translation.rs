@@ -1,4 +1,5 @@
 /* This file is generated. Do not edit manually. */
+#![allow(clippy::doc_markdown)]
 pub mod java {
     #[doc = "Accessibility Settings..."]
     pub const ACCESSIBILITY_ONBOARDING_ACCESSIBILITY_BUTTON: &str =

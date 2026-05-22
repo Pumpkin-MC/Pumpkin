@@ -266,7 +266,7 @@ impl CanyonCarver {
                         ) && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            self.carve_block(
+                            Self::carve_block(
                                 chunk, config, world_x, world_y, world_z, ctx, aquifer,
                             );
                         }
@@ -294,7 +294,6 @@ impl CanyonCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn carve_block(
-        &self,
         chunk: &mut ProtoChunk,
         config: &CarverConfig,
         x: i32,

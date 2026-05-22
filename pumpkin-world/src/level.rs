@@ -25,7 +25,7 @@ use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use std::{
     path::PathBuf,
@@ -39,7 +39,7 @@ use tracing::{debug, error, info, trace, warn};
 use tokio::{
     select,
     sync::{
-        mpsc::{self, UnboundedReceiver},
+        mpsc::{self, Receiver},
         oneshot,
     },
     task::JoinHandle,
@@ -61,7 +61,7 @@ pub type SyncEntityChunk = Arc<ChunkEntityData>;
 pub struct Level {
     pub seed: Seed,
     pub world_portal: ArcSwap<Option<Arc<dyn WorldPortalExt>>>,
-    pub level_folder: LevelFolder,
+    pub level_folder: Arc<LevelFolder>,
     pub lighting_config: LightingEngineConfig,
 
     /// Counts the number of ticks that have been scheduled for this world
@@ -117,24 +117,10 @@ pub struct RandomTickSample {
     pub tick_fluid: bool,
 }
 
-#[derive(Clone)]
 pub struct LevelFolder {
     pub root_folder: PathBuf,
     pub region_folder: PathBuf,
     pub entities_folder: PathBuf,
-}
-
-#[ignore]
-#[cfg(feature = "tokio_taskdump")]
-pub async fn dump() {
-    // let handle = Handle::current();
-    // if let Ok(dump) = timeout(Duration::from_secs(100), handle.dump()).await {
-    //     for (i, task) in dump.tasks().iter().enumerate() {
-    //         let trace = task.trace();
-    //         log::error!("TASK {i}:");
-    //         log::error!("{trace}\n");
-    //     }
-    // }
 }
 
 impl Level {
@@ -152,11 +138,11 @@ impl Level {
         std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
         std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
 
-        let level_folder = LevelFolder {
+        let level_folder = Arc::new(LevelFolder {
             root_folder,
             region_folder,
             entities_folder,
-        };
+        });
 
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
@@ -240,7 +226,7 @@ impl Level {
                     x: pos.x,
                     z: pos.y,
                     data: tokio::sync::Mutex::new(FxHashMap::default()),
-                    dirty: AtomicBool::new(true),
+                    dirty: AtomicBool::new(false),
                 });
 
                 level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
@@ -261,7 +247,7 @@ impl Level {
                         x: pos.x,
                         z: pos.y,
                         data: tokio::sync::Mutex::new(FxHashMap::default()),
-                        dirty: AtomicBool::new(true),
+                        dirty: AtomicBool::new(false),
                     });
 
                     level_clone
@@ -525,7 +511,7 @@ impl Level {
         self.chunk_watchers.get(chunk).is_some()
     }
 
-    pub fn clean_memory(&self) {
+    pub fn clean_memory(self: &Arc<Self>) -> Vec<Vector2<i32>> {
         self.chunk_watchers.retain(|_, watcher| *watcher != 0);
 
         let entity_chunks_to_remove: Vec<_> = self
@@ -535,8 +521,8 @@ impl Level {
             .map(|entry| *entry.key())
             .collect();
 
-        for pos in entity_chunks_to_remove {
-            self.loaded_entity_chunks.remove(&pos);
+        if !entity_chunks_to_remove.is_empty() {
+            self.clean_entity_chunks(&entity_chunks_to_remove);
         }
 
         // if the difference is too big, we can shrink the loaded chunks
@@ -548,6 +534,7 @@ impl Level {
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
         }
+        entity_chunks_to_remove
     }
 
     pub async fn get_or_fetch_chunk<R, F: Fn(&SyncChunk) -> R>(
@@ -604,8 +591,8 @@ impl Level {
     pub fn receive_entity_chunks(
         self: &Arc<Self>,
         chunks: Vec<Vector2<i32>>,
-    ) -> UnboundedReceiver<(SyncEntityChunk, bool)> {
-        let (sender, receiver) = mpsc::unbounded_channel();
+    ) -> Receiver<(Weak<ChunkEntityData>, bool)> {
+        let (sender, receiver) = mpsc::channel(64);
         let level = self.clone();
 
         self.spawn_task(async move {
@@ -616,7 +603,7 @@ impl Level {
                     .iter()
                     .filter(|pos| {
                         level.loaded_entity_chunks.get(pos).is_none_or(|chunk| {
-                            let _ = sender.send((chunk.clone(), false));
+                            let _ = sender.try_send((Arc::downgrade(chunk.value()), false));
                             false // Don't fetch
                         })
                     })
@@ -638,7 +625,7 @@ impl Level {
                             LoadedData::Loaded(chunk) => {
                                 let pos = Vector2::new(chunk.x, chunk.z);
                                 level.loaded_entity_chunks.insert(pos, chunk.clone());
-                                let _ = sender.send((chunk, false));
+                                let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
                                 let sender_clone = sender.clone();
@@ -656,7 +643,8 @@ impl Level {
                                         }
                                     }
                                     if let Ok(chunk) = rx.await {
-                                        let _ = sender_clone.send((chunk, true));
+                                        let _ =
+                                            sender_clone.send((Arc::downgrade(&chunk), true)).await;
                                     }
                                 });
                             }
@@ -766,12 +754,6 @@ impl Level {
         }
     }
 
-    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<ChunkData>> {
-        self.loaded_chunks
-            .get(coordinates)
-            .map(|x| x.value().clone())
-    }
-
     pub fn is_chunk_loaded(&self, coordinates: &Vector2<i32>) -> bool {
         self.loaded_chunks.contains_key(coordinates)
     }
@@ -784,6 +766,16 @@ impl Level {
         self.loaded_chunks.get(coordinates).map(|x| f(x.value()))
     }
 
+    pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
+        &self,
+        coordinates: &Vector2<i32>,
+        f: F,
+    ) -> Option<R> {
+        self.loaded_entity_chunks
+            .get(coordinates)
+            .map(|x| f(x.value()))
+    }
+
     pub fn get_rough_biome(&self, position: &BlockPos) -> &'static Biome {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let id = self.read_chunk_sync(&chunk_coordinate, |chunk| {
@@ -794,16 +786,6 @@ impl Level {
             )
         });
         Biome::from_id(id.flatten().unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
-    }
-
-    pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
-        &self,
-        coordinates: &Vector2<i32>,
-        f: F,
-    ) -> Option<R> {
-        self.loaded_entity_chunks
-            .get(coordinates)
-            .map(|x| f(x.value()))
     }
 
     pub fn get_entity_chunk_sync(&self, pos: &Vector2<i32>) -> Option<SyncEntityChunk> {

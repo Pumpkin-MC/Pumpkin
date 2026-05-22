@@ -118,7 +118,10 @@ impl RedstoneWireTurbo {
             2 | 5 => Self::EAST,
             3 | 4 => Self::WEST,
             6..=8 => Self::SOUTH,
-            _ => unreachable!(),
+            _ => {
+                tracing::error!("Invalid turbo heading code: {}", code);
+                Self::NORTH
+            }
         }
     }
 

@@ -23,11 +23,11 @@ use pumpkin_protocol::java::{
         status::SStatusPingRequest,
     },
 };
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Cursor;
 use tokio::runtime::Runtime;
 
-const TARGET_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
+const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 // ---------------------------------------------------------------------------
 // Helper: run every known ServerPacket::read against the same payload.

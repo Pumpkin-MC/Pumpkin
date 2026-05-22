@@ -8,7 +8,7 @@ use crate::enchantments::Enchantment;
 use crate::entity_type::EntityType;
 use crate::fluid::Fluid;
 use crate::item::Item;
-use crate::{biome::Biome, version::MinecraftVersion};
+use crate::{biome::Biome, version::JavaMinecraftVersion};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -48,6 +48,7 @@ impl ToTokens for EnumCreator {
             }
 
             impl #name {
+                #[must_use]
                 pub fn from_string(s: &str) -> Option<Self> {
                     match s {
                         #(#from_string_arms,)*
@@ -55,7 +56,8 @@ impl ToTokens for EnumCreator {
                     }
                 }
 
-                pub fn identifier_string(&self) -> &str {
+                #[must_use]
+                pub const fn identifier_string(&self) -> &str {
                     match self {
                         #(#to_string_arms),*
                     }
@@ -66,7 +68,7 @@ impl ToTokens for EnumCreator {
 }
 
 /// The newest protocol version whose tag data is served as the latest-version fallback.
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
 /// modules, and the `Taggable` trait with its lookup helpers.
@@ -75,17 +77,17 @@ pub(crate) fn build() -> TokenStream {
 
     // Watch specific tag versions
     let assets = [
-        (MinecraftVersion::V_1_20_5, "1_21_2_tags.json"),
+        (JavaMinecraftVersion::V_1_20_5, "1_21_2_tags.json"),
         // TODO: upload 1_21_tags.json
-        (MinecraftVersion::V_1_21, "1_21_2_tags.json"),
-        (MinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
-        (MinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
-        (MinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
-        (MinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
-        (MinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
-        (MinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
-        (MinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
-        (MinecraftVersion::V_26_1, "26_1_tags.json"),
+        (JavaMinecraftVersion::V_1_21, "1_21_2_tags.json"),
+        (JavaMinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
+        (JavaMinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
+        (JavaMinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
+        (JavaMinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
+        (JavaMinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
+        (JavaMinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
+        (JavaMinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
+        (JavaMinecraftVersion::V_26_1, "26_1_tags.json"),
     ];
 
     // --- Load Global Assets ---
@@ -206,7 +208,7 @@ pub(crate) fn build() -> TokenStream {
                 #[allow(non_snake_case)]
                 pub mod #key_pascal {
                     #(#tag_entries)* }
-                pub(crate) static #dict_name: phf::Map<&'static str, &'static #tag_type_path> = phf::phf_map! {
+                static #dict_name: phf::Map<&'static str, &'static #tag_type_path> = phf::phf_map! {
                     #(#tag_map_entries),* };
             });
 
@@ -217,7 +219,8 @@ pub(crate) fn build() -> TokenStream {
             latest_modules.push(quote! {
                 #(#tag_dicts)*
                 #[allow(unreachable_patterns)]
-                pub fn get_latest_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+                #[must_use]
+                pub const fn get_latest_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
                     match key { #(#match_local_map,)* _ => None }
                 }
             });
@@ -228,7 +231,8 @@ pub(crate) fn build() -> TokenStream {
                 mod #mod_name {
                     use super::RegistryKey;
                     #(#tag_dicts)*
-                    pub fn get_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static super::Tag>> {
+                    #[must_use]
+                    pub const fn get_map(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static super::Tag>> {
                         match key { #(#match_local_map,)* _ => None }
                     }
                 }
@@ -245,7 +249,7 @@ pub(crate) fn build() -> TokenStream {
     .to_token_stream();
 
     quote! {
-        use pumpkin_util::version::MinecraftVersion;
+        use pumpkin_util::version::JavaMinecraftVersion;
 
         pub type Tag = (&'static [&'static str], &'static [u16]);
 
@@ -257,15 +261,18 @@ pub(crate) fn build() -> TokenStream {
         // Legacy tags are hidden in their own module
         #(#legacy_modules)*
 
+        #[must_use]
         pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
             get_latest_map(tag_category).and_then(|m| m.get(tag)).map(|t| t.0)
         }
 
+        #[must_use]
         pub fn get_tag_ids(tag_category: RegistryKey, tag: &str) -> Option<&'static [u16]> {
             get_latest_map(tag_category).and_then(|m| m.get(tag)).map(|t| t.1)
         }
 
-        pub fn get_registry_key_tags(version: MinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+        #[must_use]
+        pub const fn get_registry_key_tags(version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
             match version {
                 #(#match_get_map),*,
                 _ => get_latest_map(tag_category)
@@ -277,16 +284,19 @@ pub(crate) fn build() -> TokenStream {
             fn registry_key(&self) -> &str;
             fn registry_id(&self) -> u16;
 
+           #[must_use]
            fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix("#").unwrap_or(tag);
                 let items = get_tag_ids(Self::tag_key(), tag)?;
                 Some(items.contains(&self.registry_id()))
             }
 
+            #[must_use]
             fn has_tag(&self, tag: &'static Tag) -> bool {
                 tag.1.contains(&self.registry_id())
             }
 
+            #[must_use]
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {
                 let tag = tag.strip_prefix("#").unwrap_or(tag);
                 get_tag_values(Self::tag_key(), tag)

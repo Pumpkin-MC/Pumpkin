@@ -47,8 +47,6 @@ pub trait StructurePieceBase: Send + Sync {
         self.get_structure_piece_mut().translate(x, y, z);
     }
 
-    fn clone_box(&self) -> Box<dyn StructurePieceBase>;
-
     /// Places the blocks for this piece into the chunk.
     fn place(
         &mut self,
@@ -449,10 +447,6 @@ impl StructurePiece {
 }
 
 impl StructurePieceBase for StructurePiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn place(
         &mut self,
         _chunk: &mut ProtoChunk,
@@ -623,7 +617,6 @@ pub fn create_chunk_random(seed: i64, chunk_x: i32, chunk_z: i32) -> RandomGener
     RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed))
 }
 
-#[derive(Clone)]
 pub enum StructureInstance {
     /// This chunk is the "owner" of the structure.
     Start(StructurePosition),

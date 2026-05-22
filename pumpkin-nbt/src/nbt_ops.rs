@@ -55,7 +55,7 @@ impl DynamicOps for NbtOps {
     }
 
     fn create_string(&self, data: &str) -> Self::Value {
-        NbtTag::String(data.to_string())
+        NbtTag::String(data.into())
     }
 
     fn create_list<I>(&self, values: I) -> Self::Value
@@ -284,7 +284,7 @@ impl DynamicOps for NbtOps {
                 compound
                     .child_tags
                     .into_iter()
-                    .filter(|s| s.0 != key)
+                    .filter(|s| s.0.as_ref() != key)
                     .collect(),
             )
         } else {
@@ -467,7 +467,7 @@ impl ListCollector {
                     NbtTag::IntArray(list) => list.len(),
                     NbtTag::LongArray(list) => list.len(),
 
-                    _ => unreachable!(),
+                    _ => return None,
                 };
 
                 if len == 0 {
@@ -481,7 +481,7 @@ impl ListCollector {
                     NbtTag::IntArray(list) => Some(Self::Int(InnerIntListCollector::new(list))),
                     NbtTag::LongArray(list) => Some(Self::Long(InnerLongListCollector::new(list))),
 
-                    _ => unreachable!(),
+                    _ => None,
                 }
             }
 
@@ -546,9 +546,8 @@ impl InnerListCollector for InnerGenericListCollector {
     where
         Self: Sized,
     {
-        match &mut self.result {
-            NbtTag::List(list) => list.push(tag),
-            _ => unreachable!(),
+        if let NbtTag::List(list) = &mut self.result {
+            list.push(tag);
         }
         ListCollector::Generic(self)
     }
@@ -705,14 +704,14 @@ mod test {
         let mut collector = ListCollector::new_collector();
 
         collector = collector.accept(NbtTag::Byte(99));
-        collector = collector.accept(NbtTag::String("99".to_string()));
+        collector = collector.accept(NbtTag::String("99".into()));
         collector = collector.accept(NbtTag::LongArray(vec![1, 2, 3]));
 
         assert_eq!(
             collector.result(),
             NbtTag::List(vec![
                 NbtTag::Byte(99),
-                NbtTag::String("99".to_string()),
+                NbtTag::String("99".into()),
                 NbtTag::LongArray(vec![1, 2, 3])
             ])
         );

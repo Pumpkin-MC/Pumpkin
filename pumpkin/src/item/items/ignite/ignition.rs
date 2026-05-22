@@ -47,9 +47,9 @@ impl Ignition {
 }
 
 fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
-    let mut props = match &block.properties(state_id) {
-        Some(props) => props.to_props(),
-        None => return None,
+    let mut props = {
+        let props = &block.properties(state_id)?;
+        props.to_props()
     };
 
     if let Some((_, value)) = props.iter_mut().find(|(k, _)| *k == "extinguished") {

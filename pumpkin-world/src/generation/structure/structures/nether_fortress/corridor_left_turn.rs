@@ -20,7 +20,6 @@ use crate::{
 };
 
 /// Interior corridor that turns left (NW), optionally containing a chest (5 × 7 × 5).
-#[derive(Clone)]
 pub struct CorridorLeftTurnPiece {
     pub piece: NetherFortressPiece,
     pub contains_chest: bool,
@@ -153,9 +152,5 @@ impl StructurePieceBase for CorridorLeftTurnPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

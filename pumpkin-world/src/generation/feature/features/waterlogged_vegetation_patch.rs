@@ -23,7 +23,7 @@ impl WaterloggedVegetationPatchFeature {
         block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature_name: &str,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -101,7 +101,7 @@ impl WaterloggedVegetationPatchFeature {
         block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature_name: &str,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         placement_pos: BlockPos,
     ) -> bool {

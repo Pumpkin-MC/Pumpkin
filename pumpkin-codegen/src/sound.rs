@@ -39,10 +39,12 @@ pub fn build() -> TokenStream {
         impl Sound {
             pub const NAMES: &[&str] = &[ #(#names_list),* ];
 
-            const LOOKUP: &[(&str, Sound)] = &[
+            #[allow(clippy::large_stack_arrays)]
+            const LOOKUP: &[(&str, Self)] = &[
                     #(#lookup_table),*
             ];
 
+            #[must_use]
             pub fn from_name(name: &str) -> Option<Self> {
                 Self::LOOKUP
                     .binary_search_by_key(&name, |&(k, _)| k)
@@ -50,11 +52,14 @@ pub fn build() -> TokenStream {
                     .map(|idx| Self::LOOKUP[idx].1)
             }
 
-           pub const fn to_name(&self) -> &'static str {
+            #[must_use]
+            pub const fn to_name(&self) -> &'static str {
                 Self::NAMES[*self as usize]
             }
 
-            pub fn slice() -> &'static [Self] {
+            #[must_use]
+            #[allow(clippy::large_stack_arrays, clippy::too_many_lines)]
+            pub const fn slice() -> &'static [Self] {
                 &[#(#variants_list)*]
             }
         }

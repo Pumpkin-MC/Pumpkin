@@ -282,6 +282,7 @@ pub const FUELS: [(u16, u16); 280usize] = [
     (1361u16, 300u16),
 ];
 #[must_use]
+#[allow(clippy::too_many_lines, clippy::match_same_arms)]
 pub const fn get_item_burn_ticks(item_id: u16) -> Option<u16> {
     match item_id {
         36u16 => Some(300u16),

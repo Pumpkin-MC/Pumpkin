@@ -8,7 +8,6 @@ use crate::generation::noise::router::{
 
 use super::NoiseFunctionComponentRange;
 
-#[derive(Clone)]
 pub enum SplineValue {
     Spline(Spline),
     Fixed(f32),
@@ -37,7 +36,6 @@ impl SplineValue {
     }
 }
 
-#[derive(Clone)]
 pub struct SplinePoint {
     pub location: f32,
     pub value: SplineValue,
@@ -67,7 +65,6 @@ pub enum Range {
     Below,
 }
 
-#[derive(Clone)]
 pub struct Spline {
     pub input_index: usize,
     pub points: Box<[SplinePoint]>,
@@ -201,7 +198,6 @@ impl Spline {
     }
 }
 
-#[derive(Clone)]
 pub struct SplineFunction {
     spline: Spline,
     min_value: f64,

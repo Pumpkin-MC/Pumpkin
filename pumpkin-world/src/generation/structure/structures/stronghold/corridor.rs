@@ -19,7 +19,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct CorridorPiece {
     piece: StrongholdPiece,
     left_exit: bool,
@@ -164,13 +163,8 @@ impl StructurePieceBase for CorridorPiece {
             inner.fill_with_outline(chunk, &box_limit, false, 4, 1, 2, 4, 3, 4, air, air);
         }
     }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
-    }
 }
 
-#[derive(Clone)]
 pub struct SmallCorridorPiece {
     pub piece: StrongholdPiece,
     pub length: i32,
@@ -238,10 +232,6 @@ impl SmallCorridorPiece {
 }
 
 impl StructurePieceBase for SmallCorridorPiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
-    }
-
     fn get_structure_piece(&self) -> &crate::generation::structure::structures::StructurePiece {
         &self.piece.piece
     }

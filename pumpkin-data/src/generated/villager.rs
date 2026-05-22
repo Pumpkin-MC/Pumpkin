@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use serde::Serialize;
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct VillagerTradeItem {
     pub item: &'static crate::item::Item,
     pub count: i32,
@@ -4244,7 +4244,7 @@ pub enum VillagerProfession {
 }
 impl VillagerProfession {
     #[must_use]
-    pub fn from_i32(id: i32) -> Option<Self> {
+    pub const fn from_i32(id: i32) -> Option<Self> {
         match id {
             0i32 => Some(Self::None),
             1i32 => Some(Self::Armorer),
@@ -4265,7 +4265,8 @@ impl VillagerProfession {
         }
     }
     #[must_use]
-    pub fn work_sound(&self) -> Option<crate::sound::Sound> {
+    #[allow(clippy::match_same_arms)]
+    pub const fn work_sound(&self) -> Option<crate::sound::Sound> {
         match self {
             Self::None => None,
             Self::Armorer => Some(crate::sound::Sound::EntityVillagerWorkArmorer),
@@ -4285,7 +4286,8 @@ impl VillagerProfession {
         }
     }
     #[must_use]
-    pub fn requested_items(&self) -> &'static [&'static crate::item::Item] {
+    #[allow(clippy::match_same_arms)]
+    pub const fn requested_items(&self) -> &'static [&'static crate::item::Item] {
         match self {
             Self::None => &[],
             Self::Armorer => &[],
@@ -4310,7 +4312,7 @@ impl VillagerProfession {
         }
     }
     #[must_use]
-    pub fn translation_key(&self) -> &'static str {
+    pub const fn translation_key(&self) -> &'static str {
         match self {
             Self::None => "entity.minecraft.villager.none",
             Self::Armorer => "entity.minecraft.villager.armorer",
@@ -4330,7 +4332,8 @@ impl VillagerProfession {
         }
     }
     #[must_use]
-    pub fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
+    #[allow(clippy::too_many_lines, clippy::match_same_arms)]
+    pub const fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
         match self {
             Self::None => None,
             Self::Armorer => match level {
@@ -4655,7 +4658,7 @@ pub enum VillagerType {
 }
 impl VillagerType {
     #[must_use]
-    pub fn from_i32(id: i32) -> Option<Self> {
+    pub const fn from_i32(id: i32) -> Option<Self> {
         match id {
             0i32 => Some(Self::Desert),
             1i32 => Some(Self::Jungle),

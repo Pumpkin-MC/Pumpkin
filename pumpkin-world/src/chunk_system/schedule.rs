@@ -528,7 +528,61 @@ impl GenerationSchedule {
         true
     }
 
-    fn unload_chunk(&mut self) {
+    fn garbage_collect_dependencies(&mut self) {
+        // Garbage collect stranded dependencies
+        let mut stranded = Vec::new();
+        for (pos, holder) in &self.chunk_map {
+            if holder.target_stage == StagedChunkEnum::None
+                && holder.dependency_stage != StagedChunkEnum::None
+            {
+                stranded.push(*pos);
+            }
+        }
+
+        for pos in stranded {
+            let holder = self.chunk_map.get_mut(&pos).unwrap();
+            if !holder.occupied.is_null() && self.graph.nodes.contains_key(holder.occupied) {
+                continue;
+            }
+
+            let mut cur_edge = holder.occupied_by;
+            let mut prev_edge = EdgeKey::null();
+            let mut change_head = None;
+            let mut has_valid_task = false;
+
+            while !cur_edge.is_null() {
+                let edge = self.graph.edges.get(cur_edge).unwrap();
+                if self.graph.nodes.contains_key(edge.to) {
+                    prev_edge = cur_edge;
+                    cur_edge = edge.next;
+                    has_valid_task = true;
+                } else {
+                    let next = edge.next;
+                    self.graph.edges.remove(cur_edge);
+                    cur_edge = next;
+                    if prev_edge.is_null() {
+                        change_head = Some(next);
+                    } else {
+                        self.graph.edges.get_mut(prev_edge).unwrap().next = next;
+                    }
+                }
+            }
+            if let Some(next) = change_head {
+                holder.occupied_by = next;
+            }
+
+            if !has_valid_task {
+                holder.dependency_stage = StagedChunkEnum::None;
+                self.unload_chunks.insert(pos);
+            }
+        }
+    }
+
+    fn process_unload_queue(&mut self) {
+        if self.unload_chunks.is_empty() {
+            return;
+        }
+
         let mut unload_chunks = HashSetType::default();
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
@@ -568,6 +622,8 @@ impl GenerationSchedule {
                         self.chunk_map.remove(&pos);
                     }
                 }
+            } else {
+                self.unload_chunks.insert(pos);
             }
         }
         if chunks.is_empty() {
@@ -586,42 +642,49 @@ impl GenerationSchedule {
         }
     }
 
-    fn save_all_chunk(&self, save_proto_chunk: bool) {
+    fn save_all_chunk(&mut self, save_proto_chunk: bool) {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
-        for (pos, holder) in &self.chunk_map {
-            if let Some(chunk) = &holder.chunk {
-                match chunk {
-                    Chunk::Level(sync_chunk) => {
-                        if sync_chunk.is_dirty() {
-                            chunks.push((*pos, Chunk::Level(sync_chunk.clone())));
-                        }
-                    }
+
+        for (pos, holder) in &mut self.chunk_map {
+            if let Some(chunk) = holder.chunk.take() {
+                let should_save = match &chunk {
+                    Chunk::Level(sync_chunk) => sync_chunk.is_dirty(),
                     Chunk::Proto(proto) => {
-                        if save_proto_chunk {
-                            chunks.push((*pos, Chunk::Proto(proto.clone())));
-                        }
+                        save_proto_chunk
+                            && !matches!(
+                                proto.stage,
+                                crate::chunk_system::chunk_state::StagedChunkEnum::Empty
+                                    | crate::chunk_system::chunk_state::StagedChunkEnum::None
+                            )
                     }
+                };
+
+                if should_save {
+                    chunks.push((*pos, chunk));
+                } else {
+                    holder.chunk = Some(chunk);
                 }
             }
         }
+
         if chunks.is_empty() {
             return;
         }
+
         info!(
             "Saving {} chunks (collected from {} holders)...",
             chunks.len(),
             self.chunk_map.len()
         );
+
         let mut data = self.io_lock.0.lock().unwrap();
-        for (pos, _chunk) in &chunks {
+        for (pos, _) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
         }
         drop(data);
+
         if let Err(e) = self.io_write.send(chunks) {
-            error!(
-                "Failed to send chunks to io write thread during unload (may have shut down): {:?}",
-                e
-            );
+            error!("Failed to send chunks to io write thread: {:?}", e);
         }
     }
 
@@ -773,6 +836,7 @@ impl GenerationSchedule {
                                     }
                                 }
                             } else {
+                                holder.current_stage = StagedChunkEnum::Full;
                                 holder.chunk = Some(Chunk::Level(chunk));
                             }
 
@@ -783,10 +847,9 @@ impl GenerationSchedule {
                             }
                             holder.occupied = NodeKey::null();
 
-                            // If this neighbor chunk was only loaded for a dependency and
-                            // is no longer needed, clear dependency_stage and queue unload.
+                            // If this chunk was only loaded for a dependency or cancelled
+                            // and is no longer needed, clear dependency_stage and queue unload.
                             if holder.target_stage == StagedChunkEnum::None
-                                && new_pos != pos
                                 && holder.current_stage >= holder.dependency_stage
                             {
                                 holder.dependency_stage = StagedChunkEnum::None;
@@ -822,14 +885,14 @@ impl GenerationSchedule {
                                 {
                                     self.drop_node(holder.occupied);
                                 }
+                            }
 
-                                // Clear dependency_stage and queue unload if no longer needed
-                                if holder.target_stage == StagedChunkEnum::None
-                                    && holder.current_stage >= holder.dependency_stage
-                                {
-                                    holder.dependency_stage = StagedChunkEnum::None;
-                                    self.unload_chunks.insert(new_pos);
-                                }
+                            // Clear dependency_stage and queue unload if no longer needed
+                            if holder.target_stage == StagedChunkEnum::None
+                                && holder.current_stage >= holder.dependency_stage
+                            {
+                                holder.dependency_stage = StagedChunkEnum::None;
+                                self.unload_chunks.insert(new_pos);
                             }
 
                             holder.occupied = NodeKey::null();
@@ -927,19 +990,27 @@ impl GenerationSchedule {
         );
         loop {
             if level.should_unload.swap(false, Relaxed) {
-                self.unload_chunk();
+                self.garbage_collect_dependencies();
+                self.process_unload_queue();
             }
             if level.should_save.swap(false, Relaxed) {
                 self.save_all_chunk(false);
             }
             if level.shut_down_chunk_system.load(Relaxed) {
                 info!("Saving chunks before shutdown...");
+                self.garbage_collect_dependencies();
+                self.process_unload_queue();
                 self.save_all_chunk(true);
                 break;
             }
 
             // 1. Get latest world state (player moves, etc)
             self.resort_work(self.send_level.get());
+
+            // Process unload queue continuously if there are chunks to unload
+            if !self.unload_chunks.is_empty() {
+                self.process_unload_queue();
+            }
 
             // 2. Process all pending chunk results from workers
             while let Ok((pos, data)) = self.recv_chunk.try_recv() {

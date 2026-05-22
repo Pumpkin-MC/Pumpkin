@@ -20,7 +20,6 @@ use crate::{
 };
 
 /// Large entrance tower connecting the bridge network to the interior (13 × 14 × 13).
-#[derive(Clone)]
 pub struct CorridorExitPiece {
     pub piece: NetherFortressPiece,
 }
@@ -228,9 +227,5 @@ impl StructurePieceBase for CorridorExitPiece {
         // if bb.contains_pos(&lava_pos) {
         //     chunk.schedule_fluid_tick(&lava_pos, 0);
         // }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

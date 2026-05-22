@@ -22,7 +22,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct FiveWayCrossingPiece {
     pub piece: StrongholdPiece,
     pub lower_left_exists: bool,
@@ -312,9 +311,5 @@ impl StructurePieceBase for FiveWayCrossingPiece {
 
         // let torch = Block::WALL_TORCH.default_state.with("facing", "south");
         // inner.add_block(chunk, &torch, 6, 5, 6, &box_limit);
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -35,7 +35,7 @@ impl ClientPacket for CCommands<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(&self.nodes, |bytebuf, node: &ProtoNode| {
@@ -78,7 +78,7 @@ impl ProtoNode<'_> {
     pub fn write_to(
         &self,
         write: &mut impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         // flags
         let mut redirect_target_on_flag = 0i32;
@@ -166,9 +166,9 @@ impl ProtoNode<'_> {
                     })?;
                     write.write_string(suggestion_type.resource_location())?;
                 }
-                _ => unimplemented!(
-                    "`ProtoNode::FLAG_HAS_SUGGESTION_TYPE` is only implemented for `ProtoNodeType::Argument`"
-                ),
+                _ => return Err(WritingError::Message(
+                    "`ProtoNode::FLAG_HAS_SUGGESTION_TYPE` is only implemented for `ProtoNodeType::Argument`".into()
+                )),
             }
         }
 
@@ -200,7 +200,7 @@ pub enum ArgumentType<'a> {
     Component,
     Style,
     Message,
-    Nbt,
+    NbtCompound,
     NbtTag,
     NbtPath,
     Objective,
@@ -245,13 +245,13 @@ impl ArgumentType<'_> {
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     #[must_use]
-    pub fn to_id(&self, version: &MinecraftVersion) -> i32 {
+    pub fn to_id(&self, version: &JavaMinecraftVersion) -> i32 {
         // Safety: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
         let id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<i32>() };
 
         // TODO: Should probably be extracting ViaVersion backward mapping data for this
-        if version < &MinecraftVersion::V_1_21_5 {
+        if version < &JavaMinecraftVersion::V_1_21_5 {
             match id {
                 ..=16 => id,
                 18..=46 => id - 1,
@@ -264,7 +264,7 @@ impl ArgumentType<'_> {
                 // 54 Dialog => String
                 17 | 47 | 54 => 5,
             }
-        } else if version < &MinecraftVersion::V_1_21_6 {
+        } else if version < &JavaMinecraftVersion::V_1_21_6 {
             match id {
                 ..=16 => id,
                 18..=53 => id - 1,
@@ -284,7 +284,7 @@ impl ArgumentType<'_> {
     pub fn write_to_buffer(
         &self,
         write: &mut impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let id = self.to_id(version);
         write.write_var_int(&(id).into())?;

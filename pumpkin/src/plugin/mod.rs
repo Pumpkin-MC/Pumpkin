@@ -17,6 +17,7 @@ use tokio::{
 use tracing::{debug, error, info, warn};
 
 pub mod api;
+pub mod cache;
 pub mod loader;
 /// Constants for plugin permissions.
 ///
@@ -497,7 +498,7 @@ impl PluginManager {
         }
 
         let prompt = format!(
-            "\n{} [Y/n]: ",
+            "\n{} [y/N]: ",
             "Do you want to allow these permissions and load the plugin?".bold()
         );
 
@@ -671,6 +672,9 @@ impl PluginManager {
             return Ok(std::time::Duration::ZERO);
         }
 
+        let cache_path = path.join("permission_cache.json");
+        let mut cache = cache::PermissionCache::load(&cache_path).await;
+
         let mut prepared_plugins = Vec::new();
 
         for entry in std::fs::read_dir(path)? {
@@ -746,7 +750,10 @@ impl PluginManager {
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
             {
-                let (allowed, wait_time) = Self::ask_permission_confirmation(&metadata);
+                let (allowed, wait_time) = self
+                    .check_permissions_cached(&path, &metadata, &mut cache, &cache_path)
+                    .await;
+
                 total_wait_time += wait_time;
 
                 if !allowed {
@@ -775,6 +782,37 @@ impl PluginManager {
         Ok(total_wait_time)
     }
 
+    async fn check_permissions_cached(
+        &self,
+        path: &Path,
+        metadata: &PluginMetadata,
+        cache: &mut cache::PermissionCache,
+        cache_path: &Path,
+    ) -> (bool, std::time::Duration) {
+        let hash = cache::calculate_hash(path).await.unwrap_or_default();
+
+        if let Some(entry) = cache.entries.get(&hash)
+            && entry.permissions_requested == metadata.permissions
+        {
+            info!(
+                "Found cached permission decision for plugin \"{}\" (approved: {})",
+                metadata.name, entry.approved
+            );
+            return (entry.approved, std::time::Duration::ZERO);
+        }
+
+        let (allowed, wait_time) = Self::ask_permission_confirmation(metadata);
+        cache.entries.insert(
+            hash,
+            cache::PermissionCacheEntry {
+                permissions_requested: metadata.permissions.clone(),
+                approved: allowed,
+            },
+        );
+        let _ = cache.save(cache_path).await;
+        (allowed, wait_time)
+    }
+
     /// Start loading a plugin asynchronously
     async fn start_loading_plugin(
         &self,
@@ -784,7 +822,13 @@ impl PluginManager {
             if loader.can_load(path) {
                 let (instance, metadata, loader_data) = loader.load(path).await?;
 
-                let (allowed, _wait_time) = Self::ask_permission_confirmation(&metadata);
+                let cache_path = Path::new(PLUGIN_DIR).join("permission_cache.json");
+                let mut cache = cache::PermissionCache::load(&cache_path).await;
+
+                let (allowed, _) = self
+                    .check_permissions_cached(path, &metadata, &mut cache, &cache_path)
+                    .await;
+
                 if !allowed {
                     warn!(
                         "Permission denied for plugin \"{}\", skipping loading.",

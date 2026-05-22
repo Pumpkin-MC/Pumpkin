@@ -120,7 +120,7 @@ impl FromStr for EntityFilter {
                 }
                 Ok(Self::Sort(sort))
             }
-            _ => todo!("{key}"),
+            _ => Err(format!("Unimplemented key: {key}")),
         }
     }
 }

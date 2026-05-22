@@ -11,7 +11,7 @@ use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 #[repr(i8)]
 pub enum DyeColor {
     White = 0,
@@ -160,7 +160,7 @@ impl From<Text> for NbtTag {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|s| Self::String(s.clone()))
+                .map(|s| Self::String(s.clone().into()))
                 .collect(),
         );
         Self::Compound(nbt)

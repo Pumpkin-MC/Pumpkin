@@ -15,6 +15,7 @@ pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
     pub killed_by_player: Option<bool>,
+    pub luck: f32,
 }
 
 pub trait LootTableExt {
@@ -34,7 +35,8 @@ impl LootTableExt for LootTable {
                     continue;
                 }
 
-                let rolls = pool.rolls.get(&mut random).round() as i32;
+                let rolls = pool.rolls.get(&mut random) as i32
+                    + (pool.bonus_rolls.get(&mut random) * params.luck).floor() as i32;
 
                 for _ in 0..rolls {
                     let mut total_weight = 0;
@@ -46,9 +48,11 @@ impl LootTableExt for LootTable {
                             .as_ref()
                             .is_none_or(|c| c.iter().all(|cond| cond.is_fulfilled(&params)))
                         {
-                            let w = 1; // TODO: weight
-                            total_weight += w;
-                            valid_entries.push((entry, w));
+                            let weight = (entry.weight as f32 + entry.quality as f32 * params.luck)
+                                .floor() as i32;
+                            let weight = weight.max(0);
+                            total_weight += weight;
+                            valid_entries.push((entry, weight));
                         }
                     }
 
@@ -162,13 +166,11 @@ trait LootPoolEntryTypesExt {
 impl LootPoolEntryTypesExt for LootPoolEntryTypes {
     fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack> {
         match self {
-            Self::Empty => Vec::new(),
+            Self::Empty | Self::LootTable | Self::Dynamic => Vec::new(),
             Self::Item(item_entry) => {
                 let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
                 vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
             }
-            Self::LootTable => todo!(),
-            Self::Dynamic => todo!(),
             Self::Tag(tag) => {
                 let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
 

@@ -1,3 +1,0 @@
-interface entity {
-    use %world.{entity};
-}

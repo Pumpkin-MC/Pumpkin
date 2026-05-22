@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 const SOUND_ID_REMAP_V_26_1_TO_V_1_20_5: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
@@ -984,44 +984,46 @@ const SOUND_ID_REMAP_V_26_1_TO_V_1_21_11: &[u16] = &[
     1830, 1831, 1832, 1833, 1834, 1835, 1836, 1837,
 ];
 #[must_use]
-pub fn remap_sound_id_for_version(sound_id: u16, version: MinecraftVersion) -> u16 {
+pub fn remap_sound_id_for_version(sound_id: u16, version: JavaMinecraftVersion) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_20_5 => SOUND_ID_REMAP_V_26_1_TO_V_1_20_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => SOUND_ID_REMAP_V_26_1_TO_V_1_20_5
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21 => SOUND_ID_REMAP_V_26_1_TO_V_1_21
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21 => SOUND_ID_REMAP_V_26_1_TO_V_1_21
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_2
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_2
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_4
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_4
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_5
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_6
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_6
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_7
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_7
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_9
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_9
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_11 => SOUND_ID_REMAP_V_26_1_TO_V_1_21_11
-            .get(usize::from(sound_id))
-            .copied()
-            .unwrap_or(sound_id),
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => {
+            SOUND_ID_REMAP_V_26_1_TO_V_1_21_11
+                .get(usize::from(sound_id))
+                .copied()
+                .unwrap_or(sound_id)
+        }
         _ => sound_id,
     }
 }

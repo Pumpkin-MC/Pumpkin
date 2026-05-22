@@ -14,6 +14,7 @@ mod biome;
 mod bitsets;
 mod block;
 mod carver;
+pub mod chest_loot;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -33,7 +34,6 @@ mod game_event;
 mod game_rules;
 mod item;
 mod jukebox_song;
-pub mod chest_loot;
 pub mod loot;
 mod message_type;
 mod meta_data_type;
@@ -124,7 +124,9 @@ pub fn main() {
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
         (recipe_remainder::build, "recipe_remainder.rs"),
+        (placed_feature::build_enum, "placed_feature.rs"),
         (placed_feature::build, "placed_features_generated.rs"),
+        (configured_feature::build_enum, "configured_feature.rs"),
         (
             configured_feature::build,
             "configured_features_generated.rs",

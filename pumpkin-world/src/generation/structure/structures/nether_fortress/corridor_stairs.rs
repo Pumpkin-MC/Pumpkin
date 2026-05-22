@@ -18,7 +18,6 @@ use crate::{
 };
 
 /// Descending interior corridor staircase (5 × 14 × 10).
-#[derive(Clone)]
 pub struct CorridorStairsPiece {
     pub piece: NetherFortressPiece,
 }
@@ -144,9 +143,5 @@ impl StructurePieceBase for CorridorStairsPiece {
                 p.fill_downwards(chunk, nb, m, -1, l, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

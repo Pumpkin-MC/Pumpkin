@@ -71,10 +71,8 @@ impl Frame {
         let mut header_buf = [0u8; 1];
 
         while match reader.read(&mut header_buf) {
-            Ok(0) => false,
-            Ok(1) => true,
+            Ok(n) => n > 0,
             Err(e) => return Err(e),
-            _ => unreachable!(),
         } {
             let header = header_buf[0];
             let mut frame = Self::default();

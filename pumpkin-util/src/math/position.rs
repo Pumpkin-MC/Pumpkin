@@ -642,9 +642,14 @@ impl From<&BlockPos> for IntStream {
 
 impl FlatTryFrom<IntStream> for BlockPos {
     fn flat_try_from(value: IntStream) -> DataResult<Self> {
-        validate_fixed_size(value.0, 3).map(|v| {
-            let [x, y, z]: [i32; 3] = v.try_into().unwrap_or_else(|_| unreachable!());
-            Self(Vector3::new(x, y, z))
+        validate_fixed_size(value.0, 3).flat_map(|v| {
+            v.try_into().map_or_else(
+                |_| DataResult::new_error("Expected 3 elements"),
+                |arr| {
+                    let [x, y, z]: [i32; 3] = arr;
+                    DataResult::new_success(Self(Vector3::new(x, y, z)))
+                },
+            )
         })
     }
 }
@@ -745,7 +750,7 @@ mod test {
             NbtTag::List(vec![
                 NbtTag::Int(1),
                 NbtTag::Float(2.0),
-                NbtTag::String("69".to_string())
+                NbtTag::String("69".into())
             ]),
             NbtOps,
             is_error

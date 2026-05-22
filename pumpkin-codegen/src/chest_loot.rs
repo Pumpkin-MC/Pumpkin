@@ -12,6 +12,7 @@ use syn::LitStr;
 enum RollsStruct {
     Constant(f32),
     Provider {
+        #[allow(dead_code)]
         #[serde(rename = "type")]
         provider_type: String,
         #[allow(dead_code)]
@@ -152,6 +153,7 @@ pub fn build() -> TokenStream {
 
     // Emit get_chest_loot_table
     all_tokens.extend(quote! {
+        #[must_use]
         pub fn get_chest_loot_table(key: &str) -> Option<&'static ChestLootTable> {
             match key {
                 #(#table_keys => Some(&#table_idents),)*

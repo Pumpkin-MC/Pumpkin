@@ -20,7 +20,7 @@ use pumpkin_protocol::{
         },
     },
 };
-use pumpkin_util::{Hand, text::TextComponent, version::MinecraftVersion};
+use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
@@ -186,7 +186,7 @@ impl JavaClient {
         ];
 
         // optionally include timeline/dimension_type if there are any tags to send
-        if version.protocol_version() >= MinecraftVersion::V_1_21_11.protocol_version()
+        if version.protocol_version() >= JavaMinecraftVersion::V_1_21_11.protocol_version()
             && let Some(map) = pumpkin_data::tag::get_registry_key_tags(
                 version,
                 pumpkin_data::tag::RegistryKey::Timeline,
@@ -221,7 +221,7 @@ impl JavaClient {
         // We are done with configuring
         self.send_packet_now(&CFinishConfig).await;
 
-        if version < MinecraftVersion::V_1_20_2 {
+        if version < JavaMinecraftVersion::V_1_20_2 {
             return Some(self.handle_config_acknowledged(server).await);
         }
 

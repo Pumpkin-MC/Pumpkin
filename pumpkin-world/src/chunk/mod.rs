@@ -515,8 +515,6 @@ impl ChunkSections {
                 }
                 self.randomly_ticking_mask
                     .store(mask, std::sync::atomic::Ordering::Relaxed);
-
-                // If no more ticking sections, we could potentially deallocate, but that might be overkill and cause jitter.
             }
 
             return replaced_block_state_id;

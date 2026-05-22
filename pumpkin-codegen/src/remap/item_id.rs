@@ -2,7 +2,7 @@ use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 
 use crate::remap::{MappingNode, ParsedMappings, Remapper};
-use crate::version::MinecraftVersion;
+use crate::version::JavaMinecraftVersion;
 
 /// Computes the inverse of an item ID mapping table, mapping new IDs back to old IDs.
 ///
@@ -24,52 +24,52 @@ fn reverse_mapping(mapping: &[u16], mapped_size: usize) -> Vec<u16> {
 /// `remap_item_id_for_version`/`remap_item_id_from_version` functions.
 pub fn build() -> TokenStream {
     let node_1_20_5 = MappingNode {
-        version: MinecraftVersion::V_1_20_5,
+        version: JavaMinecraftVersion::V_1_20_5,
         value: "../assets/viaversion/data/mappings-1.20.5to1.21.nbt",
         child: None,
     };
     let node_1_21 = MappingNode {
-        version: MinecraftVersion::V_1_21,
+        version: JavaMinecraftVersion::V_1_21,
         value: "../assets/viaversion/data/mappings-1.21to1.21.2.nbt",
         child: Some(&node_1_20_5),
     };
     let node_1_21_2 = MappingNode {
-        version: MinecraftVersion::V_1_21_2,
+        version: JavaMinecraftVersion::V_1_21_2,
         value: "../assets/viaversion/data/mappings-1.21.2to1.21.4.nbt",
         child: Some(&node_1_21),
     };
     let node_1_21_4 = MappingNode {
-        version: MinecraftVersion::V_1_21_4,
+        version: JavaMinecraftVersion::V_1_21_4,
         value: "../assets/viaversion/data/mappings-1.21.4to1.21.5.nbt",
         child: Some(&node_1_21_2),
     };
     let node_1_21_5 = MappingNode {
-        version: MinecraftVersion::V_1_21_5,
+        version: JavaMinecraftVersion::V_1_21_5,
         value: "../assets/viaversion/data/mappings-1.21.5to1.21.6.nbt",
         child: Some(&node_1_21_4),
     };
     let node_1_21_6 = MappingNode {
-        version: MinecraftVersion::V_1_21_6,
+        version: JavaMinecraftVersion::V_1_21_6,
         value: "../assets/viaversion/data/mappings-1.21.6to1.21.7.nbt",
         child: Some(&node_1_21_5),
     };
     let node_1_21_7 = MappingNode {
-        version: MinecraftVersion::V_1_21_7,
+        version: JavaMinecraftVersion::V_1_21_7,
         value: "../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt",
         child: Some(&node_1_21_6),
     };
     let node_1_21_9 = MappingNode {
-        version: MinecraftVersion::V_1_21_9,
+        version: JavaMinecraftVersion::V_1_21_9,
         value: "../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt",
         child: Some(&node_1_21_7),
     };
     let node_1_21_11 = MappingNode {
-        version: MinecraftVersion::V_1_21_11,
+        version: JavaMinecraftVersion::V_1_21_11,
         value: "../assets/viaversion/data/mappings-1.21.11to26.1.nbt",
         child: Some(&node_1_21_9),
     };
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
-        version: MinecraftVersion::V_26_1,
+        version: JavaMinecraftVersion::V_26_1,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first
@@ -144,12 +144,12 @@ pub fn build() -> TokenStream {
     }
 
     quote! {
-        use pumpkin_util::version::MinecraftVersion;
+        use pumpkin_util::version::JavaMinecraftVersion;
 
         #static_values
 
         #[must_use]
-        pub fn remap_item_id_for_version(item_id: u16, version: MinecraftVersion) -> u16 {
+        pub fn remap_item_id_for_version(item_id: u16, version: JavaMinecraftVersion) -> u16 {
             match version {
                 #match_arms_id_for_ver
                 _ => item_id,
@@ -157,7 +157,7 @@ pub fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub fn remap_item_id_from_version(item_id: u16, version: MinecraftVersion) -> u16 {
+        pub fn remap_item_id_from_version(item_id: u16, version: JavaMinecraftVersion) -> u16 {
             match version {
                 #match_arms_id_from_ver
                 _ => item_id,

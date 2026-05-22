@@ -290,7 +290,7 @@ impl CommandDispatcher {
             let mut context = context_so_far.clone();
             let mut reader = original_reader.clone();
             let parse_result = {
-                if let Err(error) = self.tree.parse(child, &mut reader, &mut context) {
+                if let Err(error) = self.tree.parse(child, &mut reader, &mut context).await {
                     Err(error)
                 } else {
                     let peek = reader.peek();
@@ -528,10 +528,15 @@ impl CommandDispatcher {
                             // For custom suggestions sent by the server, we simply
                             // wait instead of adding the future to join.
                             provided_suggestions.push(provider.suggest(&context, builder).await);
-                            None
                         } else {
-                            Some(node.meta.argument_type.list_suggestions(&context, builder))
+                            provided_suggestions.push(
+                                node.meta
+                                    .argument_type
+                                    .list_suggestions(&context, builder)
+                                    .await,
+                            );
                         }
+                        None
                     }
                 };
 

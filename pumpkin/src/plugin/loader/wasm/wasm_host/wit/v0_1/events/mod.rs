@@ -59,14 +59,18 @@ pub(super) const fn from_wasm_position(
 
 pub(super) const fn to_wasm_block_position(
     position: BlockPos,
-) -> pumpkin::plugin::common::BlockPosition {
-    (position.0.x, position.0.y, position.0.z)
+) -> pumpkin::plugin::common::BlockPos {
+    pumpkin::plugin::common::BlockPos {
+        x: position.0.x,
+        y: position.0.y,
+        z: position.0.z,
+    }
 }
 
 pub(super) const fn from_wasm_block_position(
-    position: pumpkin::plugin::common::BlockPosition,
+    position: pumpkin::plugin::common::BlockPos,
 ) -> BlockPos {
-    BlockPos::new(position.0, position.1, position.2)
+    BlockPos::new(position.x, position.y, position.z)
 }
 
 pub(super) fn to_wasm_block_name(block: &'static Block) -> String {

@@ -5482,6 +5482,7 @@ static WOODLAND_MANSION_POOLS: &[ChestLootPool] = &[
 pub static WOODLAND_MANSION: ChestLootTable = ChestLootTable {
     pools: WOODLAND_MANSION_POOLS,
 };
+#[must_use]
 pub fn get_chest_loot_table(key: &str) -> Option<&'static ChestLootTable> {
     match key {
         "minecraft:chests/abandoned_mineshaft" => Some(&ABANDONED_MINESHAFT),

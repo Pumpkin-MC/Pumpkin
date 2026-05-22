@@ -3810,7 +3810,8 @@ impl Sound {
         "item.nautilus_saddle_underwater_equip",
         "item.nautilus_saddle_equip",
     ];
-    const LOOKUP: &[(&str, Sound)] = &[
+    #[allow(clippy::large_stack_arrays)]
+    const LOOKUP: &[(&str, Self)] = &[
         (
             "ambient.basalt_deltas.additions",
             Self::AmbientBasaltDeltasAdditions,
@@ -7016,16 +7017,20 @@ impl Sound {
         ("weather.rain", Self::WeatherRain),
         ("weather.rain.above", Self::WeatherRainAbove),
     ];
+    #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         Self::LOOKUP
             .binary_search_by_key(&name, |&(k, _)| k)
             .ok()
             .map(|idx| Self::LOOKUP[idx].1)
     }
+    #[must_use]
     pub const fn to_name(&self) -> &'static str {
         Self::NAMES[*self as usize]
     }
-    pub fn slice() -> &'static [Self] {
+    #[must_use]
+    #[allow(clippy::large_stack_arrays, clippy::too_many_lines)]
+    pub const fn slice() -> &'static [Self] {
         &[
             Self::EntityAllayAmbientWithItem,
             Self::EntityAllayAmbientWithoutItem,

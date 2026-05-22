@@ -28,7 +28,7 @@ impl OreFeature {
         _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
-        _feature: &str, // This placed feature
+        _feature: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

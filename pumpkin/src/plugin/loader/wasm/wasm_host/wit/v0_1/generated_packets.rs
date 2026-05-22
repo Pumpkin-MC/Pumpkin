@@ -6,12 +6,12 @@
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ClientboundPacket;
 use bytes::Bytes;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 #[must_use]
 pub fn serialize_java_packet(
     packet: &ClientboundPacket,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Option<Bytes> {
     match packet {
         ClientboundPacket::CAcknowledgeBlockChange(data) => {
@@ -121,6 +121,15 @@ pub fn serialize_java_packet(
             let p = pumpkin_protocol::java::client::play::CCombatDeath {
                 player_id: VarInt(data.player_id),
                 message: &component_message,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CCustomPayload(data) => {
+            let p = pumpkin_protocol::java::client::play::CCustomPayload {
+                channel: &data.channel,
+                data: &data.data,
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -267,6 +276,29 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
+        ClientboundPacket::CParticle(data) => {
+            let p = pumpkin_protocol::java::client::play::CParticle {
+                force_spawn: data.force_spawn.try_into().unwrap(),
+                important: data.important.try_into().unwrap(),
+                position: pumpkin_util::math::vector3::Vector3::new(
+                    data.position.0 as _,
+                    data.position.1 as _,
+                    data.position.2 as _,
+                ),
+                offset: pumpkin_util::math::vector3::Vector3::new(
+                    data.offset.0 as _,
+                    data.offset.1 as _,
+                    data.offset.2 as _,
+                ),
+                max_speed: data.max_speed.try_into().unwrap(),
+                particle_count: data.particle_count.try_into().unwrap(),
+                particle_id: VarInt(data.particle_id),
+                data: &data.data,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
         ClientboundPacket::CPingResponse(data) => {
             let p = pumpkin_protocol::java::client::play::CPingResponse {
                 payload: data.payload.try_into().unwrap(),
@@ -280,6 +312,19 @@ pub fn serialize_java_packet(
                 flags: data.flags.try_into().unwrap(),
                 flying_speed: data.flying_speed.try_into().unwrap(),
                 field_of_view: data.field_of_view.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CRemovePlayerInfo(data) => {
+            let vec_players = data
+                .players
+                .iter()
+                .map(|u| uuid::Uuid::from_u64_pair(u.high, u.low))
+                .collect::<Vec<_>>();
+            let p = pumpkin_protocol::java::client::play::CRemovePlayerInfo {
+                players: &vec_players,
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -303,6 +348,7 @@ pub fn serialize_java_packet(
         ClientboundPacket::CRecipeBookAdd(data) => {
             let p = pumpkin_protocol::java::client::play::CRecipeBookAdd {
                 replace: data.replace.try_into().unwrap(),
+                dynamic_recipes: &[],
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -318,6 +364,15 @@ pub fn serialize_java_packet(
                 blast_furnace_filtering: data.blast_furnace_filtering.try_into().unwrap(),
                 smoker_open: data.smoker_open.try_into().unwrap(),
                 smoker_filtering: data.smoker_filtering.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CRemoveEntities(data) => {
+            let vec_entity_ids: Vec<VarInt> = data.entity_ids.iter().map(|v| VarInt(*v)).collect();
+            let p = pumpkin_protocol::java::client::play::CRemoveEntities {
+                entity_ids: &vec_entity_ids,
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -390,6 +445,16 @@ pub fn serialize_java_packet(
                 health: data.health.try_into().unwrap(),
                 food: VarInt(data.food),
                 food_saturation: data.food_saturation.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CSetPassengers(data) => {
+            let vec_passengers: Vec<VarInt> = data.passengers.iter().map(|v| VarInt(*v)).collect();
+            let p = pumpkin_protocol::java::client::play::CSetPassengers {
+                entity_id: VarInt(data.entity_id),
+                passengers: &vec_passengers,
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -594,6 +659,15 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
                     data.position.2 as _,
                 ),
                 data: VarInt(data.data),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CModalFormRequest(data) => {
+            let p = pumpkin_protocol::bedrock::client::CModalFormRequest {
+                form_id: VarInt(data.form_id),
+                form_data: data.form_data.clone(),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();

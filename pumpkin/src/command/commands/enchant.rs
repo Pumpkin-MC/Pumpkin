@@ -80,7 +80,7 @@ impl CommandExecutor for Executor {
                 // };
                 // let lock = target.entity_equipment.lock().await.get(&EquipmentSlot::MAIN_HAND); TODO this dont work
                 let Some(player) = target.get_player() else {
-                    todo!()
+                    continue;
                 };
                 let lock = player.inventory.held_item();
                 let mut item = lock.lock().await;

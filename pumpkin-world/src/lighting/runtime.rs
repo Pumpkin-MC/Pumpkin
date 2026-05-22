@@ -8,20 +8,20 @@ use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 pub struct DynamicLightEngine {
-    decrease_block_light_queue: SegQueue<(BlockPos, u8)>,
-    increase_block_light_queue: SegQueue<(BlockPos, u8)>,
-    decrease_sky_light_queue: SegQueue<(BlockPos, u8)>,
-    increase_sky_light_queue: SegQueue<(BlockPos, u8)>,
+    block_decrease: SegQueue<(BlockPos, u8)>,
+    block_increase: SegQueue<(BlockPos, u8)>,
+    sky_decrease: SegQueue<(BlockPos, u8)>,
+    sky_increase: SegQueue<(BlockPos, u8)>,
 }
 
 impl DynamicLightEngine {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            decrease_block_light_queue: SegQueue::new(),
-            increase_block_light_queue: SegQueue::new(),
-            decrease_sky_light_queue: SegQueue::new(),
-            increase_sky_light_queue: SegQueue::new(),
+            block_decrease: SegQueue::new(),
+            block_increase: SegQueue::new(),
+            sky_decrease: SegQueue::new(),
+            sky_increase: SegQueue::new(),
         }
     }
 }
@@ -32,7 +32,7 @@ impl Default for DynamicLightEngine {
 }
 impl DynamicLightEngine {
     /// Checks if there is an open sky above the given position (no opaque blocks blocking sky light).
-    async fn has_open_sky_above(&self, level: &Arc<Level>, pos: &BlockPos) -> bool {
+    fn has_open_sky_above(level: &Arc<Level>, pos: &BlockPos) -> bool {
         let max_y = 319; // Maximum build height in Minecraft, can be adjusted if needed
         let mut current_pos = *pos;
 
@@ -51,40 +51,40 @@ impl DynamicLightEngine {
 
     /// Handles all lighting updates triggered by a block change (placement/break).
     /// This updates Block Light, Sky Light, and ensures the source block is valid.
-    pub async fn update_lighting_at(&self, level: &Arc<Level>, pos: BlockPos) {
+    pub fn update_lighting_at(&self, level: &Arc<Level>, pos: BlockPos) {
         // Block Light
-        self.check_block_light_updates(level, pos).await;
-        self.perform_block_light_updates(level).await;
+        self.check_block_light_updates(level, pos);
+        self.perform_block_light_updates(level);
 
         // Sky Light
-        self.check_sky_light_updates(level, pos).await;
-        self.perform_sky_light_updates(level).await;
+        self.check_sky_light_updates(level, pos);
+        self.perform_sky_light_updates(level);
     }
 
     pub fn queue_block_light_decrease(&self, pos: BlockPos, level: u8) {
-        self.decrease_block_light_queue.push((pos, level));
+        self.block_decrease.push((pos, level));
     }
 
     pub fn queue_block_light_increase(&self, pos: BlockPos, level: u8) {
-        self.increase_block_light_queue.push((pos, level));
+        self.block_increase.push((pos, level));
     }
 
     pub fn queue_sky_light_decrease(&self, pos: BlockPos, level: u8) {
-        self.decrease_sky_light_queue.push((pos, level));
+        self.sky_decrease.push((pos, level));
     }
 
     pub fn queue_sky_light_increase(&self, pos: BlockPos, level: u8) {
-        self.increase_sky_light_queue.push((pos, level));
+        self.sky_increase.push((pos, level));
     }
 
-    pub async fn perform_block_light_updates(&self, level: &Arc<Level>) -> i32 {
+    pub fn perform_block_light_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
 
         // Keep processing until both queues are empty
         // Light propagation queues new updates, so we need to process until convergence
         loop {
-            let decrease_updates = self.perform_block_light_decrease_updates(level).await;
-            let increase_updates = self.perform_block_light_increase_updates(level).await;
+            let decrease_updates = self.perform_block_light_decrease_updates(level);
+            let increase_updates = self.perform_block_light_increase_updates(level);
 
             updates += decrease_updates + increase_updates;
 
@@ -97,36 +97,29 @@ impl DynamicLightEngine {
         updates
     }
 
-    async fn perform_block_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_block_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
 
-        while let Some((pos, expected_light)) = self.decrease_block_light_queue.pop() {
-            self.propagate_block_light_decrease(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.block_decrease.pop() {
+            self.propagate_block_light_decrease(level, &pos, expected_light);
             updates += 1;
         }
 
         updates
     }
 
-    async fn perform_block_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_block_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
 
-        while let Some((pos, expected_light)) = self.increase_block_light_queue.pop() {
-            self.propagate_block_light_increase(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.block_increase.pop() {
+            self.propagate_block_light_increase(level, &pos, expected_light);
             updates += 1;
         }
 
         updates
     }
 
-    async fn propagate_block_light_increase(
-        &self,
-        level: &Arc<Level>,
-        pos: &BlockPos,
-        light_level: u8,
-    ) {
+    fn propagate_block_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
@@ -148,7 +141,7 @@ impl DynamicLightEngine {
         }
     }
 
-    async fn propagate_block_light_decrease(
+    fn propagate_block_light_decrease(
         &self,
         level: &Arc<Level>,
         pos: &BlockPos,
@@ -196,7 +189,7 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
+    pub fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         match level.lighting_config {
             LightingEngineConfig::Full => {
                 self.set_block_light_level(level, &pos, 15).ok();
@@ -227,12 +220,11 @@ impl DynamicLightEngine {
         // Only check neighbors if we didn't trigger a decrease
         // Decrease propagation handles re-validating neighbors
         if expected_light >= current_light {
-            self.check_neighbors_light_updates(level, pos, expected_light)
-                .await;
+            self.check_neighbors_light_updates(level, pos, expected_light);
         }
     }
 
-    pub async fn check_neighbors_light_updates(
+    pub fn check_neighbors_light_updates(
         &self,
         level: &Arc<Level>,
         pos: BlockPos,
@@ -248,11 +240,11 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn perform_sky_light_updates(&self, level: &Arc<Level>) -> i32 {
+    pub fn perform_sky_light_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
         loop {
-            let decrease_updates = self.perform_sky_light_decrease_updates(level).await;
-            let increase_updates = self.perform_sky_light_increase_updates(level).await;
+            let decrease_updates = self.perform_sky_light_decrease_updates(level);
+            let increase_updates = self.perform_sky_light_increase_updates(level);
 
             updates += decrease_updates + increase_updates;
 
@@ -263,32 +255,25 @@ impl DynamicLightEngine {
         updates
     }
 
-    async fn perform_sky_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_sky_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
-        while let Some((pos, expected_light)) = self.decrease_sky_light_queue.pop() {
-            self.propagate_sky_light_decrease(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.sky_decrease.pop() {
+            self.propagate_sky_light_decrease(level, &pos, expected_light);
             updates += 1;
         }
         updates
     }
 
-    async fn perform_sky_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_sky_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
-        while let Some((pos, expected_light)) = self.increase_sky_light_queue.pop() {
-            self.propagate_sky_light_increase(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.sky_increase.pop() {
+            self.propagate_sky_light_increase(level, &pos, expected_light);
             updates += 1;
         }
         updates
     }
 
-    async fn propagate_sky_light_increase(
-        &self,
-        level: &Arc<Level>,
-        pos: &BlockPos,
-        light_level: u8,
-    ) {
+    fn propagate_sky_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
@@ -317,12 +302,7 @@ impl DynamicLightEngine {
         }
     }
 
-    async fn propagate_sky_light_decrease(
-        &self,
-        level: &Arc<Level>,
-        pos: &BlockPos,
-        removed_light: u8,
-    ) {
+    fn propagate_sky_light_decrease(&self, level: &Arc<Level>, pos: &BlockPos, removed_light: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
@@ -353,7 +333,7 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
+    pub fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         match level.lighting_config {
             LightingEngineConfig::Full => {
                 self.set_sky_light_level(level, &pos, 15).ok();
@@ -376,7 +356,7 @@ impl DynamicLightEngine {
             0
         } else {
             // Check if there's open sky above
-            let has_sky = self.has_open_sky_above(level, &pos).await;
+            let has_sky = Self::has_open_sky_above(level, &pos);
 
             if has_sky {
                 // Direct sunlight, reduced by opacity
@@ -419,12 +399,11 @@ impl DynamicLightEngine {
 
         // Notify neighbors if light increased or stayed same
         if expected_light >= current_light {
-            self.check_neighbors_sky_light_updates(pos, expected_light)
-                .await;
+            self.check_neighbors_sky_light_updates(pos, expected_light);
         }
     }
 
-    pub async fn check_neighbors_sky_light_updates(&self, pos: BlockPos, current_light: u8) {
+    pub fn check_neighbors_sky_light_updates(&self, pos: BlockPos, current_light: u8) {
         // When we update a position, propagate to neighbors
         if current_light > 0 {
             self.queue_sky_light_increase(pos, current_light);

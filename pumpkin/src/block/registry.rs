@@ -1,3 +1,4 @@
+use crate::block::blocks::amethyst::AmethystBlock;
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
@@ -16,6 +17,9 @@ use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::conduit::ConduitBlock;
+use crate::block::blocks::coral::coral_block::CoralBlock;
+use crate::block::blocks::coral::coral_fan::CoralFanBlock;
+use crate::block::blocks::coral::coral_plant::CoralPlantBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
@@ -31,6 +35,7 @@ use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
+use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
 use crate::block::blocks::infested::InfestedBlock;
@@ -293,6 +298,11 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SmallDripleafBlock);
     manager.register(BigDripleafStemBlock);
     manager.register(BigDripleafBlock);
+    manager.register(CoralFanBlock);
+    manager.register(CoralPlantBlock);
+    manager.register(CoralBlock);
+    manager.register(AmethystBlock);
+    manager.register(GrassBlock);
 
     manager.register(FallingBlock);
 
