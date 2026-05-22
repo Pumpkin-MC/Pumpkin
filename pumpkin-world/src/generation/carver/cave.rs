@@ -375,19 +375,16 @@ impl CaveCarver {
     }
 
     fn get_top_material(biome: &Biome) -> &'static BlockState {
-        match biome.id {
-            // Mushroom Fields
-            14 | 15 => BlockState::from_id(pumpkin_data::Block::MYCELIUM.default_state.id),
-            // Desert & Beach
-            2 | 17 | 26 => BlockState::from_id(pumpkin_data::Block::SAND.default_state.id),
-            // Badlands
-            37 | 38 | 39 | 165 | 166 | 167 => {
-                BlockState::from_id(pumpkin_data::Block::RED_SAND.default_state.id)
-            }
-            // Stony Biomes
-            25 | 182 => BlockState::from_id(pumpkin_data::Block::STONE.default_state.id),
-            // Default
-            _ => BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id),
+        if biome.id == Biome::MUSHROOM_FIELDS.id {
+            BlockState::from_id(pumpkin_data::Block::MYCELIUM.default_state.id)
+        } else if biome.id == Biome::DESERT.id || biome.id == Biome::BEACH.id || biome.id == Biome::SNOWY_BEACH.id {
+            BlockState::from_id(pumpkin_data::Block::SAND.default_state.id)
+        } else if biome.id == Biome::BADLANDS.id || biome.id == Biome::ERODED_BADLANDS.id || biome.id == Biome::WOODED_BADLANDS.id {
+            BlockState::from_id(pumpkin_data::Block::RED_SAND.default_state.id)
+        } else if biome.id == Biome::STONY_PEAKS.id || biome.id == Biome::STONY_SHORE.id {
+            BlockState::from_id(pumpkin_data::Block::STONE.default_state.id)
+        } else {
+            BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id)
         }
     }
 }
