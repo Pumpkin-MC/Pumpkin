@@ -352,7 +352,17 @@ impl CaveCarver {
         // Only carve if it's replaceable
         if config.replaceable.1.contains(&block.id) {
             let biome = chunk.get_biome(x, y, z);
-            let is_ocean = matches!(biome.id, 0 | 24 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 10);
+            let is_watery = biome.id == Biome::OCEAN.id
+                || biome.id == Biome::COLD_OCEAN.id
+                || biome.id == Biome::DEEP_COLD_OCEAN.id
+                || biome.id == Biome::DEEP_FROZEN_OCEAN.id
+                || biome.id == Biome::DEEP_LUKEWARM_OCEAN.id
+                || biome.id == Biome::DEEP_OCEAN.id
+                || biome.id == Biome::FROZEN_OCEAN.id
+                || biome.id == Biome::LUKEWARM_OCEAN.id
+                || biome.id == Biome::WARM_OCEAN.id
+                || biome.id == Biome::RIVER.id
+                || biome.id == Biome::FROZEN_RIVER.id;
 
             let lava_y = config
                 .lava_level
@@ -360,7 +370,7 @@ impl CaveCarver {
 
             let replacement_state = if y <= lava_y {
                 BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id)
-            } else if is_ocean && y < 63 {
+            } else if is_watery && y < 63 {
                 BlockState::from_id(pumpkin_data::Block::WATER.default_state.id)
             } else {
                 BlockState::from_id(pumpkin_data::Block::AIR.default_state.id)
