@@ -36,7 +36,9 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::height_limit::HeightLimitView;
-use crate::generation::noise::aquifer_sampler::{AquiferSampler, FluidLevel, FluidLevelSamplerImpl};
+use crate::generation::noise::aquifer_sampler::{
+    AquiferSampler, FluidLevel, FluidLevelSamplerImpl,
+};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
