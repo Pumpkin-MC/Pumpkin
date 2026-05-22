@@ -503,16 +503,10 @@ impl BlockRegistry {
         BlockActionResult::Pass
     }
 
-    pub async fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
-        let pumpkin_block = self.get_pumpkin_block(block.id);
+    pub async fn explode<'a>(&'a self, args: ExplodeArgs<'a>) {
+        let pumpkin_block = self.get_pumpkin_block(args.block.id);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
-                .explode(ExplodeArgs {
-                    world,
-                    block,
-                    position,
-                })
-                .await;
+            pumpkin_block.explode(args).await;
         }
     }
 

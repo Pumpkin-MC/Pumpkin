@@ -1,5 +1,12 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
-use crate::{entity::EntityBaseFuture, server::Server};
+use crate::{
+    entity::EntityBaseFuture,
+    server::Server,
+    world::{
+        explosion::Explosion,
+        explosion_behavior::{EntityBasedExplosion, ExplosionInteraction},
+    },
+};
 use core::f32;
 use pumpkin_data::{Block, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
@@ -15,18 +22,25 @@ use std::{
     },
 };
 
+const EXPLOSION_Y_OFFSET: f64 = 0.0625;
+
 pub struct TNTEntity {
     entity: Entity,
     power: f32,
     fuse: AtomicU32,
+    owner_id: Option<i32>,
 }
 
 impl TNTEntity {
-    pub const fn new(entity: Entity, power: f32, fuse: u32) -> Self {
+    pub const fn new(entity: Entity, power: f32, fuse: u32, owner: Option<&Entity>) -> Self {
         Self {
             entity,
             power,
             fuse: AtomicU32::new(fuse),
+            owner_id: match owner {
+                Some(e) => Some(e.entity_id),
+                None => None,
+            },
         }
     }
 }
@@ -64,12 +78,21 @@ impl EntityBase for TNTEntity {
 
             if fuse <= 1 {
                 // TNT explodes now
+                let world = self.entity.world.load();
+                let height = self.entity.entity_dimension.load().height as f64;
+                let pos =
+                    self.entity.pos.load() + Vector3::new(0., height * EXPLOSION_Y_OFFSET, 0.);
+                let explosion = Explosion {
+                    source_id: Some(self.entity.entity_id),
+                    cause_id: self.owner_id,
+                    behavior: Arc::new(EntityBasedExplosion),
+                    block_interaction: ExplosionInteraction::TNT.resolve(&world),
+                    ..Explosion::new(self.power, pos)
+                };
+
+                world.explode(&explosion).await;
                 self.entity.remove().await;
-                self.entity
-                    .world
-                    .load()
-                    .explode(self.entity.pos.load(), self.power)
-                    .await;
+                // TODO: Prevent nether portals from TNT explosions after teleportation
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);

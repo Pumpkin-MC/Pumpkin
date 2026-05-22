@@ -1,12 +1,18 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use pumpkin_data::damage::DamageType;
+
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage,
         projectile::{ProjectileHit, ThrownItemEntity},
     },
     server::Server,
+    world::{
+        explosion::Explosion,
+        explosion_behavior::{EntityBasedExplosion, ExplosionInteraction},
+    },
 };
 
 const EXPLOSION_POWER: f32 = 1.0;
@@ -94,7 +100,16 @@ impl EntityBase for FireballEntity {
 
             let hit_pos = hit.hit_pos();
             // Explosion sets fire if mob griefing is enabled (assuming true for now)
-            world.explode(hit_pos, self.explosion_power).await;
+            let explosion = Explosion {
+                source_id: Some(self.get_entity().entity_id),
+                cause_id: self.thrown.owner_id,
+                behavior: Arc::new(EntityBasedExplosion),
+                block_interaction: ExplosionInteraction::Mob.resolve(&world),
+                damage_type: DamageType::PLAYER_EXPLOSION,
+                fire: true,
+                ..Explosion::new(self.explosion_power, hit_pos)
+            };
+            world.explode(&explosion).await;
         })
     }
 }

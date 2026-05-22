@@ -1,6 +1,13 @@
 use core::f32;
+use std::sync::Arc;
 
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
+use crate::{
+    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity},
+    world::{
+        explosion::Explosion,
+        explosion_behavior::{EntityBasedExplosion, ExplosionInteraction},
+    },
+};
 use pumpkin_data::{
     damage::DamageType,
     meta_data_type::MetaDataType,
@@ -48,17 +55,23 @@ impl EntityBase for EndCrystalEntity {
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.entity.remove().await;
             if !damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
-                self.entity
-                    .world
-                    .load()
-                    .explode(self.entity.pos.load(), 6.0)
-                    .await;
+                let world = self.entity.world.load();
+                let explosion = Explosion {
+                    source_id: Some(self.entity.entity_id),
+                    cause_id: cause.map(|e| e.get_entity().entity_id),
+                    behavior: Arc::new(EntityBasedExplosion),
+                    block_interaction: ExplosionInteraction::Block.resolve(&world),
+                    ..Explosion::new(6.0, self.entity.pos.load())
+                };
+
+                world.explode(&explosion).await;
             }
+
+            self.entity.remove().await;
 
             // TODO
             true

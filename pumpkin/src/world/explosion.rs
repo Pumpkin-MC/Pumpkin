@@ -1,29 +1,79 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockState, damage::DamageType, entity::EntityType};
+use pumpkin_data::{
+    Block, BlockState, attributes::Attributes, damage::DamageType, entity::EntityType,
+};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
+use rand::random_range;
 use rustc_hash::FxHashMap;
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
     entity::{Entity, EntityBase},
-    world::loot::LootContextParameters,
+    world::{
+        explosion_behavior::{DefaultExplosion, ExplosionBehavior, ExplosionBlockInteraction},
+        loot::LootContextParameters,
+    },
 };
 
 use super::{BlockFlags, World};
 
 pub struct Explosion {
-    power: f32,
-    pos: Vector3<f64>,
+    pub power: f32,
+    pub pos: Vector3<f64>,
+    pub behavior: Arc<dyn ExplosionBehavior>,
+    pub source_id: Option<i32>,
+    pub cause_id: Option<i32>,
+    pub damage_type: DamageType,
+    pub block_interaction: ExplosionBlockInteraction,
+    pub fire: bool,
 }
 
 impl Explosion {
     #[must_use]
-    pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
-        Self { power, pos }
+    pub fn new(power: f32, pos: Vector3<f64>) -> Self {
+        Self {
+            power,
+            pos,
+            behavior: Arc::new(DefaultExplosion),
+            source_id: None,
+            cause_id: None,
+            damage_type: DamageType::EXPLOSION,
+            block_interaction: ExplosionBlockInteraction::Destroy,
+            fire: false,
+        }
     }
 
-    fn get_blocks_to_destroy(
+    pub fn should_trigger_blocks(&self, world: &Arc<World>) -> bool {
+        let mob_griefing = world.level_info.load().game_rules.mob_griefing;
+        let is_not_wind_charge = !self
+            .source_id
+            .and_then(|id| world.get_entity_by_id(id))
+            .is_some_and(|e| e.get_entity().entity_type == &EntityType::BREEZE_WIND_CHARGE);
+
+        self.block_interaction == ExplosionBlockInteraction::TriggerBlock
+            && (is_not_wind_charge || mob_griefing)
+    }
+
+    pub fn should_affect_blocklike_entities(&self, world: &Arc<World>) -> bool {
+        let mob_griefing = world.level_info.load().game_rules.mob_griefing;
+        let is_not_wind_charge = !self
+            .source_id
+            .and_then(|id| world.get_entity_by_id(id))
+            .is_some_and(|e| {
+                let entity_type = e.get_entity().entity_type;
+                entity_type == &EntityType::BREEZE_WIND_CHARGE
+                    || entity_type == &EntityType::WIND_CHARGE
+            });
+        let should_destroy = matches!(
+            self.block_interaction,
+            ExplosionBlockInteraction::Destroy | ExplosionBlockInteraction::DestroyWithDecay
+        );
+
+        is_not_wind_charge && (mob_griefing || should_destroy)
+    }
+
+    async fn get_blocks_to_destroy(
         &self,
         world: &World,
     ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
@@ -47,7 +97,7 @@ impl Explosion {
                     z *= sqrt;
 
                     let mut pos_x = self.pos.x;
-                    let mut pos_y = self.pos.y + 0.0625;
+                    let mut pos_y = self.pos.y;
                     let mut pos_z = self.pos.z;
 
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
@@ -61,14 +111,17 @@ impl Explosion {
                         //     continue 'block2;
                         // }
 
-                        if !state.is_air() || !fluid_state.is_empty {
-                            let resistance =
-                                fluid_state.blast_resistance.max(block.blast_resistance);
-                            h -= resistance * 0.3;
-                            if h > 0.0 {
+                        if let Some(resistance) = self
+                            .behavior
+                            .get_block_explosion_resistance(block, fluid_state, &block_pos)
+                            .await
+                        {
+                            h -= (resistance + 0.3) * 0.3;
+                            if h > 0.0 && self.behavior.should_affect_block(block).await {
                                 map.insert(block_pos, (block, state));
                             }
                         }
+
                         pos_x += x * 0.3;
                         pos_y += y * 0.3;
                         pos_z += z * 0.3;
@@ -99,7 +152,18 @@ impl Explosion {
             Vector3::new(max_x as f64, max_y as f64, max_z as f64),
         );
 
-        let entities = world.get_all_at_box(&search_box);
+        // Exclude the soruce entity
+        let entities: Vec<_> = world
+            .get_all_at_box(&search_box)
+            .into_iter()
+            .filter(|e| {
+                self.source_id
+                    .is_none_or(|id| e.get_entity().entity_id != id)
+            })
+            .collect();
+
+        let source = self.source_id.and_then(|id| world.get_entity_by_id(id));
+        let cause = self.cause_id.and_then(|id| world.get_entity_by_id(id));
 
         for entity_base in entities {
             if entity_base.is_immune_to_explosion() {
@@ -118,21 +182,33 @@ impl Explosion {
                 continue;
             }
 
-            let exposure = Self::calculate_exposure(&self.pos, entity, world).await as f64;
-            if exposure == 0.0 {
-                continue;
+            let should_take_damage = self.behavior.should_damage_entity(entity).await;
+            let knockback_multiplier = self.behavior.get_knockback_multiplier(entity).await;
+            let exposure = if should_take_damage || knockback_multiplier != 0.0 {
+                Self::calculate_exposure(&self.pos, entity, world).await as f64
+            } else {
+                0.0
+            };
+
+            if should_take_damage {
+                let damage_multiplier = (1.0 - distance) * exposure;
+                let damage =
+                    (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
+                        * 7.0
+                        * radius
+                        + 1.0) as f32;
+
+                entity_base
+                    .damage_with_context(
+                        entity,
+                        damage,
+                        self.damage_type,
+                        Some(self.pos),
+                        source.as_deref(),
+                        cause.as_deref(),
+                    )
+                    .await;
             }
-
-            let damage_multiplier = (1.0 - distance) * exposure;
-            let damage = (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
-                * 7.0
-                * self.power as f64
-                + 1.0) as f32;
-
-            // TODO: damage type
-            entity
-                .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
-                .await;
 
             // Calculate and apply knockback
             let dir_pos = if entity.entity_type == &EntityType::TNT {
@@ -141,12 +217,17 @@ impl Explosion {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            // TODO
-            let knockback_resistance = 0.0;
+            let knockback_resistance = entity.get_living_entity().map_or(0.0, |living_entity| {
+                living_entity.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+            });
 
-            let knockback_multiplier = (1.0 - distance) * exposure * (1.0 - knockback_resistance);
-            let knockback = direction * knockback_multiplier;
+            let knockback_power =
+                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
+            let knockback = direction * knockback_power;
             entity.add_velocity(knockback);
+
+            // TODO: Transfer projectile owner to explosion source
+            // TODO: Wind Charge fall damage immunity
         }
     }
 
@@ -209,35 +290,65 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
-    /// Returns the removed block count
+    /// Returns the count of removed blocks
+    /// The source entity must still exist when calling this.
+    /// Call `entity.remove()` after this, not before.
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let blocks = self.get_blocks_to_destroy(world);
+        let blocks = self.get_blocks_to_destroy(world).await;
+        let source = self.source_id.and_then(|id| world.get_entity_by_id(id));
+        let cause = self.cause_id.and_then(|id| world.get_entity_by_id(id));
         self.damage_entities(world).await;
-        for (pos, (block, state)) in &blocks {
-            world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
-            world.close_container_screens_at(pos).await;
 
+        for (pos, (block, state)) in &blocks {
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
-            if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                let params = LootContextParameters {
-                    block_state: Some(state),
-                    explosion_radius: Some(self.power),
-                    ..Default::default()
-                };
-                drop_loot(world, block, pos, false, params).await;
+            match self.block_interaction {
+                ExplosionBlockInteraction::Keep => {
+                    continue;
+                }
+                ExplosionBlockInteraction::TriggerBlock => {}
+                _ => {
+                    world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
+                    world.close_container_screens_at(pos).await;
+
+                    if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
+                        let params = LootContextParameters {
+                            block_state: Some(state),
+                            explosion_radius: Some(self.power),
+                            ..Default::default()
+                        };
+                        drop_loot(world, block, pos, false, params).await;
+                    }
+                }
             }
+
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block
                     .explode(ExplodeArgs {
                         world,
                         block,
+                        state,
                         position: pos,
+                        source: source.as_deref(),
+                        cause: cause.as_deref(),
+                        block_interaction: &self.block_interaction,
                     })
                     .await;
             }
         }
-        // TODO: fire
+
+        if self.fire {
+            for pos in (blocks).keys() {
+                if random_range(0..3) == 0
+                    && world.get_block_state(pos).is_air()
+                    && world.get_block_state(&pos.down()).is_solid()
+                {
+                    world
+                        .set_block_state(pos, Block::FIRE.default_state.id, BlockFlags::NOTIFY_ALL)
+                        .await;
+                }
+            }
+        }
         blocks.len() as u32
     }
 }

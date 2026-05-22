@@ -15,6 +15,7 @@ use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
 pub mod explosion;
+pub mod explosion_behavior;
 pub mod loot;
 pub mod map;
 pub mod portal;
@@ -2369,8 +2370,10 @@ impl World {
         player.set_health(20.0).await;
     }
 
-    pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position);
+    pub async fn explode(self: &Arc<Self>, explosion: &Explosion) {
+        let power = explosion.power;
+        let pos = explosion.pos;
+
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
@@ -2383,13 +2386,13 @@ impl World {
                 sound_id = remap_sound_id_for_version(sound_id, java_client.version.load());
             }
             let sound = IdOr::<SoundEvent>::Id(sound_id);
-            if player.position().squared_distance_to_vec(&position) > 4096.0 {
+            if player.position().squared_distance_to_vec(&pos) > 4096.0 {
                 continue;
             }
             player
                 .client
                 .enqueue_packet(&CExplosion::new(
-                    position,
+                    pos,
                     power,
                     block_count as i32,
                     None,
@@ -4149,7 +4152,7 @@ impl World {
             return None;
         }
 
-        let adjust = -1.0e-7f64;
+        let adjust = 1.0e-7f64;
         let to = end_pos.lerp(&start_pos, adjust);
         let from = start_pos.lerp(&end_pos, adjust);
 

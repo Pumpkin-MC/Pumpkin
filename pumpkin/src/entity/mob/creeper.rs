@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
@@ -14,16 +14,22 @@ use pumpkin_data::{
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
-use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
-    ai::goal::{
-        active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+use crate::{
+    entity::{
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+        ai::goal::{
+            active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+            wander_around::WanderAroundGoal,
+        },
+        mob::{Mob, MobEntity},
+        player::Player,
     },
-    mob::{Mob, MobEntity},
-    player::Player,
+    world::{
+        explosion::Explosion,
+        explosion_behavior::{EntityBasedExplosion, ExplosionInteraction},
+    },
 };
 
 const DEFAULT_FUSE_TIME: i32 = 30;
@@ -110,7 +116,15 @@ impl CreeperEntity {
             .store(true, Ordering::Relaxed);
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.explode(pos, radius * multiplier).await;
+        let explosion = Explosion {
+            source_id: Some(self.get_entity().entity_id),
+            cause_id: Some(self.get_entity().entity_id),
+            behavior: Arc::new(EntityBasedExplosion),
+            block_interaction: ExplosionInteraction::Mob.resolve(&world),
+            damage_type: DamageType::PLAYER_EXPLOSION,
+            ..Explosion::new(radius * multiplier, pos)
+        };
+        world.explode(&explosion).await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
     }

@@ -1,3 +1,4 @@
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64,
@@ -13,11 +14,16 @@ use crate::{
         projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
+    world::{
+        explosion::Explosion,
+        explosion_behavior::{ExplosionInteraction, SimpleExplosion},
+    },
 };
 
 const EXPLOSION_POWER: f32 = 1.2;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
+const KNOCKBACK_MULTIPLIER: f64 = 1.22;
 
 pub struct WindChargeEntity {
     deflect_cooldown: AtomicU8,
@@ -42,11 +48,27 @@ impl WindChargeEntity {
     }
 
     pub async fn create_explosion(&self, position: Vector3<f64>) {
-        self.get_entity()
-            .world
-            .load()
-            .explode(position, EXPLOSION_POWER)
-            .await;
+        let world = self.get_entity().world.load();
+        let behavior = Arc::new(SimpleExplosion {
+            affect_blocks: true,
+            damage_entities: false,
+            knockback_multiplier: Some(KNOCKBACK_MULTIPLIER),
+            immune_block_ids: get_tag_ids(
+                RegistryKey::Block,
+                "minecraft:blocks_wind_charge_explosions",
+            )
+            .map_or(Vec::new(), <[u16]>::to_vec),
+        });
+
+        let explosion = Explosion {
+            source_id: Some(self.get_entity().entity_id),
+            cause_id: self.thrown_item_entity.owner_id,
+            behavior,
+            block_interaction: ExplosionInteraction::Trigger.resolve(&world),
+            ..Explosion::new(EXPLOSION_POWER, position)
+        };
+
+        world.explode(&explosion).await;
     }
 
     pub fn deflect(

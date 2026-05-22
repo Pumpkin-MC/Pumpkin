@@ -4,6 +4,7 @@ use crate::block::entities::bed::BedBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
@@ -25,6 +26,8 @@ use crate::block::{
 };
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
+use crate::world::explosion::Explosion;
+use crate::world::explosion_behavior::ExplosionInteraction;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
 
@@ -234,9 +237,14 @@ impl BlockBehaviour for BedBlock {
                     .break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS)
                     .await;
 
-                args.world
-                    .explode(bed_head_pos.to_centered_f64(), 5.0)
-                    .await;
+                let explosion = Explosion {
+                    block_interaction: ExplosionInteraction::Block.resolve(args.world),
+                    fire: true,
+                    damage_type: DamageType::BAD_RESPAWN_POINT,
+                    ..Explosion::new(5.0, bed_head_pos.to_centered_f64())
+                };
+
+                args.world.explode(&explosion).await;
 
                 return BlockActionResult::SuccessServer;
             }

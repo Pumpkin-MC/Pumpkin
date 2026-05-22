@@ -5,8 +5,8 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, ExplodeArgs, OnNeighborUpdateArgs, PlacedArgs, UseWithItemArgs,
 };
-use crate::entity::Entity;
 use crate::entity::tnt::TNTEntity;
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::SoundCategory;
@@ -22,10 +22,10 @@ use super::redstone::block_receives_redstone_power;
 pub struct TNTBlock;
 
 impl TNTBlock {
-    pub async fn prime(world: &Arc<World>, location: &BlockPos) {
+    pub async fn prime(world: &Arc<World>, location: &BlockPos, owner: Option<&Entity>) {
         let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::TNT);
         let pos = entity.pos.load();
-        let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
+        let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE, owner));
         world.spawn_entity(tnt).await;
         world.play_sound(
             pumpkin_data::sound::Sound::EntityTntPrimed,
@@ -52,7 +52,7 @@ impl BlockBehaviour for TNTBlock {
                 return BlockActionResult::Pass;
             }
             let world = args.player.world();
-            Self::prime(&world, args.position).await;
+            Self::prime(&world, args.position, Some(args.player.get_entity())).await;
 
             BlockActionResult::Consume
         })
@@ -61,7 +61,7 @@ impl BlockBehaviour for TNTBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if block_receives_redstone_power(args.world, args.position).await {
-                Self::prime(args.world, args.position).await;
+                Self::prime(args.world, args.position, None).await;
             }
         })
     }
@@ -69,7 +69,7 @@ impl BlockBehaviour for TNTBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if block_receives_redstone_power(args.world, args.position).await {
-                Self::prime(args.world, args.position).await;
+                Self::prime(args.world, args.position, None).await;
             }
         })
     }
@@ -80,7 +80,12 @@ impl BlockBehaviour for TNTBlock {
             let angle = rand::random::<f64>() * std::f64::consts::TAU;
             entity.set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02));
             let fuse = rand::rng().random_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
-            let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
+            let tnt = Arc::new(TNTEntity::new(
+                entity,
+                DEFAULT_POWER,
+                fuse,
+                args.cause.map(EntityBase::get_entity),
+            ));
             args.world.spawn_entity(tnt).await;
         })
     }

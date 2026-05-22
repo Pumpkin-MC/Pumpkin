@@ -236,7 +236,7 @@ pub fn from_type(
             Arc::new(FallingEntity::new(entity, Block::SAND.default_state.id))
         }
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
-        id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),
+        id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80, None)),
         id if id == EntityType::ITEM.id => {
             Arc::new(ItemEntity::new(entity, ItemStack::new(1, &Item::AIR)))
         }

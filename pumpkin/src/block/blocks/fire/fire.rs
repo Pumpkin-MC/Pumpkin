@@ -175,7 +175,7 @@ impl FireBlock {
             }
 
             if old_block == &Block::TNT {
-                TNTBlock::prime(world, pos).await;
+                TNTBlock::prime(world, pos, None).await;
             }
         }
     }

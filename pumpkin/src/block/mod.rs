@@ -7,6 +7,7 @@ use pumpkin_world::BlockStateId;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
+use crate::world::explosion_behavior::ExplosionBlockInteraction;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -258,7 +259,11 @@ pub struct OnEntityStepArgs<'a> {
 pub struct ExplodeArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
+    pub state: &'a BlockState,
     pub position: &'a BlockPos,
+    pub source: Option<&'a dyn EntityBase>,
+    pub cause: Option<&'a dyn EntityBase>,
+    pub block_interaction: &'a ExplosionBlockInteraction,
 }
 
 pub struct OnSyncedBlockEventArgs<'a> {
