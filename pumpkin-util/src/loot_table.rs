@@ -23,7 +23,7 @@ pub struct LootPool {
     /// Number of rolls, specified using a number provider.
     pub rolls: LootNumberProviderTypes,
     /// Additional bonus rolls to apply.
-    pub bonus_rolls: f32,
+    pub bonus_rolls: LootNumberProviderTypes,
     /// Optional conditions that must be met for this pool to be applied.
     pub conditions: Option<&'static [LootCondition]>,
     /// Optional functions applied to each entry in the pool.
@@ -192,6 +192,10 @@ pub enum LootFunctionBonusParameter {
 pub struct LootPoolEntry {
     /// The type of entry.
     pub content: LootPoolEntryTypes,
+    /// Relative probability weight; higher values are more likely.
+    pub weight: i32,
+    /// Quality of the entry, used to modify weight based on luck.
+    pub quality: i32,
     /// Optional conditions for this entry.
     pub conditions: Option<&'static [LootCondition]>,
     /// Optional functions for this entry.

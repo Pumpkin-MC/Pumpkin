@@ -669,6 +669,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:blaze_rod",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -688,7 +690,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::KilledByPlayer]),
                 functions: None,
             }]),
@@ -769,6 +771,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -788,7 +792,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -797,6 +801,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -816,7 +822,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -825,6 +831,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:tipped_arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -848,7 +856,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
@@ -907,6 +915,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:breeze_rod",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -926,7 +936,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::KilledByPlayer]),
                 functions: None,
             }]),
@@ -1056,6 +1066,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:rotten_flesh",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -1075,7 +1087,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -1134,6 +1146,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:string",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[LootFunction {
                         content: LootFunctionTypes::SetCount {
@@ -1147,7 +1161,7 @@ impl EntityType {
                     }]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -1206,6 +1220,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:string",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1225,7 +1241,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1234,6 +1250,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:spider_eye",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1253,7 +1271,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
@@ -1379,6 +1397,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:feather",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1398,7 +1418,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1407,6 +1427,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:chicken",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1420,7 +1442,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1479,6 +1501,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:cod",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
@@ -1486,7 +1510,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1495,11 +1519,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone_meal",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
                     functions: None,
                 },
@@ -1579,6 +1605,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:copper_ingot",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -1598,7 +1626,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -1657,6 +1685,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:leather",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1676,7 +1706,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1685,6 +1715,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:beef",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1708,7 +1740,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1818,6 +1850,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:gunpowder",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -1837,7 +1871,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -1847,11 +1881,13 @@ impl EntityType {
                             name: "minecraft:creeper_drop_music_discs",
                             expand: true,
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::EntityProperties]),
                     functions: None,
                 },
@@ -1954,6 +1990,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:cod",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -1977,7 +2015,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -2035,6 +2073,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:leather",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -2054,7 +2094,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -2136,6 +2176,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rotten_flesh",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -2155,7 +2197,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -2164,11 +2206,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:copper_ingot",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -2253,6 +2297,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:prismarine_shard",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -2272,7 +2318,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -2282,6 +2328,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:cod",
                             }),
+                            weight: 3i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -2298,6 +2346,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:prismarine_crystals",
                             }),
+                            weight: 2i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -2306,12 +2356,14 @@ impl EntityType {
                         },
                         LootPoolEntry {
                             content: LootPoolEntryTypes::Empty,
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
                     ],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -2320,17 +2372,21 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:wet_sponge",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
                 LootPool {
                     entries: &[LootPoolEntry {
                         content: LootPoolEntryTypes::LootTable,
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
@@ -2338,7 +2394,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -2349,6 +2405,8 @@ impl EntityType {
                     entries: &[
                         LootPoolEntry {
                             content: LootPoolEntryTypes::Empty,
+                            weight: 4i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -2356,12 +2414,14 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:tide_armor_trim_smithing_template",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
                     ],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -2513,6 +2573,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:ender_pearl",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -2532,7 +2594,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -2641,11 +2703,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:totem_of_undying",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -2654,6 +2718,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:emerald",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -2673,7 +2739,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
@@ -3033,6 +3099,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:ghast_tear",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -3052,7 +3120,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3061,6 +3129,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:gunpowder",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -3080,7 +3150,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3089,11 +3159,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:music_disc_tears",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::DamageSourceProperties,
                         LootCondition::KilledByPlayer,
@@ -3232,6 +3304,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:glow_ink_sac",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -3251,7 +3325,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -3361,6 +3435,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:prismarine_shard",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -3380,7 +3456,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3390,6 +3466,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:cod",
                             }),
+                            weight: 2i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -3406,6 +3484,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:prismarine_crystals",
                             }),
+                            weight: 2i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -3414,18 +3494,22 @@ impl EntityType {
                         },
                         LootPoolEntry {
                             content: LootPoolEntryTypes::Empty,
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
                     ],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
                 LootPool {
                     entries: &[LootPoolEntry {
                         content: LootPoolEntryTypes::LootTable,
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
@@ -3433,7 +3517,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -3547,6 +3631,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:porkchop",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -3570,7 +3656,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3579,6 +3665,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:leather",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -3598,7 +3686,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3679,6 +3767,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:leather",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -3698,7 +3788,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -3758,6 +3848,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rotten_flesh",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -3777,7 +3869,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3786,6 +3878,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rabbit_foot",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::EntityProperties]),
                         functions: Some(&[
                             LootFunction {
@@ -3805,7 +3899,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3815,6 +3909,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:iron_ingot",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -3822,6 +3918,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:carrot",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -3829,6 +3927,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:potato",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
@@ -3837,7 +3937,7 @@ impl EntityType {
                         },
                     ],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -3972,6 +4072,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:poppy",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -3985,7 +4087,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -3994,6 +4096,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:iron_ingot",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -4007,7 +4111,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -4242,6 +4346,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:leather",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -4261,7 +4367,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -4342,6 +4448,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:magma_cream",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[
                             LootCondition::Inverted,
                             LootCondition::EntityProperties,
@@ -4367,6 +4475,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:pearlescent_froglight",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -4380,6 +4490,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:verdant_froglight",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -4393,6 +4505,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:ochre_froglight",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -4404,7 +4518,7 @@ impl EntityType {
                     },
                 ],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -4599,6 +4713,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:leather",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -4618,7 +4734,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -4627,6 +4743,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:beef",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -4650,7 +4768,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -4709,6 +4827,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:leather",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -4728,7 +4848,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -4787,11 +4907,13 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:nautilus_shell",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: None,
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[
                     LootCondition::KilledByPlayer,
                     LootCondition::RandomChanceWithEnchantedBonus,
@@ -5036,6 +5158,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:bamboo",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[LootFunction {
                         content: LootFunctionTypes::SetCount {
@@ -5046,7 +5170,7 @@ impl EntityType {
                     }]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -5105,6 +5229,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5124,7 +5250,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -5133,6 +5259,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5152,7 +5280,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -5161,6 +5289,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:tipped_arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5184,7 +5314,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
@@ -5245,6 +5375,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:feather",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -5264,7 +5396,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -5322,6 +5454,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:phantom_membrane",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -5341,7 +5475,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::KilledByPlayer]),
                 functions: None,
             }]),
@@ -5399,6 +5533,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:porkchop",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -5422,7 +5558,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -5580,6 +5716,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:ominous_bottle",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -5596,7 +5734,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::EntityProperties]),
                 functions: None,
             }]),
@@ -5682,6 +5820,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:cod",
                         }),
+                        weight: 3i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5708,6 +5848,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:salmon",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5732,7 +5874,7 @@ impl EntityType {
                     },
                 ],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -5790,6 +5932,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:pufferfish",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -5800,7 +5944,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -5809,11 +5953,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone_meal",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
                     functions: None,
                 },
@@ -5874,6 +6020,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rabbit_hide",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5893,7 +6041,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -5902,6 +6050,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rabbit",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -5922,7 +6072,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -5931,11 +6081,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rabbit_foot",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -5997,6 +6149,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:saddle",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[LootFunction {
                         content: LootFunctionTypes::SetCount {
@@ -6007,7 +6161,7 @@ impl EntityType {
                     }]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -6065,6 +6219,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:salmon",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
@@ -6072,7 +6228,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -6081,11 +6237,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone_meal",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
                     functions: None,
                 },
@@ -6145,6 +6303,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:mutton",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -6168,7 +6328,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -6178,91 +6338,125 @@ impl EntityType {
                             children: &[
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
                                     content: LootPoolEntryTypes::LootTable,
+                                    weight: 1i32,
+                                    quality: 0i32,
                                     conditions: Some(&[LootCondition::EntityProperties]),
                                     functions: None,
                                 },
                             ],
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -6320,11 +6514,13 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:shulker_shell",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: None,
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::RandomChanceWithEnchantedBonus]),
                 functions: None,
             }]),
@@ -6455,6 +6651,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -6474,7 +6672,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -6483,6 +6681,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -6502,7 +6702,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -6561,6 +6761,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:bone",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -6580,7 +6782,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -6639,6 +6841,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:slime_ball",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::Inverted]),
                         functions: Some(&[
                             LootFunction {
@@ -6661,6 +6865,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:slime_ball",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -6672,7 +6878,7 @@ impl EntityType {
                     },
                 ],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::EntityProperties]),
                 functions: None,
             }]),
@@ -6801,6 +7007,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:snowball",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[LootFunction {
                         content: LootFunctionTypes::SetCount {
@@ -6814,7 +7022,7 @@ impl EntityType {
                     }]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -6939,6 +7147,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:string",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -6958,7 +7168,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -6967,6 +7177,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:spider_eye",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -6986,7 +7198,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
@@ -7110,6 +7322,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:ink_sac",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -7129,7 +7343,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -7188,6 +7402,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -7207,7 +7423,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -7216,6 +7432,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -7235,7 +7453,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -7244,6 +7462,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:tipped_arrow",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -7267,7 +7487,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::KilledByPlayer]),
                     functions: None,
                 },
@@ -7326,6 +7546,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:string",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -7345,7 +7567,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -7519,6 +7741,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:leather",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -7538,7 +7762,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -7618,6 +7842,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:tropical_fish",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
@@ -7628,7 +7854,7 @@ impl EntityType {
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -7637,11 +7863,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone_meal",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
                     functions: None,
                 },
@@ -7701,6 +7929,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:seagrass",
                         }),
+                        weight: 3i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -7720,7 +7950,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -7729,11 +7959,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bowl",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::DamageSourceProperties]),
                     functions: None,
                 },
@@ -7891,6 +8123,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:emerald",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -7910,7 +8144,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::KilledByPlayer]),
                 functions: None,
             }]),
@@ -8017,11 +8251,13 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:sculk_catalyst",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: None,
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -8103,6 +8339,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:glowstone_dust",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -8125,6 +8363,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:sugar",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -8147,6 +8387,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:spider_eye",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -8169,6 +8411,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:glass_bottle",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -8191,6 +8435,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:gunpowder",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -8213,6 +8459,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:stick",
                             }),
+                            weight: 2i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
@@ -8238,7 +8486,7 @@ impl EntityType {
                             max: 3f32,
                         }),
                     ),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8247,6 +8495,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:redstone",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -8266,7 +8516,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8377,6 +8627,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:coal",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -8396,7 +8648,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8405,6 +8657,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:bone",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -8424,7 +8678,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8433,11 +8687,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:wither_skeleton_skull",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -8572,6 +8828,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:rotten_flesh",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -8591,7 +8849,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -8651,6 +8909,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rotten_flesh",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -8670,7 +8930,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8679,6 +8939,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:red_mushroom",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: Some(&[LootCondition::EntityProperties]),
                         functions: Some(&[
                             LootFunction {
@@ -8698,7 +8960,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8708,6 +8970,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:iron_ingot",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -8715,6 +8979,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:carrot",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -8722,6 +8988,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:potato",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
@@ -8730,7 +8998,7 @@ impl EntityType {
                         },
                     ],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -8742,11 +9010,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:music_disc_lava_chicken",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::EntityProperties,
@@ -8808,6 +9078,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:rotten_flesh",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -8827,7 +9099,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: None,
                 functions: None,
             }]),
@@ -8886,6 +9158,8 @@ impl EntityType {
                     content: LootPoolEntryTypes::Item(ItemEntry {
                         name: "minecraft:rotten_flesh",
                     }),
+                    weight: 1i32,
+                    quality: 0i32,
                     conditions: None,
                     functions: Some(&[
                         LootFunction {
@@ -8905,7 +9179,7 @@ impl EntityType {
                     ]),
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
+                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[LootCondition::KilledByPlayer]),
                 functions: None,
             }]),
@@ -8965,6 +9239,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rotten_flesh",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -8984,7 +9260,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -8994,6 +9270,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:iron_ingot",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -9001,6 +9279,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:carrot",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: None,
                         },
@@ -9008,6 +9288,8 @@ impl EntityType {
                             content: LootPoolEntryTypes::Item(ItemEntry {
                                 name: "minecraft:potato",
                             }),
+                            weight: 1i32,
+                            quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
@@ -9016,7 +9298,7 @@ impl EntityType {
                         },
                     ],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,
@@ -9080,6 +9362,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:rotten_flesh",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -9099,7 +9383,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -9108,6 +9392,8 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:gold_nugget",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: Some(&[
                             LootFunction {
@@ -9127,7 +9413,7 @@ impl EntityType {
                         ]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: None,
                     functions: None,
                 },
@@ -9136,11 +9422,13 @@ impl EntityType {
                         content: LootPoolEntryTypes::Item(ItemEntry {
                             name: "minecraft:gold_ingot",
                         }),
+                        weight: 1i32,
+                        quality: 0i32,
                         conditions: None,
                         functions: None,
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: 0f32,
+                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
                         LootCondition::RandomChanceWithEnchantedBonus,

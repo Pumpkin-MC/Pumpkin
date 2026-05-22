@@ -1,5 +1,6 @@
 use crate::block::entities::BlockEntity;
 use dashmap::DashMap;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
@@ -3572,6 +3573,10 @@ impl World {
             // Close container screens for any players viewing this block
             self.close_container_screens_at(position).await;
 
+            let luck = cause.as_ref().map_or(0.0, |player| {
+                player.living_entity.get_attribute_value(&Attributes::LUCK) as f32
+            });
+
             if Block::from_state_id(broken_state_id) != &Block::FIRE {
                 let particles_packet = CWorldEvent::new(
                     WorldEvent::ParticlesDestroyBlock as i32,
@@ -3591,10 +3596,10 @@ impl World {
                     None => self.broadcast_to_chunk(chunk_pos, &particles_packet),
                 }
             }
-
             if !flags.contains(BlockFlags::SKIP_DROPS) {
                 let params = LootContextParameters {
                     block_state: Some(BlockState::from_id(broken_state_id)),
+                    luck,
                     ..Default::default()
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;

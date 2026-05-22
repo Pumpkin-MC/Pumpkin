@@ -51,9 +51,9 @@ pub struct LootPoolStruct {
     /// Entries that can be selected during a roll of this pool.
     entries: Vec<LootPoolEntryStruct>,
     /// Number of times the pool is rolled.
-    rolls: LootNumberProviderTypes, // TODO
+    rolls: LootNumberProviderTypes,
     /// Extra rolls granted by luck-related enchantments.
-    bonus_rolls: f32,
+    bonus_rolls: LootNumberProviderTypes,
     /// Conditions that must all pass for this pool to be rolled, if any.
     conditions: Option<Vec<LootConditionStruct>>,
     /// Functions applied to the selected entries, if any.
@@ -90,6 +90,7 @@ impl ToTokens for LootPoolStruct {
         });
     }
 }
+
 
 /// Deserialized single-item loot entry holding the item's registry key.
 #[derive(Deserialize, Clone, Debug)]
@@ -653,16 +654,28 @@ pub struct LootPoolEntryStruct {
     /// The concrete entry type (item, alternatives, etc.).
     #[serde(flatten)]
     content: LootPoolEntryTypesStruct,
+    /// Relative probability weight; higher values are more likely.
+    #[serde(default = "default_weight")]
+    weight: i32,
+    /// Quality of the entry, used to modify weight based on luck.
+    #[serde(default)]
+    quality: i32,
     /// Conditions that must all pass for this entry to be evaluated.
     conditions: Option<Vec<LootConditionStruct>>,
     /// Functions applied to the item if this entry is selected.
     functions: Option<Vec<LootFunctionStruct>>,
 }
 
+fn default_weight() -> i32 {
+    1
+}
+
 impl ToTokens for LootPoolEntryStruct {
     /// Emits a `LootPoolEntry { … }` struct literal token stream for code generation.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let content = &self.content;
+        let weight = self.weight;
+        let quality = self.quality;
         let conditions_tokens = if let Some(conds) = &self.conditions {
             let cond_tokens: Vec<_> = conds.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
@@ -679,12 +692,15 @@ impl ToTokens for LootPoolEntryStruct {
         tokens.extend(quote! {
             LootPoolEntry {
                 content: #content,
+                weight: #weight,
+                quality: #quality,
                 conditions: #conditions_tokens,
                 functions: #functions_tokens,
             }
         });
     }
 }
+
 
 /// Deserialized loot table category, tagged by its `"type"` field.
 #[derive(Deserialize, Clone, Debug)]
