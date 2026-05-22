@@ -377,9 +377,15 @@ impl CaveCarver {
     fn get_top_material(biome: &Biome) -> &'static BlockState {
         if biome.id == Biome::MUSHROOM_FIELDS.id {
             BlockState::from_id(pumpkin_data::Block::MYCELIUM.default_state.id)
-        } else if biome.id == Biome::DESERT.id || biome.id == Biome::BEACH.id || biome.id == Biome::SNOWY_BEACH.id {
+        } else if biome.id == Biome::DESERT.id
+            || biome.id == Biome::BEACH.id
+            || biome.id == Biome::SNOWY_BEACH.id
+        {
             BlockState::from_id(pumpkin_data::Block::SAND.default_state.id)
-        } else if biome.id == Biome::BADLANDS.id || biome.id == Biome::ERODED_BADLANDS.id || biome.id == Biome::WOODED_BADLANDS.id {
+        } else if biome.id == Biome::BADLANDS.id
+            || biome.id == Biome::ERODED_BADLANDS.id
+            || biome.id == Biome::WOODED_BADLANDS.id
+        {
             BlockState::from_id(pumpkin_data::Block::RED_SAND.default_state.id)
         } else if biome.id == Biome::STONY_PEAKS.id || biome.id == Biome::STONY_SHORE.id {
             BlockState::from_id(pumpkin_data::Block::STONE.default_state.id)
