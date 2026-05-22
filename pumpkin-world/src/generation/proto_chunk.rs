@@ -343,6 +343,7 @@ impl ProtoChunk {
             }
         }
 
+        proto_chunk.stage = StagedChunkEnum::from(chunk_data.status);
         proto_chunk
     }
     #[inline]

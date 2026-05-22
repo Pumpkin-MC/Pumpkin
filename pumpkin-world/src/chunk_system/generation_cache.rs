@@ -351,33 +351,50 @@ impl Cache {
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
             StagedChunkEnum::StructureStart => {
-                self.chunks[mid]
-                    .get_proto_chunk_mut()
-                    .set_structure_starts(generator);
+                let chunk = self.chunks[mid].get_proto_chunk_mut();
+                if chunk.stage < StagedChunkEnum::StructureStart {
+                    chunk.set_structure_starts(generator);
+                }
             }
             StagedChunkEnum::StructureReferences => {
-                self.chunks[mid]
-                    .get_proto_chunk_mut()
-                    .set_structure_references(generator);
+                let chunk = self.chunks[mid].get_proto_chunk_mut();
+                if chunk.stage < StagedChunkEnum::StructureReferences {
+                    chunk.set_structure_references(generator);
+                }
             }
-            StagedChunkEnum::Biomes => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_biomes(generator),
-            StagedChunkEnum::Noise => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_noise(generator),
-            StagedChunkEnum::Surface => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_surface(generator),
-            StagedChunkEnum::Carvers => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_carvers(generator),
+            StagedChunkEnum::Biomes => {
+                let chunk = self.chunks[mid].get_proto_chunk_mut();
+                if chunk.stage < StagedChunkEnum::Biomes {
+                    chunk.step_to_biomes(generator);
+                }
+            }
+            StagedChunkEnum::Noise => {
+                let chunk = self.chunks[mid].get_proto_chunk_mut();
+                if chunk.stage < StagedChunkEnum::Noise {
+                    chunk.step_to_noise(generator);
+                }
+            }
+            StagedChunkEnum::Surface => {
+                let chunk = self.chunks[mid].get_proto_chunk_mut();
+                if chunk.stage < StagedChunkEnum::Surface {
+                    chunk.step_to_surface(generator);
+                }
+            }
+            StagedChunkEnum::Carvers => {
+                let chunk = self.chunks[mid].get_proto_chunk_mut();
+                if chunk.stage < StagedChunkEnum::Carvers {
+                    chunk.step_to_carvers(generator);
+                }
+            }
             StagedChunkEnum::Features => {
-                ProtoChunk::generate_features_and_structure(
-                    self,
-                    block_registry,
-                    &generator.random_config,
-                );
+                let chunk = self.chunks[mid].get_proto_chunk();
+                if chunk.stage < StagedChunkEnum::Features {
+                    ProtoChunk::generate_features_and_structure(
+                        self,
+                        block_registry,
+                        &generator.random_config,
+                    );
+                }
             }
             StagedChunkEnum::Lighting => {
                 let mut engine = crate::lighting::LightEngine::new();

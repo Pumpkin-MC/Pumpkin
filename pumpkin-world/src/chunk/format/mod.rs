@@ -356,16 +356,16 @@ struct ChunkSectionNBT {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "PascalCase")]
 struct ChunkSectionNbtRef<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     block_states: Option<ChunkSectionBlockStates>,
     #[serde(skip_serializing_if = "Option::is_none")]
     biomes: Option<ChunkSectionBiomes>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
     block_light: Option<&'a [u8]>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
     sky_light: Option<&'a [u8]>,
+    #[serde(rename = "Y")]
     y: i8,
 }
 
