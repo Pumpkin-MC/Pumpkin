@@ -1,7 +1,6 @@
 use super::Carver;
 use super::cave::get_height;
 use crate::ProtoChunk;
-use crate::generation::noise::aquifer_sampler::FluidLevelSamplerImpl;
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
@@ -287,9 +286,20 @@ impl CanyonCarver {
         let block = pumpkin_data::Block::from_state_id(state_id);
 
         if config.replaceable.1.contains(&block.id) {
-            let fluid_level = chunk.fluid_level_sampler.get_fluid_level(x, y, z);
-            let replacement_block = fluid_level.get_block(y);
-            let replacement_state = BlockState::from_id(replacement_block.default_state.id);
+            let biome = chunk.get_biome(x, y, z);
+            let is_ocean = matches!(biome.id, 0 | 24 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 10);
+
+            let lava_y = config
+                .lava_level
+                .get_y(chunk.bottom_y() as i16, chunk.height());
+
+            let replacement_state = if y <= lava_y {
+                BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id)
+            } else if is_ocean && y < 63 {
+                BlockState::from_id(pumpkin_data::Block::WATER.default_state.id)
+            } else {
+                BlockState::from_id(pumpkin_data::Block::AIR.default_state.id)
+            };
 
             chunk.set_block_state(x & 15, local_y, z & 15, replacement_state);
 
