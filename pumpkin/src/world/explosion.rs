@@ -152,7 +152,7 @@ impl Explosion {
             Vector3::new(max_x as f64, max_y as f64, max_z as f64),
         );
 
-        // Exclude the soruce entity
+        // Exclude the source entity
         let entities: Vec<_> = world
             .get_all_at_box(&search_box)
             .into_iter()
