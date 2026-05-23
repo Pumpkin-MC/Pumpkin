@@ -121,7 +121,7 @@ pub struct SignBlockEntity {
 pub struct Text {
     pub has_glowing_text: AtomicBool,
     color: AtomicI8,
-    pub messages: Arc<std::sync::Mutex<[String; 4]>>,
+    pub messages: Arc<std::sync::Mutex<[Box<str>; 4]>>,
 }
 
 impl Clone for Text {
@@ -160,7 +160,7 @@ impl From<Text> for NbtTag {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|s| Self::String(s.clone().into()))
+                .map(|s| Self::String(s.clone()))
                 .collect(),
         );
         Self::Compound(nbt)
@@ -173,28 +173,30 @@ impl From<NbtTag> for Text {
         let nbt = tag.extract_compound().unwrap();
         let has_glowing_text = nbt.get_bool("has_glowing_text").unwrap_or(false);
         let color = nbt.get_string("color").unwrap();
-        let messages: Vec<String> = nbt
+        let messages: Vec<Box<str>> = nbt
             .get_list("messages")
             .unwrap()
             .iter()
-            .filter_map(|tag| tag.extract_string().map(std::string::ToString::to_string))
+            .filter_map(|tag| tag.extract_string().map(Box::from))
             .collect();
+        let get_message =
+            |i: usize| -> Box<str> { messages.get(i).cloned().unwrap_or_else(|| Box::from("")) };
+
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
             color: AtomicI8::new(DyeColor::from(color) as i8),
             messages: Arc::new(std::sync::Mutex::new([
-                // its important that we use unwrap_or since otherwise we may crash on older versions
-                messages.first().unwrap_or(&String::new()).clone(),
-                messages.get(1).unwrap_or(&String::new()).clone(),
-                messages.get(2).unwrap_or(&String::new()).clone(),
-                messages.get(3).unwrap_or(&String::new()).clone(),
+                get_message(0),
+                get_message(1),
+                get_message(2),
+                get_message(3),
             ])),
         }
     }
 }
 
 impl Text {
-    fn new(messages: [String; 4]) -> Self {
+    fn new(messages: [Box<str>; 4]) -> Self {
         Self {
             has_glowing_text: AtomicBool::new(false),
             color: AtomicI8::new(DyeColor::default() as i8),
@@ -263,7 +265,7 @@ impl BlockEntity for SignBlockEntity {
 impl SignBlockEntity {
     pub const ID: &'static str = "minecraft:sign";
     #[must_use]
-    pub fn new(position: BlockPos, is_front: bool, messages: [String; 4]) -> Self {
+    pub fn new(position: BlockPos, is_front: bool, messages: [Box<str>; 4]) -> Self {
         Self {
             position,
             is_waxed: AtomicBool::new(false),

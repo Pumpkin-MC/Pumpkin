@@ -223,6 +223,12 @@ impl Explosion {
                 let params = LootContextParameters {
                     block_state: Some(state),
                     explosion_radius: Some(self.power),
+                    position: Some(pumpkin_util::math::vector3::Vector3::new(
+                        pos.0.x as f64,
+                        pos.0.y as f64,
+                        pos.0.z as f64,
+                    )),
+                    world_time: world.level_info.load().day_time as u64,
                     ..Default::default()
                 };
                 drop_loot(world, block, pos, false, params).await;

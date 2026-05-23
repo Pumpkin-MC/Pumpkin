@@ -60,8 +60,8 @@ pub trait NetworkReadExt {
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
-    fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
-    fn get_string(&mut self) -> Result<String, ReadingError>;
+    fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError>;
+    fn get_str(&mut self) -> Result<Box<str>, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -154,7 +154,7 @@ impl<R: Read> NetworkReadExt for R {
         VarULong::decode(self)
     }
 
-    fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
+    fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError> {
         let bytes_len = self.get_var_uint()?.0 as usize;
 
         // We treat `bound` as the maximum number of Java `char`s allowed.
@@ -170,7 +170,7 @@ impl<R: Read> NetworkReadExt for R {
 
         let data = self.read_boxed_slice(bytes_len)?;
         let string =
-            String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))?;
+            std::str::from_utf8(&data).map_err(|e| ReadingError::Message(e.to_string()))?;
 
         // Next, if we're able to find the (bound + 1)th UTF-16 character, the string is too big.
         if string.encode_utf16().nth(bound).is_some() {
@@ -179,11 +179,11 @@ impl<R: Read> NetworkReadExt for R {
             )));
         }
 
-        Ok(string)
+        Ok(string.into())
     }
 
-    fn get_string(&mut self) -> Result<String, ReadingError> {
-        self.get_string_bounded(i32::MAX as usize)
+    fn get_str(&mut self) -> Result<Box<str>, ReadingError> {
+        self.get_str_bounded(i32::MAX as usize)
     }
 
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {

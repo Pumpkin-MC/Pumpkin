@@ -1326,10 +1326,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             .properties
             .load()
             .iter()
-            .find(|p| p.name == "textures")
+            .find(|p| p.name.as_ref() == "textures")
             .map(|p| PlayerSkin {
-                value: p.value.clone(),
-                signature: p.signature.clone(),
+                value: p.value.to_string(),
+                signature: p.signature.as_ref().map(std::string::ToString::to_string),
             }))
     }
 
@@ -1341,11 +1341,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let mut properties = (**player.gameprofile.properties.load()).clone();
 
-        properties.retain(|p| p.name != "textures");
+        properties.retain(|p| p.name.as_ref() != "textures");
         properties.push(Property {
             name: "textures".into(),
-            value: skin.value,
-            signature: skin.signature,
+            value: skin.value.into(),
+            signature: skin.signature.map(std::convert::Into::into),
         });
 
         player.gameprofile.properties.store(Arc::new(properties));
@@ -1509,7 +1509,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .client
             .java()
             .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        Ok(client.server_address.lock().await.clone())
+        Ok(client.server_address.lock().await.to_string())
     }
 
     async fn get_settings(

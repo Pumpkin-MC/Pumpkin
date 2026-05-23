@@ -3600,6 +3600,12 @@ impl World {
                 let params = LootContextParameters {
                     block_state: Some(BlockState::from_id(broken_state_id)),
                     luck,
+                    position: Some(pumpkin_util::math::vector3::Vector3::new(
+                        position.0.x as f64,
+                        position.0.y as f64,
+                        position.0.z as f64,
+                    )),
+                    world_time: self.level_info.load().day_time as u64,
                     ..Default::default()
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;

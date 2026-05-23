@@ -1,5 +1,6 @@
+use pumpkin_protocol::bedrock::client::transfer::CTransfer as BedrockCTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::CTransfer;
+use pumpkin_protocol::java::client::play::CTransfer as JavaCTransfer;
 use pumpkin_util::text::TextComponent;
 use tracing::info;
 
@@ -12,6 +13,7 @@ use crate::command::dispatcher::CommandError::{self, InvalidConsumption, Invalid
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 use crate::entity::EntityBase;
+use crate::net::ClientPlatform;
 
 const NAMES: [&str; 1] = ["transfer"];
 
@@ -55,10 +57,24 @@ impl CommandExecutor for TargetSelfExecutor {
             if let CommandSender::Player(player) = sender {
                 let name = &player.gameprofile.name;
                 info!("[{name}: Transferring {name} to {hostname}:{port}]");
-                player
-                    .client
-                    .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
-                    .await;
+
+                match &player.client {
+                    ClientPlatform::Java(client) => {
+                        client
+                            .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))
+                            .await;
+                    }
+                    ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(&BedrockCTransfer::new(
+                                hostname.to_string(),
+                                port as u16,
+                                false,
+                            ))
+                            .await;
+                    }
+                }
+
                 Ok(1)
             } else {
                 Err(InvalidRequirement)
@@ -105,9 +121,23 @@ impl CommandExecutor for TargetPlayerExecutor {
             }
 
             for p in players {
-                p.client
-                    .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
-                    .await;
+                match &p.client {
+                    ClientPlatform::Java(client) => {
+                        client
+                            .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))
+                            .await;
+                    }
+                    ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(&BedrockCTransfer::new(
+                                hostname.to_string(),
+                                port as u16,
+                                false,
+                            ))
+                            .await;
+                    }
+                }
+
                 info!(
                     "[{sender}: Transferring {} to {hostname}:{port}]",
                     p.gameprofile.name
