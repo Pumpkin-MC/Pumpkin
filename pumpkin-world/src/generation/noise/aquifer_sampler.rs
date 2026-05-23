@@ -50,6 +50,7 @@ pub trait FluidLevelSamplerImpl {
 }
 
 #[enum_dispatch(AquiferSamplerImpl)]
+#[derive(Clone)]
 pub enum AquiferSampler {
     SeaLevel(SeaLevelAquiferSampler),
     Aquifer(WorldAquiferSampler),
@@ -73,6 +74,7 @@ macro_rules! local_y {
     };
 }
 
+#[derive(Clone)]
 pub struct WorldAquiferSampler {
     fluid_level_sampler: StandardChunkFluidLevelSampler,
     start_x: i32,
@@ -609,18 +611,19 @@ impl WorldAquiferSampler {
 
 impl AquiferSamplerImpl for WorldAquiferSampler {
     #[inline]
-    fn apply(
+    fn compute_substance(
         &mut self,
         router: &mut ChunkNoiseRouter,
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
     ) -> Option<&'static BlockState> {
-        let density = router.final_density(pos, sample_options);
         self.apply_internal(router, pos, sample_options, height_estimator, density)
     }
 }
 
+#[derive(Clone)]
 pub struct SeaLevelAquiferSampler {
     level_sampler: StandardChunkFluidLevelSampler,
 }
@@ -633,16 +636,15 @@ impl SeaLevelAquiferSampler {
 }
 
 impl AquiferSamplerImpl for SeaLevelAquiferSampler {
-    fn apply(
+    fn compute_substance(
         &mut self,
-        router: &mut ChunkNoiseRouter,
+        _router: &mut ChunkNoiseRouter,
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
+        _sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
     ) -> Option<&'static BlockState> {
-        let sample = router.final_density(pos, sample_options);
-        //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
-        if sample > 0f64 {
+        if density > 0f64 {
             None
         } else {
             Some(
@@ -657,12 +659,17 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
 
 #[enum_dispatch]
 pub trait AquiferSamplerImpl {
-    fn apply(
+    /// Vanilla `Aquifer.computeSubstance(context, density)`. Returns `None`
+    /// for "keep stone" (the vanilla barrier outcome) and `Some(state)` for
+    /// a fluid/air placement. Callers pick `density`: the noise-fill path
+    /// pulls it from `router.final_density(...)`; carvers force `0.0`.
+    fn compute_substance(
         &mut self,
         router: &mut ChunkNoiseRouter,
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
+        density: f64,
     ) -> Option<&'static BlockState>;
 }
 
