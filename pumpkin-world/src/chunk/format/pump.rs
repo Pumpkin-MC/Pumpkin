@@ -55,20 +55,12 @@ where
         pumpkin_nbt::to_bytes_unnamed(&self.data, &mut bytes)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
 
-        let compressed = compress_to_vec(&bytes[..], CompressionLevel::Fastest);
-
-        tokio::fs::write(backend, compressed).await
+        tokio::fs::write(backend, bytes).await
     }
 
     fn read(r: Bytes) -> Result<Self, ChunkReadingError> {
-        let mut decoder = StreamingDecoder::new(&r[..])
-            .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e.to_string())))?;
-        let mut decompressed = Vec::new();
-        std::io::Read::read_to_end(&mut decoder, &mut decompressed)
-            .map_err(ChunkReadingError::IoError)?;
-
-        let data: PumpData = pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(decompressed))
-            .map_err(|e| {
+        let data: PumpData =
+            pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(r)).map_err(|e| {
                 ChunkReadingError::ParsingError(
                     crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
                 )
@@ -97,7 +89,9 @@ where
             .await
             .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
 
-        self.data.chunks.insert(index.to_string(), bytes.to_vec());
+        let compressed = compress_to_vec(&bytes[..], CompressionLevel::Fastest);
+
+        self.data.chunks.insert(index.to_string(), compressed);
 
         Ok(())
     }
@@ -113,7 +107,27 @@ where
             let index = (rel_x + rel_z * 32) as usize;
 
             if let Some(chunk_bytes) = self.data.chunks.get(&index.to_string()) {
-                let bytes = Bytes::copy_from_slice(chunk_bytes);
+                let mut decoder = match StreamingDecoder::new(&chunk_bytes[..]) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let _ = stream
+                            .send(LoadedData::Error((
+                                pos,
+                                ChunkReadingError::IoError(std::io::Error::other(e.to_string())),
+                            )))
+                            .await;
+                        continue;
+                    }
+                };
+                let mut decompressed = Vec::new();
+                if let Err(e) = std::io::Read::read_to_end(&mut decoder, &mut decompressed) {
+                    let _ = stream
+                        .send(LoadedData::Error((pos, ChunkReadingError::IoError(e))))
+                        .await;
+                    continue;
+                }
+
+                let bytes = Bytes::from(decompressed);
                 match D::from_bytes(&bytes, pos) {
                     Ok(data) => {
                         let _ = stream.send(LoadedData::Loaded(data)).await;
@@ -125,6 +139,95 @@ where
             } else {
                 let _ = stream.send(LoadedData::Missing(pos)).await;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunk::ChunkReadingError;
+    use crate::chunk::ChunkSerializingError;
+    use crate::chunk::format::anvil::SingleChunkDataSerializer;
+    use crate::chunk::io::Dirtiable;
+    use crate::chunk::io::{ChunkSerializer, LoadedData};
+    use bytes::Bytes;
+    use pumpkin_util::math::vector2::Vector2;
+    use serde::{Deserialize, Serialize};
+    use std::future::Future;
+    use std::pin::Pin;
+    use temp_dir::TempDir;
+
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    struct MockChunk {
+        x: i32,
+        z: i32,
+        data: Vec<u8>,
+    }
+
+    impl Dirtiable for MockChunk {
+        fn is_dirty(&self) -> bool {
+            true
+        }
+        fn mark_dirty(&self, _: bool) {}
+    }
+
+    impl SingleChunkDataSerializer for MockChunk {
+        fn to_bytes(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>
+        {
+            let mut buf = Vec::new();
+            pumpkin_nbt::to_bytes_unnamed(self, &mut buf).unwrap();
+            let bytes = Bytes::from(buf);
+            Box::pin(async move { Ok(bytes) })
+        }
+        fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+            let mut mock: MockChunk = pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(bytes))
+                .map_err(|e| {
+                    ChunkReadingError::ParsingError(
+                        crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
+                    )
+                })?;
+            mock.x = pos.x;
+            mock.z = pos.y;
+            Ok(mock)
+        }
+        fn position(&self) -> (i32, i32) {
+            (self.x, self.z)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pump_file_roundtrip() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.child("r.0.0.pump");
+
+        let mut pump_file: PumpFile<MockChunk> = PumpFile::default();
+        let chunk = MockChunk {
+            x: 0,
+            z: 0,
+            data: vec![1, 2, 3],
+        };
+
+        pump_file.update_chunk(&chunk, &()).await.unwrap();
+        pump_file.write(&file_path).await.unwrap();
+
+        let bytes = tokio::fs::read(&file_path).await.unwrap();
+        let read_file = PumpFile::<MockChunk>::read(Bytes::from(bytes)).unwrap();
+
+        assert_eq!(read_file.data.chunks.len(), 1);
+        let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(1);
+        read_file
+            .get_chunks(vec![Vector2::new(0, 0)], stream_tx)
+            .await;
+
+        let loaded = stream_rx.recv().await.unwrap();
+        match loaded {
+            LoadedData::Loaded(c) => {
+                assert_eq!(c.data, vec![1, 2, 3]);
+            }
+            _ => panic!("Expected LoadedData::Loaded"),
         }
     }
 }

@@ -32,11 +32,12 @@ pub fn generate_single_chunk(
     }
 
     let stages = [
+        StagedChunkEnum::Biomes,
         StagedChunkEnum::StructureStart,
         StagedChunkEnum::StructureReferences,
-        StagedChunkEnum::Biomes,
         StagedChunkEnum::Noise,
         StagedChunkEnum::Surface,
+        StagedChunkEnum::Carvers,
         StagedChunkEnum::Features,
         StagedChunkEnum::Lighting,
         StagedChunkEnum::Spawn,

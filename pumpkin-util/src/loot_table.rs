@@ -23,7 +23,7 @@ pub struct LootPool {
     /// Number of rolls, specified using a number provider.
     pub rolls: LootNumberProviderTypes,
     /// Additional bonus rolls to apply.
-    pub bonus_rolls: f32,
+    pub bonus_rolls: LootNumberProviderTypes,
     /// Optional conditions that must be met for this pool to be applied.
     pub conditions: Option<&'static [LootCondition]>,
     /// Optional functions applied to each entry in the pool.
@@ -61,10 +61,15 @@ pub struct GroupEntry {
 }
 
 #[derive(Clone, Debug)]
+pub struct LootTableEntry {
+    pub value: &'static str,
+}
+
+#[derive(Clone, Debug)]
 pub enum LootPoolEntryTypes {
     Empty,
     Item(ItemEntry),
-    LootTable,
+    LootTable(LootTableEntry),
     Dynamic,
     Tag(TagEntry),
     Alternatives(AlternativeEntry),
@@ -76,21 +81,27 @@ pub enum LootPoolEntryTypes {
 #[derive(Clone, PartialEq, Debug)]
 pub enum LootCondition {
     /// Inverts the result of another condition.
-    Inverted,
+    Inverted(&'static Self),
     /// Passes if any of the given conditions are met.
-    AnyOf,
+    AnyOf(&'static [Self]),
     /// Passes only if all the given conditions are met.
-    AllOf,
+    AllOf(&'static [Self]),
     /// Passes based on a random chance.
     RandomChance { chance: f32 },
     /// Passes based on a random chance modified by item enchantments.
-    RandomChanceWithEnchantedBonus,
+    RandomChanceWithEnchantedBonus {
+        enchantment: &'static str,
+        chances: Option<&'static [f32]>,
+    },
     /// Checks properties of the entity (e.g. type, attributes).
-    EntityProperties,
+    EntityProperties {
+        entity: &'static str,
+        expected_type: Option<&'static str>,
+    },
     /// Requires the entity to have been killed by a player.
     KilledByPlayer,
     /// Checks entity scores against specified criteria.
-    EntityScores,
+    EntityScores { entity: &'static str },
     /// Checks block state properties.
     BlockStateProperty {
         /// The block to check.
@@ -99,25 +110,47 @@ pub enum LootCondition {
         properties: &'static [(&'static str, &'static str)],
     },
     /// Requires a specific tool to match certain criteria.
-    MatchTool,
+    MatchTool {
+        items: Option<&'static [&'static str]>,
+    },
     /// Applies a bonus based on a table.
-    TableBonus,
+    TableBonus {
+        enchantment: &'static str,
+        chances: &'static [f32],
+    },
     /// Survives explosion damage.
     SurvivesExplosion,
     /// Checks properties of the damage source.
-    DamageSourceProperties,
+    DamageSourceProperties {
+        expected_source_type: Option<&'static str>,
+        expected_direct_type: Option<&'static str>,
+    },
     /// Checks the location of the entity.
-    LocationCheck,
+    LocationCheck {
+        offset_x: i32,
+        offset_y: i32,
+        offset_z: i32,
+        expected_biome: Option<&'static str>,
+    },
     /// Checks weather conditions.
-    WeatherCheck,
+    WeatherCheck {
+        raining: Option<bool>,
+        thundering: Option<bool>,
+    },
     /// References to another condition or table.
-    Reference,
+    Reference { name: &'static str },
     /// Checks the in-game time.
-    TimeCheck,
+    TimeCheck {
+        range: (Option<f32>, Option<f32>),
+        period: Option<u64>,
+    },
     /// Checks against a specific value or range.
-    ValueCheck,
+    ValueCheck {
+        value: LootNumberProviderTypes,
+        range: (Option<f32>, Option<f32>),
+    },
     /// Checks if a specific enchantment is active.
-    EnchantmentActiveCheck,
+    EnchantmentActiveCheck { active: bool },
 }
 
 /// Functions applied to loot entries.
@@ -192,6 +225,10 @@ pub enum LootFunctionBonusParameter {
 pub struct LootPoolEntry {
     /// The type of entry.
     pub content: LootPoolEntryTypes,
+    /// Relative probability weight; higher values are more likely.
+    pub weight: i32,
+    /// Quality of the entry, used to modify weight based on luck.
+    pub quality: i32,
     /// Optional conditions for this entry.
     pub conditions: Option<&'static [LootCondition]>,
     /// Optional functions for this entry.

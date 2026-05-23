@@ -7,7 +7,16 @@ license.workspace = true
 
 [dependencies]
 pumpkin-protocol.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = [
+    "item",
+    "screen",
+    "data_component",
+    "recipes",
+    "tag",
+    "fuels",
+    "enchantment",
+    "potion",
+] }
 
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true

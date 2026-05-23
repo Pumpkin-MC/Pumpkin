@@ -328,6 +328,13 @@ impl<'a> StringReader<'a> {
         }
     }
 
+    /// Keeps skipping characters in the reader until a space or the end of the string is encountered.
+    pub fn read_until_space(&mut self) {
+        while !matches!(self.peek(), None | Some(' ')) {
+            self.skip();
+        }
+    }
+
     /// Converts this reader into a `'static` form, which
     /// is useful for snapshotting the reader.
     #[must_use]
