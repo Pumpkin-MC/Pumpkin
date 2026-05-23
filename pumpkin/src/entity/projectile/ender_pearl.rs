@@ -2,7 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{
+        Entity, EntityBase, EntityBaseFuture, EntityType, NBTStorage,
+        mob::endermite::EndermiteEntity, projectile::ThrownItemEntity,
+    },
     server::Server,
 };
 use pumpkin_data::entity::EntityStatus;
@@ -11,6 +14,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
 
 const GRAVITY: f64 = 0.03;
+const ENDERMITE_SPAWN_CHANCE: f32 = 0.05;
 
 pub struct EnderPearlEntity {
     pub thrown: ThrownItemEntity,
@@ -96,6 +100,16 @@ impl EntityBase for EnderPearlEntity {
             if let Some(owner_id) = self.thrown.owner_id
                 && let Some(owner) = world.get_entity_by_id(owner_id)
             {
+                if rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE {
+                    let entity = Entity::new(
+                        world.clone(),
+                        owner.get_entity().pos.load(),
+                        &EntityType::ENDERMITE,
+                    );
+                    let endermite = EndermiteEntity::new(entity);
+                    world.spawn_entity(endermite).await;
+                }
+
                 // Teleport position should be position of entity from last tick (tick before collision)
                 let teleport_pos = entity.last_pos.load();
 
