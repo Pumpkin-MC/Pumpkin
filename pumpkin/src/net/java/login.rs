@@ -61,7 +61,7 @@ impl JavaClient {
                 match bungeecord::bungeecord_login(
                     &self.address,
                     &self.server_address.lock().await,
-                    login_start.name,
+                    login_start.name.into_string(),
                 )
                 .await
                 {
@@ -82,7 +82,7 @@ impl JavaClient {
 
             let profile = GameProfile {
                 id,
-                name: login_start.name,
+                name: login_start.name.into_string(),
                 properties: ArcSwap::new(Arc::new(vec![])),
                 profile_actions: None,
             };

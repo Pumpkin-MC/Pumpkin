@@ -76,7 +76,7 @@ pub struct JavaClient {
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
     /// The Address used to connect to the Server, Send in the Handshake
-    pub server_address: Mutex<String>,
+    pub server_address: Mutex<Box<str>>,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
     pub connection_state: AtomicCell<ConnectionState>,
     /// The client's IP address.
@@ -138,7 +138,7 @@ impl JavaClient {
             id,
             gameprofile: Mutex::new(None),
             config: Mutex::new(None),
-            server_address: Mutex::new(String::new()),
+            server_address: Mutex::new("".into()),
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             close_token: CancellationToken::new(),
@@ -921,7 +921,7 @@ impl JavaClient {
                 let payload = SCustomPayload::read(payload, &version)?;
                 let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
-                    payload.channel,
+                    payload.channel.to_string(),
                     Bytes::from(payload.data),
                 );
                 server.plugin_manager.fire(event).await;

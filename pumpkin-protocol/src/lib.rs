@@ -418,11 +418,11 @@ pub struct Sample {
 // basically game profile
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Property {
-    pub name: String,
+    pub name: Box<str>,
     // base 64
-    pub value: String,
+    pub value: Box<str>,
     // base 64
-    pub signature: Option<String>,
+    pub signature: Option<Box<str>>,
 }
 
 #[derive(Serialize)]

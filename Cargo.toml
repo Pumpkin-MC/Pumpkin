@@ -171,6 +171,7 @@ tracing = { version = "0.1.44", default-features = false, features = ["std", "at
 tracing-subscriber = { version = "0.3.23", default-features = false, features = [
     "env-filter",
     "fmt",
+    "ansi",
     "time",
     "std",
 ] }

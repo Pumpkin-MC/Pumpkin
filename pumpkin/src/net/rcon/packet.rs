@@ -1,5 +1,3 @@
-use std::string::FromUtf8Error;
-
 use bytes::{BufMut, BytesMut};
 use thiserror::Error;
 
@@ -60,7 +58,7 @@ pub enum PacketError {
     #[error("Missing packet lull terminator")]
     MissingNullTerminator,
     #[error("Invalid packet string body")]
-    InvalidBody(FromUtf8Error),
+    InvalidBody(std::str::Utf8Error),
 }
 
 #[derive(Debug)]
@@ -68,7 +66,7 @@ pub enum PacketError {
 pub struct Packet {
     id: i32,
     ptype: ServerboundPacket,
-    body: String,
+    body: Box<str>,
 }
 
 impl Packet {
@@ -110,8 +108,9 @@ impl Packet {
         }
 
         let payload = &incoming[body_start..body_end];
-        let body = String::from_utf8(payload.to_vec()).map_err(PacketError::InvalidBody)?;
-
+        let body = std::str::from_utf8(payload)
+            .map_err(PacketError::InvalidBody)?
+            .into();
         incoming.drain(0..total_packet_len);
 
         Ok(Some(Self {

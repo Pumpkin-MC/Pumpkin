@@ -229,7 +229,7 @@ impl BedrockClient {
         });
     }
 
-    pub async fn process_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Vec<u8>) {
+    pub async fn process_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Bytes) {
         self.last_seen.store(std::time::Instant::now());
         if let Err(error) = self.handle_packet_payload(server, packet).await {
             error!(
@@ -501,7 +501,7 @@ impl BedrockClient {
     pub async fn handle_packet_payload(
         self: &Arc<Self>,
         server: &Arc<Server>,
-        packet: Vec<u8>,
+        packet: Bytes,
     ) -> Result<(), Error> {
         let reader = &mut Cursor::new(packet);
 

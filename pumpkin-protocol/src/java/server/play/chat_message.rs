@@ -13,7 +13,7 @@ use crate::{
 
 #[java_packet(PLAY_CHAT)]
 pub struct SChatMessage {
-    pub message: String,
+    pub message: Box<str>,
     pub timestamp: i64,
     pub salt: i64,
     pub signature: Option<Box<[u8]>>,
@@ -25,7 +25,7 @@ pub struct SChatMessage {
 impl ServerPacket for SChatMessage {
     fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            message: read.get_string_bounded(256)?,
+            message: read.get_str_bounded(256)?,
             timestamp: read.get_i64_be()?,
             salt: read.get_i64_be()?,
             signature: read.get_option(|v| v.read_boxed_slice(256))?,
