@@ -96,99 +96,105 @@ strip = false
 
 
 [workspace.dependencies]
+serde_json5 = "0.2.1"
 tokio = { version = "1.52", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
 
-thiserror = "2.0"
+thiserror = { version = "2.0", default-features = false }
 
-bytes = "1.11"
+bytes = { version = "1.11", default-features = false, features = ["std"] }
 
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
-rayon = "1.12"
-crossbeam = "0.8"
+rayon = { version = "1.12", default-features = false }
+crossbeam = { version = "0.8", default-features = false, features = ["std"] }
 
-uuid = { version = "1.23", features = ["serde", "v3", "v4"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_repr = { version = "0.1" }
-serde_json = "1.0"
+uuid = { version = "1.23", default-features = false, features = ["serde", "v3", "v4", "std"] }
+serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
+serde_repr = { version = "0.1", default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
 
 tempfile = { version = "3.27.0", default-features = false }
-proc-macro-error2 = "2"
-aes = "0.9"
-async-compression = "0.4.42"
-base64 = "0.22.1"
-bitflags = "2.11.1"
-cesu8 = "1.1"
-cfb8 = "0.9"
-colored = "3.1"
+proc-macro-error2 = { version = "2", default-features = false }
+aes = { version = "0.9", default-features = false }
+async-compression = { version = "0.4.42", default-features = false }
+base64 = { version = "0.22.1", default-features = false, features = ["std"] }
+bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
+cesu8 = { version = "1.1", default-features = false }
+cfb8 = { version = "0.9", default-features = false }
+colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
-crc-fast = "1.10.0"
+crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8", default-features = false }
-crossbeam-utils = "0.8.21"
-crossfire = { version = "3.1.15", features = ["compat"] }
-crypto-bigint = "0.7.3"
-dashmap = "6.2"
-ecdsa = "0.16.9"
-either = "1.16.0"
-enum_dispatch = "0.3.13"
-flate2 = "1.1.9"
-heck = "0.5"
-hmac = "=0.13.0"
-indexmap = "2.14"
-itertools = "0.14.0"
-libloading = "0.9"
-lru = "0.18.0"
-lz4-java-wrc = "0.2.0"
-md5 = "0.8"
-num-bigint = "0.4"
-num-derive = "0.4"
-num-traits = "0.2"
-p384 = "0.13.1"
-phf = "0.13.1"
-proc-macro2 = "1.0"
-pumpkin-codecs = { path = "pumpkin-codecs" }
-pumpkin-config = { path = "pumpkin-config" }
-pumpkin-data = { path = "pumpkin-data" }
-pumpkin-inventory = { path = "pumpkin-inventory" }
-pumpkin-macros = { path = "pumpkin-macros" }
-pumpkin-nbt = { path = "pumpkin-nbt" }
-pumpkin-protocol = { path = "pumpkin-protocol" }
-pumpkin-util = { path = "pumpkin-util" }
-pumpkin-world = { path = "pumpkin-world" }
-quote = "1.0"
-rand = "0.10.1"
-rsa = "=0.10.0-rc.18"
-cipher = "0.5.2"
-rustc-hash = "2.1.2"
-rustyline = "18.0.0"
-ruzstd = "0.8.3"
-serde_json5 = "0.2.1"
-sha1 = "=0.11.0"
-sha2 = "=0.11.0"
-signature = "3.0.0"
-tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = [
+crossbeam-utils = { version = "0.8.21", default-features = false, features = ["std"] }
+crossfire = { version = "3.1.15", default-features = false, features = ["compat"] }
+crypto-bigint = { version = "0.7.3", default-features = false }
+dashmap = { version = "6.2", default-features = false }
+ecdsa = { version = "0.16.9", default-features = false, features = ["std"] }
+either = { version = "1.16.0", default-features = false }
+enum_dispatch = { version = "0.3.13", default-features = false }
+flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
+heck = { version = "0.5", default-features = false }
+hmac = { version = "=0.13.0", default-features = false }
+indexmap = { version = "2.14", default-features = false, features = ["std"] }
+itertools = { version = "0.14.0", default-features = false, features = ["use_std"] }
+libloading = { version = "0.9", default-features = false, features = ["std"] }
+lru = { version = "0.18.0", default-features = false }
+lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
+md5 = { version = "0.8", default-features = false }
+num-bigint = { version = "0.4", default-features = false, features = ["std"] }
+num-derive = { version = "0.4", default-features = false }
+num-traits = { version = "0.2", default-features = false, features = ["std"] }
+p384 = { version = "0.13.1", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
+phf = { version = "0.13.1", default-features = false, features = ["std"] }
+proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
+pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
+pumpkin-config = { path = "pumpkin-config", default-features = false }
+pumpkin-data = { path = "pumpkin-data", default-features = false }
+pumpkin-inventory = { path = "pumpkin-inventory", default-features = false }
+pumpkin-macros = { path = "pumpkin-macros", default-features = false }
+pumpkin-nbt = { path = "pumpkin-nbt", default-features = false }
+pumpkin-protocol = { path = "pumpkin-protocol", default-features = false }
+pumpkin-util = { path = "pumpkin-util", default-features = false }
+pumpkin-world = { path = "pumpkin-world", default-features = false }
+quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
+rand = { version = "0.10.1", default-features = false, features = ["std", "std_rng", "thread_rng"] }
+rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
+cipher = { version = "0.5.2", default-features = false }
+rustc-hash = { version = "2.1.2", default-features = false, features = ["std"] }
+rustyline = { version = "18.0.0", default-features = false, features = ["with-file-history"] }
+ruzstd = { version = "0.8.3", default-features = false, features = ["std"] }
+sha1 = { version = "=0.11.0", default-features = false, features = ["oid"] }
+sha2 = { version = "=0.11.0", default-features = false, features = ["oid"] }
+signature = { version = "3.0.0", default-features = false, features = ["std"] }
+tracing = { version = "0.1.44", default-features = false, features = ["std", "attributes"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = [
     "env-filter",
     "fmt",
     "time",
+    "std",
 ] }
-slotmap = "1.1"
-temp-dir = "0.2.0"
-thread_local = "1.1.9"
-time = "0.3"
-arc-swap = "1.9"
-tokio-util = "0.7.18"
-toml = "1.1"
-ureq = "3.3.0"
-notify = "8.2.0"
+slotmap = { version = "1.1", default-features = false, features = ["std"] }
+temp-dir = { version = "0.2.0", default-features = false }
+thread_local = { version = "1.1.9", default-features = false }
+time = { version = "0.3", default-features = false, features = ["std"] }
+arc-swap = { version = "1.9", default-features = false }
+tokio-util = { version = "0.7.18", default-features = false }
+toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
+ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
-wasmtime = "45.0"
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+rustc_version_runtime = { version = "0.3", default-features = false }
+ordered-float = { version = "5.3", default-features = false, features = ["std"] }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
+
+wasmtime = { version = "45.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "threads", "std"] }
 wasmtime-wasi = { version = "45.0", default-features = false, features = ["p2"] }
-wasmtime-wasi-http = "45.0"
+wasmtime-wasi-http = { version = "45.0", default-features = false, features = ["p2", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
-hyper = { version = "^1.9", features = ["full"] }
-wit-bindgen = "0.57"
+hyper = { version = "^1.9", default-features = false }
+wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
 
-postcard = { version = "1.1", features = ["alloc"] }
-tracing-serde-structured = "0.4"
+postcard = { version = "1.1", default-features = false, features = ["alloc"] }
+tracing-serde-structured = { version = "0.4", default-features = false }

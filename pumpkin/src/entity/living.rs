@@ -1291,6 +1291,12 @@ impl LivingEntity {
             world.send_entity_status(&self.entity, EntityStatus::Death);
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
+                this_entity: Some(self.entity.entity_type),
+                killer_entity: cause.map(|c| c.get_entity().entity_type),
+                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+                position: Some(self.entity.pos.load()),
+                world_time: world.level_info.load().day_time as u64,
+                damage_type: Some(damage_type),
                 ..Default::default()
             };
 

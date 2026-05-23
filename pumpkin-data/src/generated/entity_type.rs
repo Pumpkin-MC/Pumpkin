@@ -1433,7 +1433,16 @@ impl EntityType {
                         functions: Some(&[
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -1506,7 +1515,16 @@ impl EntityType {
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf]),
+                            conditions: Some(&[LootCondition::AnyOf(&[
+                                LootCondition::EntityProperties {
+                                    entity: "this",
+                                    expected_type: None,
+                                },
+                                LootCondition::EntityProperties {
+                                    entity: "direct_attacker",
+                                    expected_type: None,
+                                },
+                            ])]),
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
@@ -1731,7 +1749,16 @@ impl EntityType {
                             },
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -1888,7 +1915,10 @@ impl EntityType {
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::EntityProperties]),
+                    conditions: Some(&[LootCondition::EntityProperties {
+                        entity: "attacker",
+                        expected_type: Some("#minecraft:skeletons"),
+                    }]),
                     functions: None,
                 },
             ]),
@@ -2010,7 +2040,16 @@ impl EntityType {
                         },
                         LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf]),
+                            conditions: Some(&[LootCondition::AnyOf(&[
+                                LootCondition::EntityProperties {
+                                    entity: "this",
+                                    expected_type: None,
+                                },
+                                LootCondition::EntityProperties {
+                                    entity: "direct_attacker",
+                                    expected_type: None,
+                                },
+                            ])]),
                         },
                     ]),
                 }],
@@ -2215,7 +2254,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -2338,7 +2380,16 @@ impl EntityType {
                                 },
                                 LootFunction {
                                     content: LootFunctionTypes::FurnaceSmelt,
-                                    conditions: Some(&[LootCondition::AnyOf]),
+                                    conditions: Some(&[LootCondition::AnyOf(&[
+                                        LootCondition::EntityProperties {
+                                            entity: "this",
+                                            expected_type: None,
+                                        },
+                                        LootCondition::EntityProperties {
+                                            entity: "direct_attacker",
+                                            expected_type: None,
+                                        },
+                                    ])]),
                                 },
                             ]),
                         },
@@ -2384,20 +2435,34 @@ impl EntityType {
                 },
                 LootPool {
                     entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::LootTable,
+                        content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                            value: "minecraft:gameplay/fishing/fish",
+                        }),
                         weight: 1i32,
                         quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf]),
+                            conditions: Some(&[LootCondition::AnyOf(&[
+                                LootCondition::EntityProperties {
+                                    entity: "this",
+                                    expected_type: None,
+                                },
+                                LootCondition::EntityProperties {
+                                    entity: "direct_attacker",
+                                    expected_type: None,
+                                },
+                            ])]),
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -3167,7 +3232,10 @@ impl EntityType {
                     rolls: LootNumberProviderTypes::Constant(1f32),
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
-                        LootCondition::DamageSourceProperties,
+                        LootCondition::DamageSourceProperties {
+                            expected_source_type: None,
+                            expected_direct_type: Some("minecraft:fireball"),
+                        },
                         LootCondition::KilledByPlayer,
                     ]),
                     functions: Some(&[LootFunction {
@@ -3476,7 +3544,16 @@ impl EntityType {
                                 },
                                 LootFunction {
                                     content: LootFunctionTypes::FurnaceSmelt,
-                                    conditions: Some(&[LootCondition::AnyOf]),
+                                    conditions: Some(&[LootCondition::AnyOf(&[
+                                        LootCondition::EntityProperties {
+                                            entity: "this",
+                                            expected_type: None,
+                                        },
+                                        LootCondition::EntityProperties {
+                                            entity: "direct_attacker",
+                                            expected_type: None,
+                                        },
+                                    ])]),
                                 },
                             ]),
                         },
@@ -3507,20 +3584,34 @@ impl EntityType {
                 },
                 LootPool {
                     entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::LootTable,
+                        content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                            value: "minecraft:gameplay/fishing/fish",
+                        }),
                         weight: 1i32,
                         quality: 0i32,
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf]),
+                            conditions: Some(&[LootCondition::AnyOf(&[
+                                LootCondition::EntityProperties {
+                                    entity: "this",
+                                    expected_type: None,
+                                },
+                                LootCondition::EntityProperties {
+                                    entity: "direct_attacker",
+                                    expected_type: None,
+                                },
+                            ])]),
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -3647,7 +3738,16 @@ impl EntityType {
                             },
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -3880,7 +3980,10 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::EntityProperties]),
+                        conditions: Some(&[LootCondition::EntityProperties {
+                            entity: "this",
+                            expected_type: None,
+                        }]),
                         functions: Some(&[
                             LootFunction {
                                 content: LootFunctionTypes::SetCount {
@@ -3932,7 +4035,16 @@ impl EntityType {
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             }]),
                         },
                     ],
@@ -3940,7 +4052,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -4451,8 +4566,14 @@ impl EntityType {
                         weight: 1i32,
                         quality: 0i32,
                         conditions: Some(&[
-                            LootCondition::Inverted,
-                            LootCondition::EntityProperties,
+                            LootCondition::Inverted(&LootCondition::DamageSourceProperties {
+                                expected_source_type: Some("minecraft:frog"),
+                                expected_direct_type: None,
+                            }),
+                            LootCondition::EntityProperties {
+                                entity: "this",
+                                expected_type: None,
+                            },
                         ]),
                         functions: Some(&[
                             LootFunction {
@@ -4477,7 +4598,10 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties]),
+                        conditions: Some(&[LootCondition::DamageSourceProperties {
+                            expected_source_type: Some("minecraft:frog"),
+                            expected_direct_type: None,
+                        }]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
                                 count: LootFunctionNumberProvider::Constant { value: 1f32 },
@@ -4492,7 +4616,10 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties]),
+                        conditions: Some(&[LootCondition::DamageSourceProperties {
+                            expected_source_type: Some("minecraft:frog"),
+                            expected_direct_type: None,
+                        }]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
                                 count: LootFunctionNumberProvider::Constant { value: 1f32 },
@@ -4507,7 +4634,10 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties]),
+                        conditions: Some(&[LootCondition::DamageSourceProperties {
+                            expected_source_type: Some("minecraft:frog"),
+                            expected_direct_type: None,
+                        }]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
                                 count: LootFunctionNumberProvider::Constant { value: 1f32 },
@@ -4759,7 +4889,16 @@ impl EntityType {
                             },
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -4916,7 +5055,10 @@ impl EntityType {
                 bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                 conditions: Some(&[
                     LootCondition::KilledByPlayer,
-                    LootCondition::RandomChanceWithEnchantedBonus,
+                    LootCondition::RandomChanceWithEnchantedBonus {
+                        enchantment: "minecraft:looting",
+                        chances: None,
+                    },
                 ]),
                 functions: None,
             }]),
@@ -5549,7 +5691,16 @@ impl EntityType {
                         },
                         LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf]),
+                            conditions: Some(&[LootCondition::AnyOf(&[
+                                LootCondition::EntityProperties {
+                                    entity: "this",
+                                    expected_type: None,
+                                },
+                                LootCondition::EntityProperties {
+                                    entity: "direct_attacker",
+                                    expected_type: None,
+                                },
+                            ])]),
                         },
                         LootFunction {
                             content: LootFunctionTypes::EnchantedCountIncrease,
@@ -5735,7 +5886,10 @@ impl EntityType {
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
                 bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::EntityProperties]),
+                conditions: Some(&[LootCondition::EntityProperties {
+                    entity: "this",
+                    expected_type: None,
+                }]),
                 functions: None,
             }]),
         }),
@@ -5826,7 +5980,16 @@ impl EntityType {
                         functions: Some(&[
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::SetCount {
@@ -5854,7 +6017,16 @@ impl EntityType {
                         functions: Some(&[
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::SetCount {
@@ -6063,7 +6235,16 @@ impl EntityType {
                             },
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -6090,7 +6271,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -6224,7 +6408,16 @@ impl EntityType {
                         conditions: None,
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf]),
+                            conditions: Some(&[LootCondition::AnyOf(&[
+                                LootCondition::EntityProperties {
+                                    entity: "this",
+                                    expected_type: None,
+                                },
+                                LootCondition::EntityProperties {
+                                    entity: "direct_attacker",
+                                    expected_type: None,
+                                },
+                            ])]),
                         }]),
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
@@ -6319,7 +6512,16 @@ impl EntityType {
                             },
                             LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             },
                             LootFunction {
                                 content: LootFunctionTypes::EnchantedCountIncrease,
@@ -6337,115 +6539,195 @@ impl EntityType {
                         content: LootPoolEntryTypes::Alternatives(AlternativeEntry {
                             children: &[
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/white",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/orange",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/magenta",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/light_blue",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/yellow",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/lime",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/pink",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/gray",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/light_gray",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/cyan",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/purple",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/blue",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/brown",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/green",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/red",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                                 LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable,
+                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
+                                        value: "minecraft:entities/sheep/black",
+                                    }),
                                     weight: 1i32,
                                     quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties]),
+                                    conditions: Some(&[LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    }]),
                                     functions: None,
                                 },
                             ],
@@ -6521,7 +6803,10 @@ impl EntityType {
                 }],
                 rolls: LootNumberProviderTypes::Constant(1f32),
                 bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::RandomChanceWithEnchantedBonus]),
+                conditions: Some(&[LootCondition::RandomChanceWithEnchantedBonus {
+                    enchantment: "minecraft:looting",
+                    chances: None,
+                }]),
                 functions: None,
             }]),
         }),
@@ -6843,7 +7128,12 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::Inverted]),
+                        conditions: Some(&[LootCondition::Inverted(
+                            &LootCondition::DamageSourceProperties {
+                                expected_source_type: Some("minecraft:frog"),
+                                expected_direct_type: None,
+                            },
+                        )]),
                         functions: Some(&[
                             LootFunction {
                                 content: LootFunctionTypes::SetCount {
@@ -6867,7 +7157,10 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties]),
+                        conditions: Some(&[LootCondition::DamageSourceProperties {
+                            expected_source_type: Some("minecraft:frog"),
+                            expected_direct_type: None,
+                        }]),
                         functions: Some(&[LootFunction {
                             content: LootFunctionTypes::SetCount {
                                 count: LootFunctionNumberProvider::Constant { value: 1f32 },
@@ -6879,7 +7172,10 @@ impl EntityType {
                 ],
                 rolls: LootNumberProviderTypes::Constant(1f32),
                 bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::EntityProperties]),
+                conditions: Some(&[LootCondition::EntityProperties {
+                    entity: "this",
+                    expected_type: None,
+                }]),
                 functions: None,
             }]),
         }),
@@ -7966,7 +8262,10 @@ impl EntityType {
                     }],
                     rolls: LootNumberProviderTypes::Constant(1f32),
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::DamageSourceProperties]),
+                    conditions: Some(&[LootCondition::DamageSourceProperties {
+                        expected_source_type: None,
+                        expected_direct_type: None,
+                    }]),
                     functions: None,
                 },
             ]),
@@ -8696,7 +8995,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -8941,7 +9243,10 @@ impl EntityType {
                         }),
                         weight: 1i32,
                         quality: 0i32,
-                        conditions: Some(&[LootCondition::EntityProperties]),
+                        conditions: Some(&[LootCondition::EntityProperties {
+                            entity: "this",
+                            expected_type: None,
+                        }]),
                         functions: Some(&[
                             LootFunction {
                                 content: LootFunctionTypes::SetCount {
@@ -8993,7 +9298,16 @@ impl EntityType {
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             }]),
                         },
                     ],
@@ -9001,7 +9315,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -9019,7 +9336,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::EntityProperties,
+                        LootCondition::EntityProperties {
+                            entity: "this",
+                            expected_type: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -9293,7 +9613,16 @@ impl EntityType {
                             conditions: None,
                             functions: Some(&[LootFunction {
                                 content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf]),
+                                conditions: Some(&[LootCondition::AnyOf(&[
+                                    LootCondition::EntityProperties {
+                                        entity: "this",
+                                        expected_type: None,
+                                    },
+                                    LootCondition::EntityProperties {
+                                        entity: "direct_attacker",
+                                        expected_type: None,
+                                    },
+                                ])]),
                             }]),
                         },
                     ],
@@ -9301,7 +9630,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
@@ -9431,7 +9763,10 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[
                         LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus,
+                        LootCondition::RandomChanceWithEnchantedBonus {
+                            enchantment: "minecraft:looting",
+                            chances: None,
+                        },
                     ]),
                     functions: None,
                 },
