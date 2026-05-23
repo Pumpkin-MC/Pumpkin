@@ -96,8 +96,8 @@ impl EntityBase for EnderPearlEntity {
             if let Some(owner_id) = self.thrown.owner_id
                 && let Some(owner) = world.get_entity_by_id(owner_id)
             {
-                // Teleport owner to pearl's position before hit (approx)
-                let teleport_pos = entity.pos.load();
+                // Teleport position should be position of entity from last tick (tick before collision)
+                let teleport_pos = entity.last_pos.load();
 
                 // In vanilla, teleport handles everything including sound
                 owner
