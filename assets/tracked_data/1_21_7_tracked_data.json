@@ -62,6 +62,7 @@
   "BABY": 16,
   "ZOMBIE_TYPE": 17,
   "CONVERTING_IN_WATER": 18,
+  "ITEM": 8,
   "VEX_FLAGS": 16,
   "SHEARED": 16,
   "PUFF_STATE": 17,
