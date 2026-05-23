@@ -100,7 +100,8 @@ impl EntityBase for EnderPearlEntity {
             if let Some(owner_id) = self.thrown.owner_id
                 && let Some(owner) = world.get_entity_by_id(owner_id)
             {
-                if rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE {
+                let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
+                if world.should_spawn_monsters() && should_spawn_endermite {
                     let entity = Entity::new(
                         world.clone(),
                         owner.get_entity().pos.load(),
