@@ -39,7 +39,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         &[]
     };
 
-    let cave_carver = cave::CaveCarver;
+    let _cave_carver = cave::CaveCarver;
     let canyon_carver = canyon::CanyonCarver;
 
     for dx in -radius..=radius {
@@ -69,14 +69,14 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
                         CarverAdditionalConfig::Cave(_) | CarverAdditionalConfig::NetherCave(_) => {
-                            cave_carver.carve(
-                                config,
-                                chunk,
-                                &mut carver_random,
-                                &chunk_pos,
-                                &carver_chunk_pos,
-                                generator.settings.legacy_random_source,
-                            );
+                            // cave_carver.carve(
+                            //     config,
+                            //     chunk,
+                            //     &mut carver_random,
+                            //     &chunk_pos,
+                            //     &carver_chunk_pos,
+                            //     generator.settings.legacy_random_source,
+                            // );
                         }
                         CarverAdditionalConfig::Canyon(_) => {
                             canyon_carver.carve(

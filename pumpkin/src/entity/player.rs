@@ -4,7 +4,7 @@ use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
@@ -62,12 +62,12 @@ use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
     CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
-    CKeepAlive, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
-    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty,
-    CSetContainerSlot, CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth,
-    CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
-    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
+    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
+    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon,
+    MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -445,12 +445,6 @@ pub struct Player {
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
-    /// Whether we are waiting for a response after sending a keep alive packet.
-    pub wait_for_keep_alive: AtomicBool,
-    /// The keep alive packet payload we send. The client should respond with the same id.
-    pub keep_alive_id: AtomicI64,
-    /// The last time we sent a keep alive packet.
-    pub last_keep_alive_time: AtomicCell<Instant>,
     /// The last time the player performed an action (for idle timeout).
     pub last_action_time: AtomicCell<Instant>,
     /// The ping in millis.
@@ -585,9 +579,6 @@ impl Player {
                 // Since 1 is not possible in vanilla it is used as uninit
                 NonZeroU8::new(1).unwrap(),
             )),
-            wait_for_keep_alive: AtomicBool::new(false),
-            keep_alive_id: AtomicI64::new(0),
-            last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
@@ -1868,33 +1859,7 @@ impl Player {
                     ),
                 )
                 .await;
-                return;
             }
-        }
-
-        // TODO This should only be handled by the ClientPlatform
-        if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            if matches!(self.client, ClientPlatform::Bedrock(_)) {
-                return;
-            }
-            // We never got a response from the last keep alive we sent.
-            if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                self.kick(
-                    DisconnectReason::Timeout,
-                    TextComponent::translate_cross(
-                        translation::java::DISCONNECT_TIMEOUT,
-                        translation::bedrock::DISCONNECT_TIMEOUT,
-                        [],
-                    ),
-                )
-                .await;
-                return;
-            }
-            self.wait_for_keep_alive.store(true, Ordering::Relaxed);
-            self.last_keep_alive_time.store(now);
-            let id = now.elapsed().as_millis() as i64;
-            self.keep_alive_id.store(id, Ordering::Relaxed);
-            self.client.enqueue_packet(&CKeepAlive::new(id)).await;
         }
     }
 

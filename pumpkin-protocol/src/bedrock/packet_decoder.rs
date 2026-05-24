@@ -87,7 +87,7 @@ impl UDPNetworkDecoder {
 
     pub async fn get_packet_payload(
         &mut self,
-        mut full_packet: Vec<u8>,
+        full_packet: Vec<u8>,
     ) -> Result<Vec<u8>, PacketDecodeError> {
         if full_packet.is_empty() {
             return Err(PacketDecodeError::MalformedLength("Empty packet".into()));
@@ -104,7 +104,7 @@ impl UDPNetworkDecoder {
 
         // If compression is NOT enabled yet, the payload starts at index 1.
         if self.compression.is_none() {
-            return Ok(full_packet.split_off(1));
+            return Ok(full_packet[1..].to_vec());
         }
 
         // If compression IS enabled, Bedrock expects a compression method byte at index 1.
@@ -125,7 +125,7 @@ impl UDPNetworkDecoder {
             }
             0xff => {
                 // None (Compression enabled but this specific packet is raw)
-                Ok(full_packet.split_off(2))
+                Ok(full_packet[data_start..].to_vec())
             }
             _ => Err(PacketDecodeError::FailedDecompression(format!(
                 "Unsupported compression method: 0x{compression_method:02x}"

@@ -1435,7 +1435,7 @@ fn get_be_data_from_nbt<R: Read + Seek>(
             let raw_name = nbt.get_string("name").unwrap();
             raw_name
                 .strip_prefix("minecraft:")
-                .unwrap_or(&raw_name)
+                .unwrap_or(raw_name)
                 .to_string()
         };
 

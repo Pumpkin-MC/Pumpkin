@@ -48,7 +48,8 @@ impl BlockBehaviour for LanternBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.world.unwrap(), args.position)
+        args.world
+            .is_some_and(|world| can_place_at(world, args.position))
     }
 
     fn get_state_for_neighbor_update<'a>(

@@ -1865,19 +1865,20 @@ impl JavaClient {
     }
 
     pub async fn handle_keep_alive(&self, player: &Player, keep_alive: SKeepAlive) {
-        if player.wait_for_keep_alive.load(Ordering::Relaxed)
-            && keep_alive.keep_alive_id == player.keep_alive_id.load(Ordering::Relaxed)
+        if self.wait_for_keep_alive.load(Ordering::Relaxed)
+            && keep_alive.keep_alive_id == self.keep_alive_id.load()
         {
-            let ping = player.last_keep_alive_time.load().elapsed();
+            let ping = self.last_keep_alive_time.load().elapsed();
             // Vanilla logic
             player.ping.store(
                 (player.ping.load(Ordering::Relaxed) * 3 + ping.as_millis() as u32) / 4,
                 Ordering::Relaxed,
             );
-            player.wait_for_keep_alive.store(false, Ordering::Relaxed);
+            self.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
-            self.kick(TextComponent::text(
-                "Timeout, The server probably has a deadlock!",
+            self.kick(TextComponent::translate(
+                translation::java::DISCONNECT_TIMEOUT,
+                [],
             ))
             .await;
         }

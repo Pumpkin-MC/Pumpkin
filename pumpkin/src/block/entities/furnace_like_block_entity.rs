@@ -135,7 +135,11 @@ macro_rules! impl_cooking_block_entity_base {
                 }
 
                 if let Some(recipe_output_item) = pumpkin_data::item::Item::from_registry_key(
-                    recipe.result.id.strip_prefix("minecraft:").unwrap(),
+                    recipe
+                        .result
+                        .id
+                        .strip_prefix("minecraft:")
+                        .expect("Recipe ID should have minecraft: prefix"),
                 ) && !is_top_items_empty
                     && recipe_output_item.id == side_item_stack.item.id
                     && side_item_stack.item_count < max_count
@@ -156,7 +160,11 @@ macro_rules! impl_cooking_block_entity_base {
                     if can_accept_output {
                         let mut side_items = self.items[2].lock().await;
                         let Some(output_item) = pumpkin_data::item::Item::from_registry_key(
-                            recipe.result.id.strip_prefix("minecraft:").unwrap(),
+                            recipe
+                                .result
+                                .id
+                                .strip_prefix("minecraft:")
+                                .expect("Recipe ID should have minecraft: prefix"),
                         ) else {
                             return false;
                         };

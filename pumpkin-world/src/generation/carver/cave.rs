@@ -1,8 +1,8 @@
 use super::Carver;
 use crate::ProtoChunk;
-use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use std::f32::consts::PI;
 
@@ -352,8 +352,8 @@ impl CaveCarver {
         has_grass: &mut bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
-        let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
-        let block = pumpkin_data::Block::from_state_id(state_id);
+        let state = chunk.get_block_state(&Vector3::new(x, y, z));
+        let block = state.to_block();
 
         if block.id == pumpkin_data::Block::GRASS_BLOCK.id
             || block.id == pumpkin_data::Block::MYCELIUM.id
@@ -361,12 +361,11 @@ impl CaveCarver {
             *has_grass = true;
         }
 
-        // Only carve if it's replaceable
-        if config.replaceable.1.contains(&block.id) {
-            // Replace with air or lava
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
+        if !config.replaceable.1.contains(&block.id) {
+            return false;
+        }
 
+        let carve_state = {
             let lava_y = if is_nether {
                 chunk.bottom_y() as i32 + 31
             } else {
@@ -376,26 +375,44 @@ impl CaveCarver {
             };
 
             if y <= lava_y {
-                chunk.set_block_state(x & 15, local_y, z & 15, lava);
+                Some(pumpkin_data::Block::LAVA.default_state)
             } else {
-                chunk.set_block_state(x & 15, local_y, z & 15, air);
+                // TODO: Aquifer logic goes here.
+                // BlockState state = aquifer.computeSubstance(...)
+                // return state (or debug barrier if null)
+                if block.id == pumpkin_data::Block::WATER.id
+                    || block.id == pumpkin_data::Block::LAVA.id
+                {
+                    None
+                } else {
+                    Some(pumpkin_data::Block::AIR.default_state)
+                }
             }
+        };
 
-            // TODO: fix this
+        if let Some(state) = carve_state {
+            chunk.set_block_state(x, local_y, z, state);
+
+            // TODO: Fluid scheduling
+            // if aquifer.should_schedule_fluid_update() && !state.fluid_state().is_empty() {
+            //     chunk.mark_pos_for_postprocessing(x, y, z);
+            // }
+
+            // TODO: fix this (grass block survival logic)
             // if *has_grass {
-            //     let below_state_id = chunk.get_block_state_raw(x & 15, local_y - 1, z & 15);
+            //     let below_state_id = chunk.get_block_state_raw(x, local_y - 1, z);
             //     let below_block = pumpkin_data::Block::from_state_id(below_state_id);
 
             //     if below_block.id == pumpkin_data::Block::DIRT.id {
-            //         // TODO: Java uses Biome top material here, defaulting to Grass for now
             //         let top_material =
-            //             BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id);
-            //         chunk.set_block_state(x & 15, local_y - 1, z & 15, top_material);
+            //            pumpkin_data::Block::GRASS_BLOCK.default_state;
+            //         chunk.set_block_state(x, local_y - 1, z, top_material);
             //     }
             // }
 
             return true;
         }
+
         false
     }
 }

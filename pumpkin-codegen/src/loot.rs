@@ -91,7 +91,6 @@ impl ToTokens for LootPoolStruct {
     }
 }
 
-
 /// Deserialized single-item loot entry holding the item's registry key.
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemEntryStruct {
@@ -428,9 +427,7 @@ pub enum LootConditionStruct {
     },
     /// References an external predicate by ID.
     #[serde(rename = "minecraft:reference")]
-    Reference {
-        name: String,
-    },
+    Reference { name: String },
     /// Passes based on the current in-game time.
     #[serde(rename = "minecraft:time_check")]
     TimeCheck {
@@ -446,9 +443,7 @@ pub enum LootConditionStruct {
     },
     /// Passes if an enchantment is currently active.
     #[serde(rename = "minecraft:enchantment_active_check")]
-    EnchantmentActiveCheck {
-        active: bool,
-    },
+    EnchantmentActiveCheck { active: bool },
 }
 
 impl ToTokens for LootConditionStruct {
@@ -461,7 +456,10 @@ impl ToTokens for LootConditionStruct {
             Self::RandomChance { chance } => {
                 quote! { LootCondition::RandomChance { chance: #chance } }
             }
-            Self::RandomChanceWithEnchantedBonus { enchantment, chances } => {
+            Self::RandomChanceWithEnchantedBonus {
+                enchantment,
+                chances,
+            } => {
                 let e = LitStr::new(enchantment, Span::call_site());
                 if let Some(chances) = chances {
                     quote! { LootCondition::RandomChanceWithEnchantedBonus { enchantment: #e, chances: Some(&[#(#chances),*]) } }
@@ -472,15 +470,17 @@ impl ToTokens for LootConditionStruct {
             Self::EntityProperties { entity, predicate } => {
                 let entity = entity.as_deref().unwrap_or("this");
                 let e = LitStr::new(entity, Span::call_site());
-                let expected_type = predicate.as_ref().and_then(|p| p.entity_type.as_ref()).map(|t| {
-                    match t {
+                let expected_type = predicate
+                    .as_ref()
+                    .and_then(|p| p.entity_type.as_ref())
+                    .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
                         StringOrVec::Vec(v) => {
                             let s = &v[0];
                             quote! { Some(#s) }
                         }
-                    }
-                }).unwrap_or(quote! { None });
+                    })
+                    .unwrap_or(quote! { None });
                 quote! { LootCondition::EntityProperties { entity: #e, expected_type: #expected_type } }
             }
             Self::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
@@ -516,7 +516,10 @@ impl ToTokens for LootConditionStruct {
                     quote! { LootCondition::MatchTool { items: None } }
                 }
             }
-            Self::TableBonus { enchantment, chances } => {
+            Self::TableBonus {
+                enchantment,
+                chances,
+            } => {
                 let e = LitStr::new(enchantment, Span::call_site());
                 quote! { LootCondition::TableBonus { enchantment: #e, chances: &[#(#chances),*] } }
             }
@@ -559,20 +562,29 @@ impl ToTokens for LootConditionStruct {
                 let ox = offset_x.unwrap_or(0);
                 let oy = offset_y.unwrap_or(0);
                 let oz = offset_z.unwrap_or(0);
-                let expected_biome = predicate.as_ref().and_then(|p| p.biome.as_ref()).map(|b| {
-                    match b {
+                let expected_biome = predicate
+                    .as_ref()
+                    .and_then(|p| p.biome.as_ref())
+                    .map(|b| match b {
                         StringOrVec::String(s) => quote! { Some(#s) },
                         StringOrVec::Vec(v) => {
                             let s = &v[0];
                             quote! { Some(#s) }
                         }
-                    }
-                }).unwrap_or(quote! { None });
+                    })
+                    .unwrap_or(quote! { None });
                 quote! { LootCondition::LocationCheck { offset_x: #ox, offset_y: #oy, offset_z: #oz, expected_biome: #expected_biome } }
             }
-            Self::WeatherCheck { raining, thundering } => {
-                let r = raining.map(|b| quote! { Some(#b) }).unwrap_or(quote! { None });
-                let t = thundering.map(|b| quote! { Some(#b) }).unwrap_or(quote! { None });
+            Self::WeatherCheck {
+                raining,
+                thundering,
+            } => {
+                let r = raining
+                    .map(|b| quote! { Some(#b) })
+                    .unwrap_or(quote! { None });
+                let t = thundering
+                    .map(|b| quote! { Some(#b) })
+                    .unwrap_or(quote! { None });
                 quote! { LootCondition::WeatherCheck { raining: #r, thundering: #t } }
             }
             Self::Reference { name } => {
@@ -581,7 +593,9 @@ impl ToTokens for LootConditionStruct {
             }
             Self::TimeCheck { range, period } => {
                 let r = range.to_token_stream();
-                let p = period.map(|val| quote! { Some(#val) }).unwrap_or(quote! { None });
+                let p = period
+                    .map(|val| quote! { Some(#val) })
+                    .unwrap_or(quote! { None });
                 quote! { LootCondition::TimeCheck { range: #r, period: #p } }
             }
             Self::ValueCheck { value, range } => {
@@ -824,8 +838,14 @@ pub struct LootFunctionLimitCountStruct {
 
 impl ToTokens for LootFunctionLimitCountStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min = self.min.map(|val| quote! { Some(#val) }).unwrap_or(quote! { None });
-        let max = self.max.map(|val| quote! { Some(#val) }).unwrap_or(quote! { None });
+        let min = self
+            .min
+            .map(|val| quote! { Some(#val) })
+            .unwrap_or(quote! { None });
+        let max = self
+            .max
+            .map(|val| quote! { Some(#val) })
+            .unwrap_or(quote! { None });
         tokens.extend(quote! { (#min, #max) });
     }
 }
@@ -917,7 +937,6 @@ impl ToTokens for LootPoolEntryStruct {
         });
     }
 }
-
 
 /// Deserialized loot table category, tagged by its `"type"` field.
 #[derive(Deserialize, Clone, Debug)]

@@ -47,7 +47,7 @@ fn create_large_compound(depth: usize) -> NbtCompound {
     compound.put_string("string", "Hello test benchmark data".to_string());
     compound.put(
         "byte_array",
-        NbtTag::ByteArray(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        NbtTag::ByteArray(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9].into()),
     );
     compound.put(
         "int_array",

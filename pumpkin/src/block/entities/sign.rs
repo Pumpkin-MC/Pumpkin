@@ -158,7 +158,7 @@ impl From<Text> for NbtTag {
             value
                 .messages
                 .lock()
-                .unwrap()
+                .expect("Text messages mutex should not be poisoned")
                 .iter()
                 .map(|s| Self::String(s.clone()))
                 .collect(),
@@ -172,7 +172,7 @@ impl From<NbtTag> for Text {
     fn from(tag: NbtTag) -> Self {
         let nbt = tag.extract_compound().unwrap();
         let has_glowing_text = nbt.get_bool("has_glowing_text").unwrap_or(false);
-        let color = nbt.get_string("color").unwrap();
+        let color = nbt.get_string("color").unwrap_or("black");
         let messages: Vec<Box<str>> = nbt
             .get_list("messages")
             .unwrap()
@@ -226,8 +226,16 @@ impl BlockEntity for SignBlockEntity {
     where
         Self: Sized,
     {
-        let front_text = Text::from(nbt.get("front_text").unwrap().clone());
-        let back_text = Text::from(nbt.get("back_text").unwrap().clone());
+        let front_text = nbt
+            .get("front_text")
+            .cloned()
+            .map(Text::from)
+            .unwrap_or_default();
+        let back_text = nbt
+            .get("back_text")
+            .cloned()
+            .map(Text::from)
+            .unwrap_or_default();
         let is_waxed = nbt.get_bool("is_waxed").unwrap_or(false);
         Self {
             position,

@@ -34,7 +34,7 @@ macro_rules! impl_block_entity_for_chest {
                 };
 
                 // Only read saved items when there is no pending loot table.
-                if chest.loot_table.lock().unwrap().is_none() {
+                if chest.loot_table.lock().expect("Loot table mutex should not be poisoned").is_none() {
                     chest.read_data(nbt, &chest.items);
                 }
 
@@ -50,7 +50,7 @@ macro_rules! impl_block_entity_for_chest {
                 Box::pin(async move {
                     // Clone the loot table key without holding the lock across an await.
                     let loot_table_key = {
-                        let guard = self.loot_table.lock().unwrap();
+                        let guard = self.loot_table.lock().expect("Loot table mutex should not be poisoned");
                         guard.clone()
                     };
 
@@ -100,12 +100,12 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn take_loot_table(&self) -> Option<(String, i64)> {
-                let mut guard = self.loot_table.lock().unwrap();
+                let mut guard = self.loot_table.lock().expect("Loot table mutex should not be poisoned");
                 guard.take().map(|key| (key, self.loot_table_seed))
             }
 
             fn has_loot_table(&self) -> bool {
-                self.loot_table.lock().unwrap().is_some()
+                self.loot_table.lock().expect("Loot table mutex should not be poisoned").is_some()
             }
         }
     };

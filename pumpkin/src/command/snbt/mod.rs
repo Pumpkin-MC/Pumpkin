@@ -439,7 +439,7 @@ impl SnbtParser<'_, '_> {
             }
             bytes.push(self.parse_integer_literal(value, TypeSuffix::Byte)?.into());
         }
-        Some(NbtTag::ByteArray(bytes))
+        Some(NbtTag::ByteArray(bytes.into()))
     }
 
     fn create_int_array(&mut self, values: &[IntegerLiteral]) -> Option<NbtTag> {

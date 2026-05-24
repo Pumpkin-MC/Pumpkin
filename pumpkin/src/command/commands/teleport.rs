@@ -57,9 +57,14 @@ fn resolve_sender_world(
     sender: &CommandSender,
     server: &crate::server::Server,
 ) -> std::sync::Arc<World> {
-    sender
-        .world()
-        .unwrap_or_else(|| server.worlds.load().first().unwrap().clone())
+    sender.world().unwrap_or_else(|| {
+        server
+            .worlds
+            .load()
+            .first()
+            .expect("Server should have at least one world")
+            .clone()
+    })
 }
 
 struct EntitiesToEntityExecutor;

@@ -19,7 +19,7 @@ pub enum NbtTag {
     Long(i64) = LONG_ID,
     Float(f32) = FLOAT_ID,
     Double(f64) = DOUBLE_ID,
-    ByteArray(Vec<i8>) = BYTE_ARRAY_ID,
+    ByteArray(Box<[i8]>) = BYTE_ARRAY_ID,
     String(Box<str>) = STRING_ID,
     List(Vec<Self>) = LIST_ID,
     Compound(NbtCompound) = COMPOUND_ID,
@@ -281,7 +281,7 @@ impl NbtTag {
                     let byte = reader.get_i8()?;
                     byte_array.push(byte);
                 }
-                Ok(Self::ByteArray(byte_array))
+                Ok(Self::ByteArray(byte_array.into()))
             }
             STRING_ID => Ok(Self::String(reader.get_string()?.into())),
             LIST_ID => {
@@ -457,7 +457,7 @@ impl From<&str> for NbtTag {
 
 impl From<&[i8]> for NbtTag {
     fn from(value: &[i8]) -> Self {
-        Self::ByteArray(value.to_vec())
+        Self::ByteArray(value.into())
     }
 }
 
@@ -575,7 +575,7 @@ impl<'de> Deserialize<'de> for NbtTag {
                         while let Some(value) = seq.next_element()? {
                             vec.push(value);
                         }
-                        Ok(NbtTag::ByteArray(vec))
+                        Ok(NbtTag::ByteArray(vec.into()))
                     }
                     _ => {
                         let mut vec = Vec::new();

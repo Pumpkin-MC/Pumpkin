@@ -17,7 +17,7 @@ pub struct DyeItem;
 
 impl ItemMetadata for DyeItem {
     fn ids() -> Box<[u16]> {
-        tag::Item::C_DYES.1.to_vec().into_boxed_slice()
+        tag::Item::C_DYES.1.into()
     }
 }
 

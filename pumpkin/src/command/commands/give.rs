@@ -65,7 +65,7 @@ impl CommandExecutor for Executor {
                         .find_map(|(id, component)| {
                             (id == &MaxStackSize).then(|| get::<MaxStackSizeImpl>(*component).size)
                         })
-                        .unwrap(),
+                        .expect("Item should have MaxStackSize component"),
                 );
                 let mut remaining = item_count;
 

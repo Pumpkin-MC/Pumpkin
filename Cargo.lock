@@ -876,9 +876,9 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crossfire"
-version = "3.1.15"
+version = "3.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7985ad34fb5a761ce21154d0e5a8c37ec6b50af61c90d594eb5cdeb934f91f7c"
+checksum = "4d8c4de3db833e7ef74050bae09d5f3fa8f9d1507d3c2689c6e8c50b71208b18"
 dependencies = [
  "crossbeam-utils",
  "embed-collections",
@@ -2155,7 +2155,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

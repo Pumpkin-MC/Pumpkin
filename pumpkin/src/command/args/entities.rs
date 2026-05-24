@@ -471,7 +471,7 @@ mod test {
         let Err(error) = parse_target_selector_with_context(raw_arg) else {
             panic!("expected selector parsing to fail");
         };
-        let cursor = error.context.unwrap().cursor;
+        let cursor = error.context.expect("Error should have context").cursor;
         assert_eq!(cursor, 7);
     }
 
@@ -484,7 +484,9 @@ mod test {
             end: input.len(),
             input,
         };
-        let selector = "@e".parse::<TargetSelector>().unwrap();
+        let selector = "@e"
+            .parse::<TargetSelector>()
+            .expect("Selector should be valid");
 
         let error = ensure_player_only_selector(&selector, raw_arg).unwrap_err();
         let translate_key = match error.message.0.content.as_ref() {
@@ -492,6 +494,6 @@ mod test {
             _ => "",
         };
         assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_ENTITIES);
-        assert_eq!(error.context.unwrap().cursor, 4);
+        assert_eq!(error.context.expect("Error should have context").cursor, 4);
     }
 }
