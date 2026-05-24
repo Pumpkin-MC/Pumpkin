@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, EntityType, NBTStorage,
@@ -8,12 +9,14 @@ use crate::{
     },
     server::Server,
 };
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
 
 const GRAVITY: f64 = 0.03;
+const PARTICLE_COUNT: i32 = 32;
 const ENDERMITE_SPAWN_CHANCE: f32 = 0.05;
 
 pub struct EnderPearlEntity {
@@ -69,14 +72,41 @@ impl EntityBase for EnderPearlEntity {
         self
     }
 
-    fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
             let world = entity.world.load();
 
+            let attacker = self
+                .thrown
+                .owner_id
+                .and_then(|id| world.get_entity_by_id(id));
+
+            if let (
+                ProjectileHit::Entity {
+                    entity: hit_entity,
+                    hit_pos,
+                    ..
+                },
+                Some(owner),
+            ) = (&hit, attacker)
+            {
+                let victim_ref = &**hit_entity;
+                hit_entity
+                    .damage_with_context(
+                        victim_ref,
+                        0.0,
+                        DamageType::THROWN,
+                        Some(*hit_pos),
+                        Some(owner.get_entity()),
+                        Some(victim_ref),
+                    )
+                    .await;
+            }
+
             // Spawn portal particles at hit position
             let hit_pos = hit.hit_pos();
-            for _ in 0..32 {
+            for _ in 0..PARTICLE_COUNT {
                 let offset = Vector3::new(
                     rand::random::<f32>() as f64 - 0.5,
                     rand::random::<f32>() as f64 * 2.0,
