@@ -1,4 +1,4 @@
-use crate::block::entities::BlockEntity;
+use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
@@ -4416,9 +4416,23 @@ impl World {
     }
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
-        self.block_entities
-            .get(block_pos)
-            .map(|e| e.value().clone())
+        if let Some(entry) = self.block_entities.get(block_pos) {
+            return Some(entry.value().clone());
+        }
+
+        let nbt = self
+            .level
+            .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .remove(block_pos)
+            })
+            .flatten()?;
+        let entity = block_entity_from_nbt(&nbt)?;
+        self.block_entities.insert(*block_pos, entity.clone());
+        Some(entity)
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
