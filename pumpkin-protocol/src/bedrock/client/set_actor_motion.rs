@@ -10,3 +10,14 @@ pub struct CSetActorMotion {
     pub motion: Vector3<f32>,
     pub tick: VarULong,
 }
+
+impl CSetActorMotion {
+    #[must_use]
+    pub const fn new(target_runtime_id: VarULong, motion: Vector3<f32>, tick: VarULong) -> Self {
+        Self {
+            target_runtime_id,
+            motion,
+            tick,
+        }
+    }
+}

@@ -15,12 +15,11 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
+use pumpkin_protocol::bedrock::client::AbilityLayer;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
-use pumpkin_protocol::bedrock::client::update_abilities::{
-    Ability, AbilityLayer, CUpdateAbilities,
-};
+use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
@@ -493,9 +492,66 @@ pub struct Player {
     pub tab_list_listed: AtomicBool,
     pub enchantment_seed: AtomicI32,
     pub fishing_bobber: AtomicI32,
+    pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
+}
+
+use base64::prelude::*;
+use pumpkin_protocol::Property;
+use serde::Deserialize;
+use std::io::Read;
+
+#[derive(Deserialize)]
+struct TexturesProperty {
+    textures: Textures,
+}
+
+#[derive(Deserialize)]
+struct Textures {
+    #[serde(rename = "SKIN")]
+    skin: Option<SkinTexture>,
+}
+
+#[derive(Deserialize)]
+struct SkinTexture {
+    url: String,
 }
 
 impl Player {
+    #[must_use]
+    pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
+        let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
+        let decoded = BASE64_STANDARD
+            .decode(textures_prop.value.as_bytes())
+            .ok()?;
+        let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
+        let url = textures.textures.skin?.url;
+
+        let resp = ureq::get(&url).call().ok()?;
+        let mut buf = Vec::new();
+        resp.into_body().into_reader().read_to_end(&mut buf).ok()?;
+        let img = image::load_from_memory(&buf).ok()?;
+
+        let width = img.width();
+        let mut height = img.height();
+
+        if width != 64 || (height != 32 && height != 64) {
+            return None;
+        }
+
+        let mut rgba = img.into_rgba8().into_raw();
+
+        if height == 32 {
+            rgba.resize(64 * 64 * 4, 0);
+            height = 64;
+        }
+
+        let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        skin.image_width = width;
+        skin.image_height = height;
+        skin.skin_data = rgba;
+        Some(skin)
+    }
+
     #[expect(clippy::too_many_lines)]
     pub async fn new(
         client: ClientPlatform,
@@ -543,6 +599,14 @@ impl Player {
         // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
+
+        let properties = gameprofile.properties.load().clone();
+        let bedrock_skin = tokio::task::spawn_blocking(move || {
+            Self::fetch_skin(&properties)
+                .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
+        })
+        .await
+        .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
 
         Self {
             living_entity,
@@ -633,6 +697,7 @@ impl Player {
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(false),
             fishing_bobber: AtomicI32::new(-1),
+            bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
         }
     }
 
@@ -3545,21 +3610,33 @@ impl Player {
     }
 
     /// Swing the hand of the player
-    pub fn swing_hand(&self, hand: Hand, all: bool) {
+    pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
-        let entity_id = VarInt(self.entity_id());
-        let chunk_pos = self.living_entity.entity.chunk_pos.load();
+        let entity_id = self.entity_id();
 
         let animation = match hand {
-            Hand::Left => Animation::SwingMainArm,
-            Hand::Right => Animation::SwingOffhand,
+            Hand::Right => Animation::SwingMainArm,
+            Hand::Left => Animation::SwingOffhand,
         };
 
-        let packet = CEntityAnimation::new(entity_id, animation);
+        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
+            VarInt(entity_id),
+            animation,
+        );
+
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            runtime_entity_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+        };
+
         if all {
-            world.broadcast_to_chunk(chunk_pos, &packet);
+            world.broadcast_editioned(&je_packet, &be_packet).await;
         } else {
-            world.broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet);
+            world
+                .broadcast_packet_except_editioned(&[self.gameprofile.id], &je_packet, &be_packet)
+                .await;
         }
     }
 
