@@ -237,4 +237,20 @@ impl ParsedMappings {
 
         inverse
     }
+
+    /// Converts the forward mapping directly to a u16 table.
+    /// Used with ViaBackwards mappings which are already in new→old direction.
+    pub fn to_u16(&self, name: &str) -> Vec<u16> {
+        self.forward
+            .iter()
+            .map(|&id| {
+                if id < 0 {
+                    0 // unmapped → air
+                } else {
+                    u16::try_from(id)
+                        .unwrap_or_else(|_| panic!("{name}: id {id} does not fit in u16"))
+                }
+            })
+            .collect()
+    }
 }
