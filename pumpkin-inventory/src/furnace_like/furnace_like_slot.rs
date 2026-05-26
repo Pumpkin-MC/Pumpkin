@@ -9,9 +9,7 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use pumpkin_data::{fuels::is_fuel, item::Item};
-use pumpkin_world::{
-    block::entities::furnace_like_block_entity::ExperienceContainer, inventory::Inventory,
-};
+use pumpkin_world::{block::entities::ExperienceContainer, inventory::Inventory};
 
 use tracing::debug;
 

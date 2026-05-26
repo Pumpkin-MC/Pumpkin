@@ -128,139 +128,139 @@ impl StructurePlacementCalculator {
     }
 }
 impl Structure {
-    pub const ANCIENT_CITY: Structure = Structure {
+    pub const ANCIENT_CITY: Self = Structure {
         biomes: "#minecraft:has_structure/ancient_city",
         step: GenerationStep::UndergroundDecoration,
     };
-    pub const BASTION_REMNANT: Structure = Structure {
+    pub const BASTION_REMNANT: Self = Structure {
         biomes: "#minecraft:has_structure/bastion_remnant",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const BURIED_TREASURE: Structure = Structure {
+    pub const BURIED_TREASURE: Self = Structure {
         biomes: "#minecraft:has_structure/buried_treasure",
         step: GenerationStep::UndergroundStructures,
     };
-    pub const DESERT_PYRAMID: Structure = Structure {
+    pub const DESERT_PYRAMID: Self = Structure {
         biomes: "#minecraft:has_structure/desert_pyramid",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const END_CITY: Structure = Structure {
+    pub const END_CITY: Self = Structure {
         biomes: "#minecraft:has_structure/end_city",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const FORTRESS: Structure = Structure {
+    pub const FORTRESS: Self = Structure {
         biomes: "#minecraft:has_structure/nether_fortress",
         step: GenerationStep::UndergroundDecoration,
     };
-    pub const IGLOO: Structure = Structure {
+    pub const IGLOO: Self = Structure {
         biomes: "#minecraft:has_structure/igloo",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const JUNGLE_PYRAMID: Structure = Structure {
+    pub const JUNGLE_PYRAMID: Self = Structure {
         biomes: "#minecraft:has_structure/jungle_temple",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const MANSION: Structure = Structure {
+    pub const MANSION: Self = Structure {
         biomes: "#minecraft:has_structure/woodland_mansion",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const MINESHAFT: Structure = Structure {
+    pub const MINESHAFT: Self = Structure {
         biomes: "#minecraft:has_structure/mineshaft",
         step: GenerationStep::UndergroundStructures,
     };
-    pub const MINESHAFT_MESA: Structure = Structure {
+    pub const MINESHAFT_MESA: Self = Structure {
         biomes: "#minecraft:has_structure/mineshaft_mesa",
         step: GenerationStep::UndergroundStructures,
     };
-    pub const MONUMENT: Structure = Structure {
+    pub const MONUMENT: Self = Structure {
         biomes: "#minecraft:has_structure/ocean_monument",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const NETHER_FOSSIL: Structure = Structure {
+    pub const NETHER_FOSSIL: Self = Structure {
         biomes: "#minecraft:has_structure/nether_fossil",
         step: GenerationStep::UndergroundDecoration,
     };
-    pub const OCEAN_RUIN_COLD: Structure = Structure {
+    pub const OCEAN_RUIN_COLD: Self = Structure {
         biomes: "#minecraft:has_structure/ocean_ruin_cold",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const OCEAN_RUIN_WARM: Structure = Structure {
+    pub const OCEAN_RUIN_WARM: Self = Structure {
         biomes: "#minecraft:has_structure/ocean_ruin_warm",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const PILLAGER_OUTPOST: Structure = Structure {
+    pub const PILLAGER_OUTPOST: Self = Structure {
         biomes: "#minecraft:has_structure/pillager_outpost",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL: Structure = Structure {
+    pub const RUINED_PORTAL: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_standard",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL_DESERT: Structure = Structure {
+    pub const RUINED_PORTAL_DESERT: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_desert",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL_JUNGLE: Structure = Structure {
+    pub const RUINED_PORTAL_JUNGLE: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_jungle",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL_MOUNTAIN: Structure = Structure {
+    pub const RUINED_PORTAL_MOUNTAIN: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_mountain",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL_NETHER: Structure = Structure {
+    pub const RUINED_PORTAL_NETHER: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_nether",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL_OCEAN: Structure = Structure {
+    pub const RUINED_PORTAL_OCEAN: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_ocean",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const RUINED_PORTAL_SWAMP: Structure = Structure {
+    pub const RUINED_PORTAL_SWAMP: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_swamp",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const SHIPWRECK: Structure = Structure {
+    pub const SHIPWRECK: Self = Structure {
         biomes: "#minecraft:has_structure/shipwreck",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const SHIPWRECK_BEACHED: Structure = Structure {
+    pub const SHIPWRECK_BEACHED: Self = Structure {
         biomes: "#minecraft:has_structure/shipwreck_beached",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const STRONGHOLD: Structure = Structure {
+    pub const STRONGHOLD: Self = Structure {
         biomes: "#minecraft:has_structure/stronghold",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const SWAMP_HUT: Structure = Structure {
+    pub const SWAMP_HUT: Self = Structure {
         biomes: "#minecraft:has_structure/swamp_hut",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const TRAIL_RUINS: Structure = Structure {
+    pub const TRAIL_RUINS: Self = Structure {
         biomes: "#minecraft:has_structure/trail_ruins",
         step: GenerationStep::UndergroundStructures,
     };
-    pub const TRIAL_CHAMBERS: Structure = Structure {
+    pub const TRIAL_CHAMBERS: Self = Structure {
         biomes: "#minecraft:has_structure/trial_chambers",
         step: GenerationStep::UndergroundStructures,
     };
-    pub const VILLAGE_DESERT: Structure = Structure {
+    pub const VILLAGE_DESERT: Self = Structure {
         biomes: "#minecraft:has_structure/village_desert",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const VILLAGE_PLAINS: Structure = Structure {
+    pub const VILLAGE_PLAINS: Self = Structure {
         biomes: "#minecraft:has_structure/village_plains",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const VILLAGE_SAVANNA: Structure = Structure {
+    pub const VILLAGE_SAVANNA: Self = Structure {
         biomes: "#minecraft:has_structure/village_savanna",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const VILLAGE_SNOWY: Structure = Structure {
+    pub const VILLAGE_SNOWY: Self = Structure {
         biomes: "#minecraft:has_structure/village_snowy",
         step: GenerationStep::SurfaceStructures,
     };
-    pub const VILLAGE_TAIGA: Structure = Structure {
+    pub const VILLAGE_TAIGA: Self = Structure {
         biomes: "#minecraft:has_structure/village_taiga",
         step: GenerationStep::SurfaceStructures,
     };
@@ -305,7 +305,7 @@ impl Structure {
     }
 }
 impl StructureSet {
-    pub const ANCIENT_CITIES: StructureSet = StructureSet {
+    pub const ANCIENT_CITIES: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -321,7 +321,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const BURIED_TREASURES: StructureSet = StructureSet {
+    pub const BURIED_TREASURES: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: Some(FrequencyReductionMethod::LegacyType2),
             frequency: Some(0.01f32),
@@ -337,7 +337,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const DESERT_PYRAMIDS: StructureSet = StructureSet {
+    pub const DESERT_PYRAMIDS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -353,7 +353,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const END_CITIES: StructureSet = StructureSet {
+    pub const END_CITIES: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -369,7 +369,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const IGLOOS: StructureSet = StructureSet {
+    pub const IGLOOS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -385,7 +385,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const JUNGLE_TEMPLES: StructureSet = StructureSet {
+    pub const JUNGLE_TEMPLES: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -401,7 +401,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const MINESHAFTS: StructureSet = StructureSet {
+    pub const MINESHAFTS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: Some(FrequencyReductionMethod::LegacyType3),
             frequency: Some(0.004f32),
@@ -423,7 +423,7 @@ impl StructureSet {
             },
         ],
     };
-    pub const NETHER_COMPLEXES: StructureSet = StructureSet {
+    pub const NETHER_COMPLEXES: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -445,7 +445,7 @@ impl StructureSet {
             },
         ],
     };
-    pub const NETHER_FOSSILS: StructureSet = StructureSet {
+    pub const NETHER_FOSSILS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -461,7 +461,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const OCEAN_MONUMENTS: StructureSet = StructureSet {
+    pub const OCEAN_MONUMENTS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -477,7 +477,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const OCEAN_RUINS: StructureSet = StructureSet {
+    pub const OCEAN_RUINS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -499,7 +499,7 @@ impl StructureSet {
             },
         ],
     };
-    pub const PILLAGER_OUTPOSTS: StructureSet = StructureSet {
+    pub const PILLAGER_OUTPOSTS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: Some(FrequencyReductionMethod::LegacyType1),
             frequency: Some(0.2f32),
@@ -515,7 +515,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const RUINED_PORTALS: StructureSet = StructureSet {
+    pub const RUINED_PORTALS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -557,7 +557,7 @@ impl StructureSet {
             },
         ],
     };
-    pub const SHIPWRECKS: StructureSet = StructureSet {
+    pub const SHIPWRECKS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -579,7 +579,7 @@ impl StructureSet {
             },
         ],
     };
-    pub const STRONGHOLDS: StructureSet = StructureSet {
+    pub const STRONGHOLDS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -598,7 +598,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const SWAMP_HUTS: StructureSet = StructureSet {
+    pub const SWAMP_HUTS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -614,7 +614,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const TRAIL_RUINS: StructureSet = StructureSet {
+    pub const TRAIL_RUINS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -630,7 +630,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const TRIAL_CHAMBERS: StructureSet = StructureSet {
+    pub const TRIAL_CHAMBERS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -646,7 +646,7 @@ impl StructureSet {
             weight: 1u32,
         }],
     };
-    pub const VILLAGES: StructureSet = StructureSet {
+    pub const VILLAGES: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -680,7 +680,7 @@ impl StructureSet {
             },
         ],
     };
-    pub const WOODLAND_MANSIONS: StructureSet = StructureSet {
+    pub const WOODLAND_MANSIONS: Self = StructureSet {
         placement: StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,

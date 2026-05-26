@@ -55,16 +55,11 @@ impl StructureGenerator for SwampHutGenerator {
     }
 }
 
-#[derive(Clone)]
 pub struct SwampHutPiece {
     shiftable_structure_piece: ShiftableStructurePiece,
 }
 
 impl StructurePieceBase for SwampHutPiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

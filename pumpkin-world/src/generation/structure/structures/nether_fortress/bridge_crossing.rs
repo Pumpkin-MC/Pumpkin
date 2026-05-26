@@ -18,7 +18,6 @@ use crate::{
 
 /// 4-way exterior bridge crossing (19 × 10 × 19).
 /// Also serves as the generation start piece.
-#[derive(Clone)]
 pub struct BridgeCrossingPiece {
     pub piece: NetherFortressPiece,
 }
@@ -181,9 +180,5 @@ impl StructurePieceBase for BridgeCrossingPiece {
                 p.fill_downwards(chunk, nb, i, -1, 18 - j, &bb); // Note: Java uses `18 - i` but iterates j; faithful copy
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

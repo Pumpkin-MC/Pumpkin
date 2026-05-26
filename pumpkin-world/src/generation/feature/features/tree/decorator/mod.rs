@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::generation::proto_chunk::GenerationCache;
 use alter_ground::AlterGroundTreeDecorator;
 use attached_to_leaves::AttachedToLeavesTreeDecorator;
@@ -43,10 +45,11 @@ impl TreeDecorator {
         random: &mut RandomGenerator,
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
+        foliage_positions: &[BlockPos],
     ) {
         match self {
             Self::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
-            Self::LeaveVine(_decorator) => {}
+            Self::LeaveVine(decorator) => decorator.generate(chunk, random, foliage_positions),
             Self::PaleMoss(_decorator) => {}
             Self::CreakingHeart(_decorator) => {}
             Self::Cocoa(_decorator) => {}
@@ -62,22 +65,24 @@ impl TreeDecorator {
         }
     }
 
-    pub(super) fn get_leaf_litter_positions(
-        root_positions: &[BlockPos],
-        log_positions: &[BlockPos],
-    ) -> Vec<BlockPos> {
+    pub(super) fn get_leaf_litter_positions<'a>(
+        root_positions: &'a [BlockPos],
+        log_positions: &'a [BlockPos],
+    ) -> Cow<'a, [BlockPos]> {
         if root_positions.is_empty() {
-            return log_positions.to_vec();
+            return Cow::Borrowed(log_positions);
         }
 
-        if let (Some(root), Some(log)) = (root_positions.first(), log_positions.first())
-            && root.0.y == log.0.y
+        if log_positions
+            .first()
+            .is_some_and(|log| root_positions[0].0.y == log.0.y)
         {
             let mut list = Vec::with_capacity(root_positions.len() + log_positions.len());
             list.extend_from_slice(log_positions);
             list.extend_from_slice(root_positions);
-            return list;
+            return Cow::Owned(list);
         }
-        root_positions.to_vec()
+
+        Cow::Borrowed(root_positions)
     }
 }

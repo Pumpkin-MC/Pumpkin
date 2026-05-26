@@ -157,12 +157,15 @@ pub fn build() -> TokenStream {
         impl StatusEffect {
             #variants
 
+            #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #name_to_type
                     _ => None
                 }
             }
+
+            #[must_use]
             pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #minecraft_name_to_type
@@ -171,10 +174,12 @@ pub fn build() -> TokenStream {
             }
         }
         impl IDSetContent for StatusEffect {
+            #[must_use]
             fn registry_id(&self) -> u16 {
                 self.id as u16
             }
 
+            #[must_use]
             fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #id_to_type
@@ -182,10 +187,12 @@ pub fn build() -> TokenStream {
                 }
             }
 
+            #[must_use]
             fn from_str(name: &str) -> Option<&'static Self> {
-                StatusEffect::from_minecraft_name(name)
+                Self::from_minecraft_name(name)
             }
 
+            #[must_use]
             fn to_string(&self) -> String {
                 self.minecraft_name.to_string()
             }

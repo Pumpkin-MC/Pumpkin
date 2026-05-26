@@ -13,16 +13,22 @@ pub mod common;
 pub mod context;
 pub mod entity;
 pub mod events;
+pub mod forms;
+pub mod generated_packets;
 pub mod gui;
 pub mod i18n;
 pub mod item;
+pub mod item_stack;
+pub mod java_dialogs;
 pub mod logging;
 pub mod permission;
 pub mod player;
+pub mod recipe;
 pub mod scheduler;
 pub mod scoreboard;
 pub mod server;
 pub mod text;
+pub mod uuid;
 pub mod world;
 
 bindgen!({
@@ -31,6 +37,12 @@ bindgen!({
     imports: { default: async | trappable },
     exports: { default: async | trappable},
 });
+
+impl pumpkin::plugin::java_packets::Host for PluginHostState {}
+impl pumpkin::plugin::bedrock_packets::Host for PluginHostState {}
+impl pumpkin::plugin::data_components::Host for PluginHostState {}
+impl pumpkin::plugin::enchantments::Host for PluginHostState {}
+impl pumpkin::plugin::biomes::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
     Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;

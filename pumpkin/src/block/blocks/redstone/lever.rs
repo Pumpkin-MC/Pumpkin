@@ -22,7 +22,7 @@ use crate::{
 };
 
 async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_state_id(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut lever_props = LeverLikeProperties::from_state_id(state, block);
     lever_props.powered = !lever_props.powered;
@@ -102,16 +102,13 @@ impl BlockBehaviour for LeverBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            // Use the provided direction, or fallback to the current state's direction if missing
-            let direction = args
-                .direction
-                .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        // Use the provided direction, or fallback to the current state's direction if missing
+        let direction = args
+            .direction
+            .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
 
-            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
-                .await
-        })
+        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
     }
 
     fn get_state_for_neighbor_update<'a>(

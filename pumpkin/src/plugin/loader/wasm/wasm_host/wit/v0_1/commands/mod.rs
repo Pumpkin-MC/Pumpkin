@@ -43,7 +43,7 @@ use crate::{
                         Arg, ArgumentType, Command, CommandNode, CommandSender, CommandSenderType,
                         ConsumedArgs, PermissionLevel, StringType,
                     },
-                    common::{Locale, Position},
+                    common::{BlockPos as WitBlockPos, Locale, Position},
                     player::Player,
                     server::Server,
                     text::TextComponent,
@@ -149,23 +149,25 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                     }
                 }))
             }
-            OwnedArg::BlockPos(p) => Arg::BlockPos((p.0.x, p.0.y, p.0.z)),
+            OwnedArg::BlockPos(p) => Arg::BlockPos(WitBlockPos {
+                x: p.0.x,
+                y: p.0.y,
+                z: p.0.z,
+            }),
             OwnedArg::Pos3D(v) => Arg::Pos3d((v.x, v.y, v.z)),
             OwnedArg::Pos2D(v) => Arg::Pos2d((v.x, v.y)),
             OwnedArg::Rotation(a, b, c, d) => Arg::Rotation((a, b, c, d)),
-            OwnedArg::GameMode(g) => Arg::GameMode(match g {
-                pumpkin_util::GameMode::Survival => pumpkin::plugin::command::Gamemode::Survival,
-                pumpkin_util::GameMode::Creative => pumpkin::plugin::command::Gamemode::Creative,
-                pumpkin_util::GameMode::Adventure => pumpkin::plugin::command::Gamemode::Adventure,
-                pumpkin_util::GameMode::Spectator => pumpkin::plugin::command::Gamemode::Spectator,
+            OwnedArg::GameMode(g) => Arg::Gamemode(match g {
+                pumpkin_util::GameMode::Survival => pumpkin::plugin::common::GameMode::Survival,
+                pumpkin_util::GameMode::Creative => pumpkin::plugin::common::GameMode::Creative,
+                pumpkin_util::GameMode::Adventure => pumpkin::plugin::common::GameMode::Adventure,
+                pumpkin_util::GameMode::Spectator => pumpkin::plugin::common::GameMode::Spectator,
             }),
             OwnedArg::Difficulty(d) => Arg::Difficulty(match d {
-                pumpkin_util::Difficulty::Peaceful => {
-                    pumpkin::plugin::command::Difficulty::Peaceful
-                }
-                pumpkin_util::Difficulty::Easy => pumpkin::plugin::command::Difficulty::Easy,
-                pumpkin_util::Difficulty::Normal => pumpkin::plugin::command::Difficulty::Normal,
-                pumpkin_util::Difficulty::Hard => pumpkin::plugin::command::Difficulty::Hard,
+                pumpkin_util::Difficulty::Peaceful => pumpkin::plugin::server::Difficulty::Peaceful,
+                pumpkin_util::Difficulty::Easy => pumpkin::plugin::server::Difficulty::Easy,
+                pumpkin_util::Difficulty::Normal => pumpkin::plugin::server::Difficulty::Normal,
+                pumpkin_util::Difficulty::Hard => pumpkin::plugin::server::Difficulty::Hard,
             }),
             OwnedArg::Players(players) => {
                 let mut resources = Vec::new();
@@ -343,15 +345,13 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         &mut self,
         _res: Resource<CommandSender>,
     ) -> wasmtime::Result<CommandSenderType> {
-        // let sender = &self.get_sender_res(&res)?.provider;
-        // Ok(match sender {
-        //     crate::command::CommandSender::Player(_) => CommandSenderType::Player,
-        //     crate::command::CommandSender::Console => CommandSenderType::Console,
-        //     crate::command::CommandSender::Rcon(_) => CommandSenderType::Rcon,
-        //     crate::command::CommandSender::CommandBlock(.._) => CommandSenderType::CommandBlock,
-        //     crate::command::CommandSender::Dummy => CommandSenderType::Dummy,
-        // })
-        todo!()
+        Err(wasmtime::Error::msg(
+            "get_command_sender_type not implemented",
+        ))
+    }
+
+    async fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
+        Ok(self.get_sender_res(&sender)?.provider.to_string())
     }
 
     async fn send_message(
@@ -367,6 +367,42 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         self.get_sender_res(&sender)?
             .provider
             .send_message(component)
+            .await;
+        Ok(())
+    }
+
+    async fn send_system_message(
+        &mut self,
+        sender: Resource<CommandSender>,
+        text: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let component = self
+            .resource_table
+            .get::<TextComponentResource>(&Resource::new_own(text.rep()))?
+            .provider
+            .clone();
+        self.get_sender_res(&sender)?
+            .provider
+            .send_message(component)
+            .await;
+        Ok(())
+    }
+
+    async fn send_error(
+        &mut self,
+        sender: Resource<CommandSender>,
+        text: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let component = self
+            .resource_table
+            .get::<TextComponentResource>(&Resource::new_own(text.rep()))?
+            .provider
+            .clone();
+        self.get_sender_res(&sender)?
+            .provider
+            .send_message(component.color(pumpkin_util::text::color::Color::Named(
+                pumpkin_util::text::color::NamedColor::Red,
+            )))
             .await;
         Ok(())
     }
@@ -562,6 +598,11 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             ArgumentType::Gamemode => argument(name, GamemodeArgumentConsumer),
             ArgumentType::Difficulty => argument(name, DifficultyArgumentConsumer),
             ArgumentType::Time(_) => argument(name, TimeArgumentConsumer),
+            _ => {
+                return Err(wasmtime::Error::msg(format!(
+                    "Unimplemented argument type: {arg_type:?}"
+                )));
+            }
         };
         self.add_command_node(node)
             .map_err(|_| wasmtime::Error::msg("Failed to add argument node"))
@@ -610,7 +651,9 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         _node: Resource<CommandNode>,
         _handler_id: u32,
     ) -> wasmtime::Result<()> {
-        todo!("Implement require_with_handler_id")
+        Err(wasmtime::Error::msg(
+            "require_with_handler_id not implemented",
+        ))
     }
 
     async fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {

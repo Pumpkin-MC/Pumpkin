@@ -1,8 +1,8 @@
 use super::Carver;
 use crate::ProtoChunk;
-use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use std::f32::consts::PI;
 
@@ -16,11 +16,12 @@ impl Carver for CaveCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
+        legacy_random_source: bool,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
             CarverAdditionalConfig::NetherCave(ref c) => (true, c),
-            _ => return,
+            CarverAdditionalConfig::Canyon(_) => return,
         };
 
         let min_y = chunk.bottom_y() as i32;
@@ -48,7 +49,7 @@ impl Carver for CaveCarver {
             if random.next_bounded_i32(4) == 0 {
                 let y_scale = config.y_scale.get(random) as f64;
                 let thickness = 1.0 + random.next_f32() * 6.0;
-                self.create_room(
+                Self::create_room(
                     chunk,
                     x as f64,
                     y,
@@ -65,10 +66,10 @@ impl Carver for CaveCarver {
             for _ in 0..tunnels {
                 let horizontal_rotation = random.next_f32() * PI * 2.0;
                 let vertical_rotation = (random.next_f32() - 0.5) / 4.0;
-                let thickness = self.get_thickness(random, is_nether);
+                let thickness = Self::get_thickness(random, is_nether);
                 let distance = max_distance - random.next_bounded_i32(max_distance / 4);
 
-                self.create_tunnel(
+                Self::create_tunnel(
                     config,
                     chunk,
                     random.next_i64(),
@@ -85,6 +86,7 @@ impl Carver for CaveCarver {
                     if is_nether { 5.0 } else { 1.0 }, // this.getYScale()
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
             }
         }
@@ -92,7 +94,7 @@ impl Carver for CaveCarver {
 }
 
 impl CaveCarver {
-    fn get_thickness(&self, random: &mut RandomGenerator, is_nether: bool) -> f32 {
+    fn get_thickness(random: &mut RandomGenerator, is_nether: bool) -> f32 {
         if is_nether {
             (random.next_f32() * 2.0 + random.next_f32()) * 2.0
         } else {
@@ -106,7 +108,6 @@ impl CaveCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn create_room(
-        &self,
         chunk: &mut ProtoChunk,
         x: f64,
         y: f64,
@@ -119,7 +120,7 @@ impl CaveCarver {
     ) {
         let horizontal_radius = 1.5 + (PI / 2.0).sin() * thickness;
         let vertical_radius = horizontal_radius as f64 * y_scale;
-        self.carve_ellipsoid(
+        Self::carve_ellipsoid(
             chunk,
             config,
             x + 1.0,
@@ -134,7 +135,6 @@ impl CaveCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn create_tunnel(
-        &self,
         config: &CarverConfig,
         chunk: &mut ProtoChunk,
         tunnel_seed: i64,
@@ -151,12 +151,19 @@ impl CaveCarver {
         y_scale: f64,
         floor_level: f64,
         is_nether: bool,
+        legacy_random_source: bool,
     ) {
-        let mut random = RandomGenerator::Xoroshiro(
-            pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(tunnel_seed as u64),
-        );
+        let mut random = if legacy_random_source {
+            RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
+                tunnel_seed as u64,
+            ))
+        } else {
+            RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
+                tunnel_seed as u64,
+            ))
+        };
         let split_point = random.next_bounded_i32(dist / 2) + dist / 4;
-        let steep = random.next_bounded_i32(6) == 0;
+        let is_steep = random.next_bounded_i32(6) == 0;
         let mut y_rota = 0.0f32;
         let mut x_rota = 0.0f32;
 
@@ -169,7 +176,7 @@ impl CaveCarver {
             y += vertical_rotation.sin() as f64;
             z += (horizontal_rotation.sin() * cos_x) as f64;
 
-            vertical_rotation *= if steep { 0.92 } else { 0.7 };
+            vertical_rotation *= if is_steep { 0.92 } else { 0.7 };
             vertical_rotation += x_rota * 0.1;
             horizontal_rotation += y_rota * 0.1;
             x_rota *= 0.9;
@@ -178,7 +185,7 @@ impl CaveCarver {
             y_rota += (random.next_f32() - random.next_f32()) * random.next_f32() * 4.0;
 
             if current_step == split_point && thickness > 1.0 {
-                self.create_tunnel(
+                Self::create_tunnel(
                     config,
                     chunk,
                     random.next_i64(),
@@ -195,8 +202,9 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
-                self.create_tunnel(
+                Self::create_tunnel(
                     config,
                     chunk,
                     random.next_i64(),
@@ -213,16 +221,17 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 return;
             }
 
             if random.next_bounded_i32(4) != 0 {
-                if !self.can_reach(chunk.x, chunk.z, x, z, current_step, dist, thickness) {
+                if !Self::can_reach(chunk.x, chunk.z, x, z, current_step, dist, thickness) {
                     return;
                 }
 
-                self.carve_ellipsoid(
+                Self::carve_ellipsoid(
                     chunk,
                     config,
                     x,
@@ -239,7 +248,6 @@ impl CaveCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn can_reach(
-        &self,
         chunk_x: i32,
         chunk_z: i32,
         x: f64,
@@ -259,7 +267,6 @@ impl CaveCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn carve_ellipsoid(
-        &self,
         chunk: &mut ProtoChunk,
         config: &CarverConfig,
         x: f64,
@@ -281,36 +288,43 @@ impl CaveCarver {
         let chunk_min_x = chunk.x << 4;
         let chunk_min_z = chunk.z << 4;
 
-        let min_x_index = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
-        let max_x_index = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
+        let min_x_idx = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
+        let max_x_idx = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
         let min_y = ((y - vertical_radius).floor() as i32 - 1).max(chunk.bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
         let max_y = ((y + vertical_radius).floor() as i32 + 1)
             .min(chunk.bottom_y() as i32 + chunk.height() as i32 - 1 - protected_blocks_on_top);
 
-        let min_z_index = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
-        let max_z_index = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
+        let min_z_idx = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
+        let max_z_idx = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
 
-        for x_index in min_x_index..=max_x_index {
+        for x_index in min_x_idx..=max_x_idx {
             let world_x = chunk_min_x + x_index;
             let xd = (world_x as f64 + 0.5 - x) / horizontal_radius;
 
-            for z_index in min_z_index..=max_z_index {
+            for z_index in min_z_idx..=max_z_idx {
                 let world_z = chunk_min_z + z_index;
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
                 if xd * xd + zd * zd < 1.0 {
                     let mut has_grass = false;
-                    for world_y in (min_y..=max_y).rev() {
-                        let yd = (world_y as f64 + 0.5 - y) / vertical_radius;
 
-                        if !self.should_skip(xd, yd, zd, floor_level)
+                    for world_y in (min_y + 1..=max_y).rev() {
+                        let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
+
+                        if !Self::should_skip(xd, yd, zd, floor_level)
                             && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            has_grass |= self.carve_block(
-                                chunk, config, world_x, world_y, world_z, is_nether, has_grass,
+                            Self::carve_block(
+                                chunk,
+                                config,
+                                world_x,
+                                world_y,
+                                world_z,
+                                is_nether,
+                                &mut has_grass,
                             );
                         }
                     }
@@ -319,7 +333,7 @@ impl CaveCarver {
         }
     }
 
-    fn should_skip(&self, xd: f64, yd: f64, zd: f64, floor_level: f64) -> bool {
+    fn should_skip(xd: f64, yd: f64, zd: f64, floor_level: f64) -> bool {
         if yd <= floor_level {
             true
         } else {
@@ -329,35 +343,29 @@ impl CaveCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn carve_block(
-        &self,
         chunk: &mut ProtoChunk,
         config: &CarverConfig,
         x: i32,
         y: i32,
         z: i32,
         is_nether: bool,
-        mut has_grass: bool,
+        has_grass: &mut bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
-        let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
-        let block = pumpkin_data::Block::from_state_id(state_id);
-
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
-            return false;
-        }
+        let state = chunk.get_block_state(&Vector3::new(x, y, z));
+        let block = state.to_block();
 
         if block.id == pumpkin_data::Block::GRASS_BLOCK.id
             || block.id == pumpkin_data::Block::MYCELIUM.id
         {
-            has_grass = true;
+            *has_grass = true;
         }
 
-        // Only carve if it's replaceable
-        if config.replaceable.1.contains(&block.id) {
-            // Replace with air or lava
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
+        if !config.replaceable.1.contains(&block.id) {
+            return false;
+        }
 
+        let carve_state = {
             let lava_y = if is_nether {
                 chunk.bottom_y() as i32 + 31
             } else {
@@ -367,26 +375,44 @@ impl CaveCarver {
             };
 
             if y <= lava_y {
-                chunk.set_block_state(x & 15, local_y, z & 15, lava);
+                Some(pumpkin_data::Block::LAVA.default_state)
             } else {
-                chunk.set_block_state(x & 15, local_y, z & 15, air);
-            }
-
-            if has_grass {
-                let down_y = y - 1;
-                let local_down_y = down_y - chunk.bottom_y() as i32;
-                if (0..chunk.height() as i32).contains(&local_down_y) {
-                    let down_state_id = chunk.get_block_state_raw(x & 15, local_down_y, z & 15);
-                    if pumpkin_data::Block::from_state_id(down_state_id).id
-                        == pumpkin_data::Block::DIRT.id
-                    {
-                        // dirt replacement skipped
-                    }
+                // TODO: Aquifer logic goes here.
+                // BlockState state = aquifer.computeSubstance(...)
+                // return state (or debug barrier if null)
+                if block.id == pumpkin_data::Block::WATER.id
+                    || block.id == pumpkin_data::Block::LAVA.id
+                {
+                    None
+                } else {
+                    Some(pumpkin_data::Block::AIR.default_state)
                 }
             }
+        };
+
+        if let Some(state) = carve_state {
+            chunk.set_block_state(x, local_y, z, state);
+
+            // TODO: Fluid scheduling
+            // if aquifer.should_schedule_fluid_update() && !state.fluid_state().is_empty() {
+            //     chunk.mark_pos_for_postprocessing(x, y, z);
+            // }
+
+            // TODO: fix this (grass block survival logic)
+            // if *has_grass {
+            //     let below_state_id = chunk.get_block_state_raw(x, local_y - 1, z);
+            //     let below_block = pumpkin_data::Block::from_state_id(below_state_id);
+
+            //     if below_block.id == pumpkin_data::Block::DIRT.id {
+            //         let top_material =
+            //            pumpkin_data::Block::GRASS_BLOCK.default_state;
+            //         chunk.set_block_state(x, local_y - 1, z, top_material);
+            //     }
+            // }
 
             return true;
         }
+
         false
     }
 }
@@ -414,7 +440,7 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
         HeightProvider::VeryBiasedToBottom(p) => {
             let min = p.min_inclusive.get_y(min_y as i16, height);
             let max = p.max_inclusive.get_y(min_y as i16, height);
-            let inner = p.inner.map_or(1, |n| n.get()) as i32;
+            let inner = p.inner.map_or(1, std::num::NonZero::get) as i32;
             let min_rnd = random.next_inbetween_i32(min + inner, max);
             let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);
             random.next_inbetween_i32(min, max_rnd - 1 + inner)

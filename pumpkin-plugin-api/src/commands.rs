@@ -42,7 +42,7 @@ impl Command {
     ///
     /// Registers `handler` so that it is called whenever this command is invoked.
     /// Returns `self` to allow builder-style chaining.
-    pub fn execute<H: CommandHandler + Send + Sync + 'static>(self, handler: H) -> Command {
+    pub fn execute<H: CommandHandler + Send + Sync + 'static>(self, handler: H) -> Self {
         let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
 
         COMMAND_HANDLERS
@@ -62,7 +62,7 @@ impl CommandNode {
     /// Registers `handler` so that it is called when this specific node (subcommand
     /// or argument branch) is the final node matched during command dispatch.
     /// Returns `self` to allow builder-style chaining.
-    pub fn execute<H: CommandHandler + Send + Sync + 'static>(self, handler: H) -> CommandNode {
+    pub fn execute<H: CommandHandler + Send + Sync + 'static>(self, handler: H) -> Self {
         let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
 
         COMMAND_HANDLERS

@@ -9,7 +9,7 @@ use crate::command::{
 use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
@@ -43,7 +43,6 @@ impl CommandExecutor for GetEntityDataExecutor {
 }
 
 #[expect(clippy::too_many_lines)]
-#[allow(dead_code)]
 pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, String> {
     let folded = TextComponent::text("<...>").color_named(NamedColor::Gray);
     match tag {
@@ -157,7 +156,9 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                     let item_display = snbt_colorful_display(item, depth + 1)
                         .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
                     content = content
-                        .add_child(TextComponent::text(key.clone()).color_named(NamedColor::Aqua))
+                        .add_child(
+                            TextComponent::text(key.to_string()).color_named(NamedColor::Aqua),
+                        )
                         .add_child(TextComponent::text(": "))
                         .add_child(item_display);
 
@@ -219,33 +220,35 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
         }
     }
 }
+
 async fn display_data(
     storage: &dyn NBTStorage,
     target_name: TextComponent,
     sender: &CommandSender,
 ) -> Result<i32, CommandError> {
-    let mut nbt = PNbtCompound::new();
+    let mut nbt = NbtCompound::new();
     storage.write_nbt(&mut nbt).await;
+    let tag = NbtTag::Compound(nbt);
 
-    // PNBT is positional and doesn't directly map to SNBT.
-    // For now, we'll just show the length of the data.
-    let display = TextComponent::text(format!("PNBT Data ({} bytes)", nbt.data.len()));
-
+    let result = get_i32_result(&tag)?;
+    let display = snbt_colorful_display(&tag, 0)
+        .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_DATA_ENTITY_QUERY,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_DATA_ENTITY_QUERY,
+            translation::java::COMMANDS_DATA_ENTITY_QUERY,
             [target_name, display],
         ))
         .await;
 
-    Ok(1)
+    Ok(result)
 }
 
-#[allow(dead_code)]
 fn get_i32_result(tag: &NbtTag) -> Result<i32, CommandError> {
     match tag {
-        NbtTag::End => Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_DATA_GET_UNKNOWN,
+        NbtTag::End => Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_DATA_GET_UNKNOWN,
+            translation::java::COMMANDS_DATA_GET_UNKNOWN,
             [],
         ))),
 

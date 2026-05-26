@@ -16,7 +16,7 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::tree::Command;
 use futures::future;
-use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
+use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
@@ -224,7 +224,12 @@ impl CommandDispatcher {
     pub async fn execute(&self, parsed: ParsingResult<'_>) -> Result<i32, CommandSyntaxError> {
         if parsed.reader.peek().is_some() {
             return if parsed.errors.len() == 1 {
-                Err(parsed.errors.values().next().unwrap().clone())
+                Err(parsed
+                    .errors
+                    .values()
+                    .next()
+                    .expect("Errors length is 1, so next should exist")
+                    .clone())
             } else if parsed.context.range.is_empty() {
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
             } else {
@@ -290,7 +295,7 @@ impl CommandDispatcher {
             let mut context = context_so_far.clone();
             let mut reader = original_reader.clone();
             let parse_result = {
-                if let Err(error) = self.tree.parse(child, &mut reader, &mut context) {
+                if let Err(error) = self.tree.parse(child, &mut reader, &mut context).await {
                     Err(error)
                 } else {
                     let peek = reader.peek();
@@ -358,7 +363,7 @@ impl CommandDispatcher {
 
                     (a_reader_remaining, a_has_errors).cmp(&(b_reader_remaining, b_has_errors))
                 })
-                .unwrap()
+                .expect("Potentials list is not empty")
         }
     }
 
@@ -440,7 +445,7 @@ impl CommandDispatcher {
             }
 
             error_text = error_text.add_child(
-                TextComponent::translate(COMMAND_CONTEXT_HERE, &[])
+                TextComponent::translate_cross(COMMAND_CONTEXT_HERE, COMMAND_CONTEXT_HERE, &[])
                     .color(Color::Named(NamedColor::Red))
                     .italic(),
             );
@@ -490,14 +495,15 @@ impl CommandDispatcher {
         let mut futures = Vec::with_capacity(capacity);
 
         let context = context.build(truncated_input);
+        let mut provided_suggestions = Vec::new();
 
         for child in children {
-            let mut builder = SuggestionsBuilder::new(truncated_input, start);
+            let builder = SuggestionsBuilder::new(truncated_input, start);
 
-            let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> =
+            let future: Option<Pin<Box<dyn Future<Output = Suggestions> + Send>>> =
                 match self.tree.classify_id(child) {
-                    NodeIdClassification::Root => Box::pin(async { Suggestions::empty() }),
-                    NodeIdClassification::Literal(literal_node_id) => Box::pin(async move {
+                    NodeIdClassification::Root => Some(Box::pin(async { Suggestions::empty() })),
+                    NodeIdClassification::Literal(literal_node_id) => Some(Box::pin(async move {
                         let node = &self.tree[literal_node_id];
                         if node
                             .meta
@@ -508,8 +514,8 @@ impl CommandDispatcher {
                         } else {
                             Suggestions::empty()
                         }
-                    }),
-                    NodeIdClassification::Command(command_node_id) => Box::pin(async move {
+                    })),
+                    NodeIdClassification::Command(command_node_id) => Some(Box::pin(async move {
                         let node = &self.tree[command_node_id];
                         if node
                             .meta
@@ -520,19 +526,32 @@ impl CommandDispatcher {
                         } else {
                             Suggestions::empty()
                         }
-                    }),
+                    })),
                     NodeIdClassification::Argument(argument_node_id) => {
                         let node = &self.tree[argument_node_id];
-                        node.meta
-                            .argument_type
-                            .list_suggestions(&context, &mut builder)
+                        if let Some(provider) = &node.meta.suggestion_provider {
+                            // For custom suggestions sent by the server, we simply
+                            // wait instead of adding the future to join.
+                            provided_suggestions.push(provider.suggest(&context, builder).await);
+                        } else {
+                            provided_suggestions.push(
+                                node.meta
+                                    .argument_type
+                                    .list_suggestions(&context, builder)
+                                    .await,
+                            );
+                        }
+                        None
                     }
                 };
 
-            futures.push(future);
+            if let Some(future) = future {
+                futures.push(future);
+            }
         }
 
-        let suggestions = future::join_all(futures).await;
+        let mut suggestions = future::join_all(futures).await;
+        suggestions.append(&mut provided_suggestions);
         Suggestions::merge(full_input, suggestions)
     }
 
@@ -883,7 +902,10 @@ impl CommandDispatcher {
                             }
                         }
                         if child_usages.len() == 1 {
-                            let mut child_usage = child_usages.into_iter().next().unwrap();
+                            let mut child_usage = child_usages
+                                .into_iter()
+                                .next()
+                                .expect("Child usages length is 1, so next should exist");
                             if is_optional {
                                 child_usage = format!(
                                     "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"

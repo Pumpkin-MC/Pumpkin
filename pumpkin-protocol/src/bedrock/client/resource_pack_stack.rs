@@ -1,33 +1,35 @@
+use crate::{bedrock::client::start_game::Experiments, serial::PacketWrite};
 use pumpkin_macros::packet;
 
-use crate::{
-    bedrock::client::start_game::Experiments, codec::var_uint::VarUInt, serial::PacketWrite,
-};
+#[derive(PacketWrite)]
+pub struct ResourcePackStackEntry {
+    pub uuid: String,
+    pub version: String,
+    pub sub_pack_name: String,
+}
 
 #[derive(PacketWrite)]
 #[packet(7)]
 pub struct CResourcePackStackPacket {
-    // https://mojang.github.io/bedrock-protocol-docs/html/ResourcePackStackPacket.html
-    resource_pack_required: bool,
-    texture_pack_list_size: VarUInt,
-    game_version: String,
-    experiments: Experiments,
-    /// When connecting to an Editor world, include the vanilla editor packs in the stack
-    include_editor_packs: bool,
+    pub resource_pack_required: bool,
+    pub resource_packs: Vec<ResourcePackStackEntry>,
+    pub game_version: String,
+    pub experiments: Experiments,
+    pub include_editor_packs: bool,
 }
 
 impl CResourcePackStackPacket {
     #[must_use]
     pub const fn new(
         resource_pack_required: bool,
-        texture_pack_list_size: VarUInt,
+        resource_packs: Vec<ResourcePackStackEntry>,
         game_version: String,
         experiments: Experiments,
         include_editor_packs: bool,
     ) -> Self {
         Self {
             resource_pack_required,
-            texture_pack_list_size,
+            resource_packs,
             game_version,
             experiments,
             include_editor_packs,

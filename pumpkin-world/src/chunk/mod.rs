@@ -1,5 +1,4 @@
 use crate::BlockStateId;
-use crate::block::entities::BlockEntity;
 use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette, has_random_ticking_fluid};
@@ -8,12 +7,13 @@ use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::{Block, BlockState};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::atomic::AtomicBool;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -30,7 +30,7 @@ pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
     #[error("Io error: {0}")]
-    IoError(std::io::ErrorKind),
+    IoError(std::io::Error),
     #[error("Invalid header")]
     InvalidHeader,
     #[error("Region is invalid")]
@@ -46,7 +46,7 @@ pub enum ChunkReadingError {
 #[derive(Error, Debug)]
 pub enum ChunkWritingError {
     #[error("Io error: {0}")]
-    IoError(std::io::ErrorKind),
+    IoError(std::io::Error),
     #[error("Compression error {0}")]
     Compression(CompressionError),
     #[error("Chunk serializing error: {0}")]
@@ -76,21 +76,20 @@ pub struct ChunkData {
     pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
-    pub block_entities: std::sync::Mutex<FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    pub pending_block_entities: std::sync::Mutex<FxHashMap<BlockPos, NbtCompound>>,
     pub light_engine: std::sync::Mutex<ChunkLight>,
     pub light_populated: AtomicBool,
     pub status: ChunkStatus,
+    pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub dirty: AtomicBool,
 }
-
-use pumpkin_nbt::pnbt::PNbtCompound;
 
 pub struct ChunkEntityData {
     /// Chunk X
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: Mutex<FxHashMap<uuid::Uuid, PNbtCompound>>,
+    pub data: Mutex<FxHashMap<uuid::Uuid, NbtCompound>>,
 
     pub dirty: AtomicBool,
 }
@@ -104,7 +103,7 @@ pub struct ChunkEntityData {
 pub struct ChunkSections {
     pub count: usize,
     pub block_sections: RwLock<Box<[BlockPalette]>>,
-    pub random_tick_sections: RwLock<Box<[RandomTickSectionCache]>>,
+    pub random_tick_sections: RwLock<Option<Box<[RandomTickSectionCache]>>>,
     pub randomly_ticking_mask: std::sync::atomic::AtomicU32,
     pub biome_sections: RwLock<Box<[BiomePalette]>>,
     pub min_y: i32,
@@ -173,6 +172,7 @@ impl TryFrom<usize> for ChunkHeightmapType {
 }
 
 impl ChunkHeightmapType {
+    #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
         let block = Block::get_raw_id_from_state_id(block_state.id);
         match self {
@@ -189,12 +189,21 @@ impl ChunkHeightmapType {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
-    #[serde(serialize_with = "nbt_long_array")]
-    pub world_surface: Box<[i64]>,
-    #[serde(serialize_with = "nbt_long_array")]
-    pub motion_blocking: Box<[i64]>,
-    #[serde(serialize_with = "nbt_long_array")]
-    pub motion_blocking_no_leaves: Box<[i64]>,
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub world_surface: Option<Box<[i64]>>,
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub motion_blocking: Option<Box<[i64]>>,
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub motion_blocking_no_leaves: Option<Box<[i64]>>,
 }
 
 impl ChunkHeightmaps {
@@ -204,6 +213,8 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
         };
+
+        let data = data.get_or_insert_with(|| vec![0; 37].into_boxed_slice());
 
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
@@ -230,6 +241,10 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::WorldSurface => &self.world_surface,
             ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
+        };
+
+        let Some(data) = data else {
+            return min_y - 1;
         };
 
         let local_x = (x & 15) as usize;
@@ -289,11 +304,9 @@ impl ChunkHeightmaps {
 impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
-            // 9 bits per entry
-            // 0 packed into an i64 7 times.
-            motion_blocking: vec![0; 37].into_boxed_slice(),
-            motion_blocking_no_leaves: vec![0; 37].into_boxed_slice(),
-            world_surface: vec![0; 37].into_boxed_slice(),
+            motion_blocking: None,
+            motion_blocking_no_leaves: None,
+            world_surface: None,
         }
     }
 }
@@ -302,8 +315,9 @@ impl ChunkSections {
     #[must_use]
     pub fn build_random_tick_sections_cache(
         block_sections: &[BlockPalette],
-    ) -> (Box<[RandomTickSectionCache]>, u32) {
+    ) -> (Option<Box<[RandomTickSectionCache]>>, u32) {
         let mut mask = 0;
+        let mut has_ticks = false;
         let cache = block_sections
             .iter()
             .enumerate()
@@ -312,6 +326,7 @@ impl ChunkSections {
                     section.random_ticking_counts();
                 if random_ticking_block_count > 0 || random_ticking_fluid_count > 0 {
                     mask |= 1 << i;
+                    has_ticks = true;
                 }
                 RandomTickSectionCache {
                     random_ticking_block_count,
@@ -320,7 +335,12 @@ impl ChunkSections {
             })
             .collect::<Vec<_>>()
             .into_boxed_slice();
-        (cache, mask)
+
+        if has_ticks {
+            (Some(cache), mask)
+        } else {
+            (None, 0)
+        }
     }
 
     #[must_use]
@@ -443,51 +463,59 @@ impl ChunkSections {
 
         // Keep lock order consistent to avoid deadlocks: block sections first, then random-tick cache.
         let mut sections = self.block_sections.write().unwrap();
-        let mut random_tick_sections = self.random_tick_sections.write().unwrap();
+        let mut random_tick_sections_guard = self.random_tick_sections.write().unwrap();
 
-        if let (Some(section), Some(random_tick_cache)) = (
-            sections.get_mut(section_index),
-            random_tick_sections.get_mut(section_index),
-        ) {
+        if let Some(section) = sections.get_mut(section_index) {
             let replaced_block_state_id =
                 section.set(relative_x, relative_y, relative_z, block_state_id);
             if replaced_block_state_id == block_state_id {
                 return replaced_block_state_id;
             }
 
-            if has_random_ticks(replaced_block_state_id) {
-                random_tick_cache.random_ticking_block_count = random_tick_cache
-                    .random_ticking_block_count
-                    .saturating_sub(1);
-            }
-            if has_random_ticking_fluid(replaced_block_state_id) {
-                random_tick_cache.random_ticking_fluid_count = random_tick_cache
-                    .random_ticking_fluid_count
-                    .saturating_sub(1);
+            if (has_random_ticks(block_state_id) || has_random_ticking_fluid(block_state_id))
+                && random_tick_sections_guard.is_none()
+            {
+                let new_cache =
+                    vec![RandomTickSectionCache::default(); self.count].into_boxed_slice();
+                *random_tick_sections_guard = Some(new_cache);
             }
 
-            if has_random_ticks(block_state_id) {
-                random_tick_cache.random_ticking_block_count = random_tick_cache
-                    .random_ticking_block_count
-                    .saturating_add(1);
-            }
-            if has_random_ticking_fluid(block_state_id) {
-                random_tick_cache.random_ticking_fluid_count = random_tick_cache
-                    .random_ticking_fluid_count
-                    .saturating_add(1);
-            }
+            if let Some(random_tick_sections) = random_tick_sections_guard.as_mut() {
+                let random_tick_cache = &mut random_tick_sections[section_index];
+                if has_random_ticks(replaced_block_state_id) {
+                    random_tick_cache.random_ticking_block_count = random_tick_cache
+                        .random_ticking_block_count
+                        .saturating_sub(1);
+                }
+                if has_random_ticking_fluid(replaced_block_state_id) {
+                    random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                        .random_ticking_fluid_count
+                        .saturating_sub(1);
+                }
 
-            // Update the bitmask
-            let mut mask = self
-                .randomly_ticking_mask
-                .load(std::sync::atomic::Ordering::Relaxed);
-            if random_tick_cache.is_randomly_ticking() {
-                mask |= 1 << section_index;
-            } else {
-                mask &= !(1 << section_index);
+                if has_random_ticks(block_state_id) {
+                    random_tick_cache.random_ticking_block_count = random_tick_cache
+                        .random_ticking_block_count
+                        .saturating_add(1);
+                }
+                if has_random_ticking_fluid(block_state_id) {
+                    random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                        .random_ticking_fluid_count
+                        .saturating_add(1);
+                }
+
+                // Update the bitmask
+                let mut mask = self
+                    .randomly_ticking_mask
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if random_tick_cache.is_randomly_ticking() {
+                    mask |= 1 << section_index;
+                } else {
+                    mask &= !(1 << section_index);
+                }
+                self.randomly_ticking_mask
+                    .store(mask, std::sync::atomic::Ordering::Relaxed);
             }
-            self.randomly_ticking_mask
-                .store(mask, std::sync::atomic::Ordering::Relaxed);
 
             return replaced_block_state_id;
         }
@@ -754,6 +782,7 @@ mod tests {
         sections[1].set(0, 0, 0, Block::LAVA.default_state.id);
 
         let (cache, _mask) = ChunkSections::build_random_tick_sections_cache(&sections);
+        let cache = cache.unwrap();
         assert!(!cache[0].is_randomly_ticking());
         assert!(cache[1].random_ticking_fluid_count > 0);
         assert!(cache[1].is_randomly_ticking());
@@ -765,7 +794,12 @@ mod tests {
         let sections = ChunkSections::new(1, min_y);
 
         assert!(
-            !sections.random_tick_sections.read().unwrap()[0].is_randomly_ticking(),
+            sections
+                .random_tick_sections
+                .read()
+                .unwrap()
+                .as_ref()
+                .is_none_or(|c| !c[0].is_randomly_ticking()),
             "fresh sections should not be randomly ticking"
         );
 
@@ -778,6 +812,7 @@ mod tests {
         sections.set_block_absolute_y(0, min_y, 0, random_block_state);
         {
             let cache = sections.random_tick_sections.read().unwrap();
+            let cache = cache.as_ref().unwrap();
             assert_eq!(cache[0].random_ticking_block_count, 1);
             assert_eq!(cache[0].random_ticking_fluid_count, 0);
             assert!(cache[0].is_randomly_ticking());
@@ -786,6 +821,7 @@ mod tests {
         sections.set_block_absolute_y(0, min_y, 0, Block::STONE.default_state.id);
         {
             let cache = sections.random_tick_sections.read().unwrap();
+            let cache = cache.as_ref().unwrap();
             assert_eq!(cache[0].random_ticking_block_count, 0);
             assert_eq!(cache[0].random_ticking_fluid_count, 0);
             assert!(!cache[0].is_randomly_ticking());
@@ -794,6 +830,7 @@ mod tests {
         sections.set_block_absolute_y(0, min_y, 0, Block::LAVA.default_state.id);
         {
             let cache = sections.random_tick_sections.read().unwrap();
+            let cache = cache.as_ref().unwrap();
             assert!(cache[0].random_ticking_fluid_count > 0);
             assert!(cache[0].is_randomly_ticking());
         }

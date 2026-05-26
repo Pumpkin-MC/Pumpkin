@@ -28,16 +28,14 @@ impl ItemBehaviour for EnderPearlItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntityEnderPearlThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityEnderPearlThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
 
             let entity = Entity::new(world.clone(), position, &EntityType::ENDER_PEARL);
-            let pearl = EnderPearlEntity::new_shot(entity, &player.living_entity.entity).await;
+            let pearl = EnderPearlEntity::new_shot(entity, &player.living_entity.entity);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
             pearl.thrown.set_velocity_from(

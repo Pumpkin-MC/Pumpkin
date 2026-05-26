@@ -15,24 +15,23 @@ use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::height_provider::HeightProvider;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
-pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> =
-    LazyLock::new(build_placed_features);
+pub static PLACED_FEATURES: LazyLock<
+    HashMap<pumpkin_data::placed_feature::PlacedFeature, PlacedFeature>,
+> = LazyLock::new(build_placed_features);
 
 pub enum PlacedFeatureWrapper {
     Direct(PlacedFeature),
-    Named(String),
+    Named(pumpkin_data::placed_feature::PlacedFeature),
 }
 
 impl PlacedFeatureWrapper {
     pub fn get(&self) -> &PlacedFeature {
         match self {
-            Self::Named(name) => PLACED_FEATURES
-                .get(name.strip_prefix("minecraft:").unwrap_or(name))
-                .unwrap(),
+            Self::Named(name) => PLACED_FEATURES.get(name).unwrap(),
             Self::Direct(feature) => feature,
         }
     }
@@ -45,7 +44,7 @@ pub struct PlacedFeature {
 }
 
 pub enum Feature {
-    Named(String),
+    Named(pumpkin_data::configured_feature::ConfiguredFeature),
     Inlined(Box<ConfiguredFeature>),
 }
 
@@ -54,10 +53,10 @@ impl PlacedFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature_name: &str, // This placed feature
+        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -83,8 +82,8 @@ impl PlacedFeature {
 
         let feature = match &self.feature {
             Feature::Named(name) => CONFIGURED_FEATURES
-                .get(name.strip_prefix("minecraft:").unwrap_or(name))
-                .expect("Name: {name} not found"),
+                .get(name)
+                .expect("Name: {name:?} not found"),
             Feature::Inlined(feature) => feature,
         };
 
@@ -129,10 +128,10 @@ impl PlacementModifier {
     pub fn get_positions<T: GenerationCache>(
         &self,
         chunk: &T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature: &str,
+        feature: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
@@ -213,7 +212,7 @@ impl EnvironmentScanPlacementModifier {
     pub fn get_positions<T: GenerationCache>(
         &self,
         chunk: &T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let allowed_search_condition = self
@@ -339,8 +338,8 @@ pub struct BlockFilterPlacementModifier {
 impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
-        _feature: &str,
+        block_registry: &dyn WorldPortalExt,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
         chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
@@ -358,8 +357,8 @@ pub struct SurfaceThresholdFilterPlacementModifier {
 impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
-        _feature: &str,
+        _block_registry: &dyn WorldPortalExt,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
         chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
@@ -378,8 +377,8 @@ pub struct RarityFilterPlacementModifier {
 impl ConditionalPlacementModifier for RarityFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
-        _feature: &str,
+        _block_registry: &dyn WorldPortalExt,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
         _chunk: &T,
         random: &mut RandomGenerator,
         _pos: BlockPos,
@@ -418,8 +417,8 @@ pub struct SurfaceWaterDepthFilterPlacementModifier {
 impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
-        _feature: &str,
+        _block_registry: &dyn WorldPortalExt,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
         chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
@@ -435,17 +434,16 @@ pub struct BiomePlacementModifier;
 impl ConditionalPlacementModifier for BiomePlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
-        this_feature: &str,
+        _block_registry: &dyn WorldPortalExt,
+        this_feature: pumpkin_data::placed_feature::PlacedFeature,
         chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let name = format!("minecraft:{this_feature}");
         let biome = chunk.get_biome_for_terrain_gen(pos.0.x, pos.0.y, pos.0.z);
 
-        for feature in biome.features {
-            if feature.contains(&&*name) {
+        for step in biome.features {
+            if step.contains(&this_feature) {
                 return true;
             }
         }
@@ -510,9 +508,9 @@ pub trait CountPlacementModifierBase {
 pub trait ConditionalPlacementModifier {
     fn get_positions<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
-        feature: &str,
+        feature: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
@@ -525,8 +523,8 @@ pub trait ConditionalPlacementModifier {
 
     fn should_place<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
-        feature: &str,
+        block_registry: &dyn WorldPortalExt,
+        feature: pumpkin_data::placed_feature::PlacedFeature,
         chunk: &T,
         random: &mut RandomGenerator,
         pos: BlockPos,

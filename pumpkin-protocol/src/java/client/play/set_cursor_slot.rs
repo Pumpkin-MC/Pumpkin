@@ -5,7 +5,7 @@ use crate::{ClientPacket, WritingError};
 
 use pumpkin_data::packet::clientbound::PLAY_SET_CURSOR_ITEM;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PLAY_SET_CURSOR_ITEM)]
 pub struct CSetCursorItem<'a> {
@@ -23,7 +23,7 @@ impl ClientPacket for CSetCursorItem<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         self.stack.write_with_version(write, version)
     }

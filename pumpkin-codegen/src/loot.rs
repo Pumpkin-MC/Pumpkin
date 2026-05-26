@@ -51,9 +51,9 @@ pub struct LootPoolStruct {
     /// Entries that can be selected during a roll of this pool.
     entries: Vec<LootPoolEntryStruct>,
     /// Number of times the pool is rolled.
-    rolls: LootNumberProviderTypes, // TODO
+    rolls: LootNumberProviderTypes,
     /// Extra rolls granted by luck-related enchantments.
-    bonus_rolls: f32,
+    bonus_rolls: LootNumberProviderTypes,
     /// Conditions that must all pass for this pool to be rolled, if any.
     conditions: Option<Vec<LootConditionStruct>>,
     /// Functions applied to the selected entries, if any.
@@ -106,6 +106,25 @@ impl ToTokens for ItemEntryStruct {
         tokens.extend(quote! {
             ItemEntry {
                 name: #name,
+            }
+        });
+    }
+}
+
+/// Deserialized loot table reference entry holding the target loot table key.
+#[derive(Deserialize, Clone, Debug)]
+pub struct LootTableEntryStruct {
+    /// Namespaced loot table key.
+    value: String,
+}
+
+impl ToTokens for LootTableEntryStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let value = LitStr::new(&self.value, Span::call_site());
+
+        tokens.extend(quote! {
+            LootTableEntry {
+                value: #value,
             }
         });
     }
@@ -227,7 +246,7 @@ pub enum LootPoolEntryTypesStruct {
     Item(ItemEntryStruct),
     /// References another loot table by namespaced key.
     #[serde(rename = "minecraft:loot_table")]
-    LootTable,
+    LootTable(LootTableEntryStruct),
     /// Yields dynamically determined drops (e.g., shulker box contents).
     #[serde(rename = "minecraft:dynamic")]
     Dynamic(DynamicEntryStruct),
@@ -254,10 +273,10 @@ impl ToTokens for LootPoolEntryTypesStruct {
             Self::Item(item) => {
                 tokens.extend(quote! { LootPoolEntryTypes::Item(#item) });
             }
-            Self::LootTable => {
-                tokens.extend(quote! { LootPoolEntryTypes::LootTable });
+            Self::LootTable(entry) => {
+                tokens.extend(quote! { LootPoolEntryTypes::LootTable(#entry) });
             }
-            Self::Dynamic(entry) => {
+            Self::Dynamic(_entry) => {
                 // TODO
                 tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
             }
@@ -277,34 +296,91 @@ impl ToTokens for LootPoolEntryTypesStruct {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum StringOrVec {
+    String(String),
+    Vec(Vec<String>),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ItemPredicateStruct {
+    pub items: Option<StringOrVec>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct EntityPredicateStruct {
+    #[serde(rename = "type")]
+    pub entity_type: Option<StringOrVec>,
+}
+
+impl ToTokens for EntityPredicateStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(quote! { () });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct DamageSourcePredicateStruct {
+    pub source_entity: Option<EntityPredicateStruct>,
+    pub direct_entity: Option<EntityPredicateStruct>,
+}
+
+impl ToTokens for DamageSourcePredicateStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(quote! { () });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LocationPredicateStruct {
+    pub biome: Option<StringOrVec>,
+    pub dimension: Option<StringOrVec>,
+}
+
+impl ToTokens for LocationPredicateStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(quote! { () });
+    }
+}
+
 /// Deserialized loot condition, tagged by the `"condition"` field.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "condition")]
 pub enum LootConditionStruct {
     /// Passes if the wrapped condition fails.
     #[serde(rename = "minecraft:inverted")]
-    Inverted,
+    Inverted { term: Box<LootConditionStruct> },
     /// Passes if any of the child conditions pass.
     #[serde(rename = "minecraft:any_of")]
-    AnyOf,
+    AnyOf { terms: Vec<LootConditionStruct> },
     /// Passes if all child conditions pass.
     #[serde(rename = "minecraft:all_of")]
-    AllOf,
+    AllOf { terms: Vec<LootConditionStruct> },
     /// Passes with the given probability.
     #[serde(rename = "minecraft:random_chance")]
     RandomChance { chance: f32 },
     /// Passes with probability scaled by an enchantment level.
     #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
-    RandomChanceWithEnchantedBonus,
+    RandomChanceWithEnchantedBonus {
+        enchantment: String,
+        chances: Option<Vec<f32>>,
+    },
     /// Passes based on entity NBT predicates.
     #[serde(rename = "minecraft:entity_properties")]
-    EntityProperties,
+    EntityProperties {
+        entity: Option<String>,
+        predicate: Option<EntityPredicateStruct>,
+    },
     /// Passes if the block was killed by a player.
     #[serde(rename = "minecraft:killed_by_player")]
     KilledByPlayer,
     /// Passes based on entity scoreboard values.
     #[serde(rename = "minecraft:entity_scores")]
-    EntityScores,
+    EntityScores {
+        entity: Option<String>,
+        scores: Option<BTreeMap<String, StringOrVec>>,
+    },
     /// Passes if the source block has the specified block-state properties.
     #[serde(rename = "minecraft:block_state_property")]
     BlockStateProperty {
@@ -315,52 +391,104 @@ pub enum LootConditionStruct {
     },
     /// Passes if the tool matches an item predicate.
     #[serde(rename = "minecraft:match_tool")]
-    MatchTool,
+    MatchTool {
+        predicate: Option<ItemPredicateStruct>,
+    },
     /// Passes with probability based on an enchantment's level.
     #[serde(rename = "minecraft:table_bonus")]
-    TableBonus,
+    TableBonus {
+        enchantment: String,
+        chances: Vec<f32>,
+    },
     /// Passes if the item survives an explosion.
     #[serde(rename = "minecraft:survives_explosion")]
     SurvivesExplosion,
     /// Passes based on the damage source's properties.
     #[serde(rename = "minecraft:damage_source_properties")]
-    DamageSourceProperties,
+    DamageSourceProperties {
+        predicate: Option<DamageSourcePredicateStruct>,
+    },
     /// Passes based on the block's location.
     #[serde(rename = "minecraft:location_check")]
-    LocationCheck,
+    LocationCheck {
+        predicate: Option<LocationPredicateStruct>,
+        #[serde(rename = "offsetX")]
+        offset_x: Option<i32>,
+        #[serde(rename = "offsetY")]
+        offset_y: Option<i32>,
+        #[serde(rename = "offsetZ")]
+        offset_z: Option<i32>,
+    },
     /// Passes based on current weather conditions.
     #[serde(rename = "minecraft:weather_check")]
-    WeatherCheck,
+    WeatherCheck {
+        raining: Option<bool>,
+        thundering: Option<bool>,
+    },
     /// References an external predicate by ID.
     #[serde(rename = "minecraft:reference")]
-    Reference,
+    Reference { name: String },
     /// Passes based on the current in-game time.
     #[serde(rename = "minecraft:time_check")]
-    TimeCheck,
+    TimeCheck {
+        #[serde(rename = "value")]
+        range: LootFunctionLimitCountStruct,
+        period: Option<u64>,
+    },
     /// Passes based on a numeric value range check.
     #[serde(rename = "minecraft:value_check")]
-    ValueCheck,
+    ValueCheck {
+        value: LootFunctionNumberProviderStruct,
+        range: LootFunctionLimitCountStruct,
+    },
     /// Passes if an enchantment is currently active.
     #[serde(rename = "minecraft:enchantment_active_check")]
-    EnchantmentActiveCheck,
+    EnchantmentActiveCheck { active: bool },
 }
 
 impl ToTokens for LootConditionStruct {
     /// Emits the matching `LootCondition::*` token stream for code generation.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = match self {
-            Self::Inverted => quote! { LootCondition::Inverted },
-            Self::AnyOf => quote! { LootCondition::AnyOf },
-            Self::AllOf => quote! { LootCondition::AllOf },
+            Self::Inverted { term } => quote! { LootCondition::Inverted(&#term) },
+            Self::AnyOf { terms } => quote! { LootCondition::AnyOf(&[#(#terms),*]) },
+            Self::AllOf { terms } => quote! { LootCondition::AllOf(&[#(#terms),*]) },
             Self::RandomChance { chance } => {
                 quote! { LootCondition::RandomChance { chance: #chance } }
             }
-            Self::RandomChanceWithEnchantedBonus => {
-                quote! { LootCondition::RandomChanceWithEnchantedBonus }
+            Self::RandomChanceWithEnchantedBonus {
+                enchantment,
+                chances,
+            } => {
+                let e = LitStr::new(enchantment, Span::call_site());
+                if let Some(chances) = chances {
+                    quote! { LootCondition::RandomChanceWithEnchantedBonus { enchantment: #e, chances: Some(&[#(#chances),*]) } }
+                } else {
+                    quote! { LootCondition::RandomChanceWithEnchantedBonus { enchantment: #e, chances: None } }
+                }
             }
-            Self::EntityProperties => quote! { LootCondition::EntityProperties },
+            Self::EntityProperties { entity, predicate } => {
+                let entity = entity.as_deref().unwrap_or("this");
+                let e = LitStr::new(entity, Span::call_site());
+                let expected_type = predicate
+                    .as_ref()
+                    .and_then(|p| p.entity_type.as_ref())
+                    .map(|t| match t {
+                        StringOrVec::String(s) => quote! { Some(#s) },
+                        StringOrVec::Vec(v) => {
+                            let s = &v[0];
+                            quote! { Some(#s) }
+                        }
+                    })
+                    .unwrap_or(quote! { None });
+                quote! { LootCondition::EntityProperties { entity: #e, expected_type: #expected_type } }
+            }
             Self::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
-            Self::EntityScores => quote! { LootCondition::EntityScores },
+            Self::EntityScores { entity, scores: _ } => {
+                let entity = entity.as_deref().unwrap_or("this");
+                let e = LitStr::new(entity, Span::call_site());
+                quote! { LootCondition::EntityScores { entity: #e } }
+            }
             Self::BlockStateProperty { block, properties } => {
                 let properties: Vec<_> = properties
                     .iter()
@@ -368,19 +496,115 @@ impl ToTokens for LootConditionStruct {
                     .collect();
                 quote! { LootCondition::BlockStateProperty { block: #block, properties: &[#(#properties),*] } }
             }
-            Self::MatchTool => quote! { LootCondition::MatchTool },
-            Self::TableBonus => quote! { LootCondition::TableBonus },
-            Self::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
-            Self::DamageSourceProperties => {
-                quote! { LootCondition::DamageSourceProperties }
+            Self::MatchTool { predicate } => {
+                if let Some(pred) = predicate {
+                    if let Some(items) = &pred.items {
+                        match items {
+                            StringOrVec::String(s) => {
+                                let s = LitStr::new(s, Span::call_site());
+                                quote! { LootCondition::MatchTool { items: Some(&[#s]) } }
+                            }
+                            StringOrVec::Vec(v) => {
+                                let v = v.iter().map(|s| LitStr::new(s, Span::call_site()));
+                                quote! { LootCondition::MatchTool { items: Some(&[#(#v),*]) } }
+                            }
+                        }
+                    } else {
+                        quote! { LootCondition::MatchTool { items: None } }
+                    }
+                } else {
+                    quote! { LootCondition::MatchTool { items: None } }
+                }
             }
-            Self::LocationCheck => quote! { LootCondition::LocationCheck },
-            Self::WeatherCheck => quote! { LootCondition::WeatherCheck },
-            Self::Reference => quote! { LootCondition::Reference },
-            Self::TimeCheck => quote! { LootCondition::TimeCheck },
-            Self::ValueCheck => quote! { LootCondition::ValueCheck },
-            Self::EnchantmentActiveCheck => {
-                quote! { LootCondition::EnchantmentActiveCheck }
+            Self::TableBonus {
+                enchantment,
+                chances,
+            } => {
+                let e = LitStr::new(enchantment, Span::call_site());
+                quote! { LootCondition::TableBonus { enchantment: #e, chances: &[#(#chances),*] } }
+            }
+            Self::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
+            Self::DamageSourceProperties { predicate } => {
+                let expected_source_type = predicate
+                    .as_ref()
+                    .and_then(|p| p.source_entity.as_ref())
+                    .and_then(|e| e.entity_type.as_ref())
+                    .map(|t| match t {
+                        StringOrVec::String(s) => quote! { Some(#s) },
+                        StringOrVec::Vec(v) => {
+                            let s = &v[0];
+                            quote! { Some(#s) }
+                        }
+                    })
+                    .unwrap_or(quote! { None });
+
+                let expected_direct_type = predicate
+                    .as_ref()
+                    .and_then(|p| p.direct_entity.as_ref())
+                    .and_then(|e| e.entity_type.as_ref())
+                    .map(|t| match t {
+                        StringOrVec::String(s) => quote! { Some(#s) },
+                        StringOrVec::Vec(v) => {
+                            let s = &v[0];
+                            quote! { Some(#s) }
+                        }
+                    })
+                    .unwrap_or(quote! { None });
+
+                quote! { LootCondition::DamageSourceProperties { expected_source_type: #expected_source_type, expected_direct_type: #expected_direct_type } }
+            }
+            Self::LocationCheck {
+                predicate,
+                offset_x,
+                offset_y,
+                offset_z,
+            } => {
+                let ox = offset_x.unwrap_or(0);
+                let oy = offset_y.unwrap_or(0);
+                let oz = offset_z.unwrap_or(0);
+                let expected_biome = predicate
+                    .as_ref()
+                    .and_then(|p| p.biome.as_ref())
+                    .map(|b| match b {
+                        StringOrVec::String(s) => quote! { Some(#s) },
+                        StringOrVec::Vec(v) => {
+                            let s = &v[0];
+                            quote! { Some(#s) }
+                        }
+                    })
+                    .unwrap_or(quote! { None });
+                quote! { LootCondition::LocationCheck { offset_x: #ox, offset_y: #oy, offset_z: #oz, expected_biome: #expected_biome } }
+            }
+            Self::WeatherCheck {
+                raining,
+                thundering,
+            } => {
+                let r = raining
+                    .map(|b| quote! { Some(#b) })
+                    .unwrap_or(quote! { None });
+                let t = thundering
+                    .map(|b| quote! { Some(#b) })
+                    .unwrap_or(quote! { None });
+                quote! { LootCondition::WeatherCheck { raining: #r, thundering: #t } }
+            }
+            Self::Reference { name } => {
+                let n = LitStr::new(name, Span::call_site());
+                quote! { LootCondition::Reference { name: #n } }
+            }
+            Self::TimeCheck { range, period } => {
+                let r = range.to_token_stream();
+                let p = period
+                    .map(|val| quote! { Some(#val) })
+                    .unwrap_or(quote! { None });
+                quote! { LootCondition::TimeCheck { range: #r, period: #p } }
+            }
+            Self::ValueCheck { value, range } => {
+                let v = value.to_token_stream();
+                let r = range.to_token_stream();
+                quote! { LootCondition::ValueCheck { value: #v, range: #r } }
+            }
+            Self::EnchantmentActiveCheck { active } => {
+                quote! { LootCondition::EnchantmentActiveCheck { active: #active } }
             }
         };
 
@@ -612,6 +836,20 @@ pub struct LootFunctionLimitCountStruct {
     max: Option<f32>,
 }
 
+impl ToTokens for LootFunctionLimitCountStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let min = self
+            .min
+            .map(|val| quote! { Some(#val) })
+            .unwrap_or(quote! { None });
+        let max = self
+            .max
+            .map(|val| quote! { Some(#val) })
+            .unwrap_or(quote! { None });
+        tokens.extend(quote! { (#min, #max) });
+    }
+}
+
 /// Deserialized bonus parameters for the `ApplyBonus` loot function.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(untagged)]
@@ -653,16 +891,28 @@ pub struct LootPoolEntryStruct {
     /// The concrete entry type (item, alternatives, etc.).
     #[serde(flatten)]
     content: LootPoolEntryTypesStruct,
+    /// Relative probability weight; higher values are more likely.
+    #[serde(default = "default_weight")]
+    weight: i32,
+    /// Quality of the entry, used to modify weight based on luck.
+    #[serde(default)]
+    quality: i32,
     /// Conditions that must all pass for this entry to be evaluated.
     conditions: Option<Vec<LootConditionStruct>>,
     /// Functions applied to the item if this entry is selected.
     functions: Option<Vec<LootFunctionStruct>>,
 }
 
+fn default_weight() -> i32 {
+    1
+}
+
 impl ToTokens for LootPoolEntryStruct {
     /// Emits a `LootPoolEntry { … }` struct literal token stream for code generation.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let content = &self.content;
+        let weight = self.weight;
+        let quality = self.quality;
         let conditions_tokens = if let Some(conds) = &self.conditions {
             let cond_tokens: Vec<_> = conds.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
@@ -679,6 +929,8 @@ impl ToTokens for LootPoolEntryStruct {
         tokens.extend(quote! {
             LootPoolEntry {
                 content: #content,
+                weight: #weight,
+                quality: #quality,
                 conditions: #conditions_tokens,
                 functions: #functions_tokens,
             }

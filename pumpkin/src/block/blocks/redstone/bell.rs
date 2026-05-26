@@ -1,6 +1,7 @@
 use crate::Arc;
 use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
@@ -18,34 +19,27 @@ use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::bell::BellBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
-async fn ring_bell(
-    position: BlockPos,
-    world: &Arc<World>,
-    hit_direction: Option<HorizontalFacing>,
-) {
-    let (block, state_id) = world.get_block_and_state_id(&position).await;
+fn ring_bell(position: BlockPos, world: &Arc<World>, hit_direction: Option<HorizontalFacing>) {
+    let (block, state_id) = world.get_block_and_state_id(&position);
 
     let props = BellLikeProperties::from_state_id(state_id, block);
     let direction = hit_direction.map_or(props.facing, |direction3| direction3);
 
-    if let Some(block_entity) = world.get_block_entity(&position).await
+    if let Some(block_entity) = world.get_block_entity(&position)
         && let Some(be) = block_entity.as_any().downcast_ref::<BellBlockEntity>()
     {
         be.activate(direction);
     }
 
-    world
-        .play_sound_fine(
-            Sound::BlockBellUse,
-            SoundCategory::Blocks,
-            &position.to_centered_f64(),
-            1.0,
-            2.0,
-        )
-        .await;
+    world.play_sound_fine(
+        Sound::BlockBellUse,
+        SoundCategory::Blocks,
+        &position.to_centered_f64(),
+        1.0,
+        2.0,
+    );
 
     //TODO Emit game event: BLOCK_CHANGE -> Send block update Packet
 }
@@ -73,10 +67,9 @@ fn is_point_on_bell(
     }
 }
 
-async fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -> bool {
+fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -> bool {
     !world
         .get_block(&position.offset(facing.to_offset()))
-        .await
         .is_solid()
 }
 
@@ -97,46 +90,43 @@ impl WallMountedBlock for BellBlock {
 }
 
 impl BlockBehaviour for BellBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            if let Some(direction) = args.direction
-                && let Some(world) = args.world
-            {
-                if direction == BlockDirection::Up {
-                    let block: &Block = world.get_block(args.position).await;
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        if let Some(direction) = args.direction
+            && let Some(world) = args.world
+        {
+            if direction == BlockDirection::Up {
+                let block: &Block = world.get_block(args.position);
 
-                    if block.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER) {
-                        false
-                    } else {
-                        let block_pos = args.position.offset(direction.to_offset());
-                        let block_state = world.get_block_state(&block_pos).await;
-                        block_state.is_center_solid(direction)
-                    }
+                if block.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER) {
+                    false
                 } else {
-                    WallMountedBlock::can_place_at(self, world, args.position, direction).await
+                    let block_pos = args.position.offset(direction.to_offset());
+                    let block_state = world.get_block_state(&block_pos);
+                    block_state.is_center_solid(direction)
                 }
             } else {
-                false
+                WallMountedBlock::can_place_at(self, world, args.position, direction)
             }
-        })
+        } else {
+            false
+        }
     }
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let world: &World = args.world;
-            world.remove_block_entity(args.position).await;
+            world.remove_block_entity(args.position);
         })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .add_block_entity(Arc::new(BellBlockEntity::new(*args.position)))
-                .await;
+                .add_block_entity(Arc::new(BellBlockEntity::new(*args.position)));
         })
     }
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
 
             let props = BellLikeProperties::from_state_id(state.id, args.block);
 
@@ -147,8 +137,7 @@ impl BlockBehaviour for BellBlock {
                 *args.position,
                 args.world,
                 args.hit.face.to_horizontal_facing(),
-            )
-            .await;
+            );
 
             BlockActionResult::Success
         })
@@ -170,7 +159,7 @@ impl BlockBehaviour for BellBlock {
 
             props.attachment = match block_face {
                 AttachFace::Wall => {
-                    if is_single_wall(*args.position, props.facing.opposite(), args.world).await {
+                    if is_single_wall(*args.position, props.facing.opposite(), args.world) {
                         BellAttachment::SingleWall
                     } else {
                         BellAttachment::DoubleWall
@@ -189,7 +178,7 @@ impl BlockBehaviour for BellBlock {
             let world: &World = args.world;
 
             let is_receiving_power = block_receives_redstone_power(world, args.position).await;
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
 
             let mut props = BellLikeProperties::from_state_id(state.id, args.block);
 
@@ -205,7 +194,7 @@ impl BlockBehaviour for BellBlock {
                     .await;
 
                 if is_receiving_power {
-                    ring_bell(*args.position, args.world, None).await;
+                    ring_bell(*args.position, args.world, None);
                 }
             }
         })

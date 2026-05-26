@@ -1,9 +1,11 @@
+pub mod animate;
 pub mod client_cache_status;
 pub mod command_request;
 pub mod container_close;
 pub mod interaction;
 pub mod loading_screen;
 pub mod login;
+pub mod modal_form_response;
 pub mod player_action;
 pub mod player_auth_input;
 pub mod raknet;

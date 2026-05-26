@@ -1,15 +1,20 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
+use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::entity::Entity;
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use std::pin::Pin;
 
-pub const INVALID_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ANCHOR_INVALID);
+pub const INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ANCHOR_INVALID,
+    translation::java::ARGUMENT_ANCHOR_INVALID,
+);
 
 pub struct EntityAnchorArgumentType;
 
@@ -18,7 +23,7 @@ impl ArgumentType for EntityAnchorArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let i = reader.cursor();
-        let anchor = reader.read_unquoted_string()?;
+        let anchor = reader.read_unquoted_string();
         EntityAnchor::from_id(anchor.as_str()).map_or_else(
             || {
                 reader.set_cursor(i);
@@ -30,6 +35,14 @@ impl ArgumentType for EntityAnchorArgumentType {
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::EntityAnchor
+    }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        _context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        Box::pin(async move { builder.filter_and_suggest(&["eyes", "feet"]).build() })
     }
 
     fn examples(&self) -> Vec<String> {

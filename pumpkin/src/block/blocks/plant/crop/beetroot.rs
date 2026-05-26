@@ -16,15 +16,8 @@ type BeetrootProperties = NetherWartLikeProperties;
 pub struct BeetrootBlock;
 
 impl BlockBehaviour for BeetrootBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as CropBlockBase>::can_plant_on_top(
-                self,
-                args.block_accessor,
-                &args.position.down(),
-            )
-            .await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
     }
 
     fn get_state_for_neighbor_update<'a>(

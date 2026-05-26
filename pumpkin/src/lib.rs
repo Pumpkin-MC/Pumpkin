@@ -9,6 +9,7 @@ use crate::net::java::{JavaClient, PacketHandlerResult};
 use crate::net::{ClientPlatform, DisconnectReason};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
+use bytes::BytesMut;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
@@ -18,7 +19,7 @@ use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
-use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
+use std::io::{ErrorKind, IsTerminal, stdin};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
@@ -424,7 +425,7 @@ impl PumpkinServer {
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
-        let mut udp_buf = [0; 1496]; // Buffer for UDP receive
+        let mut udp_buf = BytesMut::with_capacity(1496);
 
         select! {
             // Branch for TCP connections (Java Edition)
@@ -490,7 +491,10 @@ impl PumpkinServer {
             },
 
             // Branch for UDP packets (Bedrock Edition)
-            udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
+            udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| {
+                unsafe { udp_buf.set_len(1496) };
+                sock.recv_from(&mut udp_buf[..])
+            }) => {
                 match udp_result {
                     Ok((len, client_addr)) => {
                         if len > 0 {
@@ -501,29 +505,33 @@ impl PumpkinServer {
                                 let be_clients = bedrock_clients.clone();
                                 let mut clients_guard = bedrock_clients.lock().await;
 
-                                if let Some(client) = clients_guard.get(&client_addr) {
-                                    let client = client.clone();
-                                    let reader = Cursor::new(udp_buf[..len].to_vec());
-                                    let server = self.server.clone();
-                                    tasks.spawn(async move {
-                                        client.process_packet(&server, reader).await;
-                                    });
-                                } else if let Some(sock) = self.udp_socket.as_ref()
-                                    && let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
-                                        *master_client_id_counter += 1;
-                                        let platform = BedrockClient::new(sock.clone(), client_addr, be_clients);
-                                        platform.handle_connection_request(packet).await;
-                                        let platform = Arc::new(platform);
-                                        platform.start_outgoing_packet_task();
-                                        clients_guard.insert(client_addr, platform);
-                                    }
-                            } else if let Some(sock) = self.udp_socket.as_ref() {
-                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, sock).await;
+                                let client = clients_guard.entry(client_addr).or_insert_with(|| {
+                                    *master_client_id_counter += 1;
+
+                                    let new_client = Arc::new(BedrockClient::new(
+                                        self.udp_socket.as_ref().unwrap().clone(),
+                                        client_addr,
+                                        be_clients
+                                    ));
+
+                                    new_client.start_outgoing_packet_task();
+                                    new_client
+                                }).clone();
+
+                                let packet_bytes = udp_buf.split_to(len).freeze();
+                                udp_buf.clear();
+                                let server = self.server.clone();
+
+                                tasks.spawn(async move {
+                                    client.process_packet(&server, packet_bytes).await;
+                                });
                             }
                         }
                     }
-                    Err(e) => error!("UDP socket error: {e}"),
-                }
+                    Err(e) => {
+                        error!("Failed to receive UDP packet: {e}");
+                    }
+            }
             },
 
             // Branch for the global stop signal

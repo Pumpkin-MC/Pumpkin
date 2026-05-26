@@ -1,11 +1,4 @@
-/// Proxy implementation for Velocity <https://papermc.io/software/velocity> by `PaperMC`
-/// Sadly, `PaperMC` does not care about 3rd parties providing support for Velocity. There is no documentation.
-/// I had to understand the code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/0cf731589a3b6923542cdfc36dbcee9c47c51076/paper-server/src/main/java/com/destroystokyo/paper/proxy/VelocityProxy.java>
-use std::{
-    io::Read,
-    net::{IpAddr, SocketAddr},
-};
-
+use arc_swap::ArcSwap;
 use bytes::{BufMut, BytesMut};
 use hmac::{Hmac, KeyInit, Mac};
 use pumpkin_config::networking::proxy::VelocityConfig;
@@ -15,6 +8,14 @@ use pumpkin_protocol::{
 };
 use rand::RngExt;
 use sha2::Sha256;
+use std::sync::Arc;
+/// Proxy implementation for Velocity <https://papermc.io/software/velocity> by `PaperMC`
+/// Sadly, `PaperMC` does not care about 3rd parties providing support for Velocity. There is no documentation.
+/// I had to understand the code logic by looking at `PaperMC`'s Velocity implementation: <https://github.com/PaperMC/Paper/blob/0cf731589a3b6923542cdfc36dbcee9c47c51076/paper-server/src/main/java/com/destroystokyo/paper/proxy/VelocityProxy.java>
+use std::{
+    io::Read,
+    net::{IpAddr, SocketAddr},
+};
 use thiserror::Error;
 use tracing::debug;
 
@@ -79,14 +80,14 @@ fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {
         .map_err(|_| VelocityError::FailedReadProfileUUID)?;
 
     let name = read
-        .get_string()
+        .get_str()
         .map_err(|_| VelocityError::FailedReadProfileName)?;
 
     let properties = read
         .get_list(|data| {
-            let name = data.get_string()?;
-            let value = data.get_string()?;
-            let signature = data.get_option(NetworkReadExt::get_string)?;
+            let name = data.get_str()?;
+            let value = data.get_str()?;
+            let signature = data.get_option(NetworkReadExt::get_str)?;
 
             Ok(Property {
                 name,
@@ -98,8 +99,8 @@ fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {
 
     Ok(GameProfile {
         id,
-        name,
-        properties,
+        name: name.into_string(),
+        properties: ArcSwap::new(Arc::from(properties)),
         profile_actions: None,
     })
 }
@@ -130,7 +131,7 @@ pub fn receive_velocity_plugin_response(
             ));
         }
         let addr = data_without_signature
-            .get_string()
+            .get_str()
             .map_err(|_| VelocityError::FailedReadAddress)?;
 
         let socket_addr: SocketAddr = SocketAddr::new(

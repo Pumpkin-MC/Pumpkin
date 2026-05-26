@@ -1,7 +1,8 @@
 /* This file is generated. Do not edit manually. */
 use crate::item::Item;
 use crate::tag::Taggable;
-#[derive(Clone, Debug)]
+use serde::{Deserialize, Serialize};
+#[derive(Clone, Debug, Serialize)]
 pub enum CraftingRecipeTypes {
     CraftingShaped {
         category: RecipeCategoryTypes,
@@ -30,7 +31,7 @@ pub enum CraftingRecipeTypes {
     CraftingSpecial,
 }
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CookingRecipe {
     #[doc = r#" Vanilla-compatible recipe ID (e.g., "minecraft:iron_ingot_from_smelting_iron_ore")"#]
     pub recipe_id: &'static str,
@@ -41,14 +42,14 @@ pub struct CookingRecipe {
     pub experience: f32,
     pub result: RecipeResultStruct,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum CookingRecipeType {
     Blasting(CookingRecipe),
     Smelting(CookingRecipe),
     Smoking(CookingRecipe),
     CampfireCooking(CookingRecipe),
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum CookingRecipeKind {
     Blasting,
     Smelting,
@@ -56,64 +57,74 @@ pub enum CookingRecipeKind {
     CampfireCooking,
 }
 impl From<&CookingRecipeType> for CookingRecipeKind {
+    
     fn from(recipe_type: &CookingRecipeType) -> Self {
         match recipe_type {
-            CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
-            CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
-            CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
-            CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+            CookingRecipeType::Blasting(_) => Self::Blasting,
+            CookingRecipeType::Smelting(_) => Self::Smelting,
+            CookingRecipeType::Smoking(_) => Self::Smoking,
+            CookingRecipeType::CampfireCooking(_) => Self::CampfireCooking,
         }
     }
 }
 impl From<CookingRecipeType> for CookingRecipeKind {
+    
     fn from(recipe_type: CookingRecipeType) -> Self {
         match recipe_type {
-            CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
-            CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
-            CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
-            CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+            CookingRecipeType::Blasting(_) => Self::Blasting,
+            CookingRecipeType::Smelting(_) => Self::Smelting,
+            CookingRecipeType::Smoking(_) => Self::Smoking,
+            CookingRecipeType::CampfireCooking(_) => Self::CampfireCooking,
         }
     }
 }
 impl CookingRecipeKind {
-    pub fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
+    #[must_use]
+    pub const fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
         match self {
-            CookingRecipeKind::Blasting => CookingRecipeType::Blasting(recipe),
-            CookingRecipeKind::Smelting => CookingRecipeType::Smelting(recipe),
-            CookingRecipeKind::Smoking => CookingRecipeType::Smoking(recipe),
-            CookingRecipeKind::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
+            Self::Blasting => CookingRecipeType::Blasting(recipe),
+            Self::Smelting => CookingRecipeType::Smelting(recipe),
+            Self::Smoking => CookingRecipeType::Smoking(recipe),
+            Self::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
+pub struct StonecutterRecipe {
+    pub group: Option<&'static str>,
+    pub ingredient: RecipeIngredientTypes,
+    pub result: RecipeResultStruct,
+}
+#[derive(Clone, Debug, Serialize)]
 pub struct RecipeResultStruct {
     pub id: &'static str,
     pub count: u8,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum RecipeIngredientTypes {
     Simple(&'static str),
     Tagged(&'static str),
     OneOf(&'static [&'static str]),
 }
 impl RecipeIngredientTypes {
+    #[must_use]
     pub fn match_item(&self, item: &Item) -> bool {
         match self {
-            RecipeIngredientTypes::Simple(ingredient) => {
+            Self::Simple(ingredient) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 name == *ingredient
             }
-            RecipeIngredientTypes::Tagged(tag) => item
+            Self::Tagged(tag) => item
                 .is_tagged_with(tag)
                 .expect("Crafting recipe used invalid tag"),
-            RecipeIngredientTypes::OneOf(ingredients) => {
+            Self::OneOf(ingredients) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 ingredients.contains(&name.as_str())
             }
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum RecipeCategoryTypes {
     Equipment,
     Building,
@@ -18269,6 +18280,2209 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         },
     }),
 ];
+pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:andesite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:andesite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:andesite_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:blackstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:blackstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:blackstone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_deepslate",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_deepslate",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_nether_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_polished_blackstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_polished_blackstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:quartz_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_quartz_block",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_red_sandstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:resin_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_resin_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_sandstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_stone_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_stone_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_tuff_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_tuff_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_tuff_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:chiseled_tuff",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobbled_deepslate_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobblestone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobblestone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobblestone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cobblestone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_red_sandstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cut_red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_red_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_red_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_sandstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cut_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:cut_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:dark_prismarine"),
+        result: RecipeResultStruct {
+            id: "minecraft:dark_prismarine_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:dark_prismarine"),
+        result: RecipeResultStruct {
+            id: "minecraft:dark_prismarine_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_tiles"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_tiles"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_tiles"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tile_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tiles",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tiles",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tiles",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:deepslate_tiles",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:diorite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:diorite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:diorite_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:end_stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:end_stone_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:exposed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:exposed_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:granite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:granite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:granite_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mossy_cobblestone"),
+        result: RecipeResultStruct {
+            id: "minecraft:mossy_cobblestone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mossy_cobblestone"),
+        result: RecipeResultStruct {
+            id: "minecraft:mossy_cobblestone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mossy_cobblestone"),
+        result: RecipeResultStruct {
+            id: "minecraft:mossy_cobblestone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mossy_stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:mossy_stone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mossy_stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:mossy_stone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mossy_stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:mossy_stone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mud_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:mud_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mud_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:mud_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:mud_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:mud_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:nether_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:nether_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:nether_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:oxidized_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:oxidized_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_andesite",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_andesite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_andesite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_andesite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_andesite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_andesite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:basalt"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_basalt",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_blackstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_blackstone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:cobbled_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_deepslate"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_deepslate_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_diorite",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_diorite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_diorite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_diorite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_diorite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_diorite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_granite",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_granite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_granite_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_granite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_granite"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_granite_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:polished_tuff_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:prismarine_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:prismarine_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:prismarine_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:prismarine_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:prismarine"),
+        result: RecipeResultStruct {
+            id: "minecraft:prismarine_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:prismarine"),
+        result: RecipeResultStruct {
+            id: "minecraft:prismarine_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:prismarine"),
+        result: RecipeResultStruct {
+            id: "minecraft:prismarine_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:purpur_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:purpur_pillar",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:purpur_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:purpur_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:purpur_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:purpur_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:quartz_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:quartz_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:quartz_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:quartz_pillar",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:quartz_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:quartz_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:quartz_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:quartz_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_nether_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_nether_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_nether_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_nether_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_sandstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_sandstone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:resin_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:resin_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:resin_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:resin_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:resin_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:resin_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:sandstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:sandstone_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_quartz"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_quartz_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_quartz"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_quartz_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_red_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_red_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_red_sandstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_sandstone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_sandstone"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_sandstone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:smooth_stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:smooth_stone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:stone"),
+        result: RecipeResultStruct {
+            id: "minecraft:stone_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff_bricks"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_brick_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:polished_tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_bricks",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:tuff"),
+        result: RecipeResultStruct {
+            id: "minecraft:tuff_wall",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_copper_block"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_exposed_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_exposed_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_oxidized_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:waxed_weathered_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:waxed_weathered_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_chiseled_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_chiseled_copper",
+            count: 1u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_copper_grate",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_cut_copper",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_cut_copper_slab",
+            count: 8u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_cut_copper_slab",
+            count: 2u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_cut_copper_stairs",
+            count: 4u8,
+        },
+    },
+    StonecutterRecipe {
+        group: None,
+        ingredient: RecipeIngredientTypes::Simple("minecraft:weathered_cut_copper"),
+        result: RecipeResultStruct {
+            id: "minecraft:weathered_cut_copper_stairs",
+            count: 1u8,
+        },
+    },
+];
+#[must_use]
 pub fn get_cooking_recipe_with_ingredient(
     ingredient: &Item,
     recipe_type: CookingRecipeKind,
@@ -18291,7 +20505,8 @@ pub fn get_cooking_recipe_with_ingredient(
 }
 #[doc = r" Get the experience value for a recipe by its recipe ID."]
 #[doc = r" Used for calculating XP when extracting from furnace."]
-#[doc = r#" Recipe IDs are in vanilla format like "minecraft:iron_ingot_from_smelting_iron_ore""#]
+#[doc = r#" Recipe IDs are in vanilla format like `"minecraft:iron_ingot_from_smelting_iron_ore"`"#]
+#[must_use]
 pub fn get_recipe_experience(recipe_id: &str) -> Option<f32> {
     RECIPES_COOKING.iter().find_map(|recipe| {
         let cooking_recipe = match recipe {

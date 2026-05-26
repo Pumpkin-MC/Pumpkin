@@ -17,7 +17,7 @@ use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
 /// The constant local ID occupied by the root node.
-pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
+pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).expect("1 is non-zero"));
 
 /// A consumer which takes ambiguity of input (when two or more nodes are satisfied)
 pub trait AmbiguityConsumer {
@@ -346,11 +346,11 @@ impl Tree {
     }
 
     /// Parses the given node, returning an error on failure.
-    pub fn parse(
+    pub async fn parse<'a>(
         &self,
         node_id: NodeId,
-        reader: &mut StringReader,
-        command_context_builder: &mut CommandContextBuilder,
+        reader: &'a mut StringReader<'_>,
+        command_context_builder: &'a mut CommandContextBuilder<'_>,
     ) -> Result<(), CommandSyntaxError> {
         match &self[node_id] {
             AttachedNode::Root(_) => {}
@@ -372,7 +372,11 @@ impl Tree {
             }
             AttachedNode::Argument(node) => {
                 let start = reader.cursor();
-                let result = node.meta.argument_type.parse(reader)?;
+                let result = node
+                    .meta
+                    .argument_type
+                    .parse_with_source(reader, &command_context_builder.source)
+                    .await?;
                 let range = StringRange::between(start, reader.cursor());
                 let parsed = ParsedArgument::new(range, result);
                 command_context_builder.with_argument(node.meta.name.to_string(), Arc::new(parsed));

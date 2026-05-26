@@ -23,7 +23,7 @@ impl ArgumentType for StringArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<String, CommandSyntaxError> {
         match self {
-            Self::SingleWord => reader.read_unquoted_string(),
+            Self::SingleWord => Ok(reader.read_unquoted_string()),
             Self::QuotablePhrase => reader.read_string(),
             Self::GreedyPhrase => {
                 let text = reader.remaining_part().to_owned();

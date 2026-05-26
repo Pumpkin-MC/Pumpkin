@@ -124,7 +124,10 @@ impl LevelChannel {
         ret
     }
     pub fn notify(&self) {
-        let val = self.value.lock().unwrap_or_else(|e| e.into_inner());
+        let val = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         drop(val);
         self.notify.notify_one();
     }

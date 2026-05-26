@@ -94,7 +94,7 @@ impl Goal for TeleportTowardsPlayerGoal {
                     return false;
                 }
                 let player_pos = player.get_entity().pos.load();
-                let mut look_control = mob.get_mob_entity().look_control.lock().await;
+                let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
                 look_control.look_at_with_range(
                     player_pos.x,
                     player_pos.y + PLAYER_EYE_HEIGHT,
@@ -137,7 +137,7 @@ impl Goal for TeleportTowardsPlayerGoal {
         Box::pin(async move {
             self.warmup = to_goal_ticks(5);
             self.unseen_ticks = 0;
-            self.enderman.set_provoked(true).await;
+            self.enderman.set_provoked(true);
         })
     }
 
@@ -176,13 +176,13 @@ impl Goal for TeleportTowardsPlayerGoal {
                 && self.enderman.is_player_staring(player).await
             {
                 if dist_sq < STARE_CLOSE_DISTANCE_SQ {
-                    self.enderman.teleport_randomly().await;
+                    self.enderman.teleport_randomly();
                 }
                 self.unseen_ticks = 0;
             } else if dist_sq > TELEPORT_FAR_DISTANCE_SQ {
                 self.unseen_ticks += 1;
                 if self.unseen_ticks >= to_goal_ticks(30) {
-                    self.enderman.teleport_towards(target.as_ref()).await;
+                    self.enderman.teleport_towards(target.as_ref());
                     self.unseen_ticks = 0;
                 }
             }

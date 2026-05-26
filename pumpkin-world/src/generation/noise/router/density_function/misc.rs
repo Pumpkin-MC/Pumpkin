@@ -21,7 +21,6 @@ use super::{
     IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
 };
 
-#[derive(Clone)]
 pub struct EndIsland {
     sampler: Arc<SimplexNoiseSampler>,
 }
@@ -170,7 +169,6 @@ impl NoiseFunctionComponentRange for WeirdScaled {
     }
 }
 
-#[derive(Clone)]
 pub struct ClampedYGradient {
     data: &'static ClampedYGradientData,
 }
@@ -205,7 +203,6 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
     }
 }
 
-#[derive(Clone)]
 pub struct RangeChoice {
     input_index: usize,
     pub(crate) when_in_index: usize,

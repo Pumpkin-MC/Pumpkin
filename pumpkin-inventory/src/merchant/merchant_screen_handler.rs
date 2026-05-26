@@ -8,7 +8,7 @@ use crate::{
     player::player_inventory::PlayerInventory,
     screen_handler::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
-        ScreenHandlerFuture,
+        ScreenHandlerFuture, offer_or_drop_stack,
     },
     slot::NormalSlot,
 };
@@ -110,7 +110,7 @@ impl ScreenHandler for MerchantScreenHandler {
                 // Drop inputs only, output is virtual/ghost in some sense or just cleared
                 let stack = self.inventory.remove_stack(i).await;
                 if !stack.is_empty() {
-                    player.drop_item(stack, false).await;
+                    offer_or_drop_stack(player, stack).await;
                 }
             }
             // Clear output slot

@@ -3,7 +3,6 @@ use crate::command::suggestion::{Suggestion, SuggestionText};
 use pumpkin_util::text::TextComponent;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
-use std::collections::HashSet;
 
 /// Represents a builder of [`Suggestion`]s.
 pub struct SuggestionsBuilder {
@@ -87,9 +86,9 @@ impl SuggestionsBuilder {
 
     /// Adds all suggestions from another [`SuggestionsBuilder`] to this one.
     #[must_use]
-    pub fn append(mut self, other: &Self) -> Self {
-        for suggestion in &other.result {
-            self.result.push(suggestion.clone());
+    pub fn append(mut self, other: Self) -> Self {
+        for suggestion in other.result {
+            self.result.push(suggestion);
         }
         self
     }
@@ -104,6 +103,162 @@ impl SuggestionsBuilder {
             start,
             result: Vec::new(),
         }
+    }
+
+    /// Takes only the values that satisfy the current builder prefix, and
+    /// suggests them. For this function to work currently, **all values provided
+    /// must be in lowercase**.
+    ///
+    /// Example:
+    /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
+    ///   as `boat` and `blue` start with the letter `b`.
+    /// - If the builder has `bl` instead, only `blue` will get counted.
+    #[must_use]
+    pub fn filter_and_suggest_lowercase(mut self, values: Vec<String>) -> Self {
+        for value in values {
+            if Self::matches_substr(self.remaining_lowercase(), &value) {
+                self = self.suggest(value);
+            }
+        }
+        self
+    }
+
+    /// Takes only the values that satisfy the current builder prefix, and
+    /// suggests them.
+    ///
+    /// Example:
+    /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
+    ///   as `boat` and `blue` start with the letter `b`.
+    /// - If the builder has `bl` instead, only `blue` will get counted.
+    #[must_use]
+    pub fn filter_and_suggest(mut self, values: &[&str]) -> Self {
+        for value in values {
+            if Self::matches_substr(self.remaining_lowercase(), &value.to_lowercase()) {
+                self = self.suggest(value.to_string());
+            }
+        }
+        self
+    }
+
+    /// Takes the value only if it satisfies the current builder prefix, and
+    /// suggests them.
+    #[must_use]
+    pub fn filter_and_suggest_one(mut self, value: impl Into<SuggestionText>) -> Self {
+        let value = value.into();
+        if Self::matches_substr(
+            self.remaining_lowercase(),
+            &value.cached_text().to_lowercase(),
+        ) {
+            self = self.suggest(value);
+        }
+        self
+    }
+
+    /// Takes only the values that satisfy the current builder prefix, and
+    /// suggests them.
+    ///
+    /// Example:
+    /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
+    ///   as `boat` and `blue` start with the letter `b`.
+    /// - If the builder has `bl` instead, only `blue` will get counted.
+    #[must_use]
+    pub fn filter_and_suggest_iter(
+        mut self,
+        values: impl IntoIterator<Item = impl Into<SuggestionText>>,
+    ) -> Self {
+        for value in values {
+            let value = value.into();
+            if Self::matches_substr(
+                self.remaining_lowercase(),
+                &value.cached_text().to_lowercase(),
+            ) {
+                self = self.suggest(value);
+            }
+        }
+        self
+    }
+
+    fn matches_substr(pattern: &str, input: &str) -> bool {
+        let mut current_str = input;
+        while !current_str.starts_with(pattern) {
+            match current_str.find(['.', '_', '/']) {
+                Some(pos) => current_str = &current_str[(pos + 1)..],
+                None => return false,
+            }
+        }
+        true
+    }
+
+    /// A helper method to suggest coordinate-related text.
+    pub fn suggest_3d_coordinates(
+        mut self,
+        suggestions: TextCoordinates,
+        validator: impl Fn(&str) -> bool,
+    ) -> Suggestions {
+        let input = self.remaining();
+        let coordinate = suggestions.get_coordinate();
+
+        if input.is_empty() {
+            let full = format!("{coordinate} {coordinate} {coordinate}");
+            if validator(&full) {
+                self = self.filter_and_suggest_one(coordinate.to_string());
+                self = self.filter_and_suggest_one(format!("{coordinate} {coordinate}"));
+                self = self.filter_and_suggest_one(full);
+            }
+        } else {
+            let mut split = input.split(' ');
+
+            match (split.next(), split.next(), split.next()) {
+                (Some(part1), None, None) => {
+                    let full = format!("{part1} {coordinate} {coordinate}");
+                    if validator(&full) {
+                        let partial = format!("{part1} {coordinate}");
+                        self = self.filter_and_suggest_one(partial);
+                        self = self.filter_and_suggest_one(full);
+                    }
+                }
+                (Some(part1), Some(part2), None) => {
+                    let full = format!("{part1} {part2} {coordinate}");
+                    if validator(&full) {
+                        self = self.filter_and_suggest_one(full);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        self.build()
+    }
+
+    /// A helper method to suggest coordinate-related text.
+    pub fn suggest_2d_coordinates(
+        mut self,
+        suggestions: TextCoordinates,
+        validator: impl Fn(&str) -> bool,
+    ) -> Suggestions {
+        let input = self.remaining();
+        let coordinate = suggestions.get_coordinate();
+
+        if input.is_empty() {
+            let full = format!("{coordinate} {coordinate}");
+            if validator(&full) {
+                self = self.filter_and_suggest_one(coordinate.to_string());
+                self = self.filter_and_suggest_one(full);
+            }
+        } else {
+            let mut split = input.split(' ');
+
+            if let Some(part) = split.next()
+                && split.next().is_none()
+            {
+                let full = format!("{part} {coordinate}");
+                if validator(&full) {
+                    self = self.filter_and_suggest_one(full);
+                }
+            }
+        }
+
+        self.build()
     }
 }
 
@@ -148,11 +303,13 @@ impl Suggestions {
             return input[0].borrow().clone();
         }
 
-        let mut texts = HashSet::new();
+        let mut texts = Vec::new();
 
         for suggestions in &input {
             for suggestion in &suggestions.borrow().suggestions {
-                texts.insert(suggestion);
+                if !texts.contains(&suggestion) {
+                    texts.push(suggestion);
+                }
             }
         }
 
@@ -178,11 +335,14 @@ impl Suggestions {
             .iter()
             .map(|s| s.borrow().range)
             .reduce(StringRange::encompass)
-            .unwrap();
+            .expect("Suggestions list is not empty, so range should exist");
 
-        let mut texts: HashSet<Suggestion> = HashSet::new();
+        let mut texts = Vec::new();
         for suggestion in &suggestions {
-            texts.insert(suggestion.borrow().expand(command, range));
+            let suggestion = suggestion.borrow().expand(command, range);
+            if !texts.contains(&suggestion) {
+                texts.push(suggestion);
+            }
         }
 
         Self::new(range, Self::sort(texts))
@@ -192,7 +352,7 @@ impl Suggestions {
     ///
     /// 1. If both suggestions are integers, their integral value is compared.
     /// 2. Otherwise, compare their text lexicographically.
-    fn sort(suggestions: HashSet<Suggestion>) -> Vec<Suggestion> {
+    fn sort(suggestions: Vec<Suggestion>) -> Vec<Suggestion> {
         enum PushSide {
             Text,
             Integer,
@@ -207,7 +367,13 @@ impl Suggestions {
         for suggestion in suggestions {
             match suggestion.text {
                 SuggestionText::Text(text) => {
-                    text_suggestions.push((text, suggestion.tooltip, suggestion.range));
+                    let text_lowercase = text.to_lowercase();
+                    text_suggestions.push((
+                        text,
+                        suggestion.tooltip,
+                        suggestion.range,
+                        text_lowercase,
+                    ));
                 }
                 SuggestionText::Integer { cached_text, value } => integer_suggestions.push((
                     cached_text,
@@ -218,9 +384,7 @@ impl Suggestions {
             }
         }
 
-        // We need not preserve the original order as
-        // there cannot be two or more equivalent suggestions in a set.
-        text_suggestions.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        text_suggestions.sort_by(|a, b| a.3.cmp(&b.3));
         integer_suggestions.sort_unstable_by_key(|x| x.1);
 
         let mut text_iter = text_suggestions.into_iter().peekable();
@@ -236,7 +400,10 @@ impl Suggestions {
                 (Some(text), Some(integer)) => match text.0.cmp(&integer.0) {
                     Ordering::Less => PushSide::Text,
                     Ordering::Greater => PushSide::Integer,
-                    Ordering::Equal => unreachable!(),
+                    Ordering::Equal => {
+                        tracing::error!("Duplicate suggestion found during merge");
+                        PushSide::Text
+                    }
                 },
                 (Some(_), None) => PushSide::Text,
                 (None, Some(_)) => PushSide::Integer,
@@ -245,7 +412,9 @@ impl Suggestions {
 
             match side {
                 PushSide::Text => {
-                    let text = text_iter.next().unwrap();
+                    let text = text_iter.next().expect(
+                        "text_iter should have a next value because side is PushSide::Text",
+                    );
                     suggestions.push(Suggestion {
                         text: SuggestionText::Text(text.0),
                         tooltip: text.1,
@@ -253,7 +422,9 @@ impl Suggestions {
                     });
                 }
                 PushSide::Integer => {
-                    let text = integer_iter.next().unwrap();
+                    let text = integer_iter.next().expect(
+                        "integer_iter should have a next value because side is PushSide::Integer",
+                    );
                     suggestions.push(Suggestion {
                         text: SuggestionText::Integer {
                             cached_text: text.0,
@@ -268,5 +439,26 @@ impl Suggestions {
         }
 
         suggestions
+    }
+}
+
+/// Represents server-side only coordinate suggestions.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TextCoordinates {
+    /// Represents `^ ^ ^`.
+    Local,
+
+    /// Represents `~ ~ ~`.
+    Global,
+}
+
+impl TextCoordinates {
+    /// Get the symbol of a coordinate of this suggestion set.
+    #[must_use]
+    pub const fn get_coordinate(self) -> &'static str {
+        match self {
+            Self::Local => "^",
+            Self::Global => "~",
+        }
     }
 }

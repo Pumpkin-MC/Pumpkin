@@ -18,5 +18,7 @@ jobs:
     steps:
     - name: Checkout Actions Repository
       uses: actions/checkout@v6
+      with:
+        submodules: recursive
     - name: Spell Check Repo
-      uses: crate-ci/typos@v1.45.1
+      uses: crate-ci/typos@v1.46.2

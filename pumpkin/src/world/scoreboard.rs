@@ -2,11 +2,15 @@ use std::collections::HashMap;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
-    NumberFormat,
+    BClientPacket, ClientPacket, NumberFormat,
+    bedrock::client::scoreboard::{
+        CRemoveObjective as BRemoveObjective, CSetDisplayObjective as BSetDisplayObjective,
+        CSetScore as BSetScore, ScoreEntry as BScoreEntry,
+    },
     codec::var_int::VarInt,
     java::client::play::{
-        CDisplayObjective, CSetPlayerTeam, CUpdateObjectives, CUpdateScore, RenderType, TeamMethod,
-        TeamParameters,
+        CDisplayObjective, CSetPlayerTeam, CUpdateObjectives, CUpdateScore, Mode, RenderType,
+        TeamMethod, TeamParameters,
     },
 };
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -22,6 +26,14 @@ pub struct Scoreboard {
 }
 
 impl Scoreboard {
+    async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
+        world: &World,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        world.broadcast_editioned(je_packet, be_packet).await;
+    }
+
     pub async fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'static>) {
         if self.objectives.contains_key(objective.name) {
             warn!(
@@ -30,21 +42,31 @@ impl Scoreboard {
             );
             return;
         }
-        world
-            .broadcast_packet_all(&CUpdateObjectives::new(
-                objective.name.to_string(),
-                pumpkin_protocol::java::client::play::Mode::Add,
-                objective.display_name.clone(),
-                objective.render_type,
-                objective.number_format.clone(),
-            ))
-            .await;
-        world
-            .broadcast_packet_all(&CDisplayObjective::new(
-                ScoreboardDisplaySlot::Sidebar,
-                objective.name.to_string(),
-            ))
-            .await;
+
+        let je_update = CUpdateObjectives::new(
+            objective.name.to_string(),
+            Mode::Add,
+            objective.display_name.clone(),
+            objective.render_type,
+            objective.number_format.clone(),
+        );
+
+        let be_update = BSetDisplayObjective {
+            display_slot: "sidebar".to_string(), // Default to sidebar
+            objective_name: objective.name.to_string(),
+            display_name: objective.display_name.clone().get_text(),
+            criteria_name: "dummy".to_string(),
+            sort_order: VarInt(0),
+        };
+
+        Self::broadcast_editioned(world, &je_update, &be_update).await;
+
+        let je_display =
+            CDisplayObjective::new(ScoreboardDisplaySlot::Sidebar, objective.name.to_string());
+        // Bedrock's SetDisplayObjective already sets the slot.
+
+        world.broadcast_packet_all(&je_display);
+
         self.objectives
             .insert(objective.name.to_string(), objective);
     }
@@ -57,15 +79,21 @@ impl Scoreboard {
             );
             return;
         }
-        world
-            .broadcast_packet_all(&CUpdateObjectives::new(
-                name.to_string(),
-                pumpkin_protocol::java::client::play::Mode::Remove,
-                TextComponent::empty(),
-                pumpkin_protocol::java::client::play::RenderType::Integer,
-                None,
-            ))
-            .await;
+
+        let je_packet = CUpdateObjectives::new(
+            name.to_string(),
+            Mode::Remove,
+            TextComponent::empty(),
+            RenderType::Integer,
+            None,
+        );
+
+        let be_packet = BRemoveObjective {
+            objective_name: name.to_string(),
+        };
+
+        Self::broadcast_editioned(world, &je_packet, &be_packet).await;
+
         self.objectives.remove(name);
         self.scores.remove(name);
     }
@@ -78,15 +106,28 @@ impl Scoreboard {
             );
             return;
         }
-        world
-            .broadcast_packet_all(&CUpdateScore::new(
-                score.entity_name.to_string(),
-                score.objective_name.to_string(),
-                score.value,
-                score.display_name.clone(),
-                score.number_format.clone(),
-            ))
-            .await;
+
+        let je_packet = CUpdateScore::new(
+            score.entity_name.to_string(),
+            score.objective_name.to_string(),
+            score.value,
+            score.display_name.clone(),
+            score.number_format.clone(),
+        );
+
+        let be_packet = BSetScore {
+            action: VarInt(0), // Change
+            entries: vec![BScoreEntry {
+                scoreboard_id: score.entity_name.as_ptr() as i64, // Hacky ID
+                objective_name: score.objective_name.to_string(),
+                score: score.value,
+                entry_type: VarInt(3), // Fake player/Literal
+                entity_unique_id: 0,
+                custom_name: score.entity_name.to_string(),
+            }],
+        };
+
+        Self::broadcast_editioned(world, &je_packet, &be_packet).await;
 
         self.scores
             .entry(score.objective_name.to_string())
@@ -95,19 +136,29 @@ impl Scoreboard {
     }
 
     pub async fn remove_score(&mut self, world: &World, entity_name: &str, objective_name: &str) {
-        world
-            .broadcast_packet_all(&CUpdateScore::new_remove(
-                entity_name.to_string(),
-                objective_name.to_string(),
-            ))
-            .await;
+        let je_packet =
+            CUpdateScore::new_remove(entity_name.to_string(), objective_name.to_string());
+
+        let be_packet = BSetScore {
+            action: VarInt(1), // Remove
+            entries: vec![BScoreEntry {
+                scoreboard_id: entity_name.as_ptr() as i64,
+                objective_name: objective_name.to_string(),
+                score: VarInt(0),
+                entry_type: VarInt(3),
+                entity_unique_id: 0,
+                custom_name: entity_name.to_string(),
+            }],
+        };
+
+        Self::broadcast_editioned(world, &je_packet, &be_packet).await;
 
         if let Some(objective_scores) = self.scores.get_mut(objective_name) {
             objective_scores.remove(entity_name);
         }
     }
 
-    pub async fn add_team(&mut self, world: &World, team: Team) {
+    pub fn add_team(&mut self, world: &World, team: Team) {
         if self.teams.contains_key(&team.name) {
             warn!(
                 "Tried to create Team which does already exist, {}",
@@ -126,19 +177,17 @@ impl Scoreboard {
             player_suffix: &team.player_suffix,
         };
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team.name.clone(),
-                method: TeamMethod::Create,
-                parameters: Some(parameters),
-                players: team.players.clone(),
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team.name.clone(),
+            method: TeamMethod::Create,
+            parameters: Some(parameters),
+            players: team.players.clone().into(),
+        });
 
         self.teams.insert(team.name.clone(), team);
     }
 
-    pub async fn update_team(&mut self, world: &World, team: Team) {
+    pub fn update_team(&mut self, world: &World, team: Team) {
         if !self.teams.contains_key(&team.name) {
             warn!("Tried to update Team which does not exist, {}", team.name);
             return;
@@ -154,37 +203,33 @@ impl Scoreboard {
             player_suffix: &team.player_suffix,
         };
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team.name.clone(),
-                method: TeamMethod::Update,
-                parameters: Some(parameters),
-                players: Vec::new(),
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team.name.clone(),
+            method: TeamMethod::Update,
+            parameters: Some(parameters),
+            players: Box::new([]),
+        });
 
         self.teams.insert(team.name.clone(), team);
     }
 
-    pub async fn remove_team(&mut self, world: &World, name: &str) {
+    pub fn remove_team(&mut self, world: &World, name: &str) {
         if !self.teams.contains_key(name) {
             warn!("Tried to remove Team which does not exist, {}", name);
             return;
         }
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: name.to_string(),
-                method: TeamMethod::Remove,
-                parameters: None,
-                players: Vec::new(),
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: name.to_string(),
+            method: TeamMethod::Remove,
+            parameters: None,
+            players: Box::new([]),
+        });
 
         self.teams.remove(name);
     }
 
-    pub async fn add_player_to_team(&mut self, world: &World, team_name: &str, player: String) {
+    pub fn add_player_to_team(&mut self, world: &World, team_name: &str, player: String) {
         let Some(team) = self.teams.get_mut(team_name) else {
             warn!(
                 "Tried to add player to Team which does not exist, {}",
@@ -197,19 +242,17 @@ impl Scoreboard {
             return;
         }
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team_name.to_string(),
-                method: TeamMethod::AddPlayers,
-                parameters: None,
-                players: vec![player.clone()],
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team_name.to_string(),
+            method: TeamMethod::AddPlayers,
+            parameters: None,
+            players: vec![player.clone()].into(),
+        });
 
         team.players.push(player);
     }
 
-    pub async fn remove_player_from_team(&mut self, world: &World, team_name: &str, player: &str) {
+    pub fn remove_player_from_team(&mut self, world: &World, team_name: &str, player: &str) {
         let Some(team) = self.teams.get_mut(team_name) else {
             warn!(
                 "Tried to remove player from Team which does not exist, {}",
@@ -222,14 +265,12 @@ impl Scoreboard {
             return;
         }
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team_name.to_string(),
-                method: TeamMethod::RemovePlayers,
-                parameters: None,
-                players: vec![player.to_string()],
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team_name.to_string(),
+            method: TeamMethod::RemovePlayers,
+            parameters: None,
+            players: vec![player.to_string()].into(),
+        });
 
         team.players.retain(|p| p != player);
     }

@@ -110,6 +110,7 @@ pub fn build() -> TokenStream {
         impl Potion {
             #variants
 
+            #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #name_to_type

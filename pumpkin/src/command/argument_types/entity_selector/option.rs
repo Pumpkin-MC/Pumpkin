@@ -1,29 +1,46 @@
 use crate::command::argument_types::FromStringReader;
-use crate::command::argument_types::entity_selector::parser::{EntitySelectorParser, Flags};
+use crate::command::argument_types::entity_selector::parser::{
+    EntitySelectorParser, EntitySelectorParserSuggestions, Flags,
+};
 use crate::command::argument_types::entity_selector::{EntitySelectorPredicate, Order};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use pumpkin_data::translation;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
 use std::str::FromStr;
 
-pub const UNKNOWN_OPTION_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_UNKNOWN);
-pub const INAPPLICABLE_OPTION_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_INAPPLICABLE);
-pub const DISTANCE_NEGATIVE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_DISTANCE_NEGATIVE);
-pub const LEVEL_NEGATIVE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_LEVEL_NEGATIVE);
-pub const LIMIT_TOO_SMALL_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_LIMIT_TOOSMALL);
-pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE);
-pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID);
+pub const UNKNOWN_OPTION_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_UNKNOWN,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_UNKNOWN,
+);
+pub const INAPPLICABLE_OPTION_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_INAPPLICABLE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_INAPPLICABLE,
+);
+pub const DISTANCE_NEGATIVE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_DISTANCE_NEGATIVE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_DISTANCE_NEGATIVE,
+);
+pub const LEVEL_NEGATIVE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LEVEL_NEGATIVE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LEVEL_NEGATIVE,
+);
+pub const LIMIT_TOO_SMALL_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LIMIT_TOOSMALL,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LIMIT_TOOSMALL,
+);
+pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE,
+);
+pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID,
+);
 
 /// Options to customize an [`EntitySelectorParser`].
 ///
@@ -51,6 +68,31 @@ pub enum EntitySelectorOption {
     Scores,
     Advancements,
     Predicate,
+}
+
+impl EntitySelectorOption {
+    pub const VALUES: [Self; 20] = [
+        Self::Distance,
+        Self::Level,
+        Self::X,
+        Self::Y,
+        Self::Z,
+        Self::Dx,
+        Self::Dy,
+        Self::Dz,
+        Self::XRotation,
+        Self::YRotation,
+        Self::Limit,
+        Self::Sort,
+        Self::Gamemode,
+        Self::Team,
+        Self::Type,
+        Self::Tag,
+        Self::Nbt,
+        Self::Scores,
+        Self::Advancements,
+        Self::Predicate,
+    ];
 }
 
 /// Implements parsing for a coordinate option.
@@ -193,7 +235,8 @@ impl EntitySelectorOption {
                 }
             }
             Self::Sort => {
-                let string = parser.reader.read_unquoted_string()?;
+                let string = parser.reader.read_unquoted_string();
+                parser.suggestions = EntitySelectorParserSuggestions::Sort;
                 parser.order = match string.as_str() {
                     "nearest" => Ok(Order::Nearest),
                     "furthest" => Ok(Order::Furthest),
@@ -209,11 +252,14 @@ impl EntitySelectorOption {
                 Ok(())
             }
             Self::Gamemode => {
+                parser.suggestions = EntitySelectorParserSuggestions::Gamemode;
+                let start = parser.reader.cursor();
                 let invert = parser.consume_inverted_start();
                 if parser.has_flag(Flags::GAMEMODE_NOT_EQUALS_SET) && !invert {
+                    parser.reader.set_cursor(start);
                     return Err(self.inapplicable_error(parser.reader));
                 }
-                let string = parser.reader.read_unquoted_string()?;
+                let string = parser.reader.read_unquoted_string();
                 if let Ok(gamemode) = GameMode::from_str(&string) {
                     parser.set_includes_entities(false);
                     parser.add_predicate(EntitySelectorPredicate::GameMode(gamemode, invert));
@@ -227,6 +273,7 @@ impl EntitySelectorOption {
                     );
                     Ok(())
                 } else {
+                    parser.reader.set_cursor(start);
                     Err(GAMEMODE_INVALID_ERROR_TYPE
                         .create(parser.reader, TextComponent::text(string)))
                 }
@@ -261,5 +308,22 @@ impl EntitySelectorOption {
             Self::Advancements => !parser.has_flag(Flags::ADVANCEMENTS_SET),
             Self::Tag | Self::Nbt | Self::Predicate => true,
         }
+    }
+
+    pub fn suggest_names(
+        parser: &EntitySelectorParser,
+        mut builder: SuggestionsBuilder,
+    ) -> SuggestionsBuilder {
+        for option in Self::VALUES {
+            let lower_prefix = builder.remaining_lowercase();
+            if option.name().starts_with(lower_prefix) && option.can_use(parser) {
+                let key = format!("argument.entity.options.{}.description", option.name());
+                builder = builder.suggest_with_tooltip(
+                    format!("{}=", option.name()),
+                    TextComponent::translate_cross(key.clone(), key, []),
+                );
+            }
+        }
+        builder
     }
 }

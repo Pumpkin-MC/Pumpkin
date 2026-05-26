@@ -57,15 +57,20 @@ impl CommandExecutor for BanListCommandExecutor {
             if entries.is_empty() {
                 source
                     .send_feedback(
-                        TextComponent::translate(translation::COMMANDS_BANLIST_NONE, []),
+                        TextComponent::translate_cross(
+                            translation::java::COMMANDS_BANLIST_NONE,
+                            translation::java::COMMANDS_BANLIST_NONE,
+                            [],
+                        ),
                         false,
                     )
                     .await;
             } else {
                 source
                     .send_feedback(
-                        TextComponent::translate(
-                            translation::COMMANDS_BANLIST_LIST,
+                        TextComponent::translate_cross(
+                            translation::java::COMMANDS_BANLIST_LIST,
+                            translation::java::COMMANDS_BANLIST_LIST,
                             [TextComponent::text(entries.len().to_string())],
                         ),
                         false,
@@ -75,8 +80,9 @@ impl CommandExecutor for BanListCommandExecutor {
                 for entry in entries {
                     source
                         .send_feedback(
-                            TextComponent::translate(
-                                translation::COMMANDS_BANLIST_ENTRY,
+                            TextComponent::translate_cross(
+                                translation::java::COMMANDS_BANLIST_ENTRY,
+                                translation::java::COMMANDS_BANLIST_ENTRY,
                                 [
                                     TextComponent::text(entry.name),
                                     TextComponent::text(entry.source),

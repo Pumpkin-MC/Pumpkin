@@ -16,8 +16,7 @@ impl BlockBehaviour for EndRodBlock {
 
             let blockstate = args
                 .world
-                .get_block_state_id(&args.position.offset(args.direction.to_offset()))
-                .await;
+                .get_block_state_id(&args.position.offset(args.direction.to_offset()));
 
             if Block::from_state_id(blockstate).eq(args.block)
                 && EndRodLikeProperties::from_state_id(blockstate, args.block).facing

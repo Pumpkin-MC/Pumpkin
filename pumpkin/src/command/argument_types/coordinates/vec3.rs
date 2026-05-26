@@ -1,15 +1,21 @@
+use std::pin::Pin;
+
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::coordinates::Coordinates;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder, TextCoordinates};
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 
-pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS3D_INCOMPLETE);
+pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS3D_INCOMPLETE,
+    translation::java::ARGUMENT_POS3D_INCOMPLETE,
+);
 
+#[derive(Debug, Default)]
 /// An argument type for a 3-dimensional vector.
 pub enum Vec3ArgumentType {
     /// The default `Vec3ArgumentType` variant.
@@ -21,6 +27,7 @@ pub enum Vec3ArgumentType {
     /// (the coordinate is integral) and it is not relative,
     /// a `+0.5` offset is added to it.
     ///
+    #[default]
     Default,
     /// No center correction occurs for this `Vec3ArgumentType` variant.
     Uncorrected,
@@ -51,6 +58,26 @@ impl ArgumentType for Vec3ArgumentType {
 
     fn examples(&self) -> Vec<String> {
         examples!("1 1 1", "3 ~34 ~-2", "40 50 60", "^ ^4 ^3")
+    }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        _context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        Box::pin(async move {
+            let remainder = builder.remaining();
+
+            let suggestioned_coordinates = if remainder.bytes().next() == Some(b'^') {
+                TextCoordinates::Local
+            } else {
+                TextCoordinates::Global
+            };
+
+            builder.suggest_3d_coordinates(suggestioned_coordinates, |value| {
+                self.parse(&mut StringReader::new(value)).is_ok()
+            })
+        })
     }
 }
 

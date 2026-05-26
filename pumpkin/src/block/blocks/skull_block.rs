@@ -36,7 +36,7 @@ impl BlockBehaviour for SkullBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = SkeletonSkullLikeProperties::from_state_id(state.id, args.block);
             let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
             if props.powered != is_receiving_power {

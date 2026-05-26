@@ -418,6 +418,7 @@ impl StatusEffect {
         translation_key: "effect.minecraft.wither",
         attribute_modifiers: &[],
     };
+    #[must_use]
     pub fn from_name(name: &str) -> Option<&'static Self> {
         match name {
             "absorption" => Some(&Self::ABSORPTION),
@@ -463,6 +464,7 @@ impl StatusEffect {
             _ => None,
         }
     }
+    #[must_use]
     pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
         match name {
             "minecraft:absorption" => Some(&Self::ABSORPTION),
@@ -510,9 +512,11 @@ impl StatusEffect {
     }
 }
 impl IDSetContent for StatusEffect {
+    
     fn registry_id(&self) -> u16 {
         self.id as u16
     }
+    
     fn from_id(id: u16) -> Option<&'static Self> {
         match id {
             21u16 => Some(&Self::ABSORPTION),
@@ -558,9 +562,11 @@ impl IDSetContent for StatusEffect {
             _ => None,
         }
     }
+    
     fn from_str(name: &str) -> Option<&'static Self> {
-        StatusEffect::from_minecraft_name(name)
+        Self::from_minecraft_name(name)
     }
+    
     fn to_string(&self) -> String {
         self.minecraft_name.to_string()
     }

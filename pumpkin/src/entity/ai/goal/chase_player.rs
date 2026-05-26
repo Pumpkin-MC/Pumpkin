@@ -83,7 +83,7 @@ impl Goal for ChasePlayerGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            let mut navigator = mob.get_mob_entity().navigator.lock().await;
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
             navigator.stop();
         })
     }
@@ -93,7 +93,7 @@ impl Goal for ChasePlayerGoal {
             if let Some(player) = &self.target {
                 let player_pos = player.get_entity().pos.load();
                 let eye_y = player_pos.y + PLAYER_EYE_HEIGHT;
-                let mut look_control = mob.get_mob_entity().look_control.lock().await;
+                let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
                 look_control.look_at(mob, player_pos.x, eye_y, player_pos.z);
             }
         })

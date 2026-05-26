@@ -55,7 +55,7 @@ impl DynamicOps for NbtOps {
     }
 
     fn create_string(&self, data: &str) -> Self::Value {
-        NbtTag::String(data.to_string())
+        NbtTag::String(data.into())
     }
 
     fn create_list<I>(&self, values: I) -> Self::Value
@@ -151,7 +151,7 @@ impl DynamicOps for NbtOps {
             }
 
             NbtTag::ByteArray(b) => DataResult::new_success(NbtIter::ByteArray(
-                b.into_iter().map(|b| Self.create_byte(b as i8)),
+                b.into_iter().map(|b| Self.create_byte(b)),
             )),
             NbtTag::IntArray(i) => DataResult::new_success(NbtIter::IntArray(
                 i.into_iter().map(|i| Self.create_int(i)),
@@ -164,16 +164,16 @@ impl DynamicOps for NbtOps {
         }
     }
 
-    fn get_byte_buffer(&self, input: Self::Value) -> DataResult<Box<[u8]>> {
+    fn get_byte_list(&self, input: Self::Value) -> DataResult<Vec<i8>> {
         if let NbtTag::ByteArray(b) = input {
-            DataResult::new_success(b)
+            DataResult::new_success(b.into())
         } else {
-            impl_get_list!(box self, input, "bytes")
+            impl_get_list!(self, input, "bytes")
         }
     }
 
-    fn create_byte_buffer(&self, buffer: Vec<u8>) -> Self::Value {
-        NbtTag::ByteArray(buffer.into_boxed_slice())
+    fn create_byte_list(&self, buffer: Vec<i8>) -> Self::Value {
+        NbtTag::ByteArray(buffer.into())
     }
 
     fn get_int_list(&self, input: Self::Value) -> DataResult<Vec<i32>> {
@@ -284,7 +284,7 @@ impl DynamicOps for NbtOps {
                 compound
                     .child_tags
                     .into_iter()
-                    .filter(|s| s.0 != key)
+                    .filter(|s| s.0.as_ref() != key)
                     .collect(),
             )
         } else {
@@ -301,7 +301,7 @@ impl DynamicOps for NbtOps {
             NbtTag::Long(l) => out_ops.create_long(l),
             NbtTag::Float(f) => out_ops.create_float(f),
             NbtTag::Double(d) => out_ops.create_double(d),
-            NbtTag::ByteArray(b) => out_ops.create_byte_buffer(b.to_vec()),
+            NbtTag::ByteArray(b) => out_ops.create_byte_list(b.to_vec()),
             NbtTag::String(s) => out_ops.create_string(&s),
             NbtTag::List(_) => self.convert_list(out_ops, input),
             NbtTag::Compound(_) => self.convert_map(out_ops, input),
@@ -326,11 +326,9 @@ impl NbtOps {
     /// If `compound` only has one element with an empty key (`""`), it returns that element.
     /// Otherwise, this simply returns a new [`NbtTag::Compound`] with `compound`.
     fn try_unwrap(mut compound: NbtCompound) -> NbtTag {
-        if compound.child_tags.len() == 1
-            && let Some(_) = compound.get("")
-        {
+        if compound.child_tags.len() == 1 && compound.has("") {
             // Remove the element to own the contained tag.
-            compound.child_tags.remove(0).1
+            compound.child_tags.remove("").unwrap()
         } else {
             NbtTag::from(compound)
         }
@@ -341,7 +339,7 @@ impl NbtOps {
 enum NbtIter {
     List(IntoIter<NbtTag>),
     CompoundList(Map<IntoIter<NbtTag>, fn(NbtTag) -> NbtTag>),
-    ByteArray(Map<IntoIter<u8>, fn(u8) -> NbtTag>),
+    ByteArray(Map<IntoIter<i8>, fn(i8) -> NbtTag>),
     IntArray(Map<IntoIter<i32>, fn(i32) -> NbtTag>),
     LongArray(Map<IntoIter<i64>, fn(i64) -> NbtTag>),
 }
@@ -469,7 +467,7 @@ impl ListCollector {
                     NbtTag::IntArray(list) => list.len(),
                     NbtTag::LongArray(list) => list.len(),
 
-                    _ => unreachable!(),
+                    _ => return None,
                 };
 
                 if len == 0 {
@@ -479,11 +477,13 @@ impl ListCollector {
                 // From this point onwards, we know that the list is not empty.
                 match tag {
                     NbtTag::List(list) => Some(Self::Generic(InnerGenericListCollector::new(list))),
-                    NbtTag::ByteArray(list) => Some(Self::Byte(InnerByteListCollector::new(list))),
+                    NbtTag::ByteArray(list) => {
+                        Some(Self::Byte(InnerByteListCollector::new(list.into())))
+                    }
                     NbtTag::IntArray(list) => Some(Self::Int(InnerIntListCollector::new(list))),
                     NbtTag::LongArray(list) => Some(Self::Long(InnerLongListCollector::new(list))),
 
-                    _ => unreachable!(),
+                    _ => None,
                 }
             }
 
@@ -548,9 +548,8 @@ impl InnerListCollector for InnerGenericListCollector {
     where
         Self: Sized,
     {
-        match &mut self.result {
-            NbtTag::List(list) => list.push(tag),
-            _ => unreachable!(),
+        if let NbtTag::List(list) = &mut self.result {
+            list.push(tag);
         }
         ListCollector::Generic(self)
     }
@@ -595,21 +594,13 @@ impl InnerListCollector for InnerByteListCollector {
     }
 
     fn result(self) -> NbtTag {
-        NbtTag::ByteArray(
-            self.list
-                .into_iter()
-                .map(|i| i as u8)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-        )
+        NbtTag::ByteArray(self.list.into())
     }
 }
 
 impl InnerByteListCollector {
-    fn new(list: Box<[u8]>) -> Self {
-        Self {
-            list: list.into_iter().map(|i| i as i8).collect(),
-        }
+    const fn new(list: Vec<i8>) -> Self {
+        Self { list }
     }
 }
 
@@ -680,13 +671,13 @@ mod test {
         );
 
         // Byte list collector
-        let tag = NbtTag::ByteArray(Box::new([255, 45, 100]));
+        let tag = NbtTag::ByteArray(vec![-1, 45, 100].into());
 
         assert_eq!(
             ListCollector::new(tag)
                 .expect("List collector should exist")
                 .result(),
-            NbtTag::ByteArray(Box::new([255, 45, 100]))
+            NbtTag::ByteArray(vec![-1, 45, 100].into())
         );
 
         // Long list
@@ -715,14 +706,14 @@ mod test {
         let mut collector = ListCollector::new_collector();
 
         collector = collector.accept(NbtTag::Byte(99));
-        collector = collector.accept(NbtTag::String("99".to_string()));
+        collector = collector.accept(NbtTag::String("99".into()));
         collector = collector.accept(NbtTag::LongArray(vec![1, 2, 3]));
 
         assert_eq!(
             collector.result(),
             NbtTag::List(vec![
                 NbtTag::Byte(99),
-                NbtTag::String("99".to_string()),
+                NbtTag::String("99".into()),
                 NbtTag::LongArray(vec![1, 2, 3])
             ])
         );

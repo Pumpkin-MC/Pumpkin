@@ -106,9 +106,13 @@ fn render_syntax_error_messages(syntax_error: CommandSyntaxError) -> Vec<TextCom
     }
 
     context_message = context_message.add_child(
-        TextComponent::translate(translation::COMMAND_CONTEXT_HERE, [])
-            .color_named(NamedColor::Red)
-            .italic(),
+        TextComponent::translate_cross(
+            translation::java::COMMAND_CONTEXT_HERE,
+            translation::java::COMMAND_CONTEXT_HERE,
+            [],
+        )
+        .color_named(NamedColor::Red)
+        .italic(),
     );
 
     vec![syntax_error.message, context_message]
@@ -748,7 +752,7 @@ mod test {
 
         let here_component = &context.extra[3];
         if let TextContent::Translate { translate, .. } = here_component.content.as_ref() {
-            assert_eq!(translate, translation::COMMAND_CONTEXT_HERE);
+            assert_eq!(translate, translation::java::COMMAND_CONTEXT_HERE);
         } else {
             panic!("expected translate component for command.context.here");
         }

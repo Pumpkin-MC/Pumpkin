@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 pub struct TrackedId {
     pub v1_21: u8,
     pub v1_21_2: u8,
@@ -12,17 +12,17 @@ pub struct TrackedId {
     pub v26_1: u8,
 }
 impl TrackedId {
-    pub fn get(&self, version: &MinecraftVersion) -> u8 {
+    pub fn get(&self, version: &JavaMinecraftVersion) -> u8 {
         match version {
-            pumpkin_util::version::MinecraftVersion::V_1_21 => self.v1_21,
-            pumpkin_util::version::MinecraftVersion::V_1_21_2 => self.v1_21_2,
-            pumpkin_util::version::MinecraftVersion::V_1_21_4 => self.v1_21_4,
-            pumpkin_util::version::MinecraftVersion::V_1_21_5 => self.v1_21_5,
-            pumpkin_util::version::MinecraftVersion::V_1_21_6 => self.v1_21_6,
-            pumpkin_util::version::MinecraftVersion::V_1_21_7 => self.v1_21_7,
-            pumpkin_util::version::MinecraftVersion::V_1_21_9 => self.v1_21_9,
-            pumpkin_util::version::MinecraftVersion::V_1_21_11 => self.v1_21_11,
-            pumpkin_util::version::MinecraftVersion::V_26_1 => self.v26_1,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21 => self.v1_21,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => self.v1_21_2,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => self.v1_21_4,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => self.v1_21_5,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => self.v1_21_6,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => self.v1_21_7,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => self.v1_21_9,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => self.v1_21_11,
+            pumpkin_util::version::JavaMinecraftVersion::V_26_1 => self.v26_1,
             _ => self.v26_1,
         }
     }

@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity;
 use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::entities::daylight_detector::DaylightDetectorBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
@@ -21,14 +21,13 @@ impl BlockBehaviour for DaylightDetectorBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .add_block_entity(Arc::new(DaylightDetectorBlockEntity::new(*args.position)))
-                .await;
+                .add_block_entity(Arc::new(DaylightDetectorBlockEntity::new(*args.position)));
         })
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 
@@ -39,7 +38,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
                 return BlockActionResult::Pass;
             }
 
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let props = DaylightDetectorProperties::from_state_id(state.id, args.block);
 
             self.update_inverted(props, args.world, args.position, args.block)

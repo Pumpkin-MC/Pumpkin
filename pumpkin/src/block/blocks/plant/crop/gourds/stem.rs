@@ -58,10 +58,8 @@ impl StemBlock {
 }
 
 impl BlockBehaviour for StemBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -84,7 +82,7 @@ impl BlockBehaviour for StemBlock {
             // TODO add light level check
             let f: f32 = get_available_moisture(args.world, args.position, args.block).await;
             if rand::rng().random_range(0..=(25.0 / f).floor() as i32) == 0 {
-                let (block, state) = args.world.get_block_and_state_id(args.position).await;
+                let (block, state) = args.world.get_block_and_state_id(args.position);
                 let props = StemProperties::from_state_id(state, block);
                 let age = i32::from(props.age);
                 if age < 7 {
@@ -100,8 +98,8 @@ impl BlockBehaviour for StemBlock {
                         Xoroshiro::from_seed(rand::rng().random()),
                     ));
                     let plant_block_pos = args.position.offset(dir.to_offset());
-                    let plant_block_state = args.world.get_block_state(&plant_block_pos).await;
-                    let under_block: &Block = args.world.get_block(&plant_block_pos.down()).await;
+                    let plant_block_state = args.world.get_block_state(&plant_block_pos);
+                    let under_block: &Block = args.world.get_block(&plant_block_pos.down());
                     if plant_block_state.is_air()
                         && (under_block == &Block::FARMLAND
                             || under_block.has_tag(&tag::Block::MINECRAFT_DIRT))
@@ -130,8 +128,8 @@ impl BlockBehaviour for StemBlock {
 }
 
 impl PlantBlockBase for StemBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos);
         if block == &Block::PUMPKIN_STEM {
             block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
         } else {

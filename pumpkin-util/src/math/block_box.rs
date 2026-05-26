@@ -5,6 +5,8 @@ use crate::{
         vector3::{Axis, Vector3},
     },
 };
+use pumpkin_codecs::codec::list::validate_fixed_size;
+use pumpkin_codecs::{DataResult, FlatTryFrom, IntStream, comap_flat_map_codec_impl};
 
 /// Represents an axis-aligned 3D block bounding box in integer coordinates.
 #[derive(Clone, Copy, Debug)]
@@ -262,3 +264,38 @@ impl BlockBox {
         Some(result)
     }
 }
+
+impl From<&BlockBox> for IntStream {
+    fn from(value: &BlockBox) -> Self {
+        let Vector3 {
+            x: min_x,
+            y: min_y,
+            z: min_z,
+        } = value.min;
+        let Vector3 {
+            x: max_x,
+            y: max_y,
+            z: max_z,
+        } = value.max;
+        Self(vec![min_x, min_y, min_z, max_x, max_y, max_z])
+    }
+}
+
+impl FlatTryFrom<IntStream> for BlockBox {
+    fn flat_try_from(value: IntStream) -> DataResult<Self> {
+        validate_fixed_size(value.0, 6).flat_map(|v| {
+            v.try_into().map_or_else(
+                |_| DataResult::new_error("Expected 6 elements"),
+                |arr| {
+                    let [min_x, min_y, min_z, max_x, max_y, max_z]: [i32; 6] = arr;
+                    DataResult::new_success(Self {
+                        min: Vector3::new(min_x, min_y, min_z),
+                        max: Vector3::new(max_x, max_y, max_z),
+                    })
+                },
+            )
+        })
+    }
+}
+
+comap_flat_map_codec_impl!(IntStream => BlockBox, BlockBox::flat_try_from, IntStream::from);

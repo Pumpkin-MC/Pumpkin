@@ -38,13 +38,44 @@ pub enum RecipeTypes {
     /// Smoker cooking recipe.
     #[serde(rename = "minecraft:smoking")]
     Smoking(CookingRecipeStruct),
-    /// Stonecutter recipe (not yet codegen'd).
+    /// Stonecutter recipe.
     #[serde(rename = "minecraft:stonecutting")]
-    Stonecutting,
+    Stonecutting(StonecuttingRecipeStruct),
     /// Any special crafting recipe type (not yet codegen'd).
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
+}
+
+/// Deserialized stonecutter recipe.
+#[derive(Deserialize)]
+pub struct StonecuttingRecipeStruct {
+    /// Optional recipe group used for advancement tracking.
+    group: Option<String>,
+    /// The single ingredient required by this recipe.
+    ingredient: RecipeIngredientTypes,
+    /// The item produced by this recipe.
+    result: RecipeResultStruct,
+}
+
+impl ToTokens for StonecuttingRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
+        let ingredient = self.ingredient.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            StonecutterRecipe {
+                group: #group,
+                ingredient: #ingredient,
+                result: #result,
+            }
+        });
+    }
 }
 
 /// Deserialized cooking recipe (furnace, blast furnace, smoker, or campfire).
@@ -432,6 +463,7 @@ pub fn build() -> TokenStream {
 
     let mut crafting_recipes = Vec::new();
     let mut cooking_recipes = Vec::new();
+    let mut stonecutting_recipes = Vec::new();
 
     for recipe in recipes_assets {
         match recipe {
@@ -493,7 +525,9 @@ pub fn build() -> TokenStream {
                 };
                 cooking_recipes.push(smoking_token);
             }
-            RecipeTypes::Stonecutting => {}
+            RecipeTypes::Stonecutting(recipe) => {
+                stonecutting_recipes.push(recipe.to_token_stream());
+            }
             RecipeTypes::CraftingSpecial => {}
         }
     }
@@ -501,8 +535,9 @@ pub fn build() -> TokenStream {
     quote! {
         use crate::tag::Taggable;
         use crate::item::Item;
+        use serde::{Serialize, Deserialize};
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CraftingRecipeTypes {
             CraftingShaped {
                 category: RecipeCategoryTypes,
@@ -532,7 +567,7 @@ pub fn build() -> TokenStream {
         }
 
         #[allow(dead_code)]
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct CookingRecipe {
             /// Vanilla-compatible recipe ID (e.g., "minecraft:iron_ingot_from_smelting_iron_ore")
             pub recipe_id: &'static str,
@@ -544,14 +579,14 @@ pub fn build() -> TokenStream {
             pub result: RecipeResultStruct,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CookingRecipeType {
             Blasting(CookingRecipe),
             Smelting(CookingRecipe),
             Smoking(CookingRecipe),
             CampfireCooking(CookingRecipe),
         }
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CookingRecipeKind {
             Blasting,
             Smelting,
@@ -560,47 +595,55 @@ pub fn build() -> TokenStream {
         }
 
         impl From<&CookingRecipeType> for CookingRecipeKind {
+            #[must_use]
             fn from(recipe_type: &CookingRecipeType) -> Self {
                 match recipe_type {
-                    CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
-                    CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
-                    CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
-                    CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+                    CookingRecipeType::Blasting(_) => Self::Blasting,
+                    CookingRecipeType::Smelting(_) => Self::Smelting,
+                    CookingRecipeType::Smoking(_) => Self::Smoking,
+                    CookingRecipeType::CampfireCooking(_) => Self::CampfireCooking,
                 }
             }
         }
 
         impl From<CookingRecipeType> for CookingRecipeKind {
+            #[must_use]
             fn from(recipe_type: CookingRecipeType) -> Self {
                 match recipe_type {
-                    CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
-                    CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
-                    CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
-                    CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+                    CookingRecipeType::Blasting(_) => Self::Blasting,
+                    CookingRecipeType::Smelting(_) => Self::Smelting,
+                    CookingRecipeType::Smoking(_) => Self::Smoking,
+                    CookingRecipeType::CampfireCooking(_) => Self::CampfireCooking,
                 }
             }
         }
 
         impl CookingRecipeKind {
-            pub fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
+            #[must_use]
+            pub const fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
                 match self {
-                    CookingRecipeKind::Blasting => CookingRecipeType::Blasting(recipe),
-                    CookingRecipeKind::Smelting => CookingRecipeType::Smelting(recipe),
-                    CookingRecipeKind::Smoking => CookingRecipeType::Smoking(recipe),
-                    CookingRecipeKind::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
+                    Self::Blasting => CookingRecipeType::Blasting(recipe),
+                    Self::Smelting => CookingRecipeType::Smelting(recipe),
+                    Self::Smoking => CookingRecipeType::Smoking(recipe),
+                    Self::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
                 }
             }
         }
 
+        #[derive(Clone, Debug, Serialize)]
+        pub struct StonecutterRecipe {
+            pub group: Option<&'static str>,
+            pub ingredient: RecipeIngredientTypes,
+            pub result: RecipeResultStruct,
+        }
 
-
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct RecipeResultStruct {
             pub id: &'static str,
             pub count: u8,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum RecipeIngredientTypes {
             Simple(&'static str),
             Tagged(&'static str),
@@ -608,16 +651,17 @@ pub fn build() -> TokenStream {
         }
 
         impl RecipeIngredientTypes {
+            #[must_use]
             pub fn match_item(&self, item: &Item) -> bool {
                 match self {
-                    RecipeIngredientTypes::Simple(ingredient) => {
+                    Self::Simple(ingredient) => {
                         let name = format!("minecraft:{}", item.registry_key);
                         name == *ingredient
                     }
-                    RecipeIngredientTypes::Tagged(tag) => item
+                    Self::Tagged(tag) => item
                         .is_tagged_with(tag)
                         .expect("Crafting recipe used invalid tag"),
-                    RecipeIngredientTypes::OneOf(ingredients) => {
+                    Self::OneOf(ingredients) => {
                         let name = format!("minecraft:{}", item.registry_key);
                         ingredients.contains(&name.as_str())
                     }
@@ -625,7 +669,7 @@ pub fn build() -> TokenStream {
             }
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum RecipeCategoryTypes {
             Equipment,
             Building,
@@ -641,7 +685,11 @@ pub fn build() -> TokenStream {
         pub static RECIPES_COOKING: &[CookingRecipeType] = &[
             #(#cooking_recipes ),*
         ];
+        pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
+            #(#stonecutting_recipes),*
+        ];
 
+        #[must_use]
         pub fn get_cooking_recipe_with_ingredient(ingredient: &Item, recipe_type: CookingRecipeKind) -> Option<&'static CookingRecipe> {
             RECIPES_COOKING
                 .iter()
@@ -661,7 +709,8 @@ pub fn build() -> TokenStream {
 
         /// Get the experience value for a recipe by its recipe ID.
         /// Used for calculating XP when extracting from furnace.
-        /// Recipe IDs are in vanilla format like "minecraft:iron_ingot_from_smelting_iron_ore"
+        /// Recipe IDs are in vanilla format like `"minecraft:iron_ingot_from_smelting_iron_ore"`
+        #[must_use]
         pub fn get_recipe_experience(recipe_id: &str) -> Option<f32> {
             RECIPES_COOKING.iter().find_map(|recipe| {
                 let cooking_recipe = match recipe {

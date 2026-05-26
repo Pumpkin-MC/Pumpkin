@@ -7,7 +7,6 @@ use crate::generation::noise::router::{
     density_function::NoiseFunctionComponentRange,
 };
 
-#[derive(Clone)]
 pub struct FindTopSurface {
     density_index: usize,
     upper_bound_index: usize,
