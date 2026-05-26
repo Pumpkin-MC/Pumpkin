@@ -31,8 +31,6 @@ impl ItemBehaviour for WindChargeItem {
             let world = player.world();
             let position = player.position();
 
-            // TODO: Implement Cooldown to throw the item
-
             world.play_sound(
                 Sound::EntityWindChargeThrow,
                 pumpkin_data::sound::SoundCategory::Neutral,

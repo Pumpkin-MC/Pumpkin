@@ -27,6 +27,9 @@ pub struct ItemComponents {
     /// Maximum number of items per stack.
     #[serde(rename = "minecraft:max_stack_size")]
     pub max_stack_size: u8,
+    /// Use cooldown component.
+    #[serde(rename = "minecraft:use_cooldown")]
+    pub use_cooldown: Option<UseCooldownComponent>,
     /// Jukebox song key if this item is a music disc, otherwise `None`.
     #[serde(rename = "minecraft:jukebox_playable")]
     pub jukebox_playable: Option<String>,
@@ -80,6 +83,19 @@ impl ToTokens for ItemComponents {
                 size: #max_stack_size,
             }),
         });
+
+        if let Some(use_cooldown) = &self.use_cooldown {
+            let seconds = LitFloat::new(&format!("{:.1}", use_cooldown.seconds), Span::call_site());
+            let cooldown_group = &use_cooldown.cooldown_group;
+
+            tokens.extend(quote! {
+                (UseCooldown, &UseCooldownImpl {
+                    seconds: #seconds,
+                    cooldown_group: #cooldown_group,
+                }),
+            });
+        }
+
         if let Some(playable) = &self.jukebox_playable {
             let song = LitStr::new(playable, Span::call_site());
             tokens.extend(quote! {
@@ -616,6 +632,12 @@ pub struct ToolComponent {
     /// Whether the tool can destroy blocks in creative mode, defaults to `true`.
     #[serde(default = "return_true")]
     can_destroy_blocks_in_creative: bool,
+}
+
+#[derive(Deserialize)]
+pub struct UseCooldownComponent {
+    seconds: f32,
+    cooldown_group: Option<String>,
 }
 
 /// Serde default helper returning `false`.
