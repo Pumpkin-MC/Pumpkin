@@ -76,7 +76,10 @@ macro_rules! assert_parse_err {
                 );
                 // There should always be a context in SNBT parsing.
                 assert_eq!(
-                    error.context.unwrap().cursor,
+                    error
+                        .context
+                        .expect("There should always be a context in SNBT parsing")
+                        .cursor,
                     $cursor,
                     "Cursor positions for error don't match"
                 );
@@ -453,7 +456,7 @@ fn lists() {
 
 #[test]
 fn arrays() {
-    assert_parse_ok!("[B;]", NbtTag::ByteArray(vec![]));
+    assert_parse_ok!("[B;]", NbtTag::ByteArray(vec![].into()));
     assert_parse_ok!("[I ;1  ,2 ,  3,]", NbtTag::IntArray(vec![1, 2, 3]));
     assert_parse_ok!("[L;1  ,2 ,  3,   4]", NbtTag::LongArray(vec![1, 2, 3, 4]));
 
@@ -481,7 +484,7 @@ fn arrays() {
     assert_parse_err!("[I;{}]", "Expected literal +", 3, []);
     assert_parse_err!("[i;4]", "Expected literal (", 2, []);
 
-    assert_parse_ok!("[B; 0b11111111]", NbtTag::ByteArray(vec![-1]));
+    assert_parse_ok!("[B; 0b11111111]", NbtTag::ByteArray(vec![-1].into()));
     assert_parse_ok!("[L; 0xFFFFFFFFFFFFFFFF]", NbtTag::LongArray(vec![-1]));
     assert_parse_err!(
         "[L; 0xFFFFFFFFFFFFFFFFF]",

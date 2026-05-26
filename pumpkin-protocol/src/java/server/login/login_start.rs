@@ -13,14 +13,14 @@ use crate::{
 #[java_packet(LOGIN_HELLO)]
 #[derive(Serialize)]
 pub struct SLoginStart {
-    pub name: String, // 16
+    pub name: Box<str>, // 16
     pub uuid: uuid::Uuid,
 }
 
 impl ServerPacket for SLoginStart {
     fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            name: read.get_string_bounded(16)?,
+            name: read.get_str_bounded(16)?,
             uuid: read.get_uuid()?,
         })
     }

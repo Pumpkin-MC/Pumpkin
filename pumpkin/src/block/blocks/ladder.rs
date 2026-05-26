@@ -26,8 +26,10 @@ impl BlockBehaviour for LadderBlock {
                 let props =
                     LadderLikeProperties::from_state_id(clicked_block_state_id, clicked_block);
                 let sub = args.position.0.sub(&clicked_pos.0);
-                let dir = horizontal_facing_from_offset(sub).unwrap();
-                if props.facing == dir.to_horizontal_facing().unwrap() {
+                if let Some(dir) = horizontal_facing_from_offset(sub)
+                    && let Some(horizontal_facing) = dir.to_horizontal_facing()
+                    && props.facing == horizontal_facing
+                {
                     return Block::AIR.default_state.id;
                 }
             }
@@ -45,7 +47,7 @@ impl BlockBehaviour for LadderBlock {
                     .opposite()
                     .to_block_direction()
                     .to_horizontal_facing()
-                    .unwrap();
+                    .expect("Opposite of horizontal direction should be horizontal");
                 return props.to_state_id(args.block);
             }
             Block::AIR.default_state.id

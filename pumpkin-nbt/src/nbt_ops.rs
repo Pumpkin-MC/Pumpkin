@@ -166,14 +166,14 @@ impl DynamicOps for NbtOps {
 
     fn get_byte_list(&self, input: Self::Value) -> DataResult<Vec<i8>> {
         if let NbtTag::ByteArray(b) = input {
-            DataResult::new_success(b)
+            DataResult::new_success(b.into())
         } else {
             impl_get_list!(self, input, "bytes")
         }
     }
 
     fn create_byte_list(&self, buffer: Vec<i8>) -> Self::Value {
-        NbtTag::ByteArray(buffer)
+        NbtTag::ByteArray(buffer.into())
     }
 
     fn get_int_list(&self, input: Self::Value) -> DataResult<Vec<i32>> {
@@ -301,7 +301,7 @@ impl DynamicOps for NbtOps {
             NbtTag::Long(l) => out_ops.create_long(l),
             NbtTag::Float(f) => out_ops.create_float(f),
             NbtTag::Double(d) => out_ops.create_double(d),
-            NbtTag::ByteArray(b) => out_ops.create_byte_list(b),
+            NbtTag::ByteArray(b) => out_ops.create_byte_list(b.to_vec()),
             NbtTag::String(s) => out_ops.create_string(&s),
             NbtTag::List(_) => self.convert_list(out_ops, input),
             NbtTag::Compound(_) => self.convert_map(out_ops, input),
@@ -477,7 +477,9 @@ impl ListCollector {
                 // From this point onwards, we know that the list is not empty.
                 match tag {
                     NbtTag::List(list) => Some(Self::Generic(InnerGenericListCollector::new(list))),
-                    NbtTag::ByteArray(list) => Some(Self::Byte(InnerByteListCollector::new(list))),
+                    NbtTag::ByteArray(list) => {
+                        Some(Self::Byte(InnerByteListCollector::new(list.into())))
+                    }
                     NbtTag::IntArray(list) => Some(Self::Int(InnerIntListCollector::new(list))),
                     NbtTag::LongArray(list) => Some(Self::Long(InnerLongListCollector::new(list))),
 
@@ -592,7 +594,7 @@ impl InnerListCollector for InnerByteListCollector {
     }
 
     fn result(self) -> NbtTag {
-        NbtTag::ByteArray(self.list)
+        NbtTag::ByteArray(self.list.into())
     }
 }
 
@@ -669,13 +671,13 @@ mod test {
         );
 
         // Byte list collector
-        let tag = NbtTag::ByteArray(vec![-1, 45, 100]);
+        let tag = NbtTag::ByteArray(vec![-1, 45, 100].into());
 
         assert_eq!(
             ListCollector::new(tag)
                 .expect("List collector should exist")
                 .result(),
-            NbtTag::ByteArray(vec![-1, 45, 100])
+            NbtTag::ByteArray(vec![-1, 45, 100].into())
         );
 
         // Long list

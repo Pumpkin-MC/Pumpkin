@@ -45,6 +45,7 @@ default = [
     "villager",
     "placed_feature",
     "configured_feature",
+    "slot_ranges"
 ]
 
 item = []
@@ -82,6 +83,7 @@ recipe_remainder = []
 chunk_gen_settings = []
 carver = []
 villager = ["item", "sound"]
+slot_ranges = []
 
 noise_parameter = []
 biome = []

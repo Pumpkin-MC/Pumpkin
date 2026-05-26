@@ -54,7 +54,9 @@ use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
     CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
@@ -309,6 +311,7 @@ impl JavaClient {
         true
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_position(
         &self,
         player: &Arc<Player>,
@@ -369,20 +372,31 @@ impl JavaClient {
                 // TODO: Warn when player moves to quickly
                 if !Self::sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0) {
                     // Send the new position to all other players.
-                    world
-                        .broadcast_packet_except(
-                            &[player.gameprofile.id],
-                            &CUpdateEntityPos::new(
-                                player.entity_id().into(),
-                                Vector3::new(
-                                    pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                                    pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                                    pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
-                                ),
-                                packet.collision & FLAG_ON_GROUND != 0,
+                    world.broadcast_packet_except_editioned_sync(
+                        &[player.gameprofile.id],
+                        &CUpdateEntityPos::new(
+                            player.entity_id().into(),
+                            Vector3::new(
+                                pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
                             ),
-                        )
-                        ;
+                            packet.collision & FLAG_ON_GROUND != 0,
+                        ),
+                        &CMovePlayer::new(
+                            VarULong(player.entity_id() as u64),
+                            Vector3::new(pos.x as f32, pos.y as f32 + player.get_entity().entity_type.eye_height, pos.z as f32),
+                            entity.pitch.load(),
+                            entity.yaw.load(),
+                            entity.yaw.load(),
+                            CMovePlayer::MODE_NORMAL,
+                            (packet.collision & FLAG_ON_GROUND) != 0,
+                            VarULong(0),
+                            0,
+                            0,
+                            VarULong(0),
+                        ),
+                    );
                 }
 
                 // Only process fall damage if player is alive
@@ -494,22 +508,33 @@ impl JavaClient {
                     sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                 {
                     // Send the new position to all other players.
-                    world
-                        .broadcast_packet_except(
-                            &[player.gameprofile.id],
-                            &CUpdateEntityPosRot::new(
-                                entity_id.into(),
-                                Vector3::new(
-                                    pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                                    pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                                    pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
-                                ),
-                                yaw as u8,
-                                pitch as u8,
-                                (packet.collision & FLAG_ON_GROUND) != 0,
+                    world.broadcast_packet_except_editioned_sync(
+                        &[player.gameprofile.id],
+                        &CUpdateEntityPosRot::new(
+                            entity_id.into(),
+                            Vector3::new(
+                                pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
                             ),
-                        )
-                        ;
+                            yaw as u8,
+                            pitch as u8,
+                            (packet.collision & FLAG_ON_GROUND) != 0,
+                        ),
+                        &CMovePlayer::new(
+                            VarULong(entity_id as u64),
+                            Vector3::new(pos.x as f32, pos.y as f32 + player.get_entity().entity_type.eye_height, pos.z as f32),
+                            entity.pitch.load(),
+                            entity.yaw.load(),
+                            entity.yaw.load(),
+                            CMovePlayer::MODE_NORMAL,
+                            (packet.collision & FLAG_ON_GROUND) != 0,
+                            VarULong(0),
+                            0,
+                            0,
+                            VarULong(0),
+                        ),
+                    );
                 }
 
                 world
@@ -591,11 +616,37 @@ impl JavaClient {
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
         let world = entity.world.load_full();
-        let packet =
+        let je_packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
-        world.broadcast_packet_except(&[player.gameprofile.id], &packet);
-        let packet = CHeadRot::new(entity_id.into(), yaw as u8);
-        world.broadcast_packet_except(&[player.gameprofile.id], &packet);
+
+        let pos = entity.pos.load();
+
+        let be_packet = CMovePlayer::new(
+            VarULong(entity_id as u64),
+            Vector3::new(
+                pos.x as f32,
+                pos.y as f32 + player.get_entity().entity_type.eye_height,
+                pos.z as f32,
+            ),
+            entity.pitch.load(),
+            entity.yaw.load(),
+            entity.yaw.load(),
+            CMovePlayer::MODE_ROTATION,
+            rotation.ground,
+            VarULong(0),
+            0,
+            0,
+            VarULong(0),
+        );
+
+        world.broadcast_packet_except_editioned_sync(
+            &[player.gameprofile.id],
+            &je_packet,
+            &be_packet,
+        );
+
+        let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
+        world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);
     }
 
     pub async fn handle_chat_command(
@@ -1176,7 +1227,7 @@ impl JavaClient {
             server;
             event;
             'after: {
-                player.swing_hand(hand, false);
+                player.swing_hand(hand, false).await;
             }
         }}
     }
@@ -1211,7 +1262,7 @@ impl JavaClient {
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), chat_message.message.clone(), vec![]);
+            PlayerChatEvent::new(player.clone(), chat_message.message.to_string(), vec![]);
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);
@@ -1865,19 +1916,20 @@ impl JavaClient {
     }
 
     pub async fn handle_keep_alive(&self, player: &Player, keep_alive: SKeepAlive) {
-        if player.wait_for_keep_alive.load(Ordering::Relaxed)
-            && keep_alive.keep_alive_id == player.keep_alive_id.load(Ordering::Relaxed)
+        if self.wait_for_keep_alive.load(Ordering::Relaxed)
+            && keep_alive.keep_alive_id == self.keep_alive_id.load()
         {
-            let ping = player.last_keep_alive_time.load().elapsed();
+            let ping = self.last_keep_alive_time.load().elapsed();
             // Vanilla logic
             player.ping.store(
                 (player.ping.load(Ordering::Relaxed) * 3 + ping.as_millis() as u32) / 4,
                 Ordering::Relaxed,
             );
-            player.wait_for_keep_alive.store(false, Ordering::Relaxed);
+            self.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
-            self.kick(TextComponent::text(
-                "Timeout, The server probably has a deadlock!",
+            self.kick(TextComponent::translate(
+                translation::java::DISCONNECT_TIMEOUT,
+                [],
             ))
             .await;
         }
@@ -2027,7 +2079,7 @@ impl JavaClient {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
 
                 if matches!(result, BlockActionResult::SuccessServer) {
-                    player.swing_hand(hand, true);
+                    player.swing_hand(hand, true).await;
                 }
                 return Ok(());
             }

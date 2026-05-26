@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ServerPacket,
@@ -13,7 +13,7 @@ use crate::{
 /// Response to a `CCookieRequest` (play) from the server.
 /// The Notchian (vanilla) server only accepts responses of up to 5 KiB in size.
 pub struct SCookieResponse {
-    pub key: ResourceLocation,
+    pub key: Box<str>,
     pub payload: Option<Box<[u8]>>, // 5120,
 }
 
@@ -21,7 +21,7 @@ const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl ServerPacket for SCookieResponse {
     fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let key = read.get_string()?;
+        let key = read.get_str()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {

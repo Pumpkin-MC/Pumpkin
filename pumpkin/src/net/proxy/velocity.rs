@@ -80,14 +80,14 @@ fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {
         .map_err(|_| VelocityError::FailedReadProfileUUID)?;
 
     let name = read
-        .get_string()
+        .get_str()
         .map_err(|_| VelocityError::FailedReadProfileName)?;
 
     let properties = read
         .get_list(|data| {
-            let name = data.get_string()?;
-            let value = data.get_string()?;
-            let signature = data.get_option(NetworkReadExt::get_string)?;
+            let name = data.get_str()?;
+            let value = data.get_str()?;
+            let signature = data.get_option(NetworkReadExt::get_str)?;
 
             Ok(Property {
                 name,
@@ -99,7 +99,7 @@ fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {
 
     Ok(GameProfile {
         id,
-        name,
+        name: name.into_string(),
         properties: ArcSwap::new(Arc::from(properties)),
         profile_actions: None,
     })
@@ -131,7 +131,7 @@ pub fn receive_velocity_plugin_response(
             ));
         }
         let addr = data_without_signature
-            .get_string()
+            .get_str()
             .map_err(|_| VelocityError::FailedReadAddress)?;
 
         let socket_addr: SocketAddr = SocketAddr::new(

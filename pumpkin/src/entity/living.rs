@@ -6,6 +6,7 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -47,8 +48,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CEntityAnimation, CEntityStatus, CHurtAnimation, CSetPlayerInventory,
-    CTakeItemEntity, CUpdateMobEffect,
+    CEntityStatus, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -715,15 +715,22 @@ impl LivingEntity {
         }
     }
 
-    pub fn swing_hand(&self) {
-        // TODO: radius
-        self.entity
-            .world
-            .load()
-            .broadcast_packet_all(&CEntityAnimation::new(
-                self.entity_id().into(),
-                Animation::SwingMainArm,
-            ));
+    pub async fn swing_hand(&self) {
+        let world = self.entity.world.load();
+        let entity_id = self.entity_id();
+
+        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
+            entity_id.into(),
+            pumpkin_protocol::java::client::play::Animation::SwingMainArm,
+        );
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            runtime_entity_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+        };
+
+        world.broadcast_editioned(&je_packet, &be_packet).await;
     }
 
     async fn tick_movement<'a>(&'a self, server: &'a Server, caller: &'a Arc<dyn EntityBase>) {
@@ -1291,6 +1298,12 @@ impl LivingEntity {
             world.send_entity_status(&self.entity, EntityStatus::Death);
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
+                this_entity: Some(self.entity.entity_type),
+                killer_entity: cause.map(|c| c.get_entity().entity_type),
+                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+                position: Some(self.entity.pos.load()),
+                world_time: world.level_info.load().day_time as u64,
+                damage_type: Some(damage_type),
                 ..Default::default()
             };
 
@@ -2013,7 +2026,15 @@ impl EntityBase for LivingEntity {
                     (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32
                         - self.entity.yaw.load()
                 });
-                world.broadcast_packet_all(&CHurtAnimation::new(entity_id, hurt_yaw));
+                let hurt_event = SActorEvent {
+                    entity_runtime_id: entity_id,
+                    event_type: ActorEventType::Hurt,
+                    event_data: VarInt(0),
+                    fire_at_position: None,
+                };
+                world
+                    .broadcast_editioned(&CHurtAnimation::new(entity_id, hurt_yaw), &hurt_event)
+                    .await;
             }
 
             world.broadcast_packet_all(&CDamageEvent::new(

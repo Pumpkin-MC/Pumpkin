@@ -1,4 +1,7 @@
-use std::{num::NonZeroU8, sync::Arc};
+use std::{
+    num::NonZeroU8,
+    sync::{Arc, atomic::Ordering},
+};
 
 use crate::{
     entity::player::ChatMode,
@@ -9,14 +12,14 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_data::registry::Registry;
+use pumpkin_data::{registry::Registry, translation};
 use pumpkin_protocol::{
     ConnectionState,
     java::{
         client::config::{CFinishConfig, CRegistryData, CUpdateTags, RegistryEntry},
         server::config::{
             ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
-            SConfigResourcePack, SKnownPacks, SPluginMessage,
+            SConfigResourcePack, SKeepAlive, SKnownPacks, SPluginMessage,
         },
     },
 };
@@ -227,6 +230,20 @@ impl JavaClient {
 
         debug!("Finished config");
         None
+    }
+
+    pub async fn handle_config_keep_alive(&self, keep_alive: SKeepAlive) {
+        if self.wait_for_keep_alive.load(Ordering::Relaxed)
+            && keep_alive.keep_alive_id == self.keep_alive_id.load()
+        {
+            self.wait_for_keep_alive.store(false, Ordering::Relaxed);
+        } else {
+            self.kick(TextComponent::translate(
+                translation::java::DISCONNECT_TIMEOUT,
+                [],
+            ))
+            .await;
+        }
     }
 
     pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {

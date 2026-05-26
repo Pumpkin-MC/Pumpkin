@@ -109,7 +109,13 @@ impl FireBlockBase {
                 Xoroshiro::from_seed(rand::rng().random()),
             ))
         };
-        NetherPortal::get_new_portal(world, block_pos, dir.to_horizontal_axis().unwrap()).is_some()
+        NetherPortal::get_new_portal(
+            world,
+            block_pos,
+            dir.to_horizontal_axis()
+                .expect("Direction should be horizontal"),
+        )
+        .is_some()
     }
 
     /// Shared fire collision behavior used by `fire` and `soul_fire`.

@@ -65,6 +65,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
+          context: .
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}

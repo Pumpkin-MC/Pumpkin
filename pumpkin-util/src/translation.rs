@@ -15,6 +15,7 @@ use std::{
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us_java.json");
+static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
 static PUMPKIN_BRB_JSON: &str = include_str!("../../assets/translations/brb.json");
 static PUMPKIN_DE_DE_JSON: &str = include_str!("../../assets/translations/de_de.json");
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
@@ -272,6 +273,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
             std::array::from_fn(|_| HashMap::new());
         let vanilla_en_us: HashMap<String, String> =
             serde_json::from_str(VANILLA_EN_US_JSON).expect("Could not parse en_us_java.json.");
+        let pumpkin_en_us: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_EN_US_JSON).expect("Could not parse en_us.json.");
         let pumpkin_brb: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_BRB_JSON).expect("Could not parse brb.json.");
         let pumpkin_de_de: HashMap<String, String> =
@@ -321,6 +324,9 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
 
         for (key, value) in vanilla_en_us {
             array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
+        }
+        for (key, value) in pumpkin_en_us {
+            array[Locale::EnUs as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_brb {
             array[Locale::Brb as usize].insert(format!("pumpkin:{key}"), value);

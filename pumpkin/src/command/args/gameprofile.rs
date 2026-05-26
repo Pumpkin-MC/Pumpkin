@@ -423,6 +423,6 @@ mod test {
             _ => "",
         };
         assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_UNKNOWN);
-        assert_eq!(error.context.unwrap().cursor, 4);
+        assert_eq!(error.context.expect("Error should have context").cursor, 4);
     }
 }

@@ -27,10 +27,7 @@ pub fn build() -> String {
         biome_enum.case(name);
     }
 
-    interface.type_def(TypeDef::new(
-        "biome",
-        TypeDefKind::Enum(biome_enum),
-    ));
+    interface.type_def(TypeDef::new("biome", TypeDefKind::Enum(biome_enum)));
     package.interface(interface);
 
     package.to_string()

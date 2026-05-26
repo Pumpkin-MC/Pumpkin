@@ -93,7 +93,7 @@ impl CommandExecutor for GiveExecutor {
                         .living_entity
                         .get_effect(effect)
                         .await
-                        .unwrap()
+                        .expect("Effect should exist because has_effect returned true")
                         .amplifier
                         >= amplifier
                 {

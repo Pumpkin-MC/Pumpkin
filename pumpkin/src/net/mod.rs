@@ -12,7 +12,7 @@ use std::{
 };
 
 use pumpkin_data::translation;
-use pumpkin_protocol::{ClientPacket, Property};
+use pumpkin_protocol::{BClientPacket, ClientPacket, Property};
 use pumpkin_util::{
     Hand, ProfileAction,
     text::TextComponent,
@@ -108,6 +108,11 @@ impl Default for PlayerConfig {
     }
 }
 
+pub enum PacketHandlerResult {
+    Stop,
+    ReadyToPlay(GameProfile, PlayerConfig),
+}
+
 /// This is just a Wrapper for both Java & Bedrock connections
 #[expect(clippy::large_enum_variant)]
 pub enum ClientPlatform {
@@ -190,24 +195,61 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+    pub async fn enqueue_packet_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
         match self {
-            Self::Java(java) => java.enqueue_packet(packet).await,
-            Self::Bedrock(_) => (),
+            Self::Java(java) => java.enqueue_packet(je_packet).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet(be_packet).await,
+        }
+    }
+
+    pub fn try_enqueue_packet_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(je_packet),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(be_packet),
+        }
+    }
+
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        if let Self::Java(java) = self {
+            java.enqueue_packet(packet).await;
+        }
+    }
+
+    pub async fn enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
+        if let Self::Bedrock(bedrock) = self {
+            bedrock.enqueue_packet(packet).await;
         }
     }
 
     pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
-        match self {
-            Self::Java(java) => java.try_enqueue_packet(packet),
-            Self::Bedrock(_) => (),
+        if let Self::Java(java) = self {
+            java.try_enqueue_packet(packet);
+        }
+    }
+
+    pub fn try_enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
+        if let Self::Bedrock(bedrock) = self {
+            bedrock.try_enqueue_packet(packet);
         }
     }
 
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
-        match self {
-            Self::Java(java) => java.send_packet_now(packet).await,
-            Self::Bedrock(_) => (),
+        if let Self::Java(java) = self {
+            java.send_packet_now(packet).await;
+        }
+    }
+
+    pub async fn send_be_packet_now<P: BClientPacket>(&self, packet: &P) {
+        if let Self::Bedrock(bedrock) = self {
+            bedrock.send_game_packet(packet).await;
         }
     }
 

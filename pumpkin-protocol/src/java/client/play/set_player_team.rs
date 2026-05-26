@@ -35,7 +35,7 @@ pub struct CSetPlayerTeam<'a> {
     pub team_name: String,
     pub method: TeamMethod,
     pub parameters: Option<TeamParameters<'a>>,
-    pub players: Vec<String>,
+    pub players: Box<[String]>,
 }
 
 impl ClientPacket for CSetPlayerTeam<'_> {

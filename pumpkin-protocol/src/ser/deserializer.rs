@@ -101,7 +101,7 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     }
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        visitor.visit_str(&self.inner.get_string()?)
+        visitor.visit_str(&self.inner.get_str()?)
     }
 
     fn deserialize_bytes<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {

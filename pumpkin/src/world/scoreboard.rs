@@ -181,7 +181,7 @@ impl Scoreboard {
             team_name: team.name.clone(),
             method: TeamMethod::Create,
             parameters: Some(parameters),
-            players: team.players.clone(),
+            players: team.players.clone().into(),
         });
 
         self.teams.insert(team.name.clone(), team);
@@ -207,7 +207,7 @@ impl Scoreboard {
             team_name: team.name.clone(),
             method: TeamMethod::Update,
             parameters: Some(parameters),
-            players: Vec::new(),
+            players: Box::new([]),
         });
 
         self.teams.insert(team.name.clone(), team);
@@ -223,7 +223,7 @@ impl Scoreboard {
             team_name: name.to_string(),
             method: TeamMethod::Remove,
             parameters: None,
-            players: Vec::new(),
+            players: Box::new([]),
         });
 
         self.teams.remove(name);
@@ -246,7 +246,7 @@ impl Scoreboard {
             team_name: team_name.to_string(),
             method: TeamMethod::AddPlayers,
             parameters: None,
-            players: vec![player.clone()],
+            players: vec![player.clone()].into(),
         });
 
         team.players.push(player);
@@ -269,7 +269,7 @@ impl Scoreboard {
             team_name: team_name.to_string(),
             method: TeamMethod::RemovePlayers,
             parameters: None,
-            players: vec![player.to_string()],
+            players: vec![player.to_string()].into(),
         });
 
         team.players.retain(|p| p != player);
