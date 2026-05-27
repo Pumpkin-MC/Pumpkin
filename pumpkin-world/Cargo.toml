@@ -30,11 +30,9 @@ uuid.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 tracing.workspace = true
-crossbeam.workspace = true
 
 sha2.workspace = true
 bitflags.workspace = true
-arc-swap.workspace = true
 
 dashmap.workspace = true
 
@@ -46,16 +44,11 @@ xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 itertools.workspace = true
 enum_dispatch.workspace = true
-rayon.workspace = true
 
 # thread_local.workspace = true
 # lru.workspace = true
 
-tokio-util = { workspace = true, features = ["rt"] }
-rand.workspace = true
 rustc-hash.workspace = true
-slotmap.workspace = true
-crossfire.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }

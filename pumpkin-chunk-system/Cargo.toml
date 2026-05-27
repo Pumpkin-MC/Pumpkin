@@ -24,8 +24,7 @@ itertools.workspace = true
 
 rayon.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
-
+tokio-util = { workspace = true, features = ["rt"] }
 [lints]
 workspace = true
 
