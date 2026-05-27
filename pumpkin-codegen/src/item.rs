@@ -1,13 +1,25 @@
+use crate::block::{Block, BlockAssets};
 use crate::enchantments::AttributeModifierSlot;
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_nbt::{
+    Nbt,
+    compound::NbtCompound,
+    deserializer::{NbtReadHelper, NbtReadHelperJava},
+    tag::NbtTag,
+};
 use pumpkin_util::registry::TagType;
 use pumpkin_util::text::TextContent;
 use pumpkin_util::{registry::RegistryEntryList, text::TextComponent};
 use quote::{ToTokens, format_ident, quote};
-use serde::Deserialize;
-use std::{collections::BTreeMap, fs};
-use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
+use serde::{Deserialize, Serialize, ser::SerializeStruct, ser::Serializer};
+use serde_repr::Deserialize_repr;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    fs,
+    io::{Cursor, Read, Seek, SeekFrom},
+};
+use syn::{Ident, LitBool, LitByteStr, LitFloat, LitInt, LitStr};
 
 /// Deserialized item entry from `items.json`.
 #[derive(Deserialize)]
@@ -776,16 +788,379 @@ pub enum Operation {
     AddMultipliedTotal,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+struct BedrockItemComponents {
+    components: Option<NbtCompound>,
+}
+
+#[derive(Deserialize_repr, Debug)]
+#[repr(i32)]
+enum BedrockItemVersion {
+    Legacy = 0,
+    DataDriven = 1,
+    None = 2,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct BedrockRuntimeItemState {
+    name: String,
+    id: i16,
+    version: BedrockItemVersion,
+    component_based: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum BedrockToolType {
+    Sword,
+    Shovel,
+    Pickaxe,
+    Axe,
+    Shears,
+    Hoe,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum BedrockArmorType {
+    Helmet,
+    Leggings,
+    Chestplate,
+    Boots,
+}
+
+#[derive(Debug)]
+struct BedrockRemapEntry {
+    identifier: String,
+    data: u32,
+    block_runtime_id_range: Option<(i32, i32)>,
+    tool_type: Option<BedrockToolType>,
+    armor_type: Option<BedrockArmorType>,
+    protection_value: Option<i32>,
+    is_entity_placer: bool,
+    is_edible: bool,
+}
+
+impl Serialize for BedrockRemapEntry {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut fields = 2;
+        if let Some(range) = self.block_runtime_id_range {
+            fields += 1;
+            if range.0 != range.1 {
+                fields += 1;
+            }
+        }
+        if self.tool_type.is_some() {
+            fields += 1;
+        }
+        if self.armor_type.is_some() {
+            fields += 1;
+        }
+        if self.protection_value.is_some() {
+            fields += 1;
+        }
+        if self.is_entity_placer {
+            fields += 1;
+        }
+        if self.is_edible {
+            fields += 1;
+        }
+
+        let mut state = serializer.serialize_struct("BedrockRemapEntry", fields)?;
+        state.serialize_field("bedrock_identifier", &self.identifier)?;
+        state.serialize_field("bedrock_data", &self.data)?;
+        if let Some(range) = &self.block_runtime_id_range {
+            state.serialize_field("firstBlockRuntimeId", &range.0)?;
+            if range.0 != range.1 {
+                state.serialize_field("lastBlockRuntimeId", &range.1)?;
+            }
+        }
+        if let Some(tool_type) = &self.tool_type {
+            state.serialize_field("tool_type", &tool_type)?;
+        }
+        if let Some(armor_type) = &self.armor_type {
+            state.serialize_field("armor_type", &armor_type)?;
+        }
+        if let Some(protection_value) = &self.protection_value {
+            state.serialize_field("protection_value", &protection_value)?;
+        }
+        if self.is_entity_placer {
+            state.serialize_field("is_entity_placer", &true)?;
+        }
+        if self.is_edible {
+            state.serialize_field("is_edible", &true)?;
+        }
+        state.end()
+    }
+}
+
+#[derive(Debug)]
+pub struct BedrockItem {
+    id: i16,
+    registry_key: String,
+    version: BedrockItemVersion,
+    component_based: bool,
+    components: Option<Nbt>,
+}
+
 /// Reads `items.json` and generates the complete item registry `TokenStream`.
 pub fn build() -> TokenStream {
+    let blocks_assets: BlockAssets =
+        serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
+            .expect("Failed to parse blocks.json");
+
     let items: BTreeMap<String, Item> =
         serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
+
+    let eggs: HashSet<u16> = serde_json::from_str::<BTreeMap<u16, String>>(
+        &fs::read_to_string("../assets/spawn_egg.json").unwrap(),
+    )
+    .expect("Failed to parse spawn_egg.json")
+    .into_keys()
+    .collect::<HashSet<_>>();
+
+    let be_item_components: HashMap<String, BedrockItemComponents> = {
+        let data = fs::read("../assets/bedrock/item_components.nbt").unwrap();
+
+        let mut cursor = Cursor::new(data);
+        pumpkin_nbt::nbt_compress::from_gzip_bytes(&mut cursor)
+            .expect("Failed to parse bedrock/item_components.nbt")
+    };
+
+    let be_runtime_item_states: Vec<BedrockRuntimeItemState> = serde_json::from_str(
+        &fs::read_to_string("../assets/bedrock/runtime_item_states.json").unwrap(),
+    )
+    .expect("Failed to parse bedrock/runtime_item_states.json");
+
+    let be_item_data_overrides: HashMap<String, u32> = serde_json::from_str(
+        &fs::read_to_string("../assets/bedrock/item_data_overrides.json").unwrap(),
+    )
+    .expect("Failed to parse bedrock/item_data_overrides.json");
+
+    let be_valid_item_identifiers = be_runtime_item_states
+        .iter()
+        .map(|item| &item.name)
+        .collect::<HashSet<_>>();
+
+    let mut be_item_remaps = indexmap::IndexMap::new();
+
+    let mut item_to_block: HashMap<u16, &Block> = HashMap::new();
+    for block in &blocks_assets.blocks {
+        if block.item_id != 0 {
+            item_to_block.entry(block.item_id).or_insert(block);
+        }
+    }
+
+    for (name, item) in &items {
+        let be_identifier = "minecraft:".to_owned()
+            + &match &**name {
+                "bricks" => "brick_block".into(),
+                "cobblestone_stairs" => "stone_stairs".into(),
+                "cobweb" => "web".into(),
+                "dead_bush" => "deadbush".into(),
+                "debug_stick" => "stick".into(),
+                "dirt_path" => "grass_path".into(),
+                "end_stone_bricks" => "end_bricks".into(),
+                "end_stone_brick_stairs" => "end_brick_stairs".into(),
+                "flowering_azalea_leaves" => "azalea_leaves_flowered".into(),
+                "frogspawn" => "frog_spawn".into(),
+                "furnace_minecart" => "hopper_minecart".into(),
+                "glow_item_frame" => "glow_frame".into(),
+                "item_frame" => "frame".into(),
+                "jack_o_lantern" => "lit_pumpkin".into(),
+                "light" => "light_block".into(),
+                "light_gray_glazed_terracotta" => "silver_glazed_terracotta".into(),
+                "lily_pad" => "waterlily".into(),
+                "knowledge_book" => "book".into(),
+                "magma_block" => "magma".into(),
+                "map" => "empty_map".into(),
+                "melon" => "melon_block".into(),
+                "nether_brick" => "netherbrick".into(),
+                "nether_bricks" => "nether_brick".into(),
+                "nether_quartz_ore" => "quartz_ore".into(),
+                "note_block" => "noteblock".into(),
+                "oak_button" => "wooden_button".into(),
+                "oak_door" => "wooden_door".into(),
+                "oak_fence_gate" => "fence_gate".into(),
+                "oak_pressure_plate" => "wooden_pressure_plate".into(),
+                "oak_trapdoor" => "trapdoor".into(),
+                "powered_rail" => "golden_rail".into(),
+                "prismarine_brick_stairs" => "prismarine_bricks_stairs".into(),
+                "red_nether_bricks" => "red_nether_brick".into(),
+                "rooted_dirt" => "dirt_with_roots".into(),
+                "scute" => "turtle_scute".into(),
+                "shulker_box" => "undyed_shulker_box".into(),
+                "slime_block" => "slime".into(),
+                "small_dripleaf" => "small_dripleaf_block".into(),
+                "snow" => "snow_layer".into(),
+                "snow_block" => "snow".into(),
+                "spawner" => "mob_spawner".into(),
+                "stonecutter" => "stonecutter_block".into(),
+                "stone_stairs" => "normal_stone_stairs".into(),
+                "terracotta" => "hardened_clay".into(),
+                "test_block" => "unknown".into(),
+                "test_instance_block" => "unknown".into(),
+                "tipped_arrow" | "spectral_arrow" => "arrow".into(),
+                "waxed_copper_block" => "waxed_copper".into(),
+                "zombified_piglin_spawn_egg" => "zombie_pigman_spawn_egg".into(),
+                n => {
+                    if n.ends_with("banner") {
+                        "banner".into()
+                    } else if n.ends_with("bed") {
+                        "bed".into()
+                    } else if n.starts_with("stone_slab") {
+                        n.replace("stone_slab", "stone_block_slab")
+                    } else if n.starts_with("double_stone_slab") {
+                        n.replace("double_stone_slab", "stone_block_slab")
+                    } else {
+                        n.into()
+                    }
+                }
+            };
+
+        assert!(
+            be_valid_item_identifiers.contains(&be_identifier),
+            "Invalid Bedrock identifier `{be_identifier}`. From Java name `{name}`"
+        );
+
+        let block = item_to_block.get(&item.id);
+
+        let type_suffix = name
+            .split(':')
+            .next_back()
+            .unwrap()
+            .split('_')
+            .next_back()
+            .unwrap();
+
+        be_item_remaps.insert(
+            "minecraft:".to_owned() + name,
+            BedrockRemapEntry {
+                identifier: be_identifier,
+                data: *be_item_data_overrides.get(name).unwrap_or(&0), // TODO: figure out how to get this
+                block_runtime_id_range: block
+                    .map(|b| {
+                        let mut min = None;
+                        let mut max = None;
+
+                        for state in &b.states {
+                            if min.is_none() {
+                                min = Some(state.id);
+                            }
+                            max = Some(state.id);
+                        }
+
+                        match (min, max) {
+                            (Some(min), Some(max)) => Some((min as i32, max as i32)),
+                            _ => None,
+                        }
+                    })
+                    .flatten(),
+                tool_type: match type_suffix {
+                    "sword" => Some(BedrockToolType::Sword),
+                    "shovel" => Some(BedrockToolType::Shovel),
+                    "pickaxe" => Some(BedrockToolType::Pickaxe),
+                    "axe" => Some(BedrockToolType::Axe),
+                    "shears" => Some(BedrockToolType::Shears),
+                    "hoe" => Some(BedrockToolType::Hoe),
+                    _ => None,
+                },
+                armor_type: match type_suffix {
+                    "helmet" => Some(BedrockArmorType::Helmet),
+                    "chestplate" => Some(BedrockArmorType::Chestplate),
+                    "leggings" => Some(BedrockArmorType::Leggings),
+                    "boots" => Some(BedrockArmorType::Boots),
+                    _ => None,
+                },
+                protection_value: if let (Some(equippable), Some(modifiers)) = (
+                    &item.components.equippable,
+                    &item.components.attribute_modifiers,
+                ) {
+                    Some(1) // TODO: calculate correct value
+                } else {
+                    None
+                },
+                is_entity_placer: eggs.contains(&item.id)
+                    || match &**name {
+                        "firework_rocket" => true,
+                        "minecart"
+                        | "tnt_minecart"
+                        | "chest_minecart"
+                        | "hopper_minecart"
+                        | "furnace_minecart"
+                        | "command_block_minecart" => true,
+                        "oak_boat"
+                        | "oak_chest_boat"
+                        | "spruce_boat"
+                        | "spruce_chest_boat"
+                        | "birch_boat"
+                        | "birch_chest_boat"
+                        | "jungle_boat"
+                        | "jungle_chest_boat"
+                        | "acacia_boat"
+                        | "acacia_chest_boat"
+                        | "dark_oak_boat"
+                        | "dark_oak_chest_boat"
+                        | "mangrove_boat"
+                        | "mangrove_chest_boat"
+                        | "cherry_boat"
+                        | "cherry_chest_boat"
+                        | "pale_oak_boat"
+                        | "pale_oak_chest_boat"
+                        | "bamboo_raft"
+                        | "bamboo_chest_raft" => true,
+                        _ => false,
+                    },
+                is_edible: item.components.food.is_some(),
+            },
+        );
+    }
+
+    let mut bedrock_item_definitions = Vec::new();
+    for item in be_runtime_item_states {
+        let components = &be_item_components.get(&item.name).unwrap().components;
+
+        bedrock_item_definitions.push(BedrockItem {
+            id: item.id,
+            registry_key: item.name.clone(),
+            version: item.version,
+            component_based: item.component_based,
+            components: if let Some(c) = components {
+                Some(Nbt::new("".to_string(), c.clone()))
+            } else {
+                if item.component_based {
+                    eprintln!(
+                        "Couldn't find the components for a component based item: {}.",
+                        item.name
+                    );
+                    Some(Nbt::new("".to_string(), NbtCompound::new()))
+                } else {
+                    None
+                }
+            },
+        });
+    }
+
+    //eprintln!("{:#?}", bedrock_item_definitions);
+
+    //std::fs::write(
+    //    "../assets/bedrock/item_mappings_tmp.json",
+    //    serde_json::to_string_pretty(&be_item_remaps).unwrap(),
+    //);
 
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
 
     let mut constants = TokenStream::new();
+    let mut bedrock_constants = TokenStream::new();
+
+    let mut all_bedrock_items = Vec::new();
 
     for (name, item) in items {
         let const_ident = format_ident!("{}", name.to_shouty_snake_case());
@@ -812,6 +1187,48 @@ pub fn build() -> TokenStream {
         });
     }
 
+    for item in bedrock_item_definitions {
+        let const_ident = format_ident!(
+            "{}",
+            item.registry_key
+                .split(':')
+                .next_back()
+                .unwrap()
+                .to_shouty_snake_case()
+        );
+
+        let id = LitInt::new(&item.id.to_string(), Span::call_site());
+        let registry_key = item.registry_key;
+        let version = format_ident!(
+            "{}",
+            match item.version {
+                BedrockItemVersion::Legacy => "Legacy",
+                BedrockItemVersion::DataDriven => "DataDriven",
+                BedrockItemVersion::None => "None",
+            }
+        );
+        let component_based = item.component_based;
+
+        let components_bytes = item.components.map(|c| c.write_bedrock());
+
+        let mut components_bytes_lit = LitByteStr::new(
+            components_bytes.as_deref().unwrap_or(&[]),
+            Span::call_site(),
+        );
+
+        bedrock_constants.extend(quote! {
+            pub const #const_ident: Self = Self {
+                id: #id,
+                registry_key: #registry_key,
+                version: BedrockItemVersion::#version,
+                component_based: #component_based,
+                definition_components: #components_bytes_lit
+            };
+        });
+
+        all_bedrock_items.push(const_ident);
+    }
+
     quote! {
         #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines)]
         use crate::data_component::DataComponent::*;
@@ -828,11 +1245,21 @@ pub fn build() -> TokenStream {
         use crate::Block;
         use crate::sound::Sound;
 
+        use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+
         #[derive(Clone)]
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
             pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
+        }
+
+        impl Eq for Item {}
+
+        impl Hash for Item {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
+            }
         }
 
         impl PartialEq for Item {
@@ -841,11 +1268,33 @@ pub fn build() -> TokenStream {
             }
         }
 
-        impl Eq for Item {}
+        #[derive(Clone)]
+        pub enum BedrockItemVersion {
+            Legacy,
+            DataDriven,
+            None
+        }
 
-        impl Hash for Item {
+        #[derive(Clone)]
+        pub struct BedrockItem {
+            pub id: i16,
+            pub registry_key: &'static str,
+            pub version: BedrockItemVersion,
+            pub component_based: bool,
+            pub definition_components: &'static [u8],
+        }
+
+        impl Eq for BedrockItem {}
+
+        impl Hash for BedrockItem {
             fn hash<H: Hasher>(&self, state: &mut H) {
                 self.id.hash(state);
+            }
+        }
+
+        impl PartialEq for BedrockItem {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
             }
         }
 
@@ -897,6 +1346,14 @@ pub fn build() -> TokenStream {
             fn registry_id(&self) -> u16 {
                 self.id
             }
+        }
+
+        impl BedrockItem {
+            #bedrock_constants
+
+            pub const ALL_BEDROCK_ITMES: &'static [&'static Self] = &[
+                #( &Self::#all_bedrock_items, )*
+            ];
         }
     }
 }

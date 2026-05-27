@@ -11,6 +11,7 @@ pub mod disconnect_player;
 pub mod gamerules_changed;
 pub mod handshake;
 pub mod inventory_content;
+pub mod item_registry;
 pub mod level_chunk;
 pub mod level_event;
 pub mod modal_form_request;

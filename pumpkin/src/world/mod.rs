@@ -2,7 +2,9 @@ use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
+use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::EntityProperties;
+use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
@@ -1837,6 +1839,25 @@ impl World {
                     world_id: String::new(),
                     owner_id: String::new(),
                 },
+            })
+            .await;
+
+        client
+            .send_game_packet(&CItemRegistry {
+                items: BedrockItem::ALL_BEDROCK_ITMES
+                    .iter()
+                    .map(|b| ItemDefinition {
+                        name: b.registry_key.into(),
+                        id: b.id,
+                        component_based: b.component_based,
+                        item_version: VarInt::from(match b.version {
+                            BedrockItemVersion::Legacy => 0,
+                            BedrockItemVersion::DataDriven => 1,
+                            BedrockItemVersion::None => 2,
+                        }),
+                        component_data: b.definition_components.into(),
+                    })
+                    .collect::<Vec<_>>(),
             })
             .await;
 
