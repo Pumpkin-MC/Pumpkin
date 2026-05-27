@@ -158,6 +158,7 @@ pumpkin-nbt = { path = "pumpkin-nbt", default-features = false }
 pumpkin-protocol = { path = "pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "pumpkin-util", default-features = false }
 pumpkin-world = { path = "pumpkin-world", default-features = false }
+pumpkin-chunk-system = { path = "pumpkin-chunk-system" }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.1", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }

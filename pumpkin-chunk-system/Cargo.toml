@@ -28,3 +28,10 @@ tokio-util.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
+
+[[bench]]
+name = "chunk_gen"
+harness = false

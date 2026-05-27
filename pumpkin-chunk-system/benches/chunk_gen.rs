@@ -2,7 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::biome::hash_seed;
-use pumpkin_world::chunk_system::{StagedChunkEnum, generate_single_chunk};
+use pumpkin_chunk_system::chunk_system::{StagedChunkEnum, generate_single_chunk};
 use pumpkin_world::generation::get_world_gen;
 use pumpkin_world::world::WorldPortalExt;
 use std::hint::black_box;

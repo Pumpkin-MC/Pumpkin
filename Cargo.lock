@@ -2734,6 +2734,7 @@ name = "pumpkin-chunk-system"
 version = "0.1.0-dev+26.1"
 dependencies = [
  "arc-swap",
+ "criterion",
  "crossbeam",
  "crossfire",
  "dashmap",
@@ -2743,7 +2744,7 @@ dependencies = [
  "pumpkin-nbt",
  "pumpkin-util",
  "pumpkin-world",
- "rand 0.10.1",
+ "rand",
  "rayon",
  "rustc-hash",
  "slotmap",
@@ -4209,12 +4210,12 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.249.0"
+version = "0.248.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69830ccbbf41c55eb585991659fb70867ef628193af3a495f09a6956f7615e59"
+checksum = "ac92cf547bc18d27ecc521015c08c353b4f18b84ab388bb6d1b6b682c620d9b6"
 dependencies = [
  "leb128fmt",
- "wasmparser 0.249.0",
+ "wasmparser 0.248.0",
 ]
 
 [[package]]
@@ -4267,9 +4268,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.249.0"
+version = "0.248.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30538cae9a794215f490b532df01c557e2e2bfac92569482554acd0992a102ea"
+checksum = "aa4439c5eee9df71ee0c6efb37f63b1fcb1fec38f85f5142c54e7ed05d33091a"
 dependencies = [
  "bitflags",
  "hashbrown 0.17.1",
