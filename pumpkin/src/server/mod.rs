@@ -385,13 +385,7 @@ impl Server {
             let seed = server.level_info.load().world_gen_settings.seed;
 
             // TODO: gen_pool should be reused
-            let level = into_level(
-                dimension.clone(),
-                &config,
-                world_path,
-                seed,
-                None,
-            );
+            let level = into_level(dimension.clone(), &config, world_path, seed, None);
             let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
             let world = Arc::new(world);
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));

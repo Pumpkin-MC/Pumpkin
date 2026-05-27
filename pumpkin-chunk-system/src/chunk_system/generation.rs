@@ -1,9 +1,9 @@
 use pumpkin_data::dimension::Dimension;
 
+use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_world::ProtoChunk;
 use pumpkin_world::generation::generator::VanillaGenerator;
 use pumpkin_world::world::WorldPortalExt;
-use pumpkin_config::lighting::LightingEngineConfig;
 
 use super::{Cache, Chunk, StagedChunkEnum};
 
@@ -63,14 +63,14 @@ pub fn generate_single_chunk(
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_util::math::position::BlockPos;
-    use pumpkin_world::biome::hash_seed;
     use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::biome::hash_seed;
     use pumpkin_world::generation::get_world_gen;
     use pumpkin_world::generation::proto_chunk::GenerationCache;
     use pumpkin_world::world::{BlockAccessor, WorldPortalExt};
-    use pumpkin_data::dimension::Dimension;
-    use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
 
     struct BlockRegistry;

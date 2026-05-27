@@ -1,7 +1,7 @@
 use crate::chunk_system::chunk_state::Chunk;
 use crate::chunk_system::generation_cache::Cache;
-use pumpkin_world::generation::height_limit::HeightLimitView;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::generation::height_limit::HeightLimitView;
 
 #[inline(always)]
 const fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<usize> {

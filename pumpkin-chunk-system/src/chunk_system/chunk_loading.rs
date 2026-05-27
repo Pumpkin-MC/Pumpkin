@@ -1,5 +1,5 @@
-use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use super::chunk_state::StagedChunkEnum;
+use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use itertools::Itertools;
 use std::cmp::{Ordering, PartialEq, min};
 use std::collections::BinaryHeap;

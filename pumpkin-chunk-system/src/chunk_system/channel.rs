@@ -1,5 +1,5 @@
-use super::{ChunkLevel, ChunkPos, HashMapType};
 use super::chunk_state::StagedChunkEnum;
+use super::{ChunkLevel, ChunkPos, HashMapType};
 use crate::level::Level;
 use std::collections::hash_map::Entry;
 use std::mem::swap;

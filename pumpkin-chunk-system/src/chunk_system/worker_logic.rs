@@ -3,11 +3,8 @@ use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
 use crate::level::Level;
 use pumpkin_world::{
-	ProtoChunk,
-	chunk::ChunkData,
-	chunk::format::LightContainer,
-	chunk::io::LoadedData,
-	chunk::io::LoadedData::Loaded,
+    ProtoChunk, chunk::ChunkData, chunk::format::LightContainer, chunk::io::LoadedData,
+    chunk::io::LoadedData::Loaded,
 };
 
 use crossfire::compat::AsyncRx;

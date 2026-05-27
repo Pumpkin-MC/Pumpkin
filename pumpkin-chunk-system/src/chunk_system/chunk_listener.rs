@@ -1,7 +1,7 @@
 use super::ChunkPos;
 use crate::level::SyncChunk;
-use pumpkin_world::chunk::ChunkData;
 use crossbeam::channel::{Receiver, Sender};
+use pumpkin_world::chunk::ChunkData;
 use std::sync::Arc;
 use std::sync::{Mutex, Weak};
 use tokio::sync::oneshot;

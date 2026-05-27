@@ -1,13 +1,13 @@
-use pumpkin_world::chunk::{ChunkData, ChunkLight, ChunkSections};
-use pumpkin_world::generation::biome_coords;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_world::chunk::{ChunkData, ChunkLight, ChunkSections};
+use pumpkin_world::generation::biome_coords;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use pumpkin_world::ProtoChunk;
 use crate::level::SyncChunk;
+use pumpkin_world::ProtoChunk;
 
 use pumpkin_data::chunk::ChunkStatus;
 use std::sync::Mutex;
