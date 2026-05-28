@@ -36941,302 +36941,302 @@ impl BedrockItem {
         registry_key: "minecraft:acacia_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_BUTTON: Self = Self {
         id: -140,
         registry_key: "minecraft:acacia_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_CHEST_BOAT: Self = Self {
         id: 684,
         registry_key: "minecraft:acacia_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_DOOR: Self = Self {
         id: 595,
         registry_key: "minecraft:acacia_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_DOUBLE_SLAB: Self = Self {
         id: -812,
         registry_key: "minecraft:acacia_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_FENCE: Self = Self {
         id: -575,
         registry_key: "minecraft:acacia_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_FENCE_GATE: Self = Self {
         id: 187,
         registry_key: "minecraft:acacia_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_HANGING_SIGN: Self = Self {
         id: -504,
         registry_key: "minecraft:acacia_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_LEAVES: Self = Self {
         id: 161,
         registry_key: "minecraft:acacia_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_LOG: Self = Self {
         id: 162,
         registry_key: "minecraft:acacia_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_PLANKS: Self = Self {
         id: -742,
         registry_key: "minecraft:acacia_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_PRESSURE_PLATE: Self = Self {
         id: -150,
         registry_key: "minecraft:acacia_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_SAPLING: Self = Self {
         id: -828,
         registry_key: "minecraft:acacia_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_SHELF: Self = Self {
         id: -1051,
         registry_key: "minecraft:acacia_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_SIGN: Self = Self {
         id: 618,
         registry_key: "minecraft:acacia_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_SLAB: Self = Self {
         id: -807,
         registry_key: "minecraft:acacia_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_STAIRS: Self = Self {
         id: 163,
         registry_key: "minecraft:acacia_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_STANDING_SIGN: Self = Self {
         id: -190,
         registry_key: "minecraft:acacia_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_TRAPDOOR: Self = Self {
         id: -145,
         registry_key: "minecraft:acacia_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_WALL_SIGN: Self = Self {
         id: -191,
         registry_key: "minecraft:acacia_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACACIA_WOOD: Self = Self {
         id: -817,
         registry_key: "minecraft:acacia_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ACTIVATOR_RAIL: Self = Self {
         id: 126,
         registry_key: "minecraft:activator_rail",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AGENT_SPAWN_EGG: Self = Self {
         id: 521,
         registry_key: "minecraft:agent_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AIR: Self = Self {
         id: -158,
         registry_key: "minecraft:air",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ALLAY_SPAWN_EGG: Self = Self {
         id: 673,
         registry_key: "minecraft:allay_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ALLIUM: Self = Self {
         id: -831,
         registry_key: "minecraft:allium",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ALLOW: Self = Self {
         id: 210,
         registry_key: "minecraft:allow",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AMETHYST_BLOCK: Self = Self {
         id: -327,
         registry_key: "minecraft:amethyst_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AMETHYST_CLUSTER: Self = Self {
         id: -329,
         registry_key: "minecraft:amethyst_cluster",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AMETHYST_SHARD: Self = Self {
         id: 666,
         registry_key: "minecraft:amethyst_shard",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANCIENT_DEBRIS: Self = Self {
         id: -271,
         registry_key: "minecraft:ancient_debris",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANDESITE: Self = Self {
         id: -594,
         registry_key: "minecraft:andesite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANDESITE_DOUBLE_SLAB: Self = Self {
         id: -920,
         registry_key: "minecraft:andesite_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANDESITE_SLAB: Self = Self {
         id: -893,
         registry_key: "minecraft:andesite_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANDESITE_STAIRS: Self = Self {
         id: -171,
         registry_key: "minecraft:andesite_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANDESITE_WALL: Self = Self {
         id: -974,
         registry_key: "minecraft:andesite_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANGLER_POTTERY_SHERD: Self = Self {
         id: 699,
         registry_key: "minecraft:angler_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ANVIL: Self = Self {
         id: 145,
         registry_key: "minecraft:anvil",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const APPLE : Self = Self { id : 285 , registry_key : "minecraft:apple" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\x01\x05\x11movement_modifier33\xB3>\x05\x0Cuse_duration\xCD\xCC\xCC?\0\t\titem_tags\x08\x02\x11minecraft:is_food\n\x0Fitem_properties\x01\x04foil\0\x01\x0Eallow_off_hand\0\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x04\x03\x0Emax_stack_size\x80\x01\x03\ruse_animation\x02\x03\x06damage\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration@\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x05apple\0\0\x05\x0Cmining_speed\0\0\x80?\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x04none\x03\x11enchantable_value\0\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x02\x11minecraft:is_food\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\tnutrition\x08\n\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\0\n\x17minecraft:use_animation\x08\x05value\x03eat\0\n\x16minecraft:display_name\x08\x05value\x0Fitem.apple.name\0\0" } ;
+    pub const APPLE : Self = Self { id : 285 , registry_key : "minecraft:apple" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x17minecraft:use_animation\x08\x05value\x03eat\0\n\x0Fitem_properties\x01\x04foil\0\x03\x0Bframe_count\x02\x03\x11enchantable_value\0\x01\x0Eallow_off_hand\0\x03\ruse_animation\x02\x03\x0Cuse_duration@\x01\x0Eshould_despawn\x01\x01\x17can_destroy_in_creative\x01\x01\x0Fstacked_by_data\0\x03\x06damage\0\x05\x0Cmining_speed\0\0\x80?\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x05apple\0\0\x08\x0Ecreative_group\0\x01\x12hidden_in_commands\x02\x03\x11creative_category\x04\x03\x0Emax_stack_size\x80\x01\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\x01\x0Eliquid_clipped\0\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\x01\x05\x11movement_modifier33\xB3>\x05\x0Cuse_duration\xCD\xCC\xCC?\0\t\titem_tags\x08\x02\x11minecraft:is_food\n\x0Eminecraft:food\x03\tnutrition\x08\n\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\0\n\x16minecraft:display_name\x08\x05value\x0Fitem.apple.name\0\n\x0Eminecraft:tags\t\x04tags\x08\x02\x11minecraft:is_food\0\0" } ;
     pub const ARCHER_POTTERY_SHERD: Self = Self {
         id: 700,
         registry_key: "minecraft:archer_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ARMADILLO_SCUTE: Self = Self {
         id: 746,
         registry_key: "minecraft:armadillo_scute",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ARMADILLO_SPAWN_EGG: Self = Self {
         id: 745,
         registry_key: "minecraft:armadillo_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ARMOR_STAND: Self = Self {
         id: 591,
         registry_key: "minecraft:armor_stand",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ARMS_UP_POTTERY_SHERD: Self = Self {
         id: 701,
         registry_key: "minecraft:arms_up_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ARROW: Self = Self {
         id: 332,
@@ -37250,884 +37250,884 @@ impl BedrockItem {
         registry_key: "minecraft:axolotl_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AXOLOTL_SPAWN_EGG: Self = Self {
         id: 536,
         registry_key: "minecraft:axolotl_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AZALEA: Self = Self {
         id: -337,
         registry_key: "minecraft:azalea",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AZALEA_LEAVES: Self = Self {
         id: -324,
         registry_key: "minecraft:azalea_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AZALEA_LEAVES_FLOWERED: Self = Self {
         id: -325,
         registry_key: "minecraft:azalea_leaves_flowered",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const AZURE_BLUET: Self = Self {
         id: -832,
         registry_key: "minecraft:azure_bluet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BAKED_POTATO : Self = Self { id : 310 , registry_key : "minecraft:baked_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\tnutrition\n\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\rcooldown_time\0\0\0" } ;
+    pub const BAKED_POTATO : Self = Self { id : 310 , registry_key : "minecraft:baked_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\tnutrition\n\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const BALLOON: Self = Self {
         id: 641,
         registry_key: "minecraft:balloon",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO: Self = Self {
         id: -163,
         registry_key: "minecraft:bamboo",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_BLOCK: Self = Self {
         id: -527,
         registry_key: "minecraft:bamboo_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_BUTTON: Self = Self {
         id: -511,
         registry_key: "minecraft:bamboo_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_CHEST_RAFT: Self = Self {
         id: 696,
         registry_key: "minecraft:bamboo_chest_raft",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_DOOR: Self = Self {
         id: -517,
         registry_key: "minecraft:bamboo_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_DOUBLE_SLAB: Self = Self {
         id: -521,
         registry_key: "minecraft:bamboo_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_FENCE: Self = Self {
         id: -515,
         registry_key: "minecraft:bamboo_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_FENCE_GATE: Self = Self {
         id: -516,
         registry_key: "minecraft:bamboo_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_HANGING_SIGN: Self = Self {
         id: -522,
         registry_key: "minecraft:bamboo_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_MOSAIC: Self = Self {
         id: -509,
         registry_key: "minecraft:bamboo_mosaic",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_MOSAIC_DOUBLE_SLAB: Self = Self {
         id: -525,
         registry_key: "minecraft:bamboo_mosaic_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_MOSAIC_SLAB: Self = Self {
         id: -524,
         registry_key: "minecraft:bamboo_mosaic_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_MOSAIC_STAIRS: Self = Self {
         id: -523,
         registry_key: "minecraft:bamboo_mosaic_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_PLANKS: Self = Self {
         id: -510,
         registry_key: "minecraft:bamboo_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_PRESSURE_PLATE: Self = Self {
         id: -514,
         registry_key: "minecraft:bamboo_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_RAFT: Self = Self {
         id: 695,
         registry_key: "minecraft:bamboo_raft",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_SAPLING: Self = Self {
         id: -164,
         registry_key: "minecraft:bamboo_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_SHELF: Self = Self {
         id: -1056,
         registry_key: "minecraft:bamboo_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_SIGN: Self = Self {
         id: 694,
         registry_key: "minecraft:bamboo_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_SLAB: Self = Self {
         id: -513,
         registry_key: "minecraft:bamboo_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_STAIRS: Self = Self {
         id: -512,
         registry_key: "minecraft:bamboo_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_STANDING_SIGN: Self = Self {
         id: -518,
         registry_key: "minecraft:bamboo_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_TRAPDOOR: Self = Self {
         id: -520,
         registry_key: "minecraft:bamboo_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAMBOO_WALL_SIGN: Self = Self {
         id: -519,
         registry_key: "minecraft:bamboo_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BANNER: Self = Self {
         id: 606,
         registry_key: "minecraft:banner",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BANNER_PATTERN: Self = Self {
         id: 841,
         registry_key: "minecraft:banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BARREL: Self = Self {
         id: -203,
         registry_key: "minecraft:barrel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BARRIER: Self = Self {
         id: -161,
         registry_key: "minecraft:barrier",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BASALT: Self = Self {
         id: -234,
         registry_key: "minecraft:basalt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BAT_SPAWN_EGG: Self = Self {
         id: 486,
         registry_key: "minecraft:bat_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BEACON: Self = Self {
         id: 138,
         registry_key: "minecraft:beacon",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BED: Self = Self {
         id: 450,
         registry_key: "minecraft:bed",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BEDROCK: Self = Self {
         id: 7,
         registry_key: "minecraft:bedrock",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BEE_NEST: Self = Self {
         id: -218,
         registry_key: "minecraft:bee_nest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BEE_SPAWN_EGG: Self = Self {
         id: 528,
         registry_key: "minecraft:bee_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BEEF : Self = Self { id : 302 , registry_key : "minecraft:beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x06\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\0\0" } ;
+    pub const BEEF : Self = Self { id : 302 , registry_key : "minecraft:beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\tnutrition\x06\x05\x13saturation_modifier\x9A\x99\x99>\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x08\rcooldown_type\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const BEEHIVE: Self = Self {
         id: -219,
         registry_key: "minecraft:beehive",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BEETROOT : Self = Self { id : 314 , registry_key : "minecraft:beetroot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\tnutrition\x02\x03\rcooldown_time\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const BEETROOT_SEEDS : Self = Self { id : 324 , registry_key : "minecraft:beetroot_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\x0Bcrop_result\x12minecraft:beetroot\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\0\0" } ;
-    pub const BEETROOT_SOUP : Self = Self { id : 315 , registry_key : "minecraft:beetroot_soup" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\x04bowl\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x0C\x05\x13saturation_modifier\x9A\x99\x19?\x03\ron_use_action\x01\0\x03\x18minecraft:max_stack_size\x02\x03\x16minecraft:use_duration@\0" } ;
+    pub const BEETROOT : Self = Self { id : 314 , registry_key : "minecraft:beetroot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x19?\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\tnutrition\x02\x03\rcooldown_time\0\0\0" } ;
+    pub const BEETROOT_SEEDS : Self = Self { id : 324 , registry_key : "minecraft:beetroot_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x12minecraft:beetroot\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\0\0" } ;
+    pub const BEETROOT_SOUP : Self = Self { id : 315 , registry_key : "minecraft:beetroot_soup" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x03\tnutrition\x0C\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\x04bowl\0\x03\x16minecraft:use_duration@\x03\x18minecraft:max_stack_size\x02\0" } ;
     pub const BELL: Self = Self {
         id: -206,
         registry_key: "minecraft:bell",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIG_DRIPLEAF: Self = Self {
         id: -323,
         registry_key: "minecraft:big_dripleaf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_BOAT: Self = Self {
         id: 408,
         registry_key: "minecraft:birch_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_BUTTON: Self = Self {
         id: -141,
         registry_key: "minecraft:birch_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_CHEST_BOAT: Self = Self {
         id: 681,
         registry_key: "minecraft:birch_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_DOOR: Self = Self {
         id: 593,
         registry_key: "minecraft:birch_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_DOUBLE_SLAB: Self = Self {
         id: -810,
         registry_key: "minecraft:birch_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_FENCE: Self = Self {
         id: -576,
         registry_key: "minecraft:birch_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_FENCE_GATE: Self = Self {
         id: 184,
         registry_key: "minecraft:birch_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_HANGING_SIGN: Self = Self {
         id: -502,
         registry_key: "minecraft:birch_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_LEAVES: Self = Self {
         id: -801,
         registry_key: "minecraft:birch_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_LOG: Self = Self {
         id: -570,
         registry_key: "minecraft:birch_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_PLANKS: Self = Self {
         id: -740,
         registry_key: "minecraft:birch_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_PRESSURE_PLATE: Self = Self {
         id: -151,
         registry_key: "minecraft:birch_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_SAPLING: Self = Self {
         id: -826,
         registry_key: "minecraft:birch_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_SHELF: Self = Self {
         id: -1049,
         registry_key: "minecraft:birch_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_SIGN: Self = Self {
         id: 616,
         registry_key: "minecraft:birch_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_SLAB: Self = Self {
         id: -805,
         registry_key: "minecraft:birch_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_STAIRS: Self = Self {
         id: 135,
         registry_key: "minecraft:birch_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_STANDING_SIGN: Self = Self {
         id: -186,
         registry_key: "minecraft:birch_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_TRAPDOOR: Self = Self {
         id: -146,
         registry_key: "minecraft:birch_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_WALL_SIGN: Self = Self {
         id: -187,
         registry_key: "minecraft:birch_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BIRCH_WOOD: Self = Self {
         id: -815,
         registry_key: "minecraft:birch_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BLACK_BUNDLE : Self = Self { id : 264 , registry_key : "minecraft:black_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x08\x0Ecreative_group\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Cbundle_black\x08\x10bundle_open_back\x16bundle_black_open_back\x08\x11bundle_open_front\x17bundle_black_open_front\0\0\x03\x11enchantable_value\0\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x02\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x03\x06damage\0\x01\x04foil\0\x03\x0Cuse_duration\0\x01\rhand_equipped\0\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\0\t\titem_tags\0\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\0\0" } ;
+    pub const BLACK_BUNDLE : Self = Self { id : 264 , registry_key : "minecraft:black_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x0Fitem_properties\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\x03\x0Cuse_duration\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_black_open_back\x08\x07default\x0Cbundle_black\x08\x11bundle_open_front\x17bundle_black_open_front\0\0\x01\x12hidden_in_commands\x02\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x03\x11enchantable_value\0\x03\x06damage\0\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\rhand_equipped\0\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x01\x04foil\0\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\0" } ;
     pub const BLACK_CANDLE: Self = Self {
         id: -428,
         registry_key: "minecraft:black_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_CANDLE_CAKE: Self = Self {
         id: -445,
         registry_key: "minecraft:black_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_CARPET: Self = Self {
         id: -611,
         registry_key: "minecraft:black_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_CONCRETE: Self = Self {
         id: -642,
         registry_key: "minecraft:black_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_CONCRETE_POWDER: Self = Self {
         id: -723,
         registry_key: "minecraft:black_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_DYE: Self = Self {
         id: 427,
         registry_key: "minecraft:black_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_GLAZED_TERRACOTTA: Self = Self {
         id: 235,
         registry_key: "minecraft:black_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_HARNESS: Self = Self {
         id: 756,
         registry_key: "minecraft:black_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_SHULKER_BOX: Self = Self {
         id: -627,
         registry_key: "minecraft:black_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_STAINED_GLASS: Self = Self {
         id: -687,
         registry_key: "minecraft:black_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_STAINED_GLASS_PANE: Self = Self {
         id: -657,
         registry_key: "minecraft:black_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_TERRACOTTA: Self = Self {
         id: -738,
         registry_key: "minecraft:black_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACK_WOOL: Self = Self {
         id: -554,
         registry_key: "minecraft:black_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACKSTONE: Self = Self {
         id: -273,
         registry_key: "minecraft:blackstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACKSTONE_DOUBLE_SLAB: Self = Self {
         id: -283,
         registry_key: "minecraft:blackstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACKSTONE_SLAB: Self = Self {
         id: -282,
         registry_key: "minecraft:blackstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACKSTONE_STAIRS: Self = Self {
         id: -276,
         registry_key: "minecraft:blackstone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLACKSTONE_WALL: Self = Self {
         id: -277,
         registry_key: "minecraft:blackstone_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLADE_POTTERY_SHERD: Self = Self {
         id: 702,
         registry_key: "minecraft:blade_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLAST_FURNACE: Self = Self {
         id: -196,
         registry_key: "minecraft:blast_furnace",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLAZE_POWDER: Self = Self {
         id: 462,
         registry_key: "minecraft:blaze_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLAZE_ROD: Self = Self {
         id: 455,
         registry_key: "minecraft:blaze_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLAZE_SPAWN_EGG: Self = Self {
         id: 489,
         registry_key: "minecraft:blaze_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLEACH: Self = Self {
         id: 639,
         registry_key: "minecraft:bleach",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BLUE_BUNDLE : Self = Self { id : 265 , registry_key : "minecraft:blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x0Fitem_properties\x05\x0Cmining_speed\0\0\x80?\x01\x17can_destroy_in_creative\x01\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x08\x0Ecreative_group\0\x03\x06damage\0\x01\x12hidden_in_commands\x02\x01\rhand_equipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x16bundle_blue_open_front\x08\x07default\x0Bbundle_blue\x08\x10bundle_open_back\x15bundle_blue_open_back\0\0\x01\x0Eshould_despawn\x01\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0" } ;
+    pub const BLUE_BUNDLE : Self = Self { id : 265 , registry_key : "minecraft:blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n\x0Fitem_properties\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x16bundle_blue_open_front\x08\x07default\x0Bbundle_blue\x08\x10bundle_open_back\x15bundle_blue_open_back\0\0\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\x11creative_category\x06\x01\x04foil\0\x03\x0Bframe_count\x02\x03\x06damage\0\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x02\x01\rhand_equipped\0\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0" } ;
     pub const BLUE_CANDLE: Self = Self {
         id: -424,
         registry_key: "minecraft:blue_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_CANDLE_CAKE: Self = Self {
         id: -441,
         registry_key: "minecraft:blue_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_CARPET: Self = Self {
         id: -607,
         registry_key: "minecraft:blue_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_CONCRETE: Self = Self {
         id: -638,
         registry_key: "minecraft:blue_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_CONCRETE_POWDER: Self = Self {
         id: -719,
         registry_key: "minecraft:blue_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_DYE: Self = Self {
         id: 431,
         registry_key: "minecraft:blue_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_EGG: Self = Self {
         id: 753,
         registry_key: "minecraft:blue_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_GLAZED_TERRACOTTA: Self = Self {
         id: 231,
         registry_key: "minecraft:blue_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_HARNESS: Self = Self {
         id: 757,
         registry_key: "minecraft:blue_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_ICE: Self = Self {
         id: -11,
         registry_key: "minecraft:blue_ice",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_ORCHID: Self = Self {
         id: -830,
         registry_key: "minecraft:blue_orchid",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_SHULKER_BOX: Self = Self {
         id: -623,
         registry_key: "minecraft:blue_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_STAINED_GLASS: Self = Self {
         id: -683,
         registry_key: "minecraft:blue_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_STAINED_GLASS_PANE: Self = Self {
         id: -653,
         registry_key: "minecraft:blue_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_TERRACOTTA: Self = Self {
         id: -734,
         registry_key: "minecraft:blue_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BLUE_WOOL: Self = Self {
         id: -563,
         registry_key: "minecraft:blue_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOARD: Self = Self {
         id: 635,
         registry_key: "minecraft:board",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOAT: Self = Self {
         id: 839,
         registry_key: "minecraft:boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOGGED_SPAWN_EGG: Self = Self {
         id: 496,
         registry_key: "minecraft:bogged_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 741,
         registry_key: "minecraft:bolt_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BONE: Self = Self {
         id: 447,
         registry_key: "minecraft:bone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BONE_BLOCK: Self = Self {
         id: 216,
         registry_key: "minecraft:bone_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BONE_MEAL: Self = Self {
         id: 443,
         registry_key: "minecraft:bone_meal",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOOK: Self = Self {
         id: 419,
         registry_key: "minecraft:book",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOOKSHELF: Self = Self {
         id: 47,
         registry_key: "minecraft:bookshelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BORDER_BLOCK: Self = Self {
         id: 212,
         registry_key: "minecraft:border_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BORDURE_INDENTED_BANNER_PATTERN: Self = Self {
         id: 625,
         registry_key: "minecraft:bordure_indented_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOW: Self = Self {
         id: 331,
         registry_key: "minecraft:bow",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BOWL: Self = Self {
         id: 353,
         registry_key: "minecraft:bowl",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRAIN_CORAL: Self = Self {
         id: -581,
         registry_key: "minecraft:brain_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRAIN_CORAL_BLOCK: Self = Self {
         id: -849,
         registry_key: "minecraft:brain_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRAIN_CORAL_FAN: Self = Self {
         id: -840,
         registry_key: "minecraft:brain_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRAIN_CORAL_WALL_FAN: Self = Self {
         id: -904,
         registry_key: "minecraft:brain_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BREAD : Self = Self { id : 290 , registry_key : "minecraft:bread" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\tnutrition\n\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const BREEZE_ROD : Self = Self { id : 281 , registry_key : "minecraft:breeze_rod" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nbreeze_rod\0\0\x01\rhand_equipped\x01\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x80\x01\x01\x0Eliquid_clipped\0\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\x03\x11enchantable_value\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x03\x06damage\0\x03\ruse_animation\0\x03\x0Cuse_duration\0\x03\x11creative_category\x08\0\t\titem_tags\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x16minecraft:display_name\x08\x05value\x14item.breeze_rod.name\0\0" } ;
+    pub const BREAD : Self = Self { id : 290 , registry_key : "minecraft:bread" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\tnutrition\n\x03\ron_use_action\x01\0\0" } ;
+    pub const BREEZE_ROD : Self = Self { id : 281 , registry_key : "minecraft:breeze_rod" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:display_name\x08\x05value\x14item.breeze_rod.name\0\t\titem_tags\0\0\n\x0Fitem_properties\x01\x04foil\0\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x80\x01\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x03\x06damage\0\x05\x0Cmining_speed\0\0\x80?\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nbreeze_rod\0\0\x01\rhand_equipped\x01\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x08\x10enchantable_slot\x04none\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x01\x0Eliquid_clipped\0\x03\x11creative_category\x08\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\0" } ;
     pub const BREEZE_SPAWN_EGG: Self = Self {
         id: 535,
         registry_key: "minecraft:breeze_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BREWER_POTTERY_SHERD: Self = Self {
         id: 703,
         registry_key: "minecraft:brewer_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BREWING_STAND: Self = Self {
         id: 464,
@@ -38141,240 +38141,240 @@ impl BedrockItem {
         registry_key: "minecraft:brick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRICK_BLOCK: Self = Self {
         id: 45,
         registry_key: "minecraft:brick_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRICK_DOUBLE_SLAB: Self = Self {
         id: -880,
         registry_key: "minecraft:brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRICK_SLAB: Self = Self {
         id: -874,
         registry_key: "minecraft:brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRICK_STAIRS: Self = Self {
         id: 108,
         registry_key: "minecraft:brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRICK_WALL: Self = Self {
         id: -976,
         registry_key: "minecraft:brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BROWN_BUNDLE : Self = Self { id : 266 , registry_key : "minecraft:brown_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x0Eshould_despawn\x01\x01\rhand_equipped\0\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x01\x0Eallow_off_hand\0\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_brown_open_back\x08\x07default\x0Cbundle_brown\x08\x11bundle_open_front\x17bundle_brown_open_front\0\0\x01\x0Fstacked_by_data\0\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x03\x06damage\0\x03\x11enchantable_value\0\x03\x11creative_category\x06\x01\x04foil\0\x03\x0Cuse_duration\0\x08\x10enchantable_slot\x04none\x03\x0Emax_stack_size\x02\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0" } ;
+    pub const BROWN_BUNDLE : Self = Self { id : 266 , registry_key : "minecraft:brown_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Cbundle_brown\x08\x11bundle_open_front\x17bundle_brown_open_front\x08\x10bundle_open_back\x16bundle_brown_open_back\0\0\x01\x0Fstacked_by_data\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\0\x01\rhand_equipped\0\x03\ruse_animation\0\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x03\x06damage\0\x01\x0Eallow_off_hand\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x0Eliquid_clipped\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\0" } ;
     pub const BROWN_CANDLE: Self = Self {
         id: -425,
         registry_key: "minecraft:brown_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_CANDLE_CAKE: Self = Self {
         id: -442,
         registry_key: "minecraft:brown_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_CARPET: Self = Self {
         id: -608,
         registry_key: "minecraft:brown_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_CONCRETE: Self = Self {
         id: -639,
         registry_key: "minecraft:brown_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_CONCRETE_POWDER: Self = Self {
         id: -720,
         registry_key: "minecraft:brown_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_DYE: Self = Self {
         id: 430,
         registry_key: "minecraft:brown_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_EGG: Self = Self {
         id: 754,
         registry_key: "minecraft:brown_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_GLAZED_TERRACOTTA: Self = Self {
         id: 232,
         registry_key: "minecraft:brown_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_HARNESS: Self = Self {
         id: 758,
         registry_key: "minecraft:brown_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_MUSHROOM: Self = Self {
         id: 39,
         registry_key: "minecraft:brown_mushroom",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_MUSHROOM_BLOCK: Self = Self {
         id: 99,
         registry_key: "minecraft:brown_mushroom_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_SHULKER_BOX: Self = Self {
         id: -624,
         registry_key: "minecraft:brown_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_STAINED_GLASS: Self = Self {
         id: -684,
         registry_key: "minecraft:brown_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_STAINED_GLASS_PANE: Self = Self {
         id: -654,
         registry_key: "minecraft:brown_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_TERRACOTTA: Self = Self {
         id: -735,
         registry_key: "minecraft:brown_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BROWN_WOOL: Self = Self {
         id: -555,
         registry_key: "minecraft:brown_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BRUSH: Self = Self {
         id: 722,
         registry_key: "minecraft:brush",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUBBLE_COLUMN: Self = Self {
         id: -160,
         registry_key: "minecraft:bubble_column",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUBBLE_CORAL: Self = Self {
         id: -582,
         registry_key: "minecraft:bubble_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUBBLE_CORAL_BLOCK: Self = Self {
         id: -850,
         registry_key: "minecraft:bubble_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUBBLE_CORAL_FAN: Self = Self {
         id: -841,
         registry_key: "minecraft:bubble_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUBBLE_CORAL_WALL_FAN: Self = Self {
         id: -136,
         registry_key: "minecraft:bubble_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUCKET: Self = Self {
         id: 392,
         registry_key: "minecraft:bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUDDING_AMETHYST: Self = Self {
         id: -328,
         registry_key: "minecraft:budding_amethyst",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const BUNDLE : Self = Self { id : 267 , registry_key : "minecraft:bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x04foil\0\x01\rhand_equipped\0\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x10bundle_open_back\x08\x07default\x06bundle\x08\x11bundle_open_front\x11bundle_open_front\0\0\x01\x0Eshould_despawn\x01\x03\x11creative_category\x06\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x03\x06damage\0\x01\x0Eallow_off_hand\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\x03\x0Cuse_duration\0\x03\x0Bframe_count\x02\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\t\titem_tags\0\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\0" } ;
+    pub const BUNDLE : Self = Self { id : 267 , registry_key : "minecraft:bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x03\x06damage\0\x01\rhand_equipped\0\x01\x0Eallow_off_hand\0\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x11bundle_open_front\x08\x07default\x06bundle\x08\x10bundle_open_back\x10bundle_open_back\0\0\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x03\x0Emax_stack_size\x02\x01\x04foil\0\x01\x0Fstacked_by_data\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\0" } ;
     pub const BURN_POTTERY_SHERD: Self = Self {
         id: 704,
         registry_key: "minecraft:burn_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const BUSH: Self = Self {
         id: -1023,
         registry_key: "minecraft:bush",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CACTUS: Self = Self {
         id: 81,
         registry_key: "minecraft:cactus",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CACTUS_FLOWER: Self = Self {
         id: -1030,
         registry_key: "minecraft:cactus_flower",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAKE: Self = Self {
         id: 449,
@@ -38388,30 +38388,30 @@ impl BedrockItem {
         registry_key: "minecraft:calcite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CALIBRATED_SCULK_SENSOR: Self = Self {
         id: -580,
         registry_key: "minecraft:calibrated_sculk_sensor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAMEL_HUSK_SPAWN_EGG: Self = Self {
         id: 698,
         registry_key: "minecraft:camel_husk_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAMEL_SPAWN_EGG: Self = Self {
         id: 697,
         registry_key: "minecraft:camel_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const CAMERA : Self = Self { id : 636 , registry_key : "minecraft:camera" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x10minecraft:camera\x05\x13black_bars_duration\xCD\xCCL>\x05\x10shutter_duration\xCD\xCCL>\x05\x13slide_away_duration\xCD\xCCL>\x05\x10picture_duration\0\0\x80?\x05\x14shutter_screen_ratio\0\0\0?\x05\x17black_bars_screen_ratio\n\xD7\xA3=\0\x03\x16minecraft:use_duration\xC0\x9A\x0C\x08\x0Fminecraft:block\x10minecraft:camera\0" } ;
+    pub const CAMERA : Self = Self { id : 636 , registry_key : "minecraft:camera" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x08\x0Fminecraft:block\x10minecraft:camera\x03\x16minecraft:use_duration\xC0\x9A\x0C\n\x10minecraft:camera\x05\x13slide_away_duration\xCD\xCCL>\x05\x10picture_duration\0\0\x80?\x05\x17black_bars_screen_ratio\n\xD7\xA3=\x05\x10shutter_duration\xCD\xCCL>\x05\x13black_bars_duration\xCD\xCCL>\x05\x14shutter_screen_ratio\0\0\0?\0\0" } ;
     pub const CAMPFIRE: Self = Self {
         id: 630,
         registry_key: "minecraft:campfire",
@@ -38424,57 +38424,57 @@ impl BedrockItem {
         registry_key: "minecraft:candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CANDLE_CAKE: Self = Self {
         id: -429,
         registry_key: "minecraft:candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CARPET: Self = Self {
         id: 796,
         registry_key: "minecraft:carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const CARROT : Self = Self { id : 308 , registry_key : "minecraft:carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\0\x08\x0Bcrop_result\x11minecraft:carrots\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\x03\tnutrition\x06\x03\ron_use_action\x01\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\0\0" } ;
+    pub const CARROT : Self = Self { id : 308 , registry_key : "minecraft:carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\x0Bcrop_result\x11minecraft:carrots\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x03\tnutrition\x06\x08\x11using_converts_to\0\x03\ron_use_action\x01\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\0\0" } ;
     pub const CARROT_ON_A_STICK: Self = Self {
         id: 556,
         registry_key: "minecraft:carrot_on_a_stick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CARROTS: Self = Self {
         id: 141,
         registry_key: "minecraft:carrots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CARTOGRAPHY_TABLE: Self = Self {
         id: -200,
         registry_key: "minecraft:cartography_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CARVED_PUMPKIN: Self = Self {
         id: -155,
         registry_key: "minecraft:carved_pumpkin",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAT_SPAWN_EGG: Self = Self {
         id: 522,
         registry_key: "minecraft:cat_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAULDRON: Self = Self {
         id: 465,
@@ -38488,70 +38488,70 @@ impl BedrockItem {
         registry_key: "minecraft:cave_spider_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAVE_VINES: Self = Self {
         id: -322,
         registry_key: "minecraft:cave_vines",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAVE_VINES_BODY_WITH_BERRIES: Self = Self {
         id: -375,
         registry_key: "minecraft:cave_vines_body_with_berries",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CAVE_VINES_HEAD_WITH_BERRIES: Self = Self {
         id: -376,
         registry_key: "minecraft:cave_vines_head_with_berries",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHAIN_COMMAND_BLOCK: Self = Self {
         id: 189,
         registry_key: "minecraft:chain_command_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHAINMAIL_BOOTS: Self = Self {
         id: 374,
         registry_key: "minecraft:chainmail_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHAINMAIL_CHESTPLATE: Self = Self {
         id: 372,
         registry_key: "minecraft:chainmail_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHAINMAIL_HELMET: Self = Self {
         id: 371,
         registry_key: "minecraft:chainmail_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHAINMAIL_LEGGINGS: Self = Self {
         id: 373,
         registry_key: "minecraft:chainmail_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHALKBOARD: Self = Self {
         id: 230,
         registry_key: "minecraft:chalkboard",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHARCOAL: Self = Self {
         id: 334,
@@ -38565,415 +38565,415 @@ impl BedrockItem {
         registry_key: "minecraft:chemical_heat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHEMISTRY_TABLE: Self = Self {
         id: 833,
         registry_key: "minecraft:chemistry_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_BOAT: Self = Self {
         id: 691,
         registry_key: "minecraft:cherry_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_BUTTON: Self = Self {
         id: -530,
         registry_key: "minecraft:cherry_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_CHEST_BOAT: Self = Self {
         id: 692,
         registry_key: "minecraft:cherry_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_DOOR: Self = Self {
         id: -531,
         registry_key: "minecraft:cherry_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_DOUBLE_SLAB: Self = Self {
         id: -540,
         registry_key: "minecraft:cherry_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_FENCE: Self = Self {
         id: -532,
         registry_key: "minecraft:cherry_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_FENCE_GATE: Self = Self {
         id: -533,
         registry_key: "minecraft:cherry_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_HANGING_SIGN: Self = Self {
         id: -534,
         registry_key: "minecraft:cherry_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_LEAVES: Self = Self {
         id: -548,
         registry_key: "minecraft:cherry_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_LOG: Self = Self {
         id: -536,
         registry_key: "minecraft:cherry_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_PLANKS: Self = Self {
         id: -537,
         registry_key: "minecraft:cherry_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_PRESSURE_PLATE: Self = Self {
         id: -538,
         registry_key: "minecraft:cherry_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_SAPLING: Self = Self {
         id: -547,
         registry_key: "minecraft:cherry_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_SHELF: Self = Self {
         id: -1054,
         registry_key: "minecraft:cherry_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_SIGN: Self = Self {
         id: 693,
         registry_key: "minecraft:cherry_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_SLAB: Self = Self {
         id: -539,
         registry_key: "minecraft:cherry_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_STAIRS: Self = Self {
         id: -541,
         registry_key: "minecraft:cherry_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_STANDING_SIGN: Self = Self {
         id: -542,
         registry_key: "minecraft:cherry_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_TRAPDOOR: Self = Self {
         id: -543,
         registry_key: "minecraft:cherry_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_WALL_SIGN: Self = Self {
         id: -544,
         registry_key: "minecraft:cherry_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHERRY_WOOD: Self = Self {
         id: -546,
         registry_key: "minecraft:cherry_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHEST: Self = Self {
         id: 54,
         registry_key: "minecraft:chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHEST_BOAT: Self = Self {
         id: 687,
         registry_key: "minecraft:chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHEST_MINECART: Self = Self {
         id: 421,
         registry_key: "minecraft:chest_minecart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const CHICKEN : Self = Self { id : 304 , registry_key : "minecraft:chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\t\x07effects\n\x02\x05\x06chance\x9A\x99\x99>\x03\tamplifier\0\x08\rdescriptionId\rpotion.hunger\x03\x08duration<\x03\x02id\"\x08\x04name\x06hunger\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\0\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const CHICKEN : Self = Self { id : 304 , registry_key : "minecraft:chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\t\x07effects\n\x02\x03\x08duration<\x08\x04name\x06hunger\x05\x06chance\x9A\x99\x99>\x08\rdescriptionId\rpotion.hunger\x03\x02id\"\x03\tamplifier\0\0\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const CHICKEN_SPAWN_EGG: Self = Self {
         id: 468,
         registry_key: "minecraft:chicken_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHIPPED_ANVIL: Self = Self {
         id: -959,
         registry_key: "minecraft:chipped_anvil",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_BOOKSHELF: Self = Self {
         id: -526,
         registry_key: "minecraft:chiseled_bookshelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_CINNABAR: Self = Self {
         id: -1124,
         registry_key: "minecraft:chiseled_cinnabar",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_COPPER: Self = Self {
         id: -760,
         registry_key: "minecraft:chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_DEEPSLATE: Self = Self {
         id: -395,
         registry_key: "minecraft:chiseled_deepslate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_NETHER_BRICKS: Self = Self {
         id: -302,
         registry_key: "minecraft:chiseled_nether_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_POLISHED_BLACKSTONE: Self = Self {
         id: -279,
         registry_key: "minecraft:chiseled_polished_blackstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_QUARTZ_BLOCK: Self = Self {
         id: -953,
         registry_key: "minecraft:chiseled_quartz_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_RED_SANDSTONE: Self = Self {
         id: -956,
         registry_key: "minecraft:chiseled_red_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_RESIN_BRICKS: Self = Self {
         id: -1020,
         registry_key: "minecraft:chiseled_resin_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_SANDSTONE: Self = Self {
         id: -944,
         registry_key: "minecraft:chiseled_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_STONE_BRICKS: Self = Self {
         id: -870,
         registry_key: "minecraft:chiseled_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_SULFUR: Self = Self {
         id: -1107,
         registry_key: "minecraft:chiseled_sulfur",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_TUFF: Self = Self {
         id: -753,
         registry_key: "minecraft:chiseled_tuff",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHISELED_TUFF_BRICKS: Self = Self {
         id: -759,
         registry_key: "minecraft:chiseled_tuff_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CHORUS_FLOWER: Self = Self {
         id: 200,
         registry_key: "minecraft:chorus_flower",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const CHORUS_FRUIT : Self = Self { id : 597 , registry_key : "minecraft:chorus_fruit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x03\ron_use_action\0\x03\rcooldown_time(\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\x0Bchorusfruit\x03\tnutrition\x08\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\x01\0\0" } ;
+    pub const CHORUS_FRUIT : Self = Self { id : 597 , registry_key : "minecraft:chorus_fruit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\0\x01\x0Ecan_always_eat\x01\x08\rcooldown_type\x0Bchorusfruit\x08\x11using_converts_to\0\x03\rcooldown_time(\x03\tnutrition\x08\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99>\0\0" } ;
     pub const CHORUS_PLANT: Self = Self {
         id: 240,
         registry_key: "minecraft:chorus_plant",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR: Self = Self {
         id: -1109,
         registry_key: "minecraft:cinnabar",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_BRICK_DOUBLE_SLAB: Self = Self {
         id: -1121,
         registry_key: "minecraft:cinnabar_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_BRICK_SLAB: Self = Self {
         id: -1120,
         registry_key: "minecraft:cinnabar_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_BRICK_STAIRS: Self = Self {
         id: -1122,
         registry_key: "minecraft:cinnabar_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_BRICK_WALL: Self = Self {
         id: -1123,
         registry_key: "minecraft:cinnabar_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_BRICKS: Self = Self {
         id: -1119,
         registry_key: "minecraft:cinnabar_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_DOUBLE_SLAB: Self = Self {
         id: -1111,
         registry_key: "minecraft:cinnabar_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_SLAB: Self = Self {
         id: -1110,
         registry_key: "minecraft:cinnabar_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_STAIRS: Self = Self {
         id: -1112,
         registry_key: "minecraft:cinnabar_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CINNABAR_WALL: Self = Self {
         id: -1113,
         registry_key: "minecraft:cinnabar_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CLAY: Self = Self {
         id: 82,
         registry_key: "minecraft:clay",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CLAY_BALL: Self = Self {
         id: 416,
         registry_key: "minecraft:clay_ball",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CLIENT_REQUEST_PLACEHOLDER_BLOCK: Self = Self {
         id: -465,
         registry_key: "minecraft:client_request_placeholder_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CLOCK: Self = Self {
         id: 425,
         registry_key: "minecraft:clock",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CLOSED_EYEBLOSSOM: Self = Self {
         id: -1019,
         registry_key: "minecraft:closed_eyeblossom",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COAL: Self = Self {
         id: 333,
@@ -38987,176 +38987,176 @@ impl BedrockItem {
         registry_key: "minecraft:coal_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COAL_ORE: Self = Self {
         id: 16,
         registry_key: "minecraft:coal_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COARSE_DIRT: Self = Self {
         id: -962,
         registry_key: "minecraft:coarse_dirt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COAST_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 726,
         registry_key: "minecraft:coast_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLED_DEEPSLATE: Self = Self {
         id: -379,
         registry_key: "minecraft:cobbled_deepslate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLED_DEEPSLATE_DOUBLE_SLAB: Self = Self {
         id: -396,
         registry_key: "minecraft:cobbled_deepslate_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLED_DEEPSLATE_SLAB: Self = Self {
         id: -380,
         registry_key: "minecraft:cobbled_deepslate_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLED_DEEPSLATE_STAIRS: Self = Self {
         id: -381,
         registry_key: "minecraft:cobbled_deepslate_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLED_DEEPSLATE_WALL: Self = Self {
         id: -382,
         registry_key: "minecraft:cobbled_deepslate_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLESTONE: Self = Self {
         id: 4,
         registry_key: "minecraft:cobblestone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLESTONE_DOUBLE_SLAB: Self = Self {
         id: -879,
         registry_key: "minecraft:cobblestone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLESTONE_SLAB: Self = Self {
         id: -873,
         registry_key: "minecraft:cobblestone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COBBLESTONE_WALL: Self = Self {
         id: 139,
         registry_key: "minecraft:cobblestone_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COCOA: Self = Self {
         id: 127,
         registry_key: "minecraft:cocoa",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COCOA_BEANS: Self = Self {
         id: 444,
         registry_key: "minecraft:cocoa_beans",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const COD : Self = Self { id : 293 , registry_key : "minecraft:cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\ron_use_action\x01\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x04\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCC\xCC=\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0" } ;
+    pub const COD : Self = Self { id : 293 , registry_key : "minecraft:cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\rcooldown_type\0\x03\tnutrition\x04\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0" } ;
     pub const COD_BUCKET: Self = Self {
         id: 396,
         registry_key: "minecraft:cod_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COD_SPAWN_EGG: Self = Self {
         id: 514,
         registry_key: "minecraft:cod_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_BLUE: Self = Self {
         id: 204,
         registry_key: "minecraft:colored_torch_blue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_BP: Self = Self {
         id: 837,
         registry_key: "minecraft:colored_torch_bp",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_GREEN: Self = Self {
         id: -963,
         registry_key: "minecraft:colored_torch_green",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_PURPLE: Self = Self {
         id: -964,
         registry_key: "minecraft:colored_torch_purple",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_RED: Self = Self {
         id: 202,
         registry_key: "minecraft:colored_torch_red",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_RG: Self = Self {
         id: 836,
         registry_key: "minecraft:colored_torch_rg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COMMAND_BLOCK: Self = Self {
         id: 137,
         registry_key: "minecraft:command_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COMMAND_BLOCK_MINECART: Self = Self {
         id: 602,
         registry_key: "minecraft:command_block_minecart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COMPARATOR: Self = Self {
         id: 561,
@@ -39170,2785 +39170,2785 @@ impl BedrockItem {
         registry_key: "minecraft:compass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COMPOSTER: Self = Self {
         id: -213,
         registry_key: "minecraft:composter",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COMPOUND: Self = Self {
         id: 637,
         registry_key: "minecraft:compound",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COMPOUND_CREATOR: Self = Self {
         id: 238,
         registry_key: "minecraft:compound_creator",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CONCRETE: Self = Self {
         id: 822,
         registry_key: "minecraft:concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CONCRETE_POWDER: Self = Self {
         id: 823,
         registry_key: "minecraft:concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CONDUIT: Self = Self {
         id: -157,
         registry_key: "minecraft:conduit",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const COOKED_BEEF : Self = Self { id : 303 , registry_key : "minecraft:cooked_beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x08\rcooldown_type\0\x03\tnutrition\x10\x05\x13saturation_modifier\xCD\xCCL?\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const COOKED_CHICKEN : Self = Self { id : 305 , registry_key : "minecraft:cooked_chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\x03\tnutrition\x0C\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const COOKED_COD : Self = Self { id : 297 , registry_key : "minecraft:cooked_cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\tnutrition\n\x03\ron_use_action\x01\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0" } ;
-    pub const COOKED_MUTTON : Self = Self { id : 590 , registry_key : "minecraft:cooked_mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCCL?\x03\tnutrition\x0C\x08\rcooldown_type\0\x03\rcooldown_time\0\0\0" } ;
-    pub const COOKED_PORKCHOP : Self = Self { id : 292 , registry_key : "minecraft:cooked_porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\xCD\xCCL?\x03\tnutrition\x10\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\0" } ;
-    pub const COOKED_RABBIT : Self = Self { id : 318 , registry_key : "minecraft:cooked_rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x19?\x01\x0Ecan_always_eat\0\x03\tnutrition\n\x03\ron_use_action\x01\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const COOKED_SALMON : Self = Self { id : 298 , registry_key : "minecraft:cooked_salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\tnutrition\x0C\x05\x13saturation_modifier\xCD\xCCL?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0" } ;
-    pub const COOKIE : Self = Self { id : 300 , registry_key : "minecraft:cookie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCC\xCC=\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\x03\ron_use_action\x01\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0" } ;
+    pub const COOKED_BEEF : Self = Self { id : 303 , registry_key : "minecraft:cooked_beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\tnutrition\x10\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\xCD\xCCL?\x03\ron_use_action\x01\0\0" } ;
+    pub const COOKED_CHICKEN : Self = Self { id : 305 , registry_key : "minecraft:cooked_chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x19?\x03\tnutrition\x0C\x08\x11using_converts_to\0\x03\rcooldown_time\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0" } ;
+    pub const COOKED_COD : Self = Self { id : 297 , registry_key : "minecraft:cooked_cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\tnutrition\n\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\0" } ;
+    pub const COOKED_MUTTON : Self = Self { id : 590 , registry_key : "minecraft:cooked_mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\tnutrition\x0C\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCCL?\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\rcooldown_type\0\0\0" } ;
+    pub const COOKED_PORKCHOP : Self = Self { id : 292 , registry_key : "minecraft:cooked_porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCCL?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x03\tnutrition\x10\0\0" } ;
+    pub const COOKED_RABBIT : Self = Self { id : 318 , registry_key : "minecraft:cooked_rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\x01\x08\x11using_converts_to\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\tnutrition\n\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\x03\rcooldown_time\0\0\0" } ;
+    pub const COOKED_SALMON : Self = Self { id : 298 , registry_key : "minecraft:cooked_salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x0C\x08\rcooldown_type\0\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCCL?\x08\x11using_converts_to\0\x03\ron_use_action\x01\0\0" } ;
+    pub const COOKIE : Self = Self { id : 300 , registry_key : "minecraft:cookie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\tnutrition\x04\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const COPPER_AXE: Self = Self {
         id: 776,
         registry_key: "minecraft:copper_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_BARS: Self = Self {
         id: -1066,
         registry_key: "minecraft:copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_BLOCK: Self = Self {
         id: -340,
         registry_key: "minecraft:copper_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_BOOTS: Self = Self {
         id: 781,
         registry_key: "minecraft:copper_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_BULB: Self = Self {
         id: -776,
         registry_key: "minecraft:copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_CHAIN: Self = Self {
         id: -1074,
         registry_key: "minecraft:copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_CHEST: Self = Self {
         id: -1031,
         registry_key: "minecraft:copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_CHESTPLATE: Self = Self {
         id: 779,
         registry_key: "minecraft:copper_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_DOOR: Self = Self {
         id: -784,
         registry_key: "minecraft:copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_GOLEM_SPAWN_EGG: Self = Self {
         id: 772,
         registry_key: "minecraft:copper_golem_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_GOLEM_STATUE: Self = Self {
         id: -1039,
         registry_key: "minecraft:copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_GRATE: Self = Self {
         id: -768,
         registry_key: "minecraft:copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_HELMET: Self = Self {
         id: 778,
         registry_key: "minecraft:copper_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_HOE: Self = Self {
         id: 777,
         registry_key: "minecraft:copper_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_HORSE_ARMOR: Self = Self {
         id: 783,
         registry_key: "minecraft:copper_horse_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_INGOT: Self = Self {
         id: 544,
         registry_key: "minecraft:copper_ingot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_LANTERN: Self = Self {
         id: -1083,
         registry_key: "minecraft:copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_LEGGINGS: Self = Self {
         id: 780,
         registry_key: "minecraft:copper_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_NAUTILUS_ARMOR: Self = Self {
         id: 787,
         registry_key: "minecraft:copper_nautilus_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_NUGGET: Self = Self {
         id: 782,
         registry_key: "minecraft:copper_nugget",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_ORE: Self = Self {
         id: -311,
         registry_key: "minecraft:copper_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_PICKAXE: Self = Self {
         id: 775,
         registry_key: "minecraft:copper_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_SHOVEL: Self = Self {
         id: 774,
         registry_key: "minecraft:copper_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const COPPER_SPEAR : Self = Self { id : 257 , registry_key : "minecraft:copper_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\x1A\x03\x06damage\x04\x01\x0Eallow_off_hand\0\x03\ruse_animation\0\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x08\x0Ecreative_group\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Ccopper_spear\0\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x11creative_category\x06\x01\rhand_equipped\x01\x08\x10enchantable_slot\x0Bmelee_spear\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x16minecraft:copper_spear\0\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\t\x05items\n\x02\x08\x04name\x16minecraft:copper_ingot\0\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xFA\0\x05\x12min_relative_speed33\x93@\0\x05\x0Fdamage_modifier\0\0\0\0\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xA5\0\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_durationP\0\x05\tmin_speed\0\0@A\0\x05\rhitbox_margin\0\0\x80>\x05\x11damage_multiplier\x85\xEBQ?\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x02\x05delay\r\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\0\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x16minecraft:display_name\x08\x05value\x16item.copper_spear.name\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x15minecraft:enchantable\x01\x05value\r\x08\x04slot\x0Bmelee_spear\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Ditem.copper_spear.attack_miss\x08\nattack_hit\x1Citem.copper_spear.attack_hit\0\t\titem_tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x12minecraft:cooldown\x05\x08duration\x9A\x99Y?\x08\x04type\x06attack\x08\x08category\x05spear\0\n\x18minecraft:swing_duration\x05\x05value\x9A\x99Y?\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\xFC\x02\0\n\x17minecraft:use_modifiers\x08\x0Bstart_sound\x15item.copper_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\x01\x0Femit_vibrations\0\0\0" } ;
+    pub const COPPER_SPEAR : Self = Self { id : 257 , registry_key : "minecraft:copper_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Ccopper_spear\0\0\x03\x0Bframe_count\x02\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x01\rhand_equipped\x01\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\x1A\x03\x06damage\x04\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x02\x0Cmax_duration\xFA\0\x05\tmin_speed\0\0\0\0\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\x05\x11damage_multiplier\x85\xEBQ?\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xA5\0\x05\tmin_speed33\xA3@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x05\tmin_speed\0\0@A\x02\x0Cmax_durationP\0\x05\x12min_relative_speed\0\0\0\0\0\x02\x05delay\r\0\x05\x0Fdamage_modifier\0\0\0\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.copper_spear.attack_hit\x08\x0Battack_miss\x1Ditem.copper_spear.attack_miss\0\n\x17minecraft:use_modifiers\x05\x0Cuse_duration\0\xA0\x8CG\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x15item.copper_spear.use\x05\x11movement_modifier\0\0\x80?\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x05\x08duration\x9A\x99Y?\x08\x08category\x05spear\0\n\x18minecraft:swing_duration\x05\x05value\x9A\x99Y?\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\r\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\xFC\x02\0\n\x16minecraft:display_name\x08\x05value\x16item.copper_spear.name\0\t\titem_tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x02\x07version\r\0\x08\nexpression)context.other->query.remaining_durability\0\t\x05items\n\x02\x08\x04name\x16minecraft:copper_spear\0\0\n\rrepair_amount\x08\nexpression\x1Bquery.max_durability * 0.25\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x16minecraft:copper_ingot\0\0\0\0" } ;
     pub const COPPER_SWORD: Self = Self {
         id: 773,
         registry_key: "minecraft:copper_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_TORCH: Self = Self {
         id: -1082,
         registry_key: "minecraft:copper_torch",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COPPER_TRAPDOOR: Self = Self {
         id: -792,
         registry_key: "minecraft:copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CORAL: Self = Self {
         id: 818,
         registry_key: "minecraft:coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CORAL_BLOCK: Self = Self {
         id: 800,
         registry_key: "minecraft:coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CORAL_FAN: Self = Self {
         id: 809,
         registry_key: "minecraft:coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CORAL_FAN_DEAD: Self = Self {
         id: 810,
         registry_key: "minecraft:coral_fan_dead",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CORNFLOWER: Self = Self {
         id: -838,
         registry_key: "minecraft:cornflower",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const COW_SPAWN_EGG: Self = Self {
         id: 469,
         registry_key: "minecraft:cow_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRACKED_DEEPSLATE_BRICKS: Self = Self {
         id: -410,
         registry_key: "minecraft:cracked_deepslate_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRACKED_DEEPSLATE_TILES: Self = Self {
         id: -409,
         registry_key: "minecraft:cracked_deepslate_tiles",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRACKED_NETHER_BRICKS: Self = Self {
         id: -303,
         registry_key: "minecraft:cracked_nether_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRACKED_POLISHED_BLACKSTONE_BRICKS: Self = Self {
         id: -280,
         registry_key: "minecraft:cracked_polished_blackstone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRACKED_STONE_BRICKS: Self = Self {
         id: -869,
         registry_key: "minecraft:cracked_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRAFTER: Self = Self {
         id: -313,
         registry_key: "minecraft:crafter",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRAFTING_TABLE: Self = Self {
         id: 58,
         registry_key: "minecraft:crafting_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CREAKING_HEART: Self = Self {
         id: -1012,
         registry_key: "minecraft:creaking_heart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CREAKING_SPAWN_EGG: Self = Self {
         id: 751,
         registry_key: "minecraft:creaking_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CREEPER_BANNER_PATTERN: Self = Self {
         id: 621,
         registry_key: "minecraft:creeper_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CREEPER_HEAD: Self = Self {
         id: -968,
         registry_key: "minecraft:creeper_head",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CREEPER_SPAWN_EGG: Self = Self {
         id: 474,
         registry_key: "minecraft:creeper_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_BUTTON: Self = Self {
         id: -260,
         registry_key: "minecraft:crimson_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_DOOR: Self = Self {
         id: 659,
         registry_key: "minecraft:crimson_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_DOUBLE_SLAB: Self = Self {
         id: -266,
         registry_key: "minecraft:crimson_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_FENCE: Self = Self {
         id: -256,
         registry_key: "minecraft:crimson_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_FENCE_GATE: Self = Self {
         id: -258,
         registry_key: "minecraft:crimson_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_FUNGUS: Self = Self {
         id: -228,
         registry_key: "minecraft:crimson_fungus",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_HANGING_SIGN: Self = Self {
         id: -506,
         registry_key: "minecraft:crimson_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_HYPHAE: Self = Self {
         id: -299,
         registry_key: "minecraft:crimson_hyphae",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_NYLIUM: Self = Self {
         id: -232,
         registry_key: "minecraft:crimson_nylium",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_PLANKS: Self = Self {
         id: -242,
         registry_key: "minecraft:crimson_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_PRESSURE_PLATE: Self = Self {
         id: -262,
         registry_key: "minecraft:crimson_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_ROOTS: Self = Self {
         id: -223,
         registry_key: "minecraft:crimson_roots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_SHELF: Self = Self {
         id: -1057,
         registry_key: "minecraft:crimson_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_SIGN: Self = Self {
         id: 657,
         registry_key: "minecraft:crimson_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_SLAB: Self = Self {
         id: -264,
         registry_key: "minecraft:crimson_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_STAIRS: Self = Self {
         id: -254,
         registry_key: "minecraft:crimson_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_STANDING_SIGN: Self = Self {
         id: -250,
         registry_key: "minecraft:crimson_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_STEM: Self = Self {
         id: -225,
         registry_key: "minecraft:crimson_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_TRAPDOOR: Self = Self {
         id: -246,
         registry_key: "minecraft:crimson_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRIMSON_WALL_SIGN: Self = Self {
         id: -252,
         registry_key: "minecraft:crimson_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CROSSBOW: Self = Self {
         id: 614,
         registry_key: "minecraft:crossbow",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CRYING_OBSIDIAN: Self = Self {
         id: -289,
         registry_key: "minecraft:crying_obsidian",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_COPPER: Self = Self {
         id: -347,
         registry_key: "minecraft:cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_COPPER_SLAB: Self = Self {
         id: -361,
         registry_key: "minecraft:cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_COPPER_STAIRS: Self = Self {
         id: -354,
         registry_key: "minecraft:cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_RED_SANDSTONE: Self = Self {
         id: -957,
         registry_key: "minecraft:cut_red_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_RED_SANDSTONE_DOUBLE_SLAB: Self = Self {
         id: -928,
         registry_key: "minecraft:cut_red_sandstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_RED_SANDSTONE_SLAB: Self = Self {
         id: -901,
         registry_key: "minecraft:cut_red_sandstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_SANDSTONE: Self = Self {
         id: -945,
         registry_key: "minecraft:cut_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_SANDSTONE_DOUBLE_SLAB: Self = Self {
         id: -927,
         registry_key: "minecraft:cut_sandstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CUT_SANDSTONE_SLAB: Self = Self {
         id: -900,
         registry_key: "minecraft:cut_sandstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const CYAN_BUNDLE : Self = Self { id : 268 , registry_key : "minecraft:cyan_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x03\x06damage\0\x01\x04foil\0\x01\x0Fstacked_by_data\0\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x01\x0Eliquid_clipped\0\x01\rhand_equipped\0\x03\x0Cuse_duration\0\x03\x11creative_category\x06\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x02\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_cyan_open_back\x08\x07default\x0Bbundle_cyan\x08\x11bundle_open_front\x16bundle_cyan_open_front\0\0\x01\x17can_destroy_in_creative\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\0" } ;
+    pub const CYAN_BUNDLE : Self = Self { id : 268 , registry_key : "minecraft:cyan_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x03\x11enchantable_value\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_cyan_open_back\x08\x11bundle_open_front\x16bundle_cyan_open_front\x08\x07default\x0Bbundle_cyan\0\0\x01\x04foil\0\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x0Bframe_count\x02\x01\x0Eallow_off_hand\0\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x02\x03\x0Cuse_duration\0\x08\x10enchantable_slot\x04none\x01\x0Eliquid_clipped\0\x03\x06damage\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\0" } ;
     pub const CYAN_CANDLE: Self = Self {
         id: -422,
         registry_key: "minecraft:cyan_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_CANDLE_CAKE: Self = Self {
         id: -439,
         registry_key: "minecraft:cyan_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_CARPET: Self = Self {
         id: -605,
         registry_key: "minecraft:cyan_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_CONCRETE: Self = Self {
         id: -636,
         registry_key: "minecraft:cyan_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_CONCRETE_POWDER: Self = Self {
         id: -717,
         registry_key: "minecraft:cyan_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_DYE: Self = Self {
         id: 433,
         registry_key: "minecraft:cyan_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_GLAZED_TERRACOTTA: Self = Self {
         id: 229,
         registry_key: "minecraft:cyan_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_HARNESS: Self = Self {
         id: 759,
         registry_key: "minecraft:cyan_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_SHULKER_BOX: Self = Self {
         id: -621,
         registry_key: "minecraft:cyan_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_STAINED_GLASS: Self = Self {
         id: -681,
         registry_key: "minecraft:cyan_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_STAINED_GLASS_PANE: Self = Self {
         id: -651,
         registry_key: "minecraft:cyan_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_TERRACOTTA: Self = Self {
         id: -732,
         registry_key: "minecraft:cyan_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const CYAN_WOOL: Self = Self {
         id: -561,
         registry_key: "minecraft:cyan_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DAMAGED_ANVIL: Self = Self {
         id: -960,
         registry_key: "minecraft:damaged_anvil",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DANDELION: Self = Self {
         id: 37,
         registry_key: "minecraft:dandelion",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DANGER_POTTERY_SHERD: Self = Self {
         id: 705,
         registry_key: "minecraft:danger_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_BOAT: Self = Self {
         id: 412,
         registry_key: "minecraft:dark_oak_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_BUTTON: Self = Self {
         id: -142,
         registry_key: "minecraft:dark_oak_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_CHEST_BOAT: Self = Self {
         id: 685,
         registry_key: "minecraft:dark_oak_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_DOOR: Self = Self {
         id: 596,
         registry_key: "minecraft:dark_oak_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_DOUBLE_SLAB: Self = Self {
         id: -813,
         registry_key: "minecraft:dark_oak_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_FENCE: Self = Self {
         id: -577,
         registry_key: "minecraft:dark_oak_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_FENCE_GATE: Self = Self {
         id: 186,
         registry_key: "minecraft:dark_oak_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_HANGING_SIGN: Self = Self {
         id: -505,
         registry_key: "minecraft:dark_oak_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_LEAVES: Self = Self {
         id: -803,
         registry_key: "minecraft:dark_oak_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_LOG: Self = Self {
         id: -572,
         registry_key: "minecraft:dark_oak_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_PLANKS: Self = Self {
         id: -743,
         registry_key: "minecraft:dark_oak_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_PRESSURE_PLATE: Self = Self {
         id: -152,
         registry_key: "minecraft:dark_oak_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_SAPLING: Self = Self {
         id: -829,
         registry_key: "minecraft:dark_oak_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_SHELF: Self = Self {
         id: -1052,
         registry_key: "minecraft:dark_oak_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_SIGN: Self = Self {
         id: 619,
         registry_key: "minecraft:dark_oak_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_SLAB: Self = Self {
         id: -808,
         registry_key: "minecraft:dark_oak_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_STAIRS: Self = Self {
         id: 164,
         registry_key: "minecraft:dark_oak_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_TRAPDOOR: Self = Self {
         id: -147,
         registry_key: "minecraft:dark_oak_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_OAK_WOOD: Self = Self {
         id: -818,
         registry_key: "minecraft:dark_oak_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_PRISMARINE: Self = Self {
         id: -947,
         registry_key: "minecraft:dark_prismarine",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_PRISMARINE_DOUBLE_SLAB: Self = Self {
         id: -913,
         registry_key: "minecraft:dark_prismarine_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_PRISMARINE_SLAB: Self = Self {
         id: -886,
         registry_key: "minecraft:dark_prismarine_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARK_PRISMARINE_STAIRS: Self = Self {
         id: -3,
         registry_key: "minecraft:dark_prismarine_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARKOAK_STANDING_SIGN: Self = Self {
         id: -192,
         registry_key: "minecraft:darkoak_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DARKOAK_WALL_SIGN: Self = Self {
         id: -193,
         registry_key: "minecraft:darkoak_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DAYLIGHT_DETECTOR: Self = Self {
         id: 151,
         registry_key: "minecraft:daylight_detector",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DAYLIGHT_DETECTOR_INVERTED: Self = Self {
         id: 178,
         registry_key: "minecraft:daylight_detector_inverted",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BRAIN_CORAL: Self = Self {
         id: -586,
         registry_key: "minecraft:dead_brain_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BRAIN_CORAL_BLOCK: Self = Self {
         id: -854,
         registry_key: "minecraft:dead_brain_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BRAIN_CORAL_FAN: Self = Self {
         id: -844,
         registry_key: "minecraft:dead_brain_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BRAIN_CORAL_WALL_FAN: Self = Self {
         id: -906,
         registry_key: "minecraft:dead_brain_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BUBBLE_CORAL: Self = Self {
         id: -587,
         registry_key: "minecraft:dead_bubble_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BUBBLE_CORAL_BLOCK: Self = Self {
         id: -855,
         registry_key: "minecraft:dead_bubble_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BUBBLE_CORAL_FAN: Self = Self {
         id: -845,
         registry_key: "minecraft:dead_bubble_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_BUBBLE_CORAL_WALL_FAN: Self = Self {
         id: -908,
         registry_key: "minecraft:dead_bubble_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_FIRE_CORAL: Self = Self {
         id: -588,
         registry_key: "minecraft:dead_fire_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_FIRE_CORAL_BLOCK: Self = Self {
         id: -856,
         registry_key: "minecraft:dead_fire_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_FIRE_CORAL_FAN: Self = Self {
         id: -846,
         registry_key: "minecraft:dead_fire_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_FIRE_CORAL_WALL_FAN: Self = Self {
         id: -909,
         registry_key: "minecraft:dead_fire_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_HORN_CORAL: Self = Self {
         id: -589,
         registry_key: "minecraft:dead_horn_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_HORN_CORAL_BLOCK: Self = Self {
         id: -857,
         registry_key: "minecraft:dead_horn_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_HORN_CORAL_FAN: Self = Self {
         id: -847,
         registry_key: "minecraft:dead_horn_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_HORN_CORAL_WALL_FAN: Self = Self {
         id: -910,
         registry_key: "minecraft:dead_horn_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_TUBE_CORAL: Self = Self {
         id: -585,
         registry_key: "minecraft:dead_tube_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_TUBE_CORAL_BLOCK: Self = Self {
         id: -853,
         registry_key: "minecraft:dead_tube_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_TUBE_CORAL_FAN: Self = Self {
         id: -134,
         registry_key: "minecraft:dead_tube_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEAD_TUBE_CORAL_WALL_FAN: Self = Self {
         id: -905,
         registry_key: "minecraft:dead_tube_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEADBUSH: Self = Self {
         id: 32,
         registry_key: "minecraft:deadbush",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DECORATED_POT: Self = Self {
         id: -551,
         registry_key: "minecraft:decorated_pot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE: Self = Self {
         id: -378,
         registry_key: "minecraft:deepslate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_BRICK_DOUBLE_SLAB: Self = Self {
         id: -399,
         registry_key: "minecraft:deepslate_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_BRICK_SLAB: Self = Self {
         id: -392,
         registry_key: "minecraft:deepslate_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_BRICK_STAIRS: Self = Self {
         id: -393,
         registry_key: "minecraft:deepslate_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_BRICK_WALL: Self = Self {
         id: -394,
         registry_key: "minecraft:deepslate_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_BRICKS: Self = Self {
         id: -391,
         registry_key: "minecraft:deepslate_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_COAL_ORE: Self = Self {
         id: -406,
         registry_key: "minecraft:deepslate_coal_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_COPPER_ORE: Self = Self {
         id: -408,
         registry_key: "minecraft:deepslate_copper_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_DIAMOND_ORE: Self = Self {
         id: -405,
         registry_key: "minecraft:deepslate_diamond_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_EMERALD_ORE: Self = Self {
         id: -407,
         registry_key: "minecraft:deepslate_emerald_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_GOLD_ORE: Self = Self {
         id: -402,
         registry_key: "minecraft:deepslate_gold_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_IRON_ORE: Self = Self {
         id: -401,
         registry_key: "minecraft:deepslate_iron_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_LAPIS_ORE: Self = Self {
         id: -400,
         registry_key: "minecraft:deepslate_lapis_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_REDSTONE_ORE: Self = Self {
         id: -403,
         registry_key: "minecraft:deepslate_redstone_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_TILE_DOUBLE_SLAB: Self = Self {
         id: -398,
         registry_key: "minecraft:deepslate_tile_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_TILE_SLAB: Self = Self {
         id: -388,
         registry_key: "minecraft:deepslate_tile_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_TILE_STAIRS: Self = Self {
         id: -389,
         registry_key: "minecraft:deepslate_tile_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_TILE_WALL: Self = Self {
         id: -390,
         registry_key: "minecraft:deepslate_tile_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEEPSLATE_TILES: Self = Self {
         id: -387,
         registry_key: "minecraft:deepslate_tiles",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DENY: Self = Self {
         id: 211,
         registry_key: "minecraft:deny",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEPRECATED_ANVIL: Self = Self {
         id: -961,
         registry_key: "minecraft:deprecated_anvil",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEPRECATED_PURPUR_BLOCK_1: Self = Self {
         id: -950,
         registry_key: "minecraft:deprecated_purpur_block_1",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DEPRECATED_PURPUR_BLOCK_2: Self = Self {
         id: -952,
         registry_key: "minecraft:deprecated_purpur_block_2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DETECTOR_RAIL: Self = Self {
         id: 28,
         registry_key: "minecraft:detector_rail",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND: Self = Self {
         id: 335,
         registry_key: "minecraft:diamond",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_AXE: Self = Self {
         id: 350,
         registry_key: "minecraft:diamond_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_BLOCK: Self = Self {
         id: 57,
         registry_key: "minecraft:diamond_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_BOOTS: Self = Self {
         id: 382,
         registry_key: "minecraft:diamond_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_CHESTPLATE: Self = Self {
         id: 380,
         registry_key: "minecraft:diamond_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_HELMET: Self = Self {
         id: 379,
         registry_key: "minecraft:diamond_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_HOE: Self = Self {
         id: 364,
         registry_key: "minecraft:diamond_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_HORSE_ARMOR: Self = Self {
         id: 572,
         registry_key: "minecraft:diamond_horse_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_LEGGINGS: Self = Self {
         id: 381,
         registry_key: "minecraft:diamond_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_NAUTILUS_ARMOR: Self = Self {
         id: 790,
         registry_key: "minecraft:diamond_nautilus_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_ORE: Self = Self {
         id: 56,
         registry_key: "minecraft:diamond_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_PICKAXE: Self = Self {
         id: 349,
         registry_key: "minecraft:diamond_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIAMOND_SHOVEL: Self = Self {
         id: 348,
         registry_key: "minecraft:diamond_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const DIAMOND_SPEAR : Self = Self { id : 258 , registry_key : "minecraft:diamond_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x08\x08category\x05spear\x05\x08durationff\x86?\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\rhitbox_margin\0\0\x80>\x02\x05delay\n\0\x05\x11damage_multiplier\x9A\x99\x89?\n\x11damage_conditions\x02\x0Cmax_duration\xC8\0\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\n\x13dismount_conditions\x05\tmin_speed\0\0 A\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration<\0\0\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\x82\0\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\x0Fdamage_modifier\0\0\0\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability\xB0\x18\0\n\x16minecraft:display_name\x08\x05value\x17item.diamond_spear.name\0\t\titem_tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Ditem.diamond_spear.attack_hit\x08\x0Battack_miss\x1Eitem.diamond_spear.attack_miss\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x01\rhand_equipped\x01\x01\x04foil\0\x03\x11enchantable_value\x14\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rdiamond_spear\0\0\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\x0Eallow_off_hand\0\x03\x06damage\x08\x03\x0Cuse_duration\x80\xE4\xAF\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\0\n\x10minecraft:damage\x02\x05value\x04\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x02\x07version\r\0\x08\nexpression)context.other->query.remaining_durability\0\t\x05items\n\x02\x08\x04name\x17minecraft:diamond_spear\0\0\t\x05items\n\x02\x08\x04name\x11minecraft:diamond\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\0\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x16item.diamond_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\n\0\n\x18minecraft:swing_duration\x05\x05valueff\x86?\0\0" } ;
+    pub const DIAMOND_SPEAR : Self = Self { id : 258 , registry_key : "minecraft:diamond_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\x0Fdamage_modifier\0\0\0\0\x02\x05delay\n\0\n\x13dismount_conditions\x02\x0Cmax_duration<\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0 A\0\x05\x11damage_multiplier\x9A\x99\x89?\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\x82\0\0\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xC8\0\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\0\n\x10minecraft:damage\x02\x05value\x04\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x17minecraft:diamond_spear\0\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\0\t\x05items\n\x02\x08\x04name\x11minecraft:diamond\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\0\0\n\x12minecraft:cooldown\x05\x08durationff\x86?\x08\x08category\x05spear\x08\x04type\x06attack\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Ditem.diamond_spear.attack_hit\x08\x0Battack_miss\x1Eitem.diamond_spear.attack_miss\0\n\x16minecraft:display_name\x08\x05value\x17item.diamond_spear.name\0\n\x17minecraft:use_modifiers\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x16item.diamond_spear.use\0\n\x19minecraft:piercing_weapon\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\n\x18minecraft:swing_duration\x05\x05valueff\x86?\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\n\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\0\n\x0Fitem_properties\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rdiamond_spear\0\0\x01\x0Eliquid_clipped\0\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x0Bmelee_spear\x01\x12hidden_in_commands\x02\x03\x06damage\x08\x03\x11enchantable_value\x14\x03\x0Emax_stack_size\x02\x01\rhand_equipped\x01\x01\x0Fstacked_by_data\0\x01\x04foil\0\x03\x0Bframe_count\x02\x03\ruse_animation\0\x08\x0Ecreative_group\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\t\titem_tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability\xB0\x18\0\0" } ;
     pub const DIAMOND_SWORD: Self = Self {
         id: 347,
         registry_key: "minecraft:diamond_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIORITE: Self = Self {
         id: -592,
         registry_key: "minecraft:diorite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIORITE_DOUBLE_SLAB: Self = Self {
         id: -921,
         registry_key: "minecraft:diorite_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIORITE_SLAB: Self = Self {
         id: -894,
         registry_key: "minecraft:diorite_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIORITE_STAIRS: Self = Self {
         id: -170,
         registry_key: "minecraft:diorite_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIORITE_WALL: Self = Self {
         id: -973,
         registry_key: "minecraft:diorite_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIRT: Self = Self {
         id: 3,
         registry_key: "minecraft:dirt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DIRT_WITH_ROOTS: Self = Self {
         id: -318,
         registry_key: "minecraft:dirt_with_roots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DISC_FRAGMENT_5: Self = Self {
         id: 679,
         registry_key: "minecraft:disc_fragment_5",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DISPENSER: Self = Self {
         id: 23,
         registry_key: "minecraft:dispenser",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOLPHIN_SPAWN_EGG: Self = Self {
         id: 518,
         registry_key: "minecraft:dolphin_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DONKEY_SPAWN_EGG: Self = Self {
         id: 499,
         registry_key: "minecraft:donkey_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -368,
         registry_key: "minecraft:double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOUBLE_PLANT: Self = Self {
         id: 816,
         registry_key: "minecraft:double_plant",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB: Self = Self {
         id: 805,
         registry_key: "minecraft:double_stone_block_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB2: Self = Self {
         id: 806,
         registry_key: "minecraft:double_stone_block_slab2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB3: Self = Self {
         id: 807,
         registry_key: "minecraft:double_stone_block_slab3",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB4: Self = Self {
         id: 808,
         registry_key: "minecraft:double_stone_block_slab4",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DRAGON_BREATH: Self = Self {
         id: 599,
         registry_key: "minecraft:dragon_breath",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DRAGON_EGG: Self = Self {
         id: 122,
         registry_key: "minecraft:dragon_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DRAGON_HEAD: Self = Self {
         id: -969,
         registry_key: "minecraft:dragon_head",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DRIED_GHAST: Self = Self {
         id: -1027,
         registry_key: "minecraft:dried_ghast",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const DRIED_KELP : Self = Self { id : 299 , registry_key : "minecraft:dried_kelp" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration \n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\rcooldown_type\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\0\0" } ;
+    pub const DRIED_KELP : Self = Self { id : 299 , registry_key : "minecraft:dried_kelp" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCC\xCC=\0\x03\x16minecraft:use_duration \0" } ;
     pub const DRIED_KELP_BLOCK: Self = Self {
         id: -139,
         registry_key: "minecraft:dried_kelp_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DRIPSTONE_BLOCK: Self = Self {
         id: -317,
         registry_key: "minecraft:dripstone_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DROPPER: Self = Self {
         id: 125,
         registry_key: "minecraft:dropper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DROWNED_SPAWN_EGG: Self = Self {
         id: 517,
         registry_key: "minecraft:drowned_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 725,
         registry_key: "minecraft:dune_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const DYE: Self = Self {
         id: 840,
         registry_key: "minecraft:dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ECHO_SHARD: Self = Self {
         id: 689,
         registry_key: "minecraft:echo_shard",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EGG: Self = Self {
         id: 422,
         registry_key: "minecraft:egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELDER_GUARDIAN_SPAWN_EGG: Self = Self {
         id: 505,
         registry_key: "minecraft:elder_guardian_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_0: Self = Self {
         id: 36,
         registry_key: "minecraft:element_0",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_1: Self = Self {
         id: -12,
         registry_key: "minecraft:element_1",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_10: Self = Self {
         id: -21,
         registry_key: "minecraft:element_10",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_100: Self = Self {
         id: -111,
         registry_key: "minecraft:element_100",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_101: Self = Self {
         id: -112,
         registry_key: "minecraft:element_101",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_102: Self = Self {
         id: -113,
         registry_key: "minecraft:element_102",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_103: Self = Self {
         id: -114,
         registry_key: "minecraft:element_103",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_104: Self = Self {
         id: -115,
         registry_key: "minecraft:element_104",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_105: Self = Self {
         id: -116,
         registry_key: "minecraft:element_105",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_106: Self = Self {
         id: -117,
         registry_key: "minecraft:element_106",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_107: Self = Self {
         id: -118,
         registry_key: "minecraft:element_107",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_108: Self = Self {
         id: -119,
         registry_key: "minecraft:element_108",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_109: Self = Self {
         id: -120,
         registry_key: "minecraft:element_109",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_11: Self = Self {
         id: -22,
         registry_key: "minecraft:element_11",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_110: Self = Self {
         id: -121,
         registry_key: "minecraft:element_110",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_111: Self = Self {
         id: -122,
         registry_key: "minecraft:element_111",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_112: Self = Self {
         id: -123,
         registry_key: "minecraft:element_112",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_113: Self = Self {
         id: -124,
         registry_key: "minecraft:element_113",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_114: Self = Self {
         id: -125,
         registry_key: "minecraft:element_114",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_115: Self = Self {
         id: -126,
         registry_key: "minecraft:element_115",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_116: Self = Self {
         id: -127,
         registry_key: "minecraft:element_116",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_117: Self = Self {
         id: -128,
         registry_key: "minecraft:element_117",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_118: Self = Self {
         id: -129,
         registry_key: "minecraft:element_118",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_12: Self = Self {
         id: -23,
         registry_key: "minecraft:element_12",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_13: Self = Self {
         id: -24,
         registry_key: "minecraft:element_13",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_14: Self = Self {
         id: -25,
         registry_key: "minecraft:element_14",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_15: Self = Self {
         id: -26,
         registry_key: "minecraft:element_15",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_16: Self = Self {
         id: -27,
         registry_key: "minecraft:element_16",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_17: Self = Self {
         id: -28,
         registry_key: "minecraft:element_17",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_18: Self = Self {
         id: -29,
         registry_key: "minecraft:element_18",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_19: Self = Self {
         id: -30,
         registry_key: "minecraft:element_19",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_2: Self = Self {
         id: -13,
         registry_key: "minecraft:element_2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_20: Self = Self {
         id: -31,
         registry_key: "minecraft:element_20",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_21: Self = Self {
         id: -32,
         registry_key: "minecraft:element_21",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_22: Self = Self {
         id: -33,
         registry_key: "minecraft:element_22",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_23: Self = Self {
         id: -34,
         registry_key: "minecraft:element_23",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_24: Self = Self {
         id: -35,
         registry_key: "minecraft:element_24",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_25: Self = Self {
         id: -36,
         registry_key: "minecraft:element_25",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_26: Self = Self {
         id: -37,
         registry_key: "minecraft:element_26",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_27: Self = Self {
         id: -38,
         registry_key: "minecraft:element_27",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_28: Self = Self {
         id: -39,
         registry_key: "minecraft:element_28",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_29: Self = Self {
         id: -40,
         registry_key: "minecraft:element_29",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_3: Self = Self {
         id: -14,
         registry_key: "minecraft:element_3",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_30: Self = Self {
         id: -41,
         registry_key: "minecraft:element_30",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_31: Self = Self {
         id: -42,
         registry_key: "minecraft:element_31",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_32: Self = Self {
         id: -43,
         registry_key: "minecraft:element_32",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_33: Self = Self {
         id: -44,
         registry_key: "minecraft:element_33",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_34: Self = Self {
         id: -45,
         registry_key: "minecraft:element_34",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_35: Self = Self {
         id: -46,
         registry_key: "minecraft:element_35",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_36: Self = Self {
         id: -47,
         registry_key: "minecraft:element_36",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_37: Self = Self {
         id: -48,
         registry_key: "minecraft:element_37",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_38: Self = Self {
         id: -49,
         registry_key: "minecraft:element_38",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_39: Self = Self {
         id: -50,
         registry_key: "minecraft:element_39",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_4: Self = Self {
         id: -15,
         registry_key: "minecraft:element_4",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_40: Self = Self {
         id: -51,
         registry_key: "minecraft:element_40",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_41: Self = Self {
         id: -52,
         registry_key: "minecraft:element_41",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_42: Self = Self {
         id: -53,
         registry_key: "minecraft:element_42",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_43: Self = Self {
         id: -54,
         registry_key: "minecraft:element_43",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_44: Self = Self {
         id: -55,
         registry_key: "minecraft:element_44",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_45: Self = Self {
         id: -56,
         registry_key: "minecraft:element_45",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_46: Self = Self {
         id: -57,
         registry_key: "minecraft:element_46",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_47: Self = Self {
         id: -58,
         registry_key: "minecraft:element_47",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_48: Self = Self {
         id: -59,
         registry_key: "minecraft:element_48",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_49: Self = Self {
         id: -60,
         registry_key: "minecraft:element_49",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_5: Self = Self {
         id: -16,
         registry_key: "minecraft:element_5",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_50: Self = Self {
         id: -61,
         registry_key: "minecraft:element_50",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_51: Self = Self {
         id: -62,
         registry_key: "minecraft:element_51",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_52: Self = Self {
         id: -63,
         registry_key: "minecraft:element_52",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_53: Self = Self {
         id: -64,
         registry_key: "minecraft:element_53",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_54: Self = Self {
         id: -65,
         registry_key: "minecraft:element_54",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_55: Self = Self {
         id: -66,
         registry_key: "minecraft:element_55",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_56: Self = Self {
         id: -67,
         registry_key: "minecraft:element_56",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_57: Self = Self {
         id: -68,
         registry_key: "minecraft:element_57",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_58: Self = Self {
         id: -69,
         registry_key: "minecraft:element_58",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_59: Self = Self {
         id: -70,
         registry_key: "minecraft:element_59",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_6: Self = Self {
         id: -17,
         registry_key: "minecraft:element_6",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_60: Self = Self {
         id: -71,
         registry_key: "minecraft:element_60",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_61: Self = Self {
         id: -72,
         registry_key: "minecraft:element_61",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_62: Self = Self {
         id: -73,
         registry_key: "minecraft:element_62",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_63: Self = Self {
         id: -74,
         registry_key: "minecraft:element_63",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_64: Self = Self {
         id: -75,
         registry_key: "minecraft:element_64",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_65: Self = Self {
         id: -76,
         registry_key: "minecraft:element_65",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_66: Self = Self {
         id: -77,
         registry_key: "minecraft:element_66",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_67: Self = Self {
         id: -78,
         registry_key: "minecraft:element_67",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_68: Self = Self {
         id: -79,
         registry_key: "minecraft:element_68",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_69: Self = Self {
         id: -80,
         registry_key: "minecraft:element_69",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_7: Self = Self {
         id: -18,
         registry_key: "minecraft:element_7",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_70: Self = Self {
         id: -81,
         registry_key: "minecraft:element_70",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_71: Self = Self {
         id: -82,
         registry_key: "minecraft:element_71",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_72: Self = Self {
         id: -83,
         registry_key: "minecraft:element_72",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_73: Self = Self {
         id: -84,
         registry_key: "minecraft:element_73",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_74: Self = Self {
         id: -85,
         registry_key: "minecraft:element_74",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_75: Self = Self {
         id: -86,
         registry_key: "minecraft:element_75",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_76: Self = Self {
         id: -87,
         registry_key: "minecraft:element_76",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_77: Self = Self {
         id: -88,
         registry_key: "minecraft:element_77",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_78: Self = Self {
         id: -89,
         registry_key: "minecraft:element_78",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_79: Self = Self {
         id: -90,
         registry_key: "minecraft:element_79",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_8: Self = Self {
         id: -19,
         registry_key: "minecraft:element_8",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_80: Self = Self {
         id: -91,
         registry_key: "minecraft:element_80",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_81: Self = Self {
         id: -92,
         registry_key: "minecraft:element_81",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_82: Self = Self {
         id: -93,
         registry_key: "minecraft:element_82",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_83: Self = Self {
         id: -94,
         registry_key: "minecraft:element_83",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_84: Self = Self {
         id: -95,
         registry_key: "minecraft:element_84",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_85: Self = Self {
         id: -96,
         registry_key: "minecraft:element_85",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_86: Self = Self {
         id: -97,
         registry_key: "minecraft:element_86",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_87: Self = Self {
         id: -98,
         registry_key: "minecraft:element_87",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_88: Self = Self {
         id: -99,
         registry_key: "minecraft:element_88",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_89: Self = Self {
         id: -100,
         registry_key: "minecraft:element_89",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_9: Self = Self {
         id: -20,
         registry_key: "minecraft:element_9",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_90: Self = Self {
         id: -101,
         registry_key: "minecraft:element_90",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_91: Self = Self {
         id: -102,
         registry_key: "minecraft:element_91",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_92: Self = Self {
         id: -103,
         registry_key: "minecraft:element_92",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_93: Self = Self {
         id: -104,
         registry_key: "minecraft:element_93",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_94: Self = Self {
         id: -105,
         registry_key: "minecraft:element_94",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_95: Self = Self {
         id: -106,
         registry_key: "minecraft:element_95",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_96: Self = Self {
         id: -107,
         registry_key: "minecraft:element_96",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_97: Self = Self {
         id: -108,
         registry_key: "minecraft:element_97",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_98: Self = Self {
         id: -109,
         registry_key: "minecraft:element_98",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_99: Self = Self {
         id: -110,
         registry_key: "minecraft:element_99",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELEMENT_CONSTRUCTOR: Self = Self {
         id: -987,
         registry_key: "minecraft:element_constructor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ELYTRA: Self = Self {
         id: 603,
         registry_key: "minecraft:elytra",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EMERALD: Self = Self {
         id: 552,
         registry_key: "minecraft:emerald",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EMERALD_BLOCK: Self = Self {
         id: 133,
         registry_key: "minecraft:emerald_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EMERALD_ORE: Self = Self {
         id: 129,
         registry_key: "minecraft:emerald_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EMPTY_MAP: Self = Self {
         id: 555,
         registry_key: "minecraft:empty_map",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENCHANTED_BOOK: Self = Self {
         id: 560,
         registry_key: "minecraft:enchanted_book",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const ENCHANTED_GOLDEN_APPLE : Self = Self { id : 288 , registry_key : "minecraft:enchanted_golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x99?\x03\tnutrition\x08\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x08\rcooldown_type\0\t\x07effects\n\x08\x03\tamplifier\x02\x05\x06chance\0\0\x80?\x08\rdescriptionId\x13potion.regeneration\x03\x08duration<\x08\x04name\x0Cregeneration\x03\x02id\x14\0\x08\x04name\nabsorption\x05\x06chance\0\0\x80?\x03\x02id,\x03\x08duration\xF0\x01\x03\tamplifier\x06\x08\rdescriptionId\x11potion.absorption\0\x03\x08duration\xD8\x04\x03\tamplifier\0\x08\rdescriptionId\x11potion.resistance\x08\x04name\nresistance\x03\x02id\x16\x05\x06chance\0\0\x80?\0\x05\x06chance\0\0\x80?\x03\tamplifier\0\x03\x08duration\xD8\x04\x03\x02id\x18\x08\rdescriptionId\x15potion.fireResistance\x08\x04name\x0Ffire_resistance\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\x01\0\x01\x19minecraft:stacked_by_data\x01\x01\x0Eminecraft:foil\x01\0" } ;
+    pub const ENCHANTED_GOLDEN_APPLE : Self = Self { id : 288 , registry_key : "minecraft:enchanted_golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\x01\x0Eminecraft:foil\x01\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\t\x07effects\n\x08\x08\x04name\x0Cregeneration\x05\x06chance\0\0\x80?\x03\tamplifier\x02\x03\x08duration<\x08\rdescriptionId\x13potion.regeneration\x03\x02id\x14\0\x03\tamplifier\x06\x05\x06chance\0\0\x80?\x08\x04name\nabsorption\x03\x02id,\x08\rdescriptionId\x11potion.absorption\x03\x08duration\xF0\x01\0\x03\tamplifier\0\x03\x08duration\xD8\x04\x03\x02id\x16\x05\x06chance\0\0\x80?\x08\rdescriptionId\x11potion.resistance\x08\x04name\nresistance\0\x03\tamplifier\0\x03\x08duration\xD8\x04\x08\rdescriptionId\x15potion.fireResistance\x05\x06chance\0\0\x80?\x03\x02id\x18\x08\x04name\x0Ffire_resistance\0\x03\tnutrition\x08\x01\x0Ecan_always_eat\x01\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99?\x08\x11using_converts_to\0\x03\rcooldown_time\0\0\0" } ;
     pub const ENCHANTING_TABLE: Self = Self {
         id: 116,
         registry_key: "minecraft:enchanting_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_BRICK_STAIRS: Self = Self {
         id: -178,
         registry_key: "minecraft:end_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_BRICKS: Self = Self {
         id: 206,
         registry_key: "minecraft:end_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_CRYSTAL: Self = Self {
         id: 843,
         registry_key: "minecraft:end_crystal",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_GATEWAY: Self = Self {
         id: 209,
         registry_key: "minecraft:end_gateway",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_PORTAL: Self = Self {
         id: 119,
         registry_key: "minecraft:end_portal",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_PORTAL_FRAME: Self = Self {
         id: 120,
         registry_key: "minecraft:end_portal_frame",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_ROD: Self = Self {
         id: 208,
         registry_key: "minecraft:end_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_STONE: Self = Self {
         id: 121,
         registry_key: "minecraft:end_stone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_STONE_BRICK_DOUBLE_SLAB: Self = Self {
         id: -167,
         registry_key: "minecraft:end_stone_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_STONE_BRICK_SLAB: Self = Self {
         id: -162,
         registry_key: "minecraft:end_stone_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const END_STONE_BRICK_WALL: Self = Self {
         id: -980,
         registry_key: "minecraft:end_stone_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENDER_CHEST: Self = Self {
         id: 130,
         registry_key: "minecraft:ender_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENDER_DRAGON_SPAWN_EGG: Self = Self {
         id: 541,
         registry_key: "minecraft:ender_dragon_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENDER_EYE: Self = Self {
         id: 466,
         registry_key: "minecraft:ender_eye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENDER_PEARL: Self = Self {
         id: 454,
         registry_key: "minecraft:ender_pearl",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENDERMAN_SPAWN_EGG: Self = Self {
         id: 475,
         registry_key: "minecraft:enderman_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ENDERMITE_SPAWN_EGG: Self = Self {
         id: 493,
         registry_key: "minecraft:endermite_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EVOKER_SPAWN_EGG: Self = Self {
         id: 509,
         registry_key: "minecraft:evoker_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPERIENCE_BOTTLE: Self = Self {
         id: 548,
         registry_key: "minecraft:experience_bottle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPLORER_POTTERY_SHERD: Self = Self {
         id: 706,
         registry_key: "minecraft:explorer_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_CHISELED_COPPER: Self = Self {
         id: -761,
         registry_key: "minecraft:exposed_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER: Self = Self {
         id: -341,
         registry_key: "minecraft:exposed_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_BARS: Self = Self {
         id: -1067,
         registry_key: "minecraft:exposed_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_BULB: Self = Self {
         id: -777,
         registry_key: "minecraft:exposed_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_CHAIN: Self = Self {
         id: -1075,
         registry_key: "minecraft:exposed_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_CHEST: Self = Self {
         id: -1032,
         registry_key: "minecraft:exposed_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_DOOR: Self = Self {
         id: -785,
         registry_key: "minecraft:exposed_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1040,
         registry_key: "minecraft:exposed_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_GRATE: Self = Self {
         id: -769,
         registry_key: "minecraft:exposed_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_LANTERN: Self = Self {
         id: -1084,
         registry_key: "minecraft:exposed_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_COPPER_TRAPDOOR: Self = Self {
         id: -793,
         registry_key: "minecraft:exposed_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_CUT_COPPER: Self = Self {
         id: -348,
         registry_key: "minecraft:exposed_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_CUT_COPPER_SLAB: Self = Self {
         id: -362,
         registry_key: "minecraft:exposed_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_CUT_COPPER_STAIRS: Self = Self {
         id: -355,
         registry_key: "minecraft:exposed_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -369,
         registry_key: "minecraft:exposed_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EXPOSED_LIGHTNING_ROD: Self = Self {
         id: -1059,
         registry_key: "minecraft:exposed_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const EYE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 729,
         registry_key: "minecraft:eye_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FARMLAND: Self = Self {
         id: 60,
         registry_key: "minecraft:farmland",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FEATHER: Self = Self {
         id: 359,
         registry_key: "minecraft:feather",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FENCE: Self = Self {
         id: 798,
         registry_key: "minecraft:fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FENCE_GATE: Self = Self {
         id: 107,
         registry_key: "minecraft:fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FERMENTED_SPIDER_EYE: Self = Self {
         id: 461,
         registry_key: "minecraft:fermented_spider_eye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FERN: Self = Self {
         id: -848,
         registry_key: "minecraft:fern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIELD_MASONED_BANNER_PATTERN: Self = Self {
         id: 624,
         registry_key: "minecraft:field_masoned_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FILLED_MAP: Self = Self {
         id: 452,
         registry_key: "minecraft:filled_map",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIRE: Self = Self {
         id: 51,
         registry_key: "minecraft:fire",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIRE_CHARGE: Self = Self {
         id: 549,
         registry_key: "minecraft:fire_charge",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIRE_CORAL: Self = Self {
         id: -583,
         registry_key: "minecraft:fire_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIRE_CORAL_BLOCK: Self = Self {
         id: -851,
         registry_key: "minecraft:fire_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIRE_CORAL_FAN: Self = Self {
         id: -842,
         registry_key: "minecraft:fire_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIRE_CORAL_WALL_FAN: Self = Self {
         id: -907,
         registry_key: "minecraft:fire_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIREFLY_BUSH: Self = Self {
         id: -1025,
         registry_key: "minecraft:firefly_bush",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIREWORK_ROCKET: Self = Self {
         id: 558,
         registry_key: "minecraft:firework_rocket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FIREWORK_STAR: Self = Self {
         id: 559,
         registry_key: "minecraft:firework_star",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FISHING_ROD: Self = Self {
         id: 424,
@@ -41962,49 +41962,49 @@ impl BedrockItem {
         registry_key: "minecraft:fletching_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLINT: Self = Self {
         id: 388,
         registry_key: "minecraft:flint",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLINT_AND_STEEL: Self = Self {
         id: 330,
         registry_key: "minecraft:flint_and_steel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 740,
         registry_key: "minecraft:flow_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOW_BANNER_PATTERN: Self = Self {
         id: 628,
         registry_key: "minecraft:flow_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOW_POTTERY_SHERD: Self = Self {
         id: 707,
         registry_key: "minecraft:flow_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOWER_BANNER_PATTERN: Self = Self {
         id: 620,
         registry_key: "minecraft:flower_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOWER_POT: Self = Self {
         id: 554,
@@ -42018,28 +42018,28 @@ impl BedrockItem {
         registry_key: "minecraft:flowering_azalea",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOWING_LAVA: Self = Self {
         id: 10,
         registry_key: "minecraft:flowing_lava",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FLOWING_WATER: Self = Self {
         id: 8,
         registry_key: "minecraft:flowing_water",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FOX_SPAWN_EGG: Self = Self {
         id: 524,
         registry_key: "minecraft:fox_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FRAME: Self = Self {
         id: 553,
@@ -42053,93 +42053,93 @@ impl BedrockItem {
         registry_key: "minecraft:friend_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FROG_SPAWN: Self = Self {
         id: -468,
         registry_key: "minecraft:frog_spawn",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FROG_SPAWN_EGG: Self = Self {
         id: 670,
         registry_key: "minecraft:frog_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FROSTED_ICE: Self = Self {
         id: 207,
         registry_key: "minecraft:frosted_ice",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const FURNACE: Self = Self {
         id: 61,
         registry_key: "minecraft:furnace",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GHAST_SPAWN_EGG: Self = Self {
         id: 487,
         registry_key: "minecraft:ghast_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GHAST_TEAR: Self = Self {
         id: 457,
         registry_key: "minecraft:ghast_tear",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GILDED_BLACKSTONE: Self = Self {
         id: -281,
         registry_key: "minecraft:gilded_blackstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLASS: Self = Self {
         id: 20,
         registry_key: "minecraft:glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLASS_BOTTLE: Self = Self {
         id: 460,
         registry_key: "minecraft:glass_bottle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLASS_PANE: Self = Self {
         id: 102,
         registry_key: "minecraft:glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLISTERING_MELON_SLICE: Self = Self {
         id: 467,
         registry_key: "minecraft:glistering_melon_slice",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOBE_BANNER_PATTERN: Self = Self {
         id: 627,
         registry_key: "minecraft:globe_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const GLOW_BERRIES : Self = Self { id : 844 , registry_key : "minecraft:glow_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\x01\x08\rplant_at_face\x04down\t\x08plant_at\x08\x04\ncave_vines\x1Ccave_vines_head_with_berries\x08\x0Bcrop_result\x14minecraft:cave_vines\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x04\x03\ron_use_action\x01\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\0\0" } ;
+    pub const GLOW_BERRIES : Self = Self { id : 844 , registry_key : "minecraft:glow_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\ron_use_action\x01\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x04\ncave_vines\x1Ccave_vines_head_with_berries\x01\x1Aplant_at_any_solid_surface\x01\x08\rplant_at_face\x04down\x08\x0Bcrop_result\x14minecraft:cave_vines\0\x03\x16minecraft:use_duration@\0" } ;
     pub const GLOW_FRAME: Self = Self {
         id: 665,
         registry_key: "minecraft:glow_frame",
@@ -42152,804 +42152,804 @@ impl BedrockItem {
         registry_key: "minecraft:glow_ink_sac",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOW_LICHEN: Self = Self {
         id: -411,
         registry_key: "minecraft:glow_lichen",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOW_SQUID_SPAWN_EGG: Self = Self {
         id: 538,
         registry_key: "minecraft:glow_squid_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOW_STICK: Self = Self {
         id: 644,
         registry_key: "minecraft:glow_stick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOWINGOBSIDIAN: Self = Self {
         id: 246,
         registry_key: "minecraft:glowingobsidian",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOWSTONE: Self = Self {
         id: 89,
         registry_key: "minecraft:glowstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GLOWSTONE_DUST: Self = Self {
         id: 426,
         registry_key: "minecraft:glowstone_dust",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOAT_HORN: Self = Self {
         id: 669,
         registry_key: "minecraft:goat_horn",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOAT_SPAWN_EGG: Self = Self {
         id: 537,
         registry_key: "minecraft:goat_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLD_BLOCK: Self = Self {
         id: 41,
         registry_key: "minecraft:gold_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLD_INGOT: Self = Self {
         id: 337,
         registry_key: "minecraft:gold_ingot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLD_NUGGET: Self = Self {
         id: 458,
         registry_key: "minecraft:gold_nugget",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLD_ORE: Self = Self {
         id: 14,
         registry_key: "minecraft:gold_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const GOLDEN_APPLE : Self = Self { id : 287 , registry_key : "minecraft:golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\x01\t\x07effects\n\x04\x03\tamplifier\x02\x03\x08duration\n\x08\x04name\x0Cregeneration\x03\x02id\x14\x05\x06chance\0\0\x80?\x08\rdescriptionId\x13potion.regeneration\0\x03\tamplifier\0\x03\x02id,\x05\x06chance\0\0\x80?\x08\x04name\nabsorption\x03\x08duration\xF0\x01\x08\rdescriptionId\x11potion.absorption\0\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99?\x03\tnutrition\x08\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0" } ;
+    pub const GOLDEN_APPLE : Self = Self { id : 287 , registry_key : "minecraft:golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\x01\x03\ron_use_action\x01\x08\rcooldown_type\0\t\x07effects\n\x04\x03\tamplifier\x02\x03\x08duration\n\x08\x04name\x0Cregeneration\x03\x02id\x14\x05\x06chance\0\0\x80?\x08\rdescriptionId\x13potion.regeneration\0\x05\x06chance\0\0\x80?\x03\x08duration\xF0\x01\x03\x02id,\x08\rdescriptionId\x11potion.absorption\x08\x04name\nabsorption\x03\tamplifier\0\0\x03\tnutrition\x08\x05\x13saturation_modifier\x9A\x99\x99?\0\0" } ;
     pub const GOLDEN_AXE: Self = Self {
         id: 357,
         registry_key: "minecraft:golden_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_BOOTS: Self = Self {
         id: 386,
         registry_key: "minecraft:golden_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const GOLDEN_CARROT : Self = Self { id : 312 , registry_key : "minecraft:golden_carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x0C\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99?\x08\x11using_converts_to\0\x03\ron_use_action\x01\0\0" } ;
+    pub const GOLDEN_CARROT : Self = Self { id : 312 , registry_key : "minecraft:golden_carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x03\tnutrition\x0C\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99?\x03\ron_use_action\x01\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const GOLDEN_CHESTPLATE: Self = Self {
         id: 384,
         registry_key: "minecraft:golden_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_DANDELION: Self = Self {
         id: -1091,
         registry_key: "minecraft:golden_dandelion",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_HELMET: Self = Self {
         id: 383,
         registry_key: "minecraft:golden_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_HOE: Self = Self {
         id: 365,
         registry_key: "minecraft:golden_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_HORSE_ARMOR: Self = Self {
         id: 571,
         registry_key: "minecraft:golden_horse_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_LEGGINGS: Self = Self {
         id: 385,
         registry_key: "minecraft:golden_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_NAUTILUS_ARMOR: Self = Self {
         id: 789,
         registry_key: "minecraft:golden_nautilus_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_PICKAXE: Self = Self {
         id: 356,
         registry_key: "minecraft:golden_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_RAIL: Self = Self {
         id: 27,
         registry_key: "minecraft:golden_rail",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GOLDEN_SHOVEL: Self = Self {
         id: 355,
         registry_key: "minecraft:golden_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const GOLDEN_SPEAR : Self = Self { id : 259 , registry_key : "minecraft:golden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x15minecraft:enchantable\x01\x05value\x16\x08\x04slot\x0Bmelee_spear\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\x0Fdamage_modifier\0\0\0\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\x11damage_multiplier333?\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\xAA\0\0\x02\x05delay\x0E\0\n\x11damage_conditions\x02\x0Cmax_duration\x13\x01\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0PA\x02\x0Cmax_durationF\0\0\x05\rhitbox_margin\0\0\x80>\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_sound\x15item.golden_spear.use\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08duration33s?\x08\x04type\x06attack\0\n\x19minecraft:piercing_weapon\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x0Fitem_properties\x01\x12hidden_in_commands\x02\x01\rhand_equipped\x01\x01\x04foil\0\x08\x10enchantable_slot\x0Bmelee_spear\x03\x11enchantable_value,\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\ruse_animation\0\x03\x11creative_category\x06\x03\x06damage\x02\x08\x0Ecreative_group\0\x01\x0Fstacked_by_data\0\x01\x17can_destroy_in_creative\x01\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ngold_spear\0\0\x01\x0Eallow_off_hand\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Ditem.golden_spear.attack_miss\x08\nattack_hit\x1Citem.golden_spear.attack_hit\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\t\titem_tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x16minecraft:golden_spear\0\0\t\x05items\n\x02\x08\x04name\x14minecraft:gold_ingot\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\0\0\n\x14minecraft:durability\x03\x0Emax_durability<\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\0\n\x16minecraft:display_name\x08\x05value\x16item.golden_spear.name\0\0" } ;
+    pub const GOLDEN_SPEAR : Self = Self { id : 259 , registry_key : "minecraft:golden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:display_name\x08\x05value\x16item.golden_spear.name\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x08\x04type\x06attack\x05\x08duration33s?\0\n\x0Fitem_properties\x01\x0Fstacked_by_data\0\x03\x06damage\x02\x01\x04foil\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ngold_spear\0\0\x03\x0Emax_stack_size\x02\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x03\x11creative_category\x06\x03\x11enchantable_value,\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\ruse_animation\0\x01\x0Eallow_off_hand\0\x01\rhand_equipped\x01\x08\x10enchantable_slot\x0Bmelee_spear\x08\x0Ecreative_group\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x16minecraft:golden_spear\0\0\n\rrepair_amount\x08\nexpression\x1Bquery.max_durability * 0.25\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x14minecraft:gold_ingot\0\0\0\n\x19minecraft:piercing_weapon\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability<\0\t\titem_tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.golden_spear.attack_hit\x08\x0Battack_miss\x1Ditem.golden_spear.attack_miss\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\x11damage_multiplier333?\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\x13\x01\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x02\x0Cmax_durationF\0\x05\tmin_speed\0\0PA\x05\x12min_relative_speed\0\0\0\0\0\x02\x05delay\x0E\0\x05\x0Fdamage_modifier\0\0\0\0\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\xAA\0\0\0\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x15item.golden_spear.use\x05\x11movement_modifier\0\0\x80?\x05\x0Cuse_duration\0\xA0\x8CG\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x16\0\0" } ;
     pub const GOLDEN_SWORD: Self = Self {
         id: 354,
         registry_key: "minecraft:golden_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRANITE: Self = Self {
         id: -590,
         registry_key: "minecraft:granite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRANITE_DOUBLE_SLAB: Self = Self {
         id: -923,
         registry_key: "minecraft:granite_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRANITE_SLAB: Self = Self {
         id: -896,
         registry_key: "minecraft:granite_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRANITE_STAIRS: Self = Self {
         id: -169,
         registry_key: "minecraft:granite_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRANITE_WALL: Self = Self {
         id: -972,
         registry_key: "minecraft:granite_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRASS_BLOCK: Self = Self {
         id: 2,
         registry_key: "minecraft:grass_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRASS_PATH: Self = Self {
         id: 198,
         registry_key: "minecraft:grass_path",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAVEL: Self = Self {
         id: 13,
         registry_key: "minecraft:gravel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const GRAY_BUNDLE : Self = Self { id : 269 , registry_key : "minecraft:gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\n\x0Fitem_properties\x01\x12hidden_in_commands\x02\x03\ruse_animation\0\x03\x0Cuse_duration\0\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_gray_open_back\x08\x11bundle_open_front\x16bundle_gray_open_front\x08\x07default\x0Bbundle_gray\0\0\x03\x11creative_category\x06\x01\rhand_equipped\0\x03\x11enchantable_value\0\x05\x0Cmining_speed\0\0\x80?\x01\x04foil\0\x01\x0Eallow_off_hand\0\x03\x06damage\0\x01\x0Fstacked_by_data\0\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x03\x0Emax_stack_size\x02\x08\x10enchantable_slot\x04none\x03\x0Bframe_count\x02\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
+    pub const GRAY_BUNDLE : Self = Self { id : 269 , registry_key : "minecraft:gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_gray\x08\x11bundle_open_front\x16bundle_gray_open_front\x08\x10bundle_open_back\x15bundle_gray_open_back\0\0\x03\ruse_animation\0\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x02\x01\x17can_destroy_in_creative\x01\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration\0\x03\x06damage\0\x01\rhand_equipped\0\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0" } ;
     pub const GRAY_CANDLE: Self = Self {
         id: -420,
         registry_key: "minecraft:gray_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_CANDLE_CAKE: Self = Self {
         id: -437,
         registry_key: "minecraft:gray_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_CARPET: Self = Self {
         id: -603,
         registry_key: "minecraft:gray_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_CONCRETE: Self = Self {
         id: -634,
         registry_key: "minecraft:gray_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_CONCRETE_POWDER: Self = Self {
         id: -715,
         registry_key: "minecraft:gray_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_DYE: Self = Self {
         id: 435,
         registry_key: "minecraft:gray_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_GLAZED_TERRACOTTA: Self = Self {
         id: 227,
         registry_key: "minecraft:gray_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_HARNESS: Self = Self {
         id: 760,
         registry_key: "minecraft:gray_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_SHULKER_BOX: Self = Self {
         id: -619,
         registry_key: "minecraft:gray_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_STAINED_GLASS: Self = Self {
         id: -679,
         registry_key: "minecraft:gray_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_STAINED_GLASS_PANE: Self = Self {
         id: -649,
         registry_key: "minecraft:gray_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_TERRACOTTA: Self = Self {
         id: -730,
         registry_key: "minecraft:gray_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRAY_WOOL: Self = Self {
         id: -553,
         registry_key: "minecraft:gray_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const GREEN_BUNDLE : Self = Self { id : 270 , registry_key : "minecraft:green_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x01\x12hidden_in_commands\x02\x03\x06damage\0\x01\rhand_equipped\0\x03\ruse_animation\0\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x08\x10enchantable_slot\x04none\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_green_open_back\x08\x11bundle_open_front\x17bundle_green_open_front\x08\x07default\x0Cbundle_green\0\0\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\x01\x0Eshould_despawn\x01\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x05\x0Cmining_speed\0\0\x80?\x01\x04foil\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
+    pub const GREEN_BUNDLE : Self = Self { id : 270 , registry_key : "minecraft:green_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_green_open_back\x08\x11bundle_open_front\x17bundle_green_open_front\x08\x07default\x0Cbundle_green\0\0\x08\x10enchantable_slot\x04none\x03\ruse_animation\0\x03\x11creative_category\x06\x01\x04foil\0\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x01\x0Eshould_despawn\x01\x03\x06damage\0\x01\x12hidden_in_commands\x02\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
     pub const GREEN_CANDLE: Self = Self {
         id: -426,
         registry_key: "minecraft:green_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_CANDLE_CAKE: Self = Self {
         id: -443,
         registry_key: "minecraft:green_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_CARPET: Self = Self {
         id: -609,
         registry_key: "minecraft:green_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_CONCRETE: Self = Self {
         id: -640,
         registry_key: "minecraft:green_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_CONCRETE_POWDER: Self = Self {
         id: -721,
         registry_key: "minecraft:green_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_DYE: Self = Self {
         id: 429,
         registry_key: "minecraft:green_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_GLAZED_TERRACOTTA: Self = Self {
         id: 233,
         registry_key: "minecraft:green_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_HARNESS: Self = Self {
         id: 761,
         registry_key: "minecraft:green_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_SHULKER_BOX: Self = Self {
         id: -625,
         registry_key: "minecraft:green_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_STAINED_GLASS: Self = Self {
         id: -685,
         registry_key: "minecraft:green_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_STAINED_GLASS_PANE: Self = Self {
         id: -655,
         registry_key: "minecraft:green_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_TERRACOTTA: Self = Self {
         id: -736,
         registry_key: "minecraft:green_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GREEN_WOOL: Self = Self {
         id: -560,
         registry_key: "minecraft:green_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GRINDSTONE: Self = Self {
         id: -195,
         registry_key: "minecraft:grindstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GUARDIAN_SPAWN_EGG: Self = Self {
         id: 494,
         registry_key: "minecraft:guardian_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GUNPOWDER: Self = Self {
         id: 360,
         registry_key: "minecraft:gunpowder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GUSTER_BANNER_PATTERN: Self = Self {
         id: 629,
         registry_key: "minecraft:guster_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const GUSTER_POTTERY_SHERD: Self = Self {
         id: 709,
         registry_key: "minecraft:guster_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HANGING_ROOTS: Self = Self {
         id: -319,
         registry_key: "minecraft:hanging_roots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HAPPY_GHAST_SPAWN_EGG: Self = Self {
         id: 755,
         registry_key: "minecraft:happy_ghast_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_BLACK_STAINED_GLASS: Self = Self {
         id: -702,
         registry_key: "minecraft:hard_black_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_BLACK_STAINED_GLASS_PANE: Self = Self {
         id: -672,
         registry_key: "minecraft:hard_black_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_BLUE_STAINED_GLASS: Self = Self {
         id: -698,
         registry_key: "minecraft:hard_blue_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_BLUE_STAINED_GLASS_PANE: Self = Self {
         id: -668,
         registry_key: "minecraft:hard_blue_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_BROWN_STAINED_GLASS: Self = Self {
         id: -699,
         registry_key: "minecraft:hard_brown_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_BROWN_STAINED_GLASS_PANE: Self = Self {
         id: -669,
         registry_key: "minecraft:hard_brown_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_CYAN_STAINED_GLASS: Self = Self {
         id: -696,
         registry_key: "minecraft:hard_cyan_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_CYAN_STAINED_GLASS_PANE: Self = Self {
         id: -666,
         registry_key: "minecraft:hard_cyan_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_GLASS: Self = Self {
         id: 253,
         registry_key: "minecraft:hard_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_GLASS_PANE: Self = Self {
         id: 190,
         registry_key: "minecraft:hard_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_GRAY_STAINED_GLASS: Self = Self {
         id: -694,
         registry_key: "minecraft:hard_gray_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_GRAY_STAINED_GLASS_PANE: Self = Self {
         id: -664,
         registry_key: "minecraft:hard_gray_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_GREEN_STAINED_GLASS: Self = Self {
         id: -700,
         registry_key: "minecraft:hard_green_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_GREEN_STAINED_GLASS_PANE: Self = Self {
         id: -670,
         registry_key: "minecraft:hard_green_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_LIGHT_BLUE_STAINED_GLASS: Self = Self {
         id: -690,
         registry_key: "minecraft:hard_light_blue_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_LIGHT_BLUE_STAINED_GLASS_PANE: Self = Self {
         id: -660,
         registry_key: "minecraft:hard_light_blue_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_LIGHT_GRAY_STAINED_GLASS: Self = Self {
         id: -695,
         registry_key: "minecraft:hard_light_gray_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_LIGHT_GRAY_STAINED_GLASS_PANE: Self = Self {
         id: -665,
         registry_key: "minecraft:hard_light_gray_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_LIME_STAINED_GLASS: Self = Self {
         id: -692,
         registry_key: "minecraft:hard_lime_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_LIME_STAINED_GLASS_PANE: Self = Self {
         id: -662,
         registry_key: "minecraft:hard_lime_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_MAGENTA_STAINED_GLASS: Self = Self {
         id: -689,
         registry_key: "minecraft:hard_magenta_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_MAGENTA_STAINED_GLASS_PANE: Self = Self {
         id: -659,
         registry_key: "minecraft:hard_magenta_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_ORANGE_STAINED_GLASS: Self = Self {
         id: -688,
         registry_key: "minecraft:hard_orange_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_ORANGE_STAINED_GLASS_PANE: Self = Self {
         id: -658,
         registry_key: "minecraft:hard_orange_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_PINK_STAINED_GLASS: Self = Self {
         id: -693,
         registry_key: "minecraft:hard_pink_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_PINK_STAINED_GLASS_PANE: Self = Self {
         id: -663,
         registry_key: "minecraft:hard_pink_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_PURPLE_STAINED_GLASS: Self = Self {
         id: -697,
         registry_key: "minecraft:hard_purple_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_PURPLE_STAINED_GLASS_PANE: Self = Self {
         id: -667,
         registry_key: "minecraft:hard_purple_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_RED_STAINED_GLASS: Self = Self {
         id: -701,
         registry_key: "minecraft:hard_red_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_RED_STAINED_GLASS_PANE: Self = Self {
         id: -671,
         registry_key: "minecraft:hard_red_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_STAINED_GLASS: Self = Self {
         id: 834,
         registry_key: "minecraft:hard_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_STAINED_GLASS_PANE: Self = Self {
         id: 835,
         registry_key: "minecraft:hard_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_WHITE_STAINED_GLASS: Self = Self {
         id: 254,
         registry_key: "minecraft:hard_white_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_WHITE_STAINED_GLASS_PANE: Self = Self {
         id: 191,
         registry_key: "minecraft:hard_white_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_YELLOW_STAINED_GLASS: Self = Self {
         id: -691,
         registry_key: "minecraft:hard_yellow_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARD_YELLOW_STAINED_GLASS_PANE: Self = Self {
         id: -661,
         registry_key: "minecraft:hard_yellow_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HARDENED_CLAY: Self = Self {
         id: 172,
         registry_key: "minecraft:hardened_clay",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HAY_BLOCK: Self = Self {
         id: 170,
         registry_key: "minecraft:hay_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HEART_OF_THE_SEA: Self = Self {
         id: 610,
         registry_key: "minecraft:heart_of_the_sea",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HEART_POTTERY_SHERD: Self = Self {
         id: 710,
         registry_key: "minecraft:heart_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HEARTBREAK_POTTERY_SHERD: Self = Self {
         id: 711,
         registry_key: "minecraft:heartbreak_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HEAVY_CORE: Self = Self {
         id: -316,
         registry_key: "minecraft:heavy_core",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HEAVY_WEIGHTED_PRESSURE_PLATE: Self = Self {
         id: 148,
         registry_key: "minecraft:heavy_weighted_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HOGLIN_SPAWN_EGG: Self = Self {
         id: 530,
         registry_key: "minecraft:hoglin_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HONEY_BLOCK: Self = Self {
         id: -220,
         registry_key: "minecraft:honey_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const HONEY_BOTTLE : Self = Self { id : 633 , registry_key : "minecraft:honey_bottle" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\ron_use_action\x01\x08\rcooldown_type\0\x08\x11using_converts_to\x0Cglass_bottle\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x0C\x05\x13saturation_modifier\xCD\xCC\xCC=\x01\x0Ecan_always_eat\x01\t\x0Eremove_effects\x03\x02&\0\x03\x18minecraft:max_stack_size \x03\x16minecraft:use_durationP\0" } ;
+    pub const HONEY_BOTTLE : Self = Self { id : 633 , registry_key : "minecraft:honey_bottle" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_durationP\x03\x18minecraft:max_stack_size \n\x0Eminecraft:food\x03\ron_use_action\x01\x08\x11using_converts_to\x0Cglass_bottle\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\t\x0Eremove_effects\x03\x02&\x01\x0Ecan_always_eat\x01\x03\tnutrition\x0C\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCC\xCC=\0\0" } ;
     pub const HONEYCOMB: Self = Self {
         id: 632,
         registry_key: "minecraft:honeycomb",
         version: BedrockItemVersion::Legacy,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HONEYCOMB_BLOCK: Self = Self {
         id: -221,
         registry_key: "minecraft:honeycomb_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HOPPER: Self = Self {
         id: 566,
@@ -42963,645 +42963,645 @@ impl BedrockItem {
         registry_key: "minecraft:hopper_minecart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HORN_CORAL: Self = Self {
         id: -584,
         registry_key: "minecraft:horn_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HORN_CORAL_BLOCK: Self = Self {
         id: -852,
         registry_key: "minecraft:horn_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HORN_CORAL_FAN: Self = Self {
         id: -843,
         registry_key: "minecraft:horn_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HORN_CORAL_WALL_FAN: Self = Self {
         id: -137,
         registry_key: "minecraft:horn_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HORSE_SPAWN_EGG: Self = Self {
         id: 491,
         registry_key: "minecraft:horse_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HOST_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 739,
         registry_key: "minecraft:host_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HOWL_POTTERY_SHERD: Self = Self {
         id: 712,
         registry_key: "minecraft:howl_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const HUSK_SPAWN_EGG: Self = Self {
         id: 497,
         registry_key: "minecraft:husk_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ICE: Self = Self {
         id: 79,
         registry_key: "minecraft:ice",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ICE_BOMB: Self = Self {
         id: 638,
         registry_key: "minecraft:ice_bomb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_CHISELED_STONE_BRICKS: Self = Self {
         id: -862,
         registry_key: "minecraft:infested_chiseled_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_COBBLESTONE: Self = Self {
         id: -858,
         registry_key: "minecraft:infested_cobblestone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_CRACKED_STONE_BRICKS: Self = Self {
         id: -861,
         registry_key: "minecraft:infested_cracked_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_DEEPSLATE: Self = Self {
         id: -454,
         registry_key: "minecraft:infested_deepslate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_MOSSY_STONE_BRICKS: Self = Self {
         id: -860,
         registry_key: "minecraft:infested_mossy_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_STONE: Self = Self {
         id: 97,
         registry_key: "minecraft:infested_stone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFESTED_STONE_BRICKS: Self = Self {
         id: -859,
         registry_key: "minecraft:infested_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFO_UPDATE: Self = Self {
         id: 248,
         registry_key: "minecraft:info_update",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INFO_UPDATE2: Self = Self {
         id: 249,
         registry_key: "minecraft:info_update2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INK_SAC: Self = Self {
         id: 445,
         registry_key: "minecraft:ink_sac",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const INVISIBLE_BEDROCK: Self = Self {
         id: 95,
         registry_key: "minecraft:invisible_bedrock",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_AXE: Self = Self {
         id: 329,
         registry_key: "minecraft:iron_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_BARS: Self = Self {
         id: 101,
         registry_key: "minecraft:iron_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_BLOCK: Self = Self {
         id: 42,
         registry_key: "minecraft:iron_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_BOOTS: Self = Self {
         id: 378,
         registry_key: "minecraft:iron_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_CHAIN: Self = Self {
         id: -286,
         registry_key: "minecraft:iron_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_CHESTPLATE: Self = Self {
         id: 376,
         registry_key: "minecraft:iron_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_DOOR: Self = Self {
         id: 404,
         registry_key: "minecraft:iron_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_GOLEM_SPAWN_EGG: Self = Self {
         id: 539,
         registry_key: "minecraft:iron_golem_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_HELMET: Self = Self {
         id: 375,
         registry_key: "minecraft:iron_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_HOE: Self = Self {
         id: 363,
         registry_key: "minecraft:iron_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_HORSE_ARMOR: Self = Self {
         id: 570,
         registry_key: "minecraft:iron_horse_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_INGOT: Self = Self {
         id: 336,
         registry_key: "minecraft:iron_ingot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_LEGGINGS: Self = Self {
         id: 377,
         registry_key: "minecraft:iron_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_NAUTILUS_ARMOR: Self = Self {
         id: 788,
         registry_key: "minecraft:iron_nautilus_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_NUGGET: Self = Self {
         id: 608,
         registry_key: "minecraft:iron_nugget",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_ORE: Self = Self {
         id: 15,
         registry_key: "minecraft:iron_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_PICKAXE: Self = Self {
         id: 328,
         registry_key: "minecraft:iron_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_SHOVEL: Self = Self {
         id: 327,
         registry_key: "minecraft:iron_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const IRON_SPEAR : Self = Self { id : 260 , registry_key : "minecraft:iron_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0E\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x02\x05delay\x0C\0\x05\x0Fdamage_modifier\0\0\0\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\x87\0\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x02\x0Cmax_duration2\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\x000A\0\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xE1\0\0\x05\x11damage_multiplier33s?\0\0\t\titem_tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\n\x14minecraft:durability\x03\x0Emax_durability\xF4\x03\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Aitem.iron_spear.attack_hit\x08\x0Battack_miss\x1Bitem.iron_spear.attack_miss\0\n\x0Fitem_properties\x03\x0Emax_stack_size\x02\x03\x0Bframe_count\x02\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x0Bmelee_spear\x03\ruse_animation\0\x03\x06damage\x06\x01\x04foil\0\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\x1C\x01\x0Fstacked_by_data\0\x01\rhand_equipped\x01\x01\x0Eliquid_clipped\0\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x07default\niron_spear\0\0\x08\x0Ecreative_group\0\0\n\x10minecraft:damage\x02\x05value\x03\0\0\n\x16minecraft:display_name\x08\x05value\x14item.iron_spear.name\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x08\x08category\x05spear\x05\x08duration33s?\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x14minecraft:iron_spear\0\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\0\n\rrepair_amount\x08\nexpression\x1Bquery.max_durability * 0.25\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x14minecraft:iron_ingot\0\0\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x13item.iron_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0" } ;
+    pub const IRON_SPEAR : Self = Self { id : 260 , registry_key : "minecraft:iron_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Aitem.iron_spear.attack_hit\x08\x0Battack_miss\x1Bitem.iron_spear.attack_miss\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0E\0\t\titem_tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\n\x10minecraft:damage\x02\x05value\x03\0\0\n\x0Fitem_properties\x01\rhand_equipped\x01\x01\x0Eliquid_clipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\niron_spear\0\0\x01\x12hidden_in_commands\x02\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x03\x11enchantable_value\x1C\x03\x06damage\x06\x05\x0Cmining_speed\0\0\x80?\x08\x10enchantable_slot\x0Bmelee_spear\x03\x0Emax_stack_size\x02\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x03\x0Bframe_count\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability\xF4\x03\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:display_name\x08\x05value\x14item.iron_spear.name\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08duration33s?\x08\x04type\x06attack\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\t\x05items\n\x02\x08\x04name\x14minecraft:iron_spear\0\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\t\x05items\n\x02\x08\x04name\x14minecraft:iron_ingot\0\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\x87\0\x05\x12min_relative_speed\0\0\0\0\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\x05\x0Fdamage_modifier\0\0\0\0\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xE1\0\x05\x12min_relative_speed33\x93@\0\x02\x05delay\x0C\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration2\0\x05\tmin_speed\0\x000A\0\x05\x11damage_multiplier33s?\0\0\n\x17minecraft:use_modifiers\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_sound\x13item.iron_spear.use\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\0\0" } ;
     pub const IRON_SWORD: Self = Self {
         id: 338,
         registry_key: "minecraft:iron_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const IRON_TRAPDOOR: Self = Self {
         id: 167,
         registry_key: "minecraft:iron_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_ACACIA_DOOR: Self = Self {
         id: 196,
         registry_key: "minecraft:item.acacia_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_BED: Self = Self {
         id: 26,
         registry_key: "minecraft:item.bed",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_BEETROOT: Self = Self {
         id: 244,
         registry_key: "minecraft:item.beetroot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_BIRCH_DOOR: Self = Self {
         id: 194,
         registry_key: "minecraft:item.birch_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_BREWING_STAND: Self = Self {
         id: 117,
         registry_key: "minecraft:item.brewing_stand",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_CAKE: Self = Self {
         id: 92,
         registry_key: "minecraft:item.cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_CAMERA: Self = Self {
         id: 242,
         registry_key: "minecraft:item.camera",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_CAMPFIRE: Self = Self {
         id: -209,
         registry_key: "minecraft:item.campfire",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_CAULDRON: Self = Self {
         id: 118,
         registry_key: "minecraft:item.cauldron",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_CRIMSON_DOOR: Self = Self {
         id: -244,
         registry_key: "minecraft:item.crimson_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_DARK_OAK_DOOR: Self = Self {
         id: 197,
         registry_key: "minecraft:item.dark_oak_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_FLOWER_POT: Self = Self {
         id: 140,
         registry_key: "minecraft:item.flower_pot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_FRAME: Self = Self {
         id: 199,
         registry_key: "minecraft:item.frame",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_GLOW_FRAME: Self = Self {
         id: -339,
         registry_key: "minecraft:item.glow_frame",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_HOPPER: Self = Self {
         id: 154,
         registry_key: "minecraft:item.hopper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_IRON_DOOR: Self = Self {
         id: 71,
         registry_key: "minecraft:item.iron_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_JUNGLE_DOOR: Self = Self {
         id: 195,
         registry_key: "minecraft:item.jungle_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_KELP: Self = Self {
         id: -138,
         registry_key: "minecraft:item.kelp",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_MANGROVE_DOOR: Self = Self {
         id: -493,
         registry_key: "minecraft:item.mangrove_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_NETHER_SPROUTS: Self = Self {
         id: -238,
         registry_key: "minecraft:item.nether_sprouts",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_NETHER_WART: Self = Self {
         id: 115,
         registry_key: "minecraft:item.nether_wart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_REEDS: Self = Self {
         id: 83,
         registry_key: "minecraft:item.reeds",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_SOUL_CAMPFIRE: Self = Self {
         id: -290,
         registry_key: "minecraft:item.soul_campfire",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_SPRUCE_DOOR: Self = Self {
         id: 193,
         registry_key: "minecraft:item.spruce_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_WARPED_DOOR: Self = Self {
         id: -245,
         registry_key: "minecraft:item.warped_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_WHEAT: Self = Self {
         id: 59,
         registry_key: "minecraft:item.wheat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ITEM_WOODEN_DOOR: Self = Self {
         id: 64,
         registry_key: "minecraft:item.wooden_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JIGSAW: Self = Self {
         id: -211,
         registry_key: "minecraft:jigsaw",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUKEBOX: Self = Self {
         id: 84,
         registry_key: "minecraft:jukebox",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_BOAT: Self = Self {
         id: 409,
         registry_key: "minecraft:jungle_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_BUTTON: Self = Self {
         id: -143,
         registry_key: "minecraft:jungle_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_CHEST_BOAT: Self = Self {
         id: 682,
         registry_key: "minecraft:jungle_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_DOOR: Self = Self {
         id: 594,
         registry_key: "minecraft:jungle_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_DOUBLE_SLAB: Self = Self {
         id: -811,
         registry_key: "minecraft:jungle_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_FENCE: Self = Self {
         id: -578,
         registry_key: "minecraft:jungle_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_FENCE_GATE: Self = Self {
         id: 185,
         registry_key: "minecraft:jungle_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_HANGING_SIGN: Self = Self {
         id: -503,
         registry_key: "minecraft:jungle_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_LEAVES: Self = Self {
         id: -802,
         registry_key: "minecraft:jungle_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_LOG: Self = Self {
         id: -571,
         registry_key: "minecraft:jungle_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_PLANKS: Self = Self {
         id: -741,
         registry_key: "minecraft:jungle_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_PRESSURE_PLATE: Self = Self {
         id: -153,
         registry_key: "minecraft:jungle_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_SAPLING: Self = Self {
         id: -827,
         registry_key: "minecraft:jungle_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_SHELF: Self = Self {
         id: -1050,
         registry_key: "minecraft:jungle_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_SIGN: Self = Self {
         id: 617,
         registry_key: "minecraft:jungle_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_SLAB: Self = Self {
         id: -806,
         registry_key: "minecraft:jungle_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_STAIRS: Self = Self {
         id: 136,
         registry_key: "minecraft:jungle_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_STANDING_SIGN: Self = Self {
         id: -188,
         registry_key: "minecraft:jungle_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_TRAPDOOR: Self = Self {
         id: -148,
         registry_key: "minecraft:jungle_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_WALL_SIGN: Self = Self {
         id: -189,
         registry_key: "minecraft:jungle_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const JUNGLE_WOOD: Self = Self {
         id: -816,
         registry_key: "minecraft:jungle_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const KELP: Self = Self {
         id: 414,
@@ -43615,1191 +43615,1191 @@ impl BedrockItem {
         registry_key: "minecraft:lab_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LADDER: Self = Self {
         id: 65,
         registry_key: "minecraft:ladder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LANTERN: Self = Self {
         id: -208,
         registry_key: "minecraft:lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LAPIS_BLOCK: Self = Self {
         id: 22,
         registry_key: "minecraft:lapis_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LAPIS_LAZULI: Self = Self {
         id: 446,
         registry_key: "minecraft:lapis_lazuli",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LAPIS_ORE: Self = Self {
         id: 21,
         registry_key: "minecraft:lapis_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LARGE_AMETHYST_BUD: Self = Self {
         id: -330,
         registry_key: "minecraft:large_amethyst_bud",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LARGE_FERN: Self = Self {
         id: -865,
         registry_key: "minecraft:large_fern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LAVA: Self = Self {
         id: 11,
         registry_key: "minecraft:lava",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LAVA_BUCKET: Self = Self {
         id: 395,
         registry_key: "minecraft:lava_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEAD: Self = Self {
         id: 586,
         registry_key: "minecraft:lead",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEAF_LITTER: Self = Self {
         id: -1026,
         registry_key: "minecraft:leaf_litter",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEATHER: Self = Self {
         id: 413,
         registry_key: "minecraft:leather",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEATHER_BOOTS: Self = Self {
         id: 370,
         registry_key: "minecraft:leather_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEATHER_CHESTPLATE: Self = Self {
         id: 368,
         registry_key: "minecraft:leather_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEATHER_HELMET: Self = Self {
         id: 367,
         registry_key: "minecraft:leather_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEATHER_HORSE_ARMOR: Self = Self {
         id: 569,
         registry_key: "minecraft:leather_horse_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEATHER_LEGGINGS: Self = Self {
         id: 369,
         registry_key: "minecraft:leather_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEAVES: Self = Self {
         id: 812,
         registry_key: "minecraft:leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEAVES2: Self = Self {
         id: 813,
         registry_key: "minecraft:leaves2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LECTERN: Self = Self {
         id: -194,
         registry_key: "minecraft:lectern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LEVER: Self = Self {
         id: 69,
         registry_key: "minecraft:lever",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK: Self = Self {
         id: 838,
         registry_key: "minecraft:light_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_0: Self = Self {
         id: -215,
         registry_key: "minecraft:light_block_0",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_1: Self = Self {
         id: -929,
         registry_key: "minecraft:light_block_1",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_10: Self = Self {
         id: -938,
         registry_key: "minecraft:light_block_10",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_11: Self = Self {
         id: -939,
         registry_key: "minecraft:light_block_11",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_12: Self = Self {
         id: -940,
         registry_key: "minecraft:light_block_12",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_13: Self = Self {
         id: -941,
         registry_key: "minecraft:light_block_13",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_14: Self = Self {
         id: -942,
         registry_key: "minecraft:light_block_14",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_15: Self = Self {
         id: -943,
         registry_key: "minecraft:light_block_15",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_2: Self = Self {
         id: -930,
         registry_key: "minecraft:light_block_2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_3: Self = Self {
         id: -931,
         registry_key: "minecraft:light_block_3",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_4: Self = Self {
         id: -932,
         registry_key: "minecraft:light_block_4",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_5: Self = Self {
         id: -933,
         registry_key: "minecraft:light_block_5",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_6: Self = Self {
         id: -934,
         registry_key: "minecraft:light_block_6",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_7: Self = Self {
         id: -935,
         registry_key: "minecraft:light_block_7",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_8: Self = Self {
         id: -936,
         registry_key: "minecraft:light_block_8",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK_9: Self = Self {
         id: -937,
         registry_key: "minecraft:light_block_9",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const LIGHT_BLUE_BUNDLE : Self = Self { id : 271 , registry_key : "minecraft:light_blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x1Cbundle_light_blue_open_front\x08\x07default\x11bundle_light_blue\x08\x10bundle_open_back\x1Bbundle_light_blue_open_back\0\0\x08\x0Ecreative_group\0\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x01\x04foil\0\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x01\rhand_equipped\0\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x03\x06damage\0\x03\x11creative_category\x06\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\0" } ;
+    pub const LIGHT_BLUE_BUNDLE : Self = Self { id : 271 , registry_key : "minecraft:light_blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x03\x11creative_category\x06\x01\x04foil\0\x03\x0Cuse_duration\0\x03\x06damage\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x11bundle_light_blue\x08\x10bundle_open_back\x1Bbundle_light_blue_open_back\x08\x11bundle_open_front\x1Cbundle_light_blue_open_front\0\0\x01\x0Eallow_off_hand\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x04none\x01\rhand_equipped\0\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\0\x01\x17can_destroy_in_creative\x01\0\t\titem_tags\0\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0" } ;
     pub const LIGHT_BLUE_CANDLE: Self = Self {
         id: -416,
         registry_key: "minecraft:light_blue_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_CANDLE_CAKE: Self = Self {
         id: -433,
         registry_key: "minecraft:light_blue_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_CARPET: Self = Self {
         id: -599,
         registry_key: "minecraft:light_blue_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_CONCRETE: Self = Self {
         id: -630,
         registry_key: "minecraft:light_blue_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_CONCRETE_POWDER: Self = Self {
         id: -711,
         registry_key: "minecraft:light_blue_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_DYE: Self = Self {
         id: 439,
         registry_key: "minecraft:light_blue_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_GLAZED_TERRACOTTA: Self = Self {
         id: 223,
         registry_key: "minecraft:light_blue_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_HARNESS: Self = Self {
         id: 762,
         registry_key: "minecraft:light_blue_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_SHULKER_BOX: Self = Self {
         id: -615,
         registry_key: "minecraft:light_blue_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_STAINED_GLASS: Self = Self {
         id: -675,
         registry_key: "minecraft:light_blue_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_STAINED_GLASS_PANE: Self = Self {
         id: -645,
         registry_key: "minecraft:light_blue_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_TERRACOTTA: Self = Self {
         id: -726,
         registry_key: "minecraft:light_blue_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLUE_WOOL: Self = Self {
         id: -562,
         registry_key: "minecraft:light_blue_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const LIGHT_GRAY_BUNDLE : Self = Self { id : 272 , registry_key : "minecraft:light_gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x0Fitem_properties\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\0\x01\x04foil\0\x01\rhand_equipped\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x1Bbundle_light_gray_open_back\x08\x07default\x11bundle_light_gray\x08\x11bundle_open_front\x1Cbundle_light_gray_open_front\0\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eliquid_clipped\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x03\x06damage\0\x01\x0Eallow_off_hand\0\x03\x0Cuse_duration\0\x01\x0Fstacked_by_data\0\x01\x12hidden_in_commands\x02\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0" } ;
+    pub const LIGHT_GRAY_BUNDLE : Self = Self { id : 272 , registry_key : "minecraft:light_gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x03\x06damage\0\x03\x11creative_category\x06\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x03\ruse_animation\0\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x12hidden_in_commands\x02\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x1Bbundle_light_gray_open_back\x08\x11bundle_open_front\x1Cbundle_light_gray_open_front\x08\x07default\x11bundle_light_gray\0\0\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0" } ;
     pub const LIGHT_GRAY_CANDLE: Self = Self {
         id: -421,
         registry_key: "minecraft:light_gray_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_CANDLE_CAKE: Self = Self {
         id: -438,
         registry_key: "minecraft:light_gray_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_CARPET: Self = Self {
         id: -604,
         registry_key: "minecraft:light_gray_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_CONCRETE: Self = Self {
         id: -635,
         registry_key: "minecraft:light_gray_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_CONCRETE_POWDER: Self = Self {
         id: -716,
         registry_key: "minecraft:light_gray_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_DYE: Self = Self {
         id: 434,
         registry_key: "minecraft:light_gray_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_HARNESS: Self = Self {
         id: 763,
         registry_key: "minecraft:light_gray_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_SHULKER_BOX: Self = Self {
         id: -620,
         registry_key: "minecraft:light_gray_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_STAINED_GLASS: Self = Self {
         id: -680,
         registry_key: "minecraft:light_gray_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_STAINED_GLASS_PANE: Self = Self {
         id: -650,
         registry_key: "minecraft:light_gray_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_TERRACOTTA: Self = Self {
         id: -731,
         registry_key: "minecraft:light_gray_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_GRAY_WOOL: Self = Self {
         id: -552,
         registry_key: "minecraft:light_gray_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHT_WEIGHTED_PRESSURE_PLATE: Self = Self {
         id: 147,
         registry_key: "minecraft:light_weighted_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIGHTNING_ROD: Self = Self {
         id: -312,
         registry_key: "minecraft:lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LILAC: Self = Self {
         id: -863,
         registry_key: "minecraft:lilac",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LILY_OF_THE_VALLEY: Self = Self {
         id: -839,
         registry_key: "minecraft:lily_of_the_valley",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const LIME_BUNDLE : Self = Self { id : 273 , registry_key : "minecraft:lime_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x0Fitem_properties\x05\x0Cmining_speed\0\0\x80?\x08\x0Ecreative_group\0\x03\x0Emax_stack_size\x02\x03\x06damage\0\x03\ruse_animation\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_lime\x08\x10bundle_open_back\x15bundle_lime_open_back\x08\x11bundle_open_front\x16bundle_lime_open_front\0\0\x01\x0Fstacked_by_data\0\x01\x12hidden_in_commands\x02\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x03\x0Cuse_duration\0\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x01\rhand_equipped\0\x01\x0Eshould_despawn\x01\x01\x04foil\0\x08\x10enchantable_slot\x04none\x03\x11creative_category\x06\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0" } ;
+    pub const LIME_BUNDLE : Self = Self { id : 273 , registry_key : "minecraft:lime_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x12hidden_in_commands\x02\x03\x0Emax_stack_size\x02\x01\x04foil\0\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x03\x06damage\0\x03\x0Cuse_duration\0\x08\x0Ecreative_group\0\x08\x10enchantable_slot\x04none\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x01\rhand_equipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_lime_open_back\x08\x11bundle_open_front\x16bundle_lime_open_front\x08\x07default\x0Bbundle_lime\0\0\x01\x0Fstacked_by_data\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x06\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0" } ;
     pub const LIME_CANDLE: Self = Self {
         id: -418,
         registry_key: "minecraft:lime_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_CANDLE_CAKE: Self = Self {
         id: -435,
         registry_key: "minecraft:lime_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_CARPET: Self = Self {
         id: -601,
         registry_key: "minecraft:lime_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_CONCRETE: Self = Self {
         id: -632,
         registry_key: "minecraft:lime_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_CONCRETE_POWDER: Self = Self {
         id: -713,
         registry_key: "minecraft:lime_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_DYE: Self = Self {
         id: 437,
         registry_key: "minecraft:lime_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_GLAZED_TERRACOTTA: Self = Self {
         id: 225,
         registry_key: "minecraft:lime_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_HARNESS: Self = Self {
         id: 764,
         registry_key: "minecraft:lime_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_SHULKER_BOX: Self = Self {
         id: -617,
         registry_key: "minecraft:lime_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_STAINED_GLASS: Self = Self {
         id: -677,
         registry_key: "minecraft:lime_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_STAINED_GLASS_PANE: Self = Self {
         id: -647,
         registry_key: "minecraft:lime_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_TERRACOTTA: Self = Self {
         id: -728,
         registry_key: "minecraft:lime_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIME_WOOL: Self = Self {
         id: -559,
         registry_key: "minecraft:lime_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LINGERING_POTION: Self = Self {
         id: 601,
         registry_key: "minecraft:lingering_potion",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_BLAST_FURNACE: Self = Self {
         id: -214,
         registry_key: "minecraft:lit_blast_furnace",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_DEEPSLATE_REDSTONE_ORE: Self = Self {
         id: -404,
         registry_key: "minecraft:lit_deepslate_redstone_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_FURNACE: Self = Self {
         id: 62,
         registry_key: "minecraft:lit_furnace",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_PUMPKIN: Self = Self {
         id: 91,
         registry_key: "minecraft:lit_pumpkin",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_REDSTONE_LAMP: Self = Self {
         id: 124,
         registry_key: "minecraft:lit_redstone_lamp",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_REDSTONE_ORE: Self = Self {
         id: 74,
         registry_key: "minecraft:lit_redstone_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LIT_SMOKER: Self = Self {
         id: -199,
         registry_key: "minecraft:lit_smoker",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LLAMA_SPAWN_EGG: Self = Self {
         id: 507,
         registry_key: "minecraft:llama_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LODESTONE: Self = Self {
         id: -222,
         registry_key: "minecraft:lodestone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LODESTONE_COMPASS: Self = Self {
         id: 645,
         registry_key: "minecraft:lodestone_compass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LOG: Self = Self {
         id: 797,
         registry_key: "minecraft:log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LOG2: Self = Self {
         id: 820,
         registry_key: "minecraft:log2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const LOOM: Self = Self {
         id: -204,
         registry_key: "minecraft:loom",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MACE: Self = Self {
         id: 351,
         registry_key: "minecraft:mace",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const MAGENTA_BUNDLE : Self = Self { id : 274 , registry_key : "minecraft:magenta_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Ebundle_magenta\x08\x10bundle_open_back\x18bundle_magenta_open_back\x08\x11bundle_open_front\x19bundle_magenta_open_front\0\0\x01\x04foil\0\x03\x11creative_category\x06\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\x03\x06damage\0\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\0" } ;
+    pub const MAGENTA_BUNDLE : Self = Self { id : 274 , registry_key : "minecraft:magenta_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x0Fitem_properties\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\x03\x0Emax_stack_size\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x19bundle_magenta_open_front\x08\x07default\x0Ebundle_magenta\x08\x10bundle_open_back\x18bundle_magenta_open_back\0\0\x03\x11enchantable_value\0\x01\x0Fstacked_by_data\0\x01\x0Eliquid_clipped\0\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\x01\x0Eshould_despawn\x01\x03\x06damage\0\x08\x0Ecreative_group\0\x03\x11creative_category\x06\x03\x0Bframe_count\x02\x03\ruse_animation\0\0\0" } ;
     pub const MAGENTA_CANDLE: Self = Self {
         id: -415,
         registry_key: "minecraft:magenta_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_CANDLE_CAKE: Self = Self {
         id: -432,
         registry_key: "minecraft:magenta_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_CARPET: Self = Self {
         id: -598,
         registry_key: "minecraft:magenta_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_CONCRETE: Self = Self {
         id: -629,
         registry_key: "minecraft:magenta_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_CONCRETE_POWDER: Self = Self {
         id: -710,
         registry_key: "minecraft:magenta_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_DYE: Self = Self {
         id: 440,
         registry_key: "minecraft:magenta_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_GLAZED_TERRACOTTA: Self = Self {
         id: 222,
         registry_key: "minecraft:magenta_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_HARNESS: Self = Self {
         id: 765,
         registry_key: "minecraft:magenta_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_SHULKER_BOX: Self = Self {
         id: -614,
         registry_key: "minecraft:magenta_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_STAINED_GLASS: Self = Self {
         id: -674,
         registry_key: "minecraft:magenta_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_STAINED_GLASS_PANE: Self = Self {
         id: -644,
         registry_key: "minecraft:magenta_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_TERRACOTTA: Self = Self {
         id: -725,
         registry_key: "minecraft:magenta_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGENTA_WOOL: Self = Self {
         id: -565,
         registry_key: "minecraft:magenta_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGMA: Self = Self {
         id: 213,
         registry_key: "minecraft:magma",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGMA_CREAM: Self = Self {
         id: 463,
         registry_key: "minecraft:magma_cream",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MAGMA_CUBE_SPAWN_EGG: Self = Self {
         id: 488,
         registry_key: "minecraft:magma_cube_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_BOAT: Self = Self {
         id: 677,
         registry_key: "minecraft:mangrove_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_BUTTON: Self = Self {
         id: -487,
         registry_key: "minecraft:mangrove_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_CHEST_BOAT: Self = Self {
         id: 686,
         registry_key: "minecraft:mangrove_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_DOOR: Self = Self {
         id: 675,
         registry_key: "minecraft:mangrove_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_DOUBLE_SLAB: Self = Self {
         id: -499,
         registry_key: "minecraft:mangrove_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_FENCE: Self = Self {
         id: -491,
         registry_key: "minecraft:mangrove_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_FENCE_GATE: Self = Self {
         id: -492,
         registry_key: "minecraft:mangrove_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_HANGING_SIGN: Self = Self {
         id: -508,
         registry_key: "minecraft:mangrove_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_LEAVES: Self = Self {
         id: -472,
         registry_key: "minecraft:mangrove_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_LOG: Self = Self {
         id: -484,
         registry_key: "minecraft:mangrove_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_PLANKS: Self = Self {
         id: -486,
         registry_key: "minecraft:mangrove_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_PRESSURE_PLATE: Self = Self {
         id: -490,
         registry_key: "minecraft:mangrove_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_PROPAGULE: Self = Self {
         id: -474,
         registry_key: "minecraft:mangrove_propagule",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_ROOTS: Self = Self {
         id: -482,
         registry_key: "minecraft:mangrove_roots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_SHELF: Self = Self {
         id: -1053,
         registry_key: "minecraft:mangrove_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_SIGN: Self = Self {
         id: 676,
         registry_key: "minecraft:mangrove_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_SLAB: Self = Self {
         id: -489,
         registry_key: "minecraft:mangrove_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_STAIRS: Self = Self {
         id: -488,
         registry_key: "minecraft:mangrove_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_STANDING_SIGN: Self = Self {
         id: -494,
         registry_key: "minecraft:mangrove_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_TRAPDOOR: Self = Self {
         id: -496,
         registry_key: "minecraft:mangrove_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_WALL_SIGN: Self = Self {
         id: -495,
         registry_key: "minecraft:mangrove_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MANGROVE_WOOD: Self = Self {
         id: -497,
         registry_key: "minecraft:mangrove_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MATERIAL_REDUCER: Self = Self {
         id: -986,
         registry_key: "minecraft:material_reducer",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MEDICINE: Self = Self {
         id: 642,
         registry_key: "minecraft:medicine",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MEDIUM_AMETHYST_BUD: Self = Self {
         id: -331,
         registry_key: "minecraft:medium_amethyst_bud",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MELON_BLOCK: Self = Self {
         id: 103,
         registry_key: "minecraft:melon_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const MELON_SEEDS : Self = Self { id : 322 , registry_key : "minecraft:melon_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x14minecraft:melon_stem\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\0\0" } ;
-    pub const MELON_SLICE : Self = Self { id : 301 , registry_key : "minecraft:melon_slice" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\x03\tnutrition\x04\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0" } ;
+    pub const MELON_SEEDS : Self = Self { id : 322 , registry_key : "minecraft:melon_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\x08\x0Bcrop_result\x14minecraft:melon_stem\0\0" } ;
+    pub const MELON_SLICE : Self = Self { id : 301 , registry_key : "minecraft:melon_slice" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\0" } ;
     pub const MELON_STEM: Self = Self {
         id: 105,
         registry_key: "minecraft:melon_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MILK_BUCKET: Self = Self {
         id: 393,
         registry_key: "minecraft:milk_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MINECART: Self = Self {
         id: 402,
         registry_key: "minecraft:minecart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MINER_POTTERY_SHERD: Self = Self {
         id: 713,
         registry_key: "minecraft:miner_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOB_SPAWNER: Self = Self {
         id: 52,
         registry_key: "minecraft:mob_spawner",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOJANG_BANNER_PATTERN: Self = Self {
         id: 623,
         registry_key: "minecraft:mojang_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MONSTER_EGG: Self = Self {
         id: 821,
         registry_key: "minecraft:monster_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOOSHROOM_SPAWN_EGG: Self = Self {
         id: 473,
         registry_key: "minecraft:mooshroom_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSS_BLOCK: Self = Self {
         id: -320,
         registry_key: "minecraft:moss_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSS_CARPET: Self = Self {
         id: -335,
         registry_key: "minecraft:moss_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_COBBLESTONE: Self = Self {
         id: 48,
         registry_key: "minecraft:mossy_cobblestone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_COBBLESTONE_DOUBLE_SLAB: Self = Self {
         id: -915,
         registry_key: "minecraft:mossy_cobblestone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_COBBLESTONE_SLAB: Self = Self {
         id: -888,
         registry_key: "minecraft:mossy_cobblestone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_COBBLESTONE_STAIRS: Self = Self {
         id: -179,
         registry_key: "minecraft:mossy_cobblestone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_COBBLESTONE_WALL: Self = Self {
         id: -971,
         registry_key: "minecraft:mossy_cobblestone_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_STONE_BRICK_DOUBLE_SLAB: Self = Self {
         id: -168,
         registry_key: "minecraft:mossy_stone_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_STONE_BRICK_SLAB: Self = Self {
         id: -166,
         registry_key: "minecraft:mossy_stone_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_STONE_BRICK_STAIRS: Self = Self {
         id: -175,
         registry_key: "minecraft:mossy_stone_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_STONE_BRICK_WALL: Self = Self {
         id: -978,
         registry_key: "minecraft:mossy_stone_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOSSY_STONE_BRICKS: Self = Self {
         id: -868,
         registry_key: "minecraft:mossy_stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOURNER_POTTERY_SHERD: Self = Self {
         id: 714,
         registry_key: "minecraft:mourner_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MOVING_BLOCK: Self = Self {
         id: 250,
         registry_key: "minecraft:moving_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUD: Self = Self {
         id: -473,
         registry_key: "minecraft:mud",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUD_BRICK_DOUBLE_SLAB: Self = Self {
         id: -479,
         registry_key: "minecraft:mud_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUD_BRICK_SLAB: Self = Self {
         id: -478,
         registry_key: "minecraft:mud_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUD_BRICK_STAIRS: Self = Self {
         id: -480,
         registry_key: "minecraft:mud_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUD_BRICK_WALL: Self = Self {
         id: -481,
         registry_key: "minecraft:mud_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUD_BRICKS: Self = Self {
         id: -475,
         registry_key: "minecraft:mud_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUDDY_MANGROVE_ROOTS: Self = Self {
         id: -483,
         registry_key: "minecraft:muddy_mangrove_roots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MULE_SPAWN_EGG: Self = Self {
         id: 500,
         registry_key: "minecraft:mule_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const MUSHROOM_STEM: Self = Self {
         id: -1008,
         registry_key: "minecraft:mushroom_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const MUSHROOM_STEW : Self = Self { id : 289 , registry_key : "minecraft:mushroom_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x18minecraft:max_stack_size\x02\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\rcooldown_type\0\x08\x11using_converts_to\x04bowl\x03\tnutrition\x0C\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\0" } ;
+    pub const MUSHROOM_STEW : Self = Self { id : 289 , registry_key : "minecraft:mushroom_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\x03\rcooldown_time\0\x03\tnutrition\x0C\x08\x11using_converts_to\x04bowl\0\x03\x16minecraft:use_duration@\x03\x18minecraft:max_stack_size\x02\0" } ;
     pub const MUSIC_DISC_11: Self = Self {
         id: 583,
         registry_key: "minecraft:music_disc_11",
@@ -44947,83 +44947,83 @@ impl BedrockItem {
         component_based: true,
         definition_components: b"\n\0\0",
     };
-    pub const MUTTON : Self = Self { id : 589 , registry_key : "minecraft:mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99>\x03\tnutrition\x04\x03\rcooldown_time\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x08\x11using_converts_to\0\0\0" } ;
+    pub const MUTTON : Self = Self { id : 589 , registry_key : "minecraft:mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\tnutrition\x04\x03\rcooldown_time\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0" } ;
     pub const MYCELIUM: Self = Self {
         id: 110,
         registry_key: "minecraft:mycelium",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NAME_TAG: Self = Self {
         id: 587,
         registry_key: "minecraft:name_tag",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NAUTILUS_SHELL: Self = Self {
         id: 609,
         registry_key: "minecraft:nautilus_shell",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NAUTILUS_SPAWN_EGG: Self = Self {
         id: 784,
         registry_key: "minecraft:nautilus_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_BRICK: Self = Self {
         id: 112,
         registry_key: "minecraft:nether_brick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_BRICK_DOUBLE_SLAB: Self = Self {
         id: -883,
         registry_key: "minecraft:nether_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_BRICK_FENCE: Self = Self {
         id: 113,
         registry_key: "minecraft:nether_brick_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_BRICK_SLAB: Self = Self {
         id: -877,
         registry_key: "minecraft:nether_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_BRICK_STAIRS: Self = Self {
         id: 114,
         registry_key: "minecraft:nether_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_BRICK_WALL: Self = Self {
         id: -979,
         registry_key: "minecraft:nether_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_GOLD_ORE: Self = Self {
         id: -288,
         registry_key: "minecraft:nether_gold_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHER_SPROUTS: Self = Self {
         id: 663,
@@ -45037,2046 +45037,2046 @@ impl BedrockItem {
         registry_key: "minecraft:nether_star",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const NETHER_WART : Self = Self { id : 323 , registry_key : "minecraft:nether_wart" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\tsoul_sand\x08\x0Bcrop_result\x15minecraft:nether_wart\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\0" } ;
+    pub const NETHER_WART : Self = Self { id : 323 , registry_key : "minecraft:nether_wart" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\0\x08\x0Bcrop_result\x15minecraft:nether_wart\x08\rplant_at_face\x02up\t\x08plant_at\x08\x02\tsoul_sand\0\0" } ;
     pub const NETHER_WART_BLOCK: Self = Self {
         id: 214,
         registry_key: "minecraft:nether_wart_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERBRICK: Self = Self {
         id: 562,
         registry_key: "minecraft:netherbrick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_AXE: Self = Self {
         id: 649,
         registry_key: "minecraft:netherite_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_BLOCK: Self = Self {
         id: -270,
         registry_key: "minecraft:netherite_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_BOOTS: Self = Self {
         id: 655,
         registry_key: "minecraft:netherite_boots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_CHESTPLATE: Self = Self {
         id: 653,
         registry_key: "minecraft:netherite_chestplate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_HELMET: Self = Self {
         id: 652,
         registry_key: "minecraft:netherite_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_HOE: Self = Self {
         id: 650,
         registry_key: "minecraft:netherite_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_HORSE_ARMOR: Self = Self {
         id: 792,
         registry_key: "minecraft:netherite_horse_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_INGOT: Self = Self {
         id: 651,
         registry_key: "minecraft:netherite_ingot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_LEGGINGS: Self = Self {
         id: 654,
         registry_key: "minecraft:netherite_leggings",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_NAUTILUS_ARMOR: Self = Self {
         id: 791,
         registry_key: "minecraft:netherite_nautilus_armor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_PICKAXE: Self = Self {
         id: 648,
         registry_key: "minecraft:netherite_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_SCRAP: Self = Self {
         id: 656,
         registry_key: "minecraft:netherite_scrap",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_SHOVEL: Self = Self {
         id: 647,
         registry_key: "minecraft:netherite_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const NETHERITE_SPEAR : Self = Self { id : 261 , registry_key : "minecraft:netherite_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:fire_resistant\x01\x05value\x01\0\n\x16minecraft:display_name\x08\x05value\x19item.netherite_spear.name\0\t\titem_tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\n\x14minecraft:durability\x03\x0Emax_durability\xDC\x1F\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_spear\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression)context.other->query.remaining_durability\0\0\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_ingot\0\n\rrepair_amount\x08\nexpression\x1Bquery.max_durability * 0.25\x02\x07version\r\0\0\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0F\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x14knockback_conditions\x02\x0Cmax_durationn\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\0\x02\x05delay\x08\0\x05\x11damage_multiplier\x9A\x99\x99?\n\x11damage_conditions\x02\x0Cmax_duration\xAF\0\x05\tmin_speed\0\0\0\0\x05\x12min_relative_speed33\x93@\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x05\x0Fdamage_modifier\0\0\0\0\x05\rhitbox_margin\0\0\x80>\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration2\0\x05\tmin_speed\0\0\x10A\0\0\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x10minecraft:damage\x02\x05value\x05\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_sound\x18item.netherite_spear.use\x05\x11movement_modifier\0\0\x80?\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Fnetherite_spear\0\0\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Eallow_off_hand\0\x03\ruse_animation\0\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x0Emax_stack_size\x02\x03\x06damage\n\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x01\rhand_equipped\x01\x03\x0Bframe_count\x02\x01\x04foil\0\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\x1E\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x08\x08category\x05spear\x05\x08duration33\x93?\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss item.netherite_spear.attack_miss\x08\nattack_hit\x1Fitem.netherite_spear.attack_hit\0\n\x18minecraft:swing_duration\x05\x05value33\x93?\0\0" } ;
+    pub const NETHERITE_SPEAR : Self = Self { id : 261 , registry_key : "minecraft:netherite_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xAF\0\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0\x10A\x02\x0Cmax_duration2\0\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x14knockback_conditions\x02\x0Cmax_durationn\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\x05\x0Fdamage_modifier\0\0\0\0\x02\x05delay\x08\0\x05\x11damage_multiplier\x9A\x99\x99?\0\0\n\x14minecraft:durability\x03\x0Emax_durability\xDC\x1F\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Fitem.netherite_spear.attack_hit\x08\x0Battack_miss item.netherite_spear.attack_miss\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_spear\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression)context.other->query.remaining_durability\0\0\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_ingot\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\0\0\n\x17minecraft:use_modifiers\x08\x0Bstart_sound\x18item.netherite_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\x01\x0Femit_vibrations\0\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08duration33\x93?\x08\x04type\x06attack\0\n\x0Fitem_properties\x01\rhand_equipped\x01\x03\x06damage\n\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Fnetherite_spear\0\0\x01\x0Eshould_despawn\x01\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\x80\xE4\xAF\x01\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x0Bmelee_spear\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\x01\x04foil\0\x01\x0Fstacked_by_data\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x02\x01\x0Eallow_off_hand\0\x01\x12hidden_in_commands\x02\x03\x11enchantable_value\x1E\x08\x0Ecreative_group\0\x03\ruse_animation\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0F\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x18minecraft:swing_duration\x05\x05value33\x93?\0\n\x10minecraft:damage\x02\x05value\x05\0\0\n\x18minecraft:fire_resistant\x01\x05value\x01\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\n\x16minecraft:display_name\x08\x05value\x19item.netherite_spear.name\0\t\titem_tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\0" } ;
     pub const NETHERITE_SWORD: Self = Self {
         id: 646,
         registry_key: "minecraft:netherite_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERITE_UPGRADE_SMITHING_TEMPLATE: Self = Self {
         id: 723,
         registry_key: "minecraft:netherite_upgrade_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERRACK: Self = Self {
         id: 87,
         registry_key: "minecraft:netherrack",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NETHERREACTOR: Self = Self {
         id: 247,
         registry_key: "minecraft:netherreactor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NORMAL_STONE_DOUBLE_SLAB: Self = Self {
         id: -926,
         registry_key: "minecraft:normal_stone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NORMAL_STONE_SLAB: Self = Self {
         id: -899,
         registry_key: "minecraft:normal_stone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NORMAL_STONE_STAIRS: Self = Self {
         id: -180,
         registry_key: "minecraft:normal_stone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NOTEBLOCK: Self = Self {
         id: 25,
         registry_key: "minecraft:noteblock",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const NPC_SPAWN_EGG: Self = Self {
         id: 504,
         registry_key: "minecraft:npc_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_BOAT: Self = Self {
         id: 407,
         registry_key: "minecraft:oak_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_CHEST_BOAT: Self = Self {
         id: 680,
         registry_key: "minecraft:oak_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_DOUBLE_SLAB: Self = Self {
         id: 157,
         registry_key: "minecraft:oak_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_FENCE: Self = Self {
         id: 85,
         registry_key: "minecraft:oak_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_HANGING_SIGN: Self = Self {
         id: -500,
         registry_key: "minecraft:oak_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_LEAVES: Self = Self {
         id: 18,
         registry_key: "minecraft:oak_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_LOG: Self = Self {
         id: 17,
         registry_key: "minecraft:oak_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_PLANKS: Self = Self {
         id: 5,
         registry_key: "minecraft:oak_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_SAPLING: Self = Self {
         id: 6,
         registry_key: "minecraft:oak_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_SHELF: Self = Self {
         id: -1047,
         registry_key: "minecraft:oak_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_SIGN: Self = Self {
         id: 390,
         registry_key: "minecraft:oak_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_SLAB: Self = Self {
         id: 158,
         registry_key: "minecraft:oak_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_STAIRS: Self = Self {
         id: 53,
         registry_key: "minecraft:oak_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OAK_WOOD: Self = Self {
         id: -212,
         registry_key: "minecraft:oak_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OBSERVER: Self = Self {
         id: 251,
         registry_key: "minecraft:observer",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OBSIDIAN: Self = Self {
         id: 49,
         registry_key: "minecraft:obsidian",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OCELOT_SPAWN_EGG: Self = Self {
         id: 484,
         registry_key: "minecraft:ocelot_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OCHRE_FROGLIGHT: Self = Self {
         id: -471,
         registry_key: "minecraft:ochre_froglight",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OMINOUS_BOTTLE: Self = Self {
         id: 634,
         registry_key: "minecraft:ominous_bottle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const OMINOUS_TRIAL_KEY : Self = Self { id : 282 , registry_key : "minecraft:ominous_trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x03\x11creative_category\x08\x08\x10enchantable_slot\x04none\x03\ruse_animation\0\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x03\x0Cuse_duration\0\x01\x0Fstacked_by_data\0\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\0\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x80\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x11ominous_trial_key\0\0\x03\x06damage\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x01\rhand_equipped\0\x01\x04foil\0\0\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x1Bitem.ominous_trial_key.name\0\0" } ;
+    pub const OMINOUS_TRIAL_KEY : Self = Self { id : 282 , registry_key : "minecraft:ominous_trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x08\x03\x0Emax_stack_size\x80\x01\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x11ominous_trial_key\0\0\x08\x0Ecreative_group\0\x03\x06damage\0\x01\x0Fstacked_by_data\0\x03\x11enchantable_value\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\x0Cuse_duration\0\x01\x04foil\0\x01\x0Eallow_off_hand\0\0\n\x16minecraft:display_name\x08\x05value\x1Bitem.ominous_trial_key.name\0\t\titem_tags\0\0\0" } ;
     pub const OPEN_EYEBLOSSOM: Self = Self {
         id: -1018,
         registry_key: "minecraft:open_eyeblossom",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const ORANGE_BUNDLE : Self = Self { id : 275 , registry_key : "minecraft:orange_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x03\x06damage\0\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x03\x0Emax_stack_size\x02\x03\x11creative_category\x06\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x04none\x01\x04foil\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rbundle_orange\x08\x10bundle_open_back\x17bundle_orange_open_back\x08\x11bundle_open_front\x18bundle_orange_open_front\0\0\x08\x0Ecreative_group\0\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\0" } ;
+    pub const ORANGE_BUNDLE : Self = Self { id : 275 , registry_key : "minecraft:orange_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x03\x11enchantable_value\0\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x03\x06damage\0\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rbundle_orange\x08\x10bundle_open_back\x17bundle_orange_open_back\x08\x11bundle_open_front\x18bundle_orange_open_front\0\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\0\x03\x0Emax_stack_size\x02\x01\x17can_destroy_in_creative\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0" } ;
     pub const ORANGE_CANDLE: Self = Self {
         id: -414,
         registry_key: "minecraft:orange_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_CANDLE_CAKE: Self = Self {
         id: -431,
         registry_key: "minecraft:orange_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_CARPET: Self = Self {
         id: -597,
         registry_key: "minecraft:orange_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_CONCRETE: Self = Self {
         id: -628,
         registry_key: "minecraft:orange_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_CONCRETE_POWDER: Self = Self {
         id: -709,
         registry_key: "minecraft:orange_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_DYE: Self = Self {
         id: 441,
         registry_key: "minecraft:orange_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_GLAZED_TERRACOTTA: Self = Self {
         id: 221,
         registry_key: "minecraft:orange_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_HARNESS: Self = Self {
         id: 766,
         registry_key: "minecraft:orange_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_SHULKER_BOX: Self = Self {
         id: -613,
         registry_key: "minecraft:orange_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_STAINED_GLASS: Self = Self {
         id: -673,
         registry_key: "minecraft:orange_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_STAINED_GLASS_PANE: Self = Self {
         id: -643,
         registry_key: "minecraft:orange_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_TERRACOTTA: Self = Self {
         id: -724,
         registry_key: "minecraft:orange_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_TULIP: Self = Self {
         id: -834,
         registry_key: "minecraft:orange_tulip",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ORANGE_WOOL: Self = Self {
         id: -557,
         registry_key: "minecraft:orange_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXEYE_DAISY: Self = Self {
         id: -837,
         registry_key: "minecraft:oxeye_daisy",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_CHISELED_COPPER: Self = Self {
         id: -763,
         registry_key: "minecraft:oxidized_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER: Self = Self {
         id: -343,
         registry_key: "minecraft:oxidized_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_BARS: Self = Self {
         id: -1069,
         registry_key: "minecraft:oxidized_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_BULB: Self = Self {
         id: -779,
         registry_key: "minecraft:oxidized_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_CHAIN: Self = Self {
         id: -1077,
         registry_key: "minecraft:oxidized_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_CHEST: Self = Self {
         id: -1034,
         registry_key: "minecraft:oxidized_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_DOOR: Self = Self {
         id: -787,
         registry_key: "minecraft:oxidized_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1042,
         registry_key: "minecraft:oxidized_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_GRATE: Self = Self {
         id: -771,
         registry_key: "minecraft:oxidized_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_LANTERN: Self = Self {
         id: -1086,
         registry_key: "minecraft:oxidized_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_COPPER_TRAPDOOR: Self = Self {
         id: -795,
         registry_key: "minecraft:oxidized_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_CUT_COPPER: Self = Self {
         id: -350,
         registry_key: "minecraft:oxidized_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_CUT_COPPER_SLAB: Self = Self {
         id: -364,
         registry_key: "minecraft:oxidized_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_CUT_COPPER_STAIRS: Self = Self {
         id: -357,
         registry_key: "minecraft:oxidized_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -371,
         registry_key: "minecraft:oxidized_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const OXIDIZED_LIGHTNING_ROD: Self = Self {
         id: -1061,
         registry_key: "minecraft:oxidized_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PACKED_ICE: Self = Self {
         id: 174,
         registry_key: "minecraft:packed_ice",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PACKED_MUD: Self = Self {
         id: -477,
         registry_key: "minecraft:packed_mud",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PAINTING: Self = Self {
         id: 389,
         registry_key: "minecraft:painting",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_HANGING_MOSS: Self = Self {
         id: -1011,
         registry_key: "minecraft:pale_hanging_moss",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_MOSS_BLOCK: Self = Self {
         id: -1009,
         registry_key: "minecraft:pale_moss_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_MOSS_CARPET: Self = Self {
         id: -1010,
         registry_key: "minecraft:pale_moss_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_BOAT: Self = Self {
         id: 748,
         registry_key: "minecraft:pale_oak_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_BUTTON: Self = Self {
         id: -989,
         registry_key: "minecraft:pale_oak_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_CHEST_BOAT: Self = Self {
         id: 749,
         registry_key: "minecraft:pale_oak_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_DOOR: Self = Self {
         id: -990,
         registry_key: "minecraft:pale_oak_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_DOUBLE_SLAB: Self = Self {
         id: -999,
         registry_key: "minecraft:pale_oak_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_FENCE: Self = Self {
         id: -991,
         registry_key: "minecraft:pale_oak_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_FENCE_GATE: Self = Self {
         id: -992,
         registry_key: "minecraft:pale_oak_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_HANGING_SIGN: Self = Self {
         id: -993,
         registry_key: "minecraft:pale_oak_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_LEAVES: Self = Self {
         id: -1007,
         registry_key: "minecraft:pale_oak_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_LOG: Self = Self {
         id: -995,
         registry_key: "minecraft:pale_oak_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_PLANKS: Self = Self {
         id: -996,
         registry_key: "minecraft:pale_oak_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_PRESSURE_PLATE: Self = Self {
         id: -997,
         registry_key: "minecraft:pale_oak_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_SAPLING: Self = Self {
         id: -1006,
         registry_key: "minecraft:pale_oak_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_SHELF: Self = Self {
         id: -1055,
         registry_key: "minecraft:pale_oak_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_SIGN: Self = Self {
         id: 750,
         registry_key: "minecraft:pale_oak_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_SLAB: Self = Self {
         id: -998,
         registry_key: "minecraft:pale_oak_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_STAIRS: Self = Self {
         id: -1000,
         registry_key: "minecraft:pale_oak_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_STANDING_SIGN: Self = Self {
         id: -1001,
         registry_key: "minecraft:pale_oak_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_TRAPDOOR: Self = Self {
         id: -1002,
         registry_key: "minecraft:pale_oak_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_WALL_SIGN: Self = Self {
         id: -1003,
         registry_key: "minecraft:pale_oak_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PALE_OAK_WOOD: Self = Self {
         id: -1005,
         registry_key: "minecraft:pale_oak_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PANDA_SPAWN_EGG: Self = Self {
         id: 523,
         registry_key: "minecraft:panda_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PAPER: Self = Self {
         id: 418,
         registry_key: "minecraft:paper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PARCHED_SPAWN_EGG: Self = Self {
         id: 786,
         registry_key: "minecraft:parched_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PARROT_SPAWN_EGG: Self = Self {
         id: 512,
         registry_key: "minecraft:parrot_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PEARLESCENT_FROGLIGHT: Self = Self {
         id: -469,
         registry_key: "minecraft:pearlescent_froglight",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PEONY: Self = Self {
         id: -867,
         registry_key: "minecraft:peony",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PETRIFIED_OAK_DOUBLE_SLAB: Self = Self {
         id: -903,
         registry_key: "minecraft:petrified_oak_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PETRIFIED_OAK_SLAB: Self = Self {
         id: -902,
         registry_key: "minecraft:petrified_oak_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PHANTOM_MEMBRANE: Self = Self {
         id: 613,
         registry_key: "minecraft:phantom_membrane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PHANTOM_SPAWN_EGG: Self = Self {
         id: 520,
         registry_key: "minecraft:phantom_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PIG_SPAWN_EGG: Self = Self {
         id: 470,
         registry_key: "minecraft:pig_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PIGLIN_BANNER_PATTERN: Self = Self {
         id: 626,
         registry_key: "minecraft:piglin_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PIGLIN_BRUTE_SPAWN_EGG: Self = Self {
         id: 533,
         registry_key: "minecraft:piglin_brute_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PIGLIN_HEAD: Self = Self {
         id: -970,
         registry_key: "minecraft:piglin_head",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PIGLIN_SPAWN_EGG: Self = Self {
         id: 531,
         registry_key: "minecraft:piglin_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PILLAGER_SPAWN_EGG: Self = Self {
         id: 525,
         registry_key: "minecraft:pillager_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const PINK_BUNDLE : Self = Self { id : 276 , registry_key : "minecraft:pink_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_pink_open_back\x08\x07default\x0Bbundle_pink\x08\x11bundle_open_front\x16bundle_pink_open_front\0\0\x08\x10enchantable_slot\x04none\x03\x11enchantable_value\0\x03\x11creative_category\x06\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\x03\x06damage\0\x01\x04foil\0\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eliquid_clipped\0\x01\x17can_destroy_in_creative\x01\x01\rhand_equipped\0\x03\x0Cuse_duration\0\x08\x0Ecreative_group\0\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\ruse_animation\0\0\0" } ;
+    pub const PINK_BUNDLE : Self = Self { id : 276 , registry_key : "minecraft:pink_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x03\ruse_animation\0\x03\x06damage\0\x03\x11creative_category\x06\x03\x0Cuse_duration\0\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_pink_open_back\x08\x11bundle_open_front\x16bundle_pink_open_front\x08\x07default\x0Bbundle_pink\0\0\x08\x0Ecreative_group\0\x01\x0Eshould_despawn\x01\x03\x0Emax_stack_size\x02\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
     pub const PINK_CANDLE: Self = Self {
         id: -419,
         registry_key: "minecraft:pink_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_CANDLE_CAKE: Self = Self {
         id: -436,
         registry_key: "minecraft:pink_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_CARPET: Self = Self {
         id: -602,
         registry_key: "minecraft:pink_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_CONCRETE: Self = Self {
         id: -633,
         registry_key: "minecraft:pink_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_CONCRETE_POWDER: Self = Self {
         id: -714,
         registry_key: "minecraft:pink_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_DYE: Self = Self {
         id: 436,
         registry_key: "minecraft:pink_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_GLAZED_TERRACOTTA: Self = Self {
         id: 226,
         registry_key: "minecraft:pink_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_HARNESS: Self = Self {
         id: 767,
         registry_key: "minecraft:pink_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_PETALS: Self = Self {
         id: -549,
         registry_key: "minecraft:pink_petals",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_SHULKER_BOX: Self = Self {
         id: -618,
         registry_key: "minecraft:pink_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_STAINED_GLASS: Self = Self {
         id: -678,
         registry_key: "minecraft:pink_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_STAINED_GLASS_PANE: Self = Self {
         id: -648,
         registry_key: "minecraft:pink_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_TERRACOTTA: Self = Self {
         id: -729,
         registry_key: "minecraft:pink_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_TULIP: Self = Self {
         id: -836,
         registry_key: "minecraft:pink_tulip",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PINK_WOOL: Self = Self {
         id: -566,
         registry_key: "minecraft:pink_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PISTON: Self = Self {
         id: 33,
         registry_key: "minecraft:piston",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PISTON_ARM_COLLISION: Self = Self {
         id: 34,
         registry_key: "minecraft:piston_arm_collision",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PITCHER_CROP: Self = Self {
         id: -574,
         registry_key: "minecraft:pitcher_crop",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PITCHER_PLANT: Self = Self {
         id: -612,
         registry_key: "minecraft:pitcher_plant",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const PITCHER_POD : Self = Self { id : 326 , registry_key : "minecraft:pitcher_pod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\x0Bcrop_result\x16minecraft:pitcher_crop\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\0" } ;
+    pub const PITCHER_POD : Self = Self { id : 326 , registry_key : "minecraft:pitcher_pod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x16minecraft:pitcher_crop\0\0" } ;
     pub const PLANKS: Self = Self {
         id: 817,
         registry_key: "minecraft:planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PLAYER_HEAD: Self = Self {
         id: -967,
         registry_key: "minecraft:player_head",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PLENTY_POTTERY_SHERD: Self = Self {
         id: 715,
         registry_key: "minecraft:plenty_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PODZOL: Self = Self {
         id: 243,
         registry_key: "minecraft:podzol",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POINTED_DRIPSTONE: Self = Self {
         id: -308,
         registry_key: "minecraft:pointed_dripstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const POISONOUS_POTATO : Self = Self { id : 311 , registry_key : "minecraft:poisonous_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\x03\ron_use_action\x01\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\t\x07effects\n\x02\x03\x08duration\n\x03\x02id&\x08\x04name\x06poison\x03\tamplifier\0\x05\x06chance\x9A\x99\x19?\x08\rdescriptionId\rpotion.poison\0\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const POISONOUS_POTATO : Self = Self { id : 311 , registry_key : "minecraft:poisonous_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x07effects\n\x02\x08\rdescriptionId\rpotion.poison\x08\x04name\x06poison\x05\x06chance\x9A\x99\x19?\x03\x08duration\n\x03\tamplifier\0\x03\x02id&\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\x03\rcooldown_time\0\x03\tnutrition\x04\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\0\0" } ;
     pub const POLAR_BEAR_SPAWN_EGG: Self = Self {
         id: 506,
         registry_key: "minecraft:polar_bear_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_ANDESITE: Self = Self {
         id: -595,
         registry_key: "minecraft:polished_andesite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_ANDESITE_DOUBLE_SLAB: Self = Self {
         id: -919,
         registry_key: "minecraft:polished_andesite_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_ANDESITE_SLAB: Self = Self {
         id: -892,
         registry_key: "minecraft:polished_andesite_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_ANDESITE_STAIRS: Self = Self {
         id: -174,
         registry_key: "minecraft:polished_andesite_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BASALT: Self = Self {
         id: -235,
         registry_key: "minecraft:polished_basalt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE: Self = Self {
         id: -291,
         registry_key: "minecraft:polished_blackstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_BRICK_DOUBLE_SLAB: Self = Self {
         id: -285,
         registry_key: "minecraft:polished_blackstone_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_BRICK_SLAB: Self = Self {
         id: -284,
         registry_key: "minecraft:polished_blackstone_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_BRICK_STAIRS: Self = Self {
         id: -275,
         registry_key: "minecraft:polished_blackstone_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_BRICK_WALL: Self = Self {
         id: -278,
         registry_key: "minecraft:polished_blackstone_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_BRICKS: Self = Self {
         id: -274,
         registry_key: "minecraft:polished_blackstone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_BUTTON: Self = Self {
         id: -296,
         registry_key: "minecraft:polished_blackstone_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_DOUBLE_SLAB: Self = Self {
         id: -294,
         registry_key: "minecraft:polished_blackstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_PRESSURE_PLATE: Self = Self {
         id: -295,
         registry_key: "minecraft:polished_blackstone_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_SLAB: Self = Self {
         id: -293,
         registry_key: "minecraft:polished_blackstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_STAIRS: Self = Self {
         id: -292,
         registry_key: "minecraft:polished_blackstone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_BLACKSTONE_WALL: Self = Self {
         id: -297,
         registry_key: "minecraft:polished_blackstone_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_CINNABAR: Self = Self {
         id: -1114,
         registry_key: "minecraft:polished_cinnabar",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_CINNABAR_DOUBLE_SLAB: Self = Self {
         id: -1116,
         registry_key: "minecraft:polished_cinnabar_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_CINNABAR_SLAB: Self = Self {
         id: -1115,
         registry_key: "minecraft:polished_cinnabar_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_CINNABAR_STAIRS: Self = Self {
         id: -1117,
         registry_key: "minecraft:polished_cinnabar_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_CINNABAR_WALL: Self = Self {
         id: -1118,
         registry_key: "minecraft:polished_cinnabar_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DEEPSLATE: Self = Self {
         id: -383,
         registry_key: "minecraft:polished_deepslate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DEEPSLATE_DOUBLE_SLAB: Self = Self {
         id: -397,
         registry_key: "minecraft:polished_deepslate_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DEEPSLATE_SLAB: Self = Self {
         id: -384,
         registry_key: "minecraft:polished_deepslate_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DEEPSLATE_STAIRS: Self = Self {
         id: -385,
         registry_key: "minecraft:polished_deepslate_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DEEPSLATE_WALL: Self = Self {
         id: -386,
         registry_key: "minecraft:polished_deepslate_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DIORITE: Self = Self {
         id: -593,
         registry_key: "minecraft:polished_diorite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DIORITE_DOUBLE_SLAB: Self = Self {
         id: -922,
         registry_key: "minecraft:polished_diorite_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DIORITE_SLAB: Self = Self {
         id: -895,
         registry_key: "minecraft:polished_diorite_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_DIORITE_STAIRS: Self = Self {
         id: -173,
         registry_key: "minecraft:polished_diorite_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_GRANITE: Self = Self {
         id: -591,
         registry_key: "minecraft:polished_granite",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_GRANITE_DOUBLE_SLAB: Self = Self {
         id: -924,
         registry_key: "minecraft:polished_granite_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_GRANITE_SLAB: Self = Self {
         id: -897,
         registry_key: "minecraft:polished_granite_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_GRANITE_STAIRS: Self = Self {
         id: -172,
         registry_key: "minecraft:polished_granite_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_SULFUR: Self = Self {
         id: -1097,
         registry_key: "minecraft:polished_sulfur",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_SULFUR_DOUBLE_SLAB: Self = Self {
         id: -1099,
         registry_key: "minecraft:polished_sulfur_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_SULFUR_SLAB: Self = Self {
         id: -1098,
         registry_key: "minecraft:polished_sulfur_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_SULFUR_STAIRS: Self = Self {
         id: -1100,
         registry_key: "minecraft:polished_sulfur_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_SULFUR_WALL: Self = Self {
         id: -1101,
         registry_key: "minecraft:polished_sulfur_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_TUFF: Self = Self {
         id: -748,
         registry_key: "minecraft:polished_tuff",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_TUFF_DOUBLE_SLAB: Self = Self {
         id: -750,
         registry_key: "minecraft:polished_tuff_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_TUFF_SLAB: Self = Self {
         id: -749,
         registry_key: "minecraft:polished_tuff_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_TUFF_STAIRS: Self = Self {
         id: -751,
         registry_key: "minecraft:polished_tuff_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POLISHED_TUFF_WALL: Self = Self {
         id: -752,
         registry_key: "minecraft:polished_tuff_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POPPED_CHORUS_FRUIT: Self = Self {
         id: 598,
         registry_key: "minecraft:popped_chorus_fruit",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POPPY: Self = Self {
         id: 38,
         registry_key: "minecraft:poppy",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const PORKCHOP : Self = Self { id : 291 , registry_key : "minecraft:porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\x03\tnutrition\x06\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x08\rcooldown_type\0\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const PORKCHOP : Self = Self { id : 291 , registry_key : "minecraft:porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\x03\tnutrition\x06\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const PORTAL: Self = Self {
         id: 90,
         registry_key: "minecraft:portal",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const POTATO : Self = Self { id : 309 , registry_key : "minecraft:potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\x0Bcrop_result\x12minecraft:potatoes\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const POTATO : Self = Self { id : 309 , registry_key : "minecraft:potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:seed\x08\x0Bcrop_result\x12minecraft:potatoes\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\0\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\0\0" } ;
     pub const POTATOES: Self = Self {
         id: 142,
         registry_key: "minecraft:potatoes",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POTENT_SULFUR: Self = Self {
         id: -1108,
         registry_key: "minecraft:potent_sulfur",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POTION: Self = Self {
         id: 459,
         registry_key: "minecraft:potion",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POWDER_SNOW: Self = Self {
         id: -306,
         registry_key: "minecraft:powder_snow",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POWDER_SNOW_BUCKET: Self = Self {
         id: 400,
         registry_key: "minecraft:powder_snow_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POWERED_COMPARATOR: Self = Self {
         id: 150,
         registry_key: "minecraft:powered_comparator",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const POWERED_REPEATER: Self = Self {
         id: 94,
         registry_key: "minecraft:powered_repeater",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE: Self = Self {
         id: 168,
         registry_key: "minecraft:prismarine",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_BRICK_DOUBLE_SLAB: Self = Self {
         id: -914,
         registry_key: "minecraft:prismarine_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_BRICK_SLAB: Self = Self {
         id: -887,
         registry_key: "minecraft:prismarine_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_BRICKS: Self = Self {
         id: -948,
         registry_key: "minecraft:prismarine_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_BRICKS_STAIRS: Self = Self {
         id: -4,
         registry_key: "minecraft:prismarine_bricks_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_CRYSTALS: Self = Self {
         id: 588,
         registry_key: "minecraft:prismarine_crystals",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_DOUBLE_SLAB: Self = Self {
         id: -912,
         registry_key: "minecraft:prismarine_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_SHARD: Self = Self {
         id: 604,
         registry_key: "minecraft:prismarine_shard",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_SLAB: Self = Self {
         id: -885,
         registry_key: "minecraft:prismarine_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_STAIRS: Self = Self {
         id: -2,
         registry_key: "minecraft:prismarine_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRISMARINE_WALL: Self = Self {
         id: -981,
         registry_key: "minecraft:prismarine_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PRIZE_POTTERY_SHERD: Self = Self {
         id: 716,
         registry_key: "minecraft:prize_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const PUFFERFISH : Self = Self { id : 296 , registry_key : "minecraft:pufferfish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\t\x07effects\n\x06\x03\tamplifier\x02\x05\x06chance\0\0\x80?\x03\x02id&\x08\x04name\x06poison\x03\x08durationx\x08\rdescriptionId\rpotion.poison\0\x03\x08duration\x1E\x08\x04name\x06nausea\x03\x02id\x12\x03\tamplifier\0\x05\x06chance\0\0\x80?\x08\rdescriptionId\x10potion.confusion\0\x03\x02id\"\x08\rdescriptionId\rpotion.hunger\x03\tamplifier\x04\x05\x06chance\0\0\x80?\x03\x08duration\x1E\x08\x04name\x06hunger\0\x03\ron_use_action\x01\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\rcooldown_time\0\0\0" } ;
+    pub const PUFFERFISH : Self = Self { id : 296 , registry_key : "minecraft:pufferfish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x02\t\x07effects\n\x06\x03\x08durationx\x08\rdescriptionId\rpotion.poison\x05\x06chance\0\0\x80?\x03\x02id&\x03\tamplifier\x02\x08\x04name\x06poison\0\x08\rdescriptionId\x10potion.confusion\x05\x06chance\0\0\x80?\x03\x02id\x12\x08\x04name\x06nausea\x03\tamplifier\0\x03\x08duration\x1E\0\x03\x02id\"\x08\x04name\x06hunger\x05\x06chance\0\0\x80?\x08\rdescriptionId\rpotion.hunger\x03\x08duration\x1E\x03\tamplifier\x04\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x08\rcooldown_type\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\ron_use_action\x01\0\0" } ;
     pub const PUFFERFISH_BUCKET: Self = Self {
         id: 399,
         registry_key: "minecraft:pufferfish_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PUFFERFISH_SPAWN_EGG: Self = Self {
         id: 515,
         registry_key: "minecraft:pufferfish_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PUMPKIN: Self = Self {
         id: 86,
         registry_key: "minecraft:pumpkin",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const PUMPKIN_PIE : Self = Self { id : 313 , registry_key : "minecraft:pumpkin_pie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\tnutrition\x10\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const PUMPKIN_SEEDS : Self = Self { id : 321 , registry_key : "minecraft:pumpkin_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x16minecraft:pumpkin_stem\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\0\0" } ;
+    pub const PUMPKIN_PIE : Self = Self { id : 313 , registry_key : "minecraft:pumpkin_pie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\x11using_converts_to\0\x03\tnutrition\x10\x08\rcooldown_type\0\0\0" } ;
+    pub const PUMPKIN_SEEDS : Self = Self { id : 321 , registry_key : "minecraft:pumpkin_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x16minecraft:pumpkin_stem\x01\x1Aplant_at_any_solid_surface\0\0\0" } ;
     pub const PUMPKIN_STEM: Self = Self {
         id: 104,
         registry_key: "minecraft:pumpkin_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const PURPLE_BUNDLE : Self = Self { id : 277 , registry_key : "minecraft:purple_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x04foil\0\x01\rhand_equipped\0\x03\x06damage\0\x01\x12hidden_in_commands\x02\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\x01\x0Fstacked_by_data\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x17bundle_purple_open_back\x08\x11bundle_open_front\x18bundle_purple_open_front\x08\x07default\rbundle_purple\0\0\x03\ruse_animation\0\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x02\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
+    pub const PURPLE_BUNDLE : Self = Self { id : 277 , registry_key : "minecraft:purple_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x08\x10enchantable_slot\x04none\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x01\rhand_equipped\0\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x01\x17can_destroy_in_creative\x01\x03\x06damage\0\x03\x0Emax_stack_size\x02\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x06\x01\x12hidden_in_commands\x02\x01\x04foil\0\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x17bundle_purple_open_back\x08\x07default\rbundle_purple\x08\x11bundle_open_front\x18bundle_purple_open_front\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\t\titem_tags\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
     pub const PURPLE_CANDLE: Self = Self {
         id: -423,
         registry_key: "minecraft:purple_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_CANDLE_CAKE: Self = Self {
         id: -440,
         registry_key: "minecraft:purple_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_CARPET: Self = Self {
         id: -606,
         registry_key: "minecraft:purple_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_CONCRETE: Self = Self {
         id: -637,
         registry_key: "minecraft:purple_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_CONCRETE_POWDER: Self = Self {
         id: -718,
         registry_key: "minecraft:purple_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_DYE: Self = Self {
         id: 432,
         registry_key: "minecraft:purple_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_GLAZED_TERRACOTTA: Self = Self {
         id: 219,
         registry_key: "minecraft:purple_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_HARNESS: Self = Self {
         id: 768,
         registry_key: "minecraft:purple_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_SHULKER_BOX: Self = Self {
         id: -622,
         registry_key: "minecraft:purple_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_STAINED_GLASS: Self = Self {
         id: -682,
         registry_key: "minecraft:purple_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_STAINED_GLASS_PANE: Self = Self {
         id: -652,
         registry_key: "minecraft:purple_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_TERRACOTTA: Self = Self {
         id: -733,
         registry_key: "minecraft:purple_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPLE_WOOL: Self = Self {
         id: -564,
         registry_key: "minecraft:purple_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPUR_BLOCK: Self = Self {
         id: 201,
         registry_key: "minecraft:purpur_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPUR_DOUBLE_SLAB: Self = Self {
         id: -911,
         registry_key: "minecraft:purpur_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPUR_PILLAR: Self = Self {
         id: -951,
         registry_key: "minecraft:purpur_pillar",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPUR_SLAB: Self = Self {
         id: -884,
         registry_key: "minecraft:purpur_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const PURPUR_STAIRS: Self = Self {
         id: 203,
         registry_key: "minecraft:purpur_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ: Self = Self {
         id: 563,
         registry_key: "minecraft:quartz",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_BLOCK: Self = Self {
         id: 155,
         registry_key: "minecraft:quartz_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_BRICKS: Self = Self {
         id: -304,
         registry_key: "minecraft:quartz_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_DOUBLE_SLAB: Self = Self {
         id: -882,
         registry_key: "minecraft:quartz_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_ORE: Self = Self {
         id: 153,
         registry_key: "minecraft:quartz_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_PILLAR: Self = Self {
         id: -954,
         registry_key: "minecraft:quartz_pillar",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_SLAB: Self = Self {
         id: -876,
         registry_key: "minecraft:quartz_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const QUARTZ_STAIRS: Self = Self {
         id: 156,
         registry_key: "minecraft:quartz_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const RABBIT : Self = Self { id : 317 , registry_key : "minecraft:rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\x03\tnutrition\x06\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const RABBIT : Self = Self { id : 317 , registry_key : "minecraft:rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\x03\tnutrition\x06\x08\rcooldown_type\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0" } ;
     pub const RABBIT_FOOT: Self = Self {
         id: 567,
         registry_key: "minecraft:rabbit_foot",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RABBIT_HIDE: Self = Self {
         id: 568,
         registry_key: "minecraft:rabbit_hide",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RABBIT_SPAWN_EGG: Self = Self {
         id: 492,
         registry_key: "minecraft:rabbit_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const RABBIT_STEW : Self = Self { id : 319 , registry_key : "minecraft:rabbit_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\x03\x18minecraft:max_stack_size\x02\n\x0Eminecraft:food\x03\tnutrition\x14\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\x04bowl\0\0" } ;
+    pub const RABBIT_STEW : Self = Self { id : 319 , registry_key : "minecraft:rabbit_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\x11using_converts_to\x04bowl\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\x03\tnutrition\x14\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\x03\x18minecraft:max_stack_size\x02\0" } ;
     pub const RAIL: Self = Self {
         id: 66,
         registry_key: "minecraft:rail",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 737,
         registry_key: "minecraft:raiser_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAPID_FERTILIZER: Self = Self {
         id: 640,
         registry_key: "minecraft:rapid_fertilizer",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAVAGER_SPAWN_EGG: Self = Self {
         id: 527,
         registry_key: "minecraft:ravager_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAW_COPPER: Self = Self {
         id: 547,
         registry_key: "minecraft:raw_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAW_COPPER_BLOCK: Self = Self {
         id: -452,
         registry_key: "minecraft:raw_copper_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAW_GOLD: Self = Self {
         id: 546,
         registry_key: "minecraft:raw_gold",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAW_GOLD_BLOCK: Self = Self {
         id: -453,
         registry_key: "minecraft:raw_gold_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAW_IRON: Self = Self {
         id: 545,
         registry_key: "minecraft:raw_iron",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RAW_IRON_BLOCK: Self = Self {
         id: -451,
         registry_key: "minecraft:raw_iron_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RECOVERY_COMPASS: Self = Self {
         id: 688,
         registry_key: "minecraft:recovery_compass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const RED_BUNDLE : Self = Self { id : 278 , registry_key : "minecraft:red_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x0Fitem_properties\x03\x0Cuse_duration\0\x03\x0Emax_stack_size\x02\x03\x06damage\0\x03\x11creative_category\x06\x01\x0Fstacked_by_data\0\x01\x12hidden_in_commands\x02\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x03\x11enchantable_value\0\x01\x04foil\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nbundle_red\x08\x11bundle_open_front\x15bundle_red_open_front\x08\x10bundle_open_back\x14bundle_red_open_back\0\0\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x04none\x05\x0Cmining_speed\0\0\x80?\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0" } ;
+    pub const RED_BUNDLE : Self = Self { id : 278 , registry_key : "minecraft:red_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\n\x0Fitem_properties\x08\x0Ecreative_group\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x03\x11enchantable_value\0\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\x01\x12hidden_in_commands\x02\x03\x06damage\0\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x15bundle_red_open_front\x08\x10bundle_open_back\x14bundle_red_open_back\x08\x07default\nbundle_red\0\0\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x03\x0Cuse_duration\0\x01\rhand_equipped\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0" } ;
     pub const RED_CANDLE: Self = Self {
         id: -427,
         registry_key: "minecraft:red_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_CANDLE_CAKE: Self = Self {
         id: -444,
         registry_key: "minecraft:red_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_CARPET: Self = Self {
         id: -610,
         registry_key: "minecraft:red_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_CONCRETE: Self = Self {
         id: -641,
         registry_key: "minecraft:red_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_CONCRETE_POWDER: Self = Self {
         id: -722,
         registry_key: "minecraft:red_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_DYE: Self = Self {
         id: 428,
         registry_key: "minecraft:red_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_FLOWER: Self = Self {
         id: 815,
         registry_key: "minecraft:red_flower",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_GLAZED_TERRACOTTA: Self = Self {
         id: 234,
         registry_key: "minecraft:red_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_HARNESS: Self = Self {
         id: 769,
         registry_key: "minecraft:red_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_MUSHROOM: Self = Self {
         id: 40,
         registry_key: "minecraft:red_mushroom",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_MUSHROOM_BLOCK: Self = Self {
         id: 100,
         registry_key: "minecraft:red_mushroom_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_NETHER_BRICK: Self = Self {
         id: 215,
         registry_key: "minecraft:red_nether_brick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_NETHER_BRICK_DOUBLE_SLAB: Self = Self {
         id: -917,
         registry_key: "minecraft:red_nether_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_NETHER_BRICK_SLAB: Self = Self {
         id: -890,
         registry_key: "minecraft:red_nether_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_NETHER_BRICK_STAIRS: Self = Self {
         id: -184,
         registry_key: "minecraft:red_nether_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_NETHER_BRICK_WALL: Self = Self {
         id: -983,
         registry_key: "minecraft:red_nether_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SAND: Self = Self {
         id: -949,
         registry_key: "minecraft:red_sand",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SANDSTONE: Self = Self {
         id: 179,
         registry_key: "minecraft:red_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SANDSTONE_DOUBLE_SLAB: Self = Self {
         id: 181,
         registry_key: "minecraft:red_sandstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SANDSTONE_SLAB: Self = Self {
         id: 182,
         registry_key: "minecraft:red_sandstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SANDSTONE_STAIRS: Self = Self {
         id: 180,
         registry_key: "minecraft:red_sandstone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SANDSTONE_WALL: Self = Self {
         id: -982,
         registry_key: "minecraft:red_sandstone_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_SHULKER_BOX: Self = Self {
         id: -626,
         registry_key: "minecraft:red_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_STAINED_GLASS: Self = Self {
         id: -686,
         registry_key: "minecraft:red_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_STAINED_GLASS_PANE: Self = Self {
         id: -656,
         registry_key: "minecraft:red_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_TERRACOTTA: Self = Self {
         id: -737,
         registry_key: "minecraft:red_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_TULIP: Self = Self {
         id: -833,
         registry_key: "minecraft:red_tulip",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RED_WOOL: Self = Self {
         id: -556,
         registry_key: "minecraft:red_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REDSTONE: Self = Self {
         id: 405,
         registry_key: "minecraft:redstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REDSTONE_BLOCK: Self = Self {
         id: 152,
         registry_key: "minecraft:redstone_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REDSTONE_LAMP: Self = Self {
         id: 123,
         registry_key: "minecraft:redstone_lamp",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REDSTONE_ORE: Self = Self {
         id: 73,
         registry_key: "minecraft:redstone_ore",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REDSTONE_TORCH: Self = Self {
         id: 76,
         registry_key: "minecraft:redstone_torch",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REDSTONE_WIRE: Self = Self {
         id: 55,
         registry_key: "minecraft:redstone_wire",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REINFORCED_DEEPSLATE: Self = Self {
         id: -466,
         registry_key: "minecraft:reinforced_deepslate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const REPEATER: Self = Self {
         id: 451,
@@ -47090,597 +47090,597 @@ impl BedrockItem {
         registry_key: "minecraft:repeating_command_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESERVED6: Self = Self {
         id: 255,
         registry_key: "minecraft:reserved6",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BLOCK: Self = Self {
         id: -1021,
         registry_key: "minecraft:resin_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BRICK: Self = Self {
         id: 752,
         registry_key: "minecraft:resin_brick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BRICK_DOUBLE_SLAB: Self = Self {
         id: -1015,
         registry_key: "minecraft:resin_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BRICK_SLAB: Self = Self {
         id: -1014,
         registry_key: "minecraft:resin_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BRICK_STAIRS: Self = Self {
         id: -1016,
         registry_key: "minecraft:resin_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BRICK_WALL: Self = Self {
         id: -1017,
         registry_key: "minecraft:resin_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_BRICKS: Self = Self {
         id: -1013,
         registry_key: "minecraft:resin_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESIN_CLUMP: Self = Self {
         id: -1022,
         registry_key: "minecraft:resin_clump",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RESPAWN_ANCHOR: Self = Self {
         id: -272,
         registry_key: "minecraft:respawn_anchor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const RIB_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 733,
         registry_key: "minecraft:rib_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ROSE_BUSH: Self = Self {
         id: -866,
         registry_key: "minecraft:rose_bush",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const ROTTEN_FLESH : Self = Self { id : 306 , registry_key : "minecraft:rotten_flesh" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\rcooldown_type\0\x05\x13saturation_modifier\xCD\xCC\xCC=\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\t\x07effects\n\x02\x03\x08duration<\x08\x04name\x06hunger\x05\x06chance\xCD\xCCL?\x03\tamplifier\0\x08\rdescriptionId\rpotion.hunger\x03\x02id\"\0\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\tnutrition\x08\x03\ron_use_action\x01\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const ROTTEN_FLESH : Self = Self { id : 306 , registry_key : "minecraft:rotten_flesh" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x03\ron_use_action\x01\x03\tnutrition\x08\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\rcooldown_type\0\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\t\x07effects\n\x02\x08\rdescriptionId\rpotion.hunger\x03\x08duration<\x08\x04name\x06hunger\x05\x06chance\xCD\xCCL?\x03\tamplifier\0\x03\x02id\"\0\0\x03\x16minecraft:use_duration@\0" } ;
     pub const SADDLE: Self = Self {
         id: 403,
         registry_key: "minecraft:saddle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const SALMON : Self = Self { id : 294 , registry_key : "minecraft:salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x03\tnutrition\x04\0\0" } ;
+    pub const SALMON : Self = Self { id : 294 , registry_key : "minecraft:salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x04\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\x11using_converts_to\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x01\x19minecraft:stacked_by_data\x01\0" } ;
     pub const SALMON_BUCKET: Self = Self {
         id: 397,
         registry_key: "minecraft:salmon_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SALMON_SPAWN_EGG: Self = Self {
         id: 516,
         registry_key: "minecraft:salmon_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SAND: Self = Self {
         id: 12,
         registry_key: "minecraft:sand",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SANDSTONE: Self = Self {
         id: 24,
         registry_key: "minecraft:sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SANDSTONE_DOUBLE_SLAB: Self = Self {
         id: -878,
         registry_key: "minecraft:sandstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SANDSTONE_SLAB: Self = Self {
         id: -872,
         registry_key: "minecraft:sandstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SANDSTONE_STAIRS: Self = Self {
         id: 128,
         registry_key: "minecraft:sandstone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SANDSTONE_WALL: Self = Self {
         id: -975,
         registry_key: "minecraft:sandstone_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SAPLING: Self = Self {
         id: 811,
         registry_key: "minecraft:sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCAFFOLDING: Self = Self {
         id: -165,
         registry_key: "minecraft:scaffolding",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCRAPE_POTTERY_SHERD: Self = Self {
         id: 717,
         registry_key: "minecraft:scrape_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCULK: Self = Self {
         id: -458,
         registry_key: "minecraft:sculk",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCULK_CATALYST: Self = Self {
         id: -460,
         registry_key: "minecraft:sculk_catalyst",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCULK_SENSOR: Self = Self {
         id: -307,
         registry_key: "minecraft:sculk_sensor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCULK_SHRIEKER: Self = Self {
         id: -461,
         registry_key: "minecraft:sculk_shrieker",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SCULK_VEIN: Self = Self {
         id: -459,
         registry_key: "minecraft:sculk_vein",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SEA_LANTERN: Self = Self {
         id: 169,
         registry_key: "minecraft:sea_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SEA_PICKLE: Self = Self {
         id: -156,
         registry_key: "minecraft:sea_pickle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SEAGRASS: Self = Self {
         id: -130,
         registry_key: "minecraft:seagrass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 724,
         registry_key: "minecraft:sentry_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 738,
         registry_key: "minecraft:shaper_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHEAF_POTTERY_SHERD: Self = Self {
         id: 718,
         registry_key: "minecraft:sheaf_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHEARS: Self = Self {
         id: 453,
         registry_key: "minecraft:shears",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHEEP_SPAWN_EGG: Self = Self {
         id: 471,
         registry_key: "minecraft:sheep_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHELTER_POTTERY_SHERD: Self = Self {
         id: 719,
         registry_key: "minecraft:shelter_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHIELD: Self = Self {
         id: 387,
         registry_key: "minecraft:shield",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHORT_DRY_GRASS: Self = Self {
         id: -1028,
         registry_key: "minecraft:short_dry_grass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHORT_GRASS: Self = Self {
         id: 31,
         registry_key: "minecraft:short_grass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHROOMLIGHT: Self = Self {
         id: -230,
         registry_key: "minecraft:shroomlight",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHULKER_BOX: Self = Self {
         id: 826,
         registry_key: "minecraft:shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHULKER_SHELL: Self = Self {
         id: 605,
         registry_key: "minecraft:shulker_shell",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SHULKER_SPAWN_EGG: Self = Self {
         id: 503,
         registry_key: "minecraft:shulker_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 735,
         registry_key: "minecraft:silence_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SILVER_GLAZED_TERRACOTTA: Self = Self {
         id: 228,
         registry_key: "minecraft:silver_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SILVERFISH_SPAWN_EGG: Self = Self {
         id: 476,
         registry_key: "minecraft:silverfish_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SKELETON_HORSE_SPAWN_EGG: Self = Self {
         id: 501,
         registry_key: "minecraft:skeleton_horse_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SKELETON_SKULL: Self = Self {
         id: 144,
         registry_key: "minecraft:skeleton_skull",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SKELETON_SPAWN_EGG: Self = Self {
         id: 477,
         registry_key: "minecraft:skeleton_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SKULL: Self = Self {
         id: 743,
         registry_key: "minecraft:skull",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SKULL_BANNER_PATTERN: Self = Self {
         id: 622,
         registry_key: "minecraft:skull_banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SKULL_POTTERY_SHERD: Self = Self {
         id: 720,
         registry_key: "minecraft:skull_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SLIME: Self = Self {
         id: 165,
         registry_key: "minecraft:slime",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SLIME_BALL: Self = Self {
         id: 420,
         registry_key: "minecraft:slime_ball",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SLIME_SPAWN_EGG: Self = Self {
         id: 478,
         registry_key: "minecraft:slime_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMALL_AMETHYST_BUD: Self = Self {
         id: -332,
         registry_key: "minecraft:small_amethyst_bud",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMALL_DRIPLEAF_BLOCK: Self = Self {
         id: -336,
         registry_key: "minecraft:small_dripleaf_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMITHING_TABLE: Self = Self {
         id: -202,
         registry_key: "minecraft:smithing_table",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOKER: Self = Self {
         id: -198,
         registry_key: "minecraft:smoker",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_BASALT: Self = Self {
         id: -377,
         registry_key: "minecraft:smooth_basalt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_QUARTZ: Self = Self {
         id: -955,
         registry_key: "minecraft:smooth_quartz",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_QUARTZ_DOUBLE_SLAB: Self = Self {
         id: -925,
         registry_key: "minecraft:smooth_quartz_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_QUARTZ_SLAB: Self = Self {
         id: -898,
         registry_key: "minecraft:smooth_quartz_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_QUARTZ_STAIRS: Self = Self {
         id: -185,
         registry_key: "minecraft:smooth_quartz_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_RED_SANDSTONE: Self = Self {
         id: -958,
         registry_key: "minecraft:smooth_red_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_RED_SANDSTONE_DOUBLE_SLAB: Self = Self {
         id: -918,
         registry_key: "minecraft:smooth_red_sandstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_RED_SANDSTONE_SLAB: Self = Self {
         id: -891,
         registry_key: "minecraft:smooth_red_sandstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_RED_SANDSTONE_STAIRS: Self = Self {
         id: -176,
         registry_key: "minecraft:smooth_red_sandstone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_SANDSTONE: Self = Self {
         id: -946,
         registry_key: "minecraft:smooth_sandstone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_SANDSTONE_DOUBLE_SLAB: Self = Self {
         id: -916,
         registry_key: "minecraft:smooth_sandstone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_SANDSTONE_SLAB: Self = Self {
         id: -889,
         registry_key: "minecraft:smooth_sandstone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_SANDSTONE_STAIRS: Self = Self {
         id: -177,
         registry_key: "minecraft:smooth_sandstone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_STONE: Self = Self {
         id: -183,
         registry_key: "minecraft:smooth_stone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_STONE_DOUBLE_SLAB: Self = Self {
         id: 43,
         registry_key: "minecraft:smooth_stone_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SMOOTH_STONE_SLAB: Self = Self {
         id: 44,
         registry_key: "minecraft:smooth_stone_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNIFFER_EGG: Self = Self {
         id: -596,
         registry_key: "minecraft:sniffer_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNIFFER_SPAWN_EGG: Self = Self {
         id: 534,
         registry_key: "minecraft:sniffer_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNORT_POTTERY_SHERD: Self = Self {
         id: 721,
         registry_key: "minecraft:snort_pottery_sherd",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 732,
         registry_key: "minecraft:snout_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNOW: Self = Self {
         id: 80,
         registry_key: "minecraft:snow",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNOW_GOLEM_SPAWN_EGG: Self = Self {
         id: 540,
         registry_key: "minecraft:snow_golem_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNOW_LAYER: Self = Self {
         id: 78,
         registry_key: "minecraft:snow_layer",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SNOWBALL: Self = Self {
         id: 406,
@@ -47701,464 +47701,464 @@ impl BedrockItem {
         registry_key: "minecraft:soul_fire",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SOUL_LANTERN: Self = Self {
         id: -269,
         registry_key: "minecraft:soul_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SOUL_SAND: Self = Self {
         id: 88,
         registry_key: "minecraft:soul_sand",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SOUL_SOIL: Self = Self {
         id: -236,
         registry_key: "minecraft:soul_soil",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SOUL_TORCH: Self = Self {
         id: -268,
         registry_key: "minecraft:soul_torch",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPARKLER: Self = Self {
         id: 643,
         registry_key: "minecraft:sparkler",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPAWN_EGG: Self = Self {
         id: 842,
         registry_key: "minecraft:spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const SPIDER_EYE : Self = Self { id : 307 , registry_key : "minecraft:spider_eye" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\x08\x11using_converts_to\0\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\t\x07effects\n\x02\x03\x02id&\x08\rdescriptionId\rpotion.poison\x08\x04name\x06poison\x05\x06chance\0\0\x80?\x03\tamplifier\0\x03\x08duration\n\0\x03\tnutrition\x04\x05\x13saturation_modifier\xCD\xCCL?\0\x03\x16minecraft:use_duration@\0" } ;
+    pub const SPIDER_EYE : Self = Self { id : 307 , registry_key : "minecraft:spider_eye" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:food\t\x07effects\n\x02\x08\rdescriptionId\rpotion.poison\x05\x06chance\0\0\x80?\x03\tamplifier\0\x03\x08duration\n\x03\x02id&\x08\x04name\x06poison\0\x03\tnutrition\x04\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\xCD\xCCL?\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0" } ;
     pub const SPIDER_SPAWN_EGG: Self = Self {
         id: 479,
         registry_key: "minecraft:spider_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 734,
         registry_key: "minecraft:spire_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPLASH_POTION: Self = Self {
         id: 600,
         registry_key: "minecraft:splash_potion",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPONGE: Self = Self {
         id: 19,
         registry_key: "minecraft:sponge",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPORE_BLOSSOM: Self = Self {
         id: -321,
         registry_key: "minecraft:spore_blossom",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_BOAT: Self = Self {
         id: 410,
         registry_key: "minecraft:spruce_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_BUTTON: Self = Self {
         id: -144,
         registry_key: "minecraft:spruce_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_CHEST_BOAT: Self = Self {
         id: 683,
         registry_key: "minecraft:spruce_chest_boat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_DOOR: Self = Self {
         id: 592,
         registry_key: "minecraft:spruce_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_DOUBLE_SLAB: Self = Self {
         id: -809,
         registry_key: "minecraft:spruce_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_FENCE: Self = Self {
         id: -579,
         registry_key: "minecraft:spruce_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_FENCE_GATE: Self = Self {
         id: 183,
         registry_key: "minecraft:spruce_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_HANGING_SIGN: Self = Self {
         id: -501,
         registry_key: "minecraft:spruce_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_LEAVES: Self = Self {
         id: -800,
         registry_key: "minecraft:spruce_leaves",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_LOG: Self = Self {
         id: -569,
         registry_key: "minecraft:spruce_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_PLANKS: Self = Self {
         id: -739,
         registry_key: "minecraft:spruce_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_PRESSURE_PLATE: Self = Self {
         id: -154,
         registry_key: "minecraft:spruce_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_SAPLING: Self = Self {
         id: -825,
         registry_key: "minecraft:spruce_sapling",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_SHELF: Self = Self {
         id: -1048,
         registry_key: "minecraft:spruce_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_SIGN: Self = Self {
         id: 615,
         registry_key: "minecraft:spruce_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_SLAB: Self = Self {
         id: -804,
         registry_key: "minecraft:spruce_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_STAIRS: Self = Self {
         id: 134,
         registry_key: "minecraft:spruce_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_STANDING_SIGN: Self = Self {
         id: -181,
         registry_key: "minecraft:spruce_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_TRAPDOOR: Self = Self {
         id: -149,
         registry_key: "minecraft:spruce_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_WALL_SIGN: Self = Self {
         id: -182,
         registry_key: "minecraft:spruce_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPRUCE_WOOD: Self = Self {
         id: -814,
         registry_key: "minecraft:spruce_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SPYGLASS: Self = Self {
         id: 667,
         registry_key: "minecraft:spyglass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SQUID_SPAWN_EGG: Self = Self {
         id: 483,
         registry_key: "minecraft:squid_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STAINED_GLASS: Self = Self {
         id: 824,
         registry_key: "minecraft:stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STAINED_GLASS_PANE: Self = Self {
         id: 825,
         registry_key: "minecraft:stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STAINED_HARDENED_CLAY: Self = Self {
         id: 744,
         registry_key: "minecraft:stained_hardened_clay",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STANDING_BANNER: Self = Self {
         id: 176,
         registry_key: "minecraft:standing_banner",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STANDING_SIGN: Self = Self {
         id: 63,
         registry_key: "minecraft:standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STICK: Self = Self {
         id: 352,
         registry_key: "minecraft:stick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STICKY_PISTON: Self = Self {
         id: 29,
         registry_key: "minecraft:sticky_piston",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STICKY_PISTON_ARM_COLLISION: Self = Self {
         id: -217,
         registry_key: "minecraft:sticky_piston_arm_collision",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE: Self = Self {
         id: 1,
         registry_key: "minecraft:stone",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_AXE: Self = Self {
         id: 346,
         registry_key: "minecraft:stone_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB: Self = Self {
         id: 801,
         registry_key: "minecraft:stone_block_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB2: Self = Self {
         id: 802,
         registry_key: "minecraft:stone_block_slab2",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB3: Self = Self {
         id: 803,
         registry_key: "minecraft:stone_block_slab3",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB4: Self = Self {
         id: 804,
         registry_key: "minecraft:stone_block_slab4",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BRICK_DOUBLE_SLAB: Self = Self {
         id: -881,
         registry_key: "minecraft:stone_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BRICK_SLAB: Self = Self {
         id: -875,
         registry_key: "minecraft:stone_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BRICK_STAIRS: Self = Self {
         id: 109,
         registry_key: "minecraft:stone_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BRICK_WALL: Self = Self {
         id: -977,
         registry_key: "minecraft:stone_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BRICKS: Self = Self {
         id: 98,
         registry_key: "minecraft:stone_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_BUTTON: Self = Self {
         id: 77,
         registry_key: "minecraft:stone_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_HOE: Self = Self {
         id: 362,
         registry_key: "minecraft:stone_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_PICKAXE: Self = Self {
         id: 345,
         registry_key: "minecraft:stone_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_PRESSURE_PLATE: Self = Self {
         id: 70,
         registry_key: "minecraft:stone_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_SHOVEL: Self = Self {
         id: 344,
         registry_key: "minecraft:stone_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const STONE_SPEAR : Self = Self { id : 262 , registry_key : "minecraft:stone_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x14minecraft:durability\x03\x0Emax_durability\x84\x02\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x16minecraft:display_name\x08\x05value\x15item.stone_spear.name\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Citem.stone_spear.attack_miss\x08\nattack_hit\x1Bitem.stone_spear.attack_hit\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x15minecraft:stone_spear\0\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\0\t\x05items\n\x02\x08\x04tags,q.all_tags('minecraft:stone_tool_materials')\0\n\rrepair_amount\x08\nexpression\x1Bquery.max_durability * 0.25\x02\x07version\r\0\0\0\0\n\x18minecraft:swing_duration\x05\x05value\0\0@?\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x14item.stone_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x14knockback_conditions\x02\x0Cmax_duration\xB4\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_durationZ\0\x05\tmin_speed\0\0PA\0\x05\rhitbox_margin\0\0\x80>\x05\x0Fdamage_modifier\0\0\0\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x02\x05delay\x0E\0\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x02\x0Cmax_duration\x13\x01\x05\tmin_speed\0\0\0\0\0\x05\x11damage_multiplier\x85\xEBQ?\0\0\t\titem_tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bstone_spear\0\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x03\x06damage\x04\x03\ruse_animation\0\x08\x0Ecreative_group\0\x03\x0Emax_stack_size\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x11enchantable_value\n\x01\x04foil\0\x01\rhand_equipped\x01\x03\x0Bframe_count\x02\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\0\n\x12minecraft:cooldown\x05\x08duration\0\0@?\x08\x08category\x05spear\x08\x04type\x06attack\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x05\0\0" } ;
+    pub const STONE_SPEAR : Self = Self { id : 262 , registry_key : "minecraft:stone_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08duration\0\0@?\x08\x04type\x06attack\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Citem.stone_spear.attack_miss\x08\nattack_hit\x1Bitem.stone_spear.attack_hit\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\0\n\x0Fitem_properties\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x01\x17can_destroy_in_creative\x01\x03\ruse_animation\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\x08\x10enchantable_slot\x0Bmelee_spear\x03\x11creative_category\x06\x01\x04foil\0\x03\x06damage\x04\x01\rhand_equipped\x01\x03\x11enchantable_value\n\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bstone_spear\0\0\x03\x0Emax_stack_size\x02\0\n\x16minecraft:display_name\x08\x05value\x15item.stone_spear.name\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x17minecraft:use_modifiers\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x14item.stone_spear.use\x01\x0Femit_vibrations\0\0\t\titem_tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x05\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability\x84\x02\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0PA\x02\x0Cmax_durationZ\0\0\x02\x05delay\x0E\0\x05\rhitbox_margin\0\0\x80>\n\x14knockback_conditions\x02\x0Cmax_duration\xB4\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x11damage_conditions\x02\x0Cmax_duration\x13\x01\x05\tmin_speed\0\0\0\0\x05\x12min_relative_speed33\x93@\0\x05\x0Fdamage_modifier\0\0\0\0\x05\x11damage_multiplier\x85\xEBQ?\0\0\n\x18minecraft:swing_duration\x05\x05value\0\0@?\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\n\rrepair_amount\x02\x07version\r\0\x08\nexpression)context.other->query.remaining_durability\0\t\x05items\n\x02\x08\x04name\x15minecraft:stone_spear\0\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\t\x05items\n\x02\x08\x04tags,q.all_tags('minecraft:stone_tool_materials')\0\0\0\0" } ;
     pub const STONE_STAIRS: Self = Self {
         id: 67,
         registry_key: "minecraft:stone_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONE_SWORD: Self = Self {
         id: 343,
         registry_key: "minecraft:stone_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONEBRICK: Self = Self {
         id: 799,
         registry_key: "minecraft:stonebrick",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONECUTTER: Self = Self {
         id: 245,
         registry_key: "minecraft:stonecutter",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STONECUTTER_BLOCK: Self = Self {
         id: -197,
         registry_key: "minecraft:stonecutter_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRAY_SPAWN_EGG: Self = Self {
         id: 495,
         registry_key: "minecraft:stray_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIDER_SPAWN_EGG: Self = Self {
         id: 529,
         registry_key: "minecraft:strider_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRING: Self = Self {
         id: 358,
@@ -48172,182 +48172,182 @@ impl BedrockItem {
         registry_key: "minecraft:stripped_acacia_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_ACACIA_WOOD: Self = Self {
         id: -823,
         registry_key: "minecraft:stripped_acacia_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_BAMBOO_BLOCK: Self = Self {
         id: -528,
         registry_key: "minecraft:stripped_bamboo_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_BIRCH_LOG: Self = Self {
         id: -6,
         registry_key: "minecraft:stripped_birch_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_BIRCH_WOOD: Self = Self {
         id: -821,
         registry_key: "minecraft:stripped_birch_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_CHERRY_LOG: Self = Self {
         id: -535,
         registry_key: "minecraft:stripped_cherry_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_CHERRY_WOOD: Self = Self {
         id: -545,
         registry_key: "minecraft:stripped_cherry_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_CRIMSON_HYPHAE: Self = Self {
         id: -300,
         registry_key: "minecraft:stripped_crimson_hyphae",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_CRIMSON_STEM: Self = Self {
         id: -240,
         registry_key: "minecraft:stripped_crimson_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_DARK_OAK_LOG: Self = Self {
         id: -9,
         registry_key: "minecraft:stripped_dark_oak_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_DARK_OAK_WOOD: Self = Self {
         id: -824,
         registry_key: "minecraft:stripped_dark_oak_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_JUNGLE_LOG: Self = Self {
         id: -7,
         registry_key: "minecraft:stripped_jungle_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_JUNGLE_WOOD: Self = Self {
         id: -822,
         registry_key: "minecraft:stripped_jungle_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_MANGROVE_LOG: Self = Self {
         id: -485,
         registry_key: "minecraft:stripped_mangrove_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_MANGROVE_WOOD: Self = Self {
         id: -498,
         registry_key: "minecraft:stripped_mangrove_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_OAK_LOG: Self = Self {
         id: -10,
         registry_key: "minecraft:stripped_oak_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_OAK_WOOD: Self = Self {
         id: -819,
         registry_key: "minecraft:stripped_oak_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_PALE_OAK_LOG: Self = Self {
         id: -994,
         registry_key: "minecraft:stripped_pale_oak_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_PALE_OAK_WOOD: Self = Self {
         id: -1004,
         registry_key: "minecraft:stripped_pale_oak_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_SPRUCE_LOG: Self = Self {
         id: -5,
         registry_key: "minecraft:stripped_spruce_log",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_SPRUCE_WOOD: Self = Self {
         id: -820,
         registry_key: "minecraft:stripped_spruce_wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_WARPED_HYPHAE: Self = Self {
         id: -301,
         registry_key: "minecraft:stripped_warped_hyphae",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRIPPED_WARPED_STEM: Self = Self {
         id: -241,
         registry_key: "minecraft:stripped_warped_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRUCTURE_BLOCK: Self = Self {
         id: 252,
         registry_key: "minecraft:structure_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const STRUCTURE_VOID: Self = Self {
         id: 217,
         registry_key: "minecraft:structure_void",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SUGAR: Self = Self {
         id: 448,
         registry_key: "minecraft:sugar",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SUGAR_CANE: Self = Self {
         id: 417,
@@ -48361,586 +48361,586 @@ impl BedrockItem {
         registry_key: "minecraft:sulfur",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_BRICK_DOUBLE_SLAB: Self = Self {
         id: -1104,
         registry_key: "minecraft:sulfur_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_BRICK_SLAB: Self = Self {
         id: -1103,
         registry_key: "minecraft:sulfur_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_BRICK_STAIRS: Self = Self {
         id: -1105,
         registry_key: "minecraft:sulfur_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_BRICK_WALL: Self = Self {
         id: -1106,
         registry_key: "minecraft:sulfur_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_BRICKS: Self = Self {
         id: -1102,
         registry_key: "minecraft:sulfur_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_CUBE_BUCKET: Self = Self {
         id: 794,
         registry_key: "minecraft:sulfur_cube_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_CUBE_SPAWN_EGG: Self = Self {
         id: 793,
         registry_key: "minecraft:sulfur_cube_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_DOUBLE_SLAB: Self = Self {
         id: -1094,
         registry_key: "minecraft:sulfur_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_SLAB: Self = Self {
         id: -1093,
         registry_key: "minecraft:sulfur_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_STAIRS: Self = Self {
         id: -1095,
         registry_key: "minecraft:sulfur_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SULFUR_WALL: Self = Self {
         id: -1096,
         registry_key: "minecraft:sulfur_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SUNFLOWER: Self = Self {
         id: 175,
         registry_key: "minecraft:sunflower",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SUSPICIOUS_GRAVEL: Self = Self {
         id: -573,
         registry_key: "minecraft:suspicious_gravel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const SUSPICIOUS_SAND: Self = Self {
         id: -529,
         registry_key: "minecraft:suspicious_sand",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const SUSPICIOUS_STEW : Self = Self { id : 631 , registry_key : "minecraft:suspicious_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x18minecraft:max_stack_size\x02\n\x0Eminecraft:food\x01\x0Ecan_always_eat\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\rcooldown_type\0\x03\tnutrition\x0C\x03\ron_use_action\x02\x08\x11using_converts_to\x04bowl\0\x03\x16minecraft:use_duration@\0" } ;
-    pub const SWEET_BERRIES : Self = Self { id : 316 , registry_key : "minecraft:sweet_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x1Aminecraft:sweet_berry_bush\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x14\x08farmland\x05grass\x04dirt\x0Bcoarse_dirt\x06podzol\nmoss_block\x08mycelium\x03mud\x14muddy_mangrove_roots\x0Fdirt_with_roots\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\x03\tnutrition\x04\0\0" } ;
+    pub const SUSPICIOUS_STEW : Self = Self { id : 631 , registry_key : "minecraft:suspicious_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x08\x11using_converts_to\x04bowl\x01\x0Ecan_always_eat\x01\x03\ron_use_action\x02\x03\rcooldown_time\0\x03\tnutrition\x0C\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\0\x03\x18minecraft:max_stack_size\x02\0" } ;
+    pub const SWEET_BERRIES : Self = Self { id : 316 , registry_key : "minecraft:sweet_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:seed\t\x08plant_at\x08\x14\x08farmland\x05grass\x04dirt\x0Bcoarse_dirt\x06podzol\nmoss_block\x08mycelium\x03mud\x14muddy_mangrove_roots\x0Fdirt_with_roots\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x1Aminecraft:sweet_berry_bush\0\n\x0Eminecraft:food\x03\tnutrition\x04\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\0\0" } ;
     pub const SWEET_BERRY_BUSH: Self = Self {
         id: -207,
         registry_key: "minecraft:sweet_berry_bush",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TADPOLE_BUCKET: Self = Self {
         id: 672,
         registry_key: "minecraft:tadpole_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TADPOLE_SPAWN_EGG: Self = Self {
         id: 671,
         registry_key: "minecraft:tadpole_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TALL_DRY_GRASS: Self = Self {
         id: -1029,
         registry_key: "minecraft:tall_dry_grass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TALL_GRASS: Self = Self {
         id: -864,
         registry_key: "minecraft:tall_grass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TALLGRASS: Self = Self {
         id: 819,
         registry_key: "minecraft:tallgrass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TARGET: Self = Self {
         id: -239,
         registry_key: "minecraft:target",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 731,
         registry_key: "minecraft:tide_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TINTED_GLASS: Self = Self {
         id: -334,
         registry_key: "minecraft:tinted_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TNT: Self = Self {
         id: 46,
         registry_key: "minecraft:tnt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TNT_MINECART: Self = Self {
         id: 564,
         registry_key: "minecraft:tnt_minecart",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TORCH: Self = Self {
         id: 50,
         registry_key: "minecraft:torch",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TORCHFLOWER: Self = Self {
         id: -568,
         registry_key: "minecraft:torchflower",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TORCHFLOWER_CROP: Self = Self {
         id: -567,
         registry_key: "minecraft:torchflower_crop",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const TORCHFLOWER_SEEDS : Self = Self { id : 325 , registry_key : "minecraft:torchflower_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\x0Bcrop_result\x1Aminecraft:torchflower_crop\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\0\0" } ;
+    pub const TORCHFLOWER_SEEDS : Self = Self { id : 325 , registry_key : "minecraft:torchflower_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\x0Bcrop_result\x1Aminecraft:torchflower_crop\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\0" } ;
     pub const TOTEM_OF_UNDYING: Self = Self {
         id: 607,
         registry_key: "minecraft:totem_of_undying",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TRADER_LLAMA_SPAWN_EGG: Self = Self {
         id: 690,
         registry_key: "minecraft:trader_llama_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TRAPDOOR: Self = Self {
         id: 96,
         registry_key: "minecraft:trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TRAPPED_CHEST: Self = Self {
         id: 146,
         registry_key: "minecraft:trapped_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const TRIAL_KEY : Self = Self { id : 283 , registry_key : "minecraft:trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x13item.trial_key.name\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x04none\x03\x11creative_category\x08\x03\x06damage\0\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x03\x11enchantable_value\0\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ttrial_key\0\0\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x05\x0Cmining_speed\0\0\x80?\x01\rhand_equipped\0\x08\x0Ecreative_group\0\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x80\x01\x01\x04foil\0\0\0" } ;
+    pub const TRIAL_KEY : Self = Self { id : 283 , registry_key : "minecraft:trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x03\x0Cuse_duration\0\x03\x06damage\0\x01\x04foil\0\x01\rhand_equipped\0\x03\x0Bframe_count\x02\x08\x10enchantable_slot\x04none\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x80\x01\x08\x0Ecreative_group\0\x05\x0Cmining_speed\0\0\x80?\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x08\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ttrial_key\0\0\0\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x13item.trial_key.name\0\0" } ;
     pub const TRIAL_SPAWNER: Self = Self {
         id: -315,
         registry_key: "minecraft:trial_spawner",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TRIDENT: Self = Self {
         id: 585,
         registry_key: "minecraft:trident",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TRIP_WIRE: Self = Self {
         id: 132,
         registry_key: "minecraft:trip_wire",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TRIPWIRE_HOOK: Self = Self {
         id: 131,
         registry_key: "minecraft:tripwire_hook",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const TROPICAL_FISH : Self = Self { id : 295 , registry_key : "minecraft:tropical_fish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\rcooldown_type\0\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x03\ron_use_action\x01\0\0" } ;
+    pub const TROPICAL_FISH : Self = Self { id : 295 , registry_key : "minecraft:tropical_fish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\rcooldown_type\0\x05\x13saturation_modifier\xCD\xCC\xCC=\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\tnutrition\x02\x08\x11using_converts_to\0\0\x01\x19minecraft:stacked_by_data\x01\0" } ;
     pub const TROPICAL_FISH_BUCKET: Self = Self {
         id: 398,
         registry_key: "minecraft:tropical_fish_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TROPICAL_FISH_SPAWN_EGG: Self = Self {
         id: 513,
         registry_key: "minecraft:tropical_fish_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUBE_CORAL: Self = Self {
         id: -131,
         registry_key: "minecraft:tube_coral",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUBE_CORAL_BLOCK: Self = Self {
         id: -132,
         registry_key: "minecraft:tube_coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUBE_CORAL_FAN: Self = Self {
         id: -133,
         registry_key: "minecraft:tube_coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUBE_CORAL_WALL_FAN: Self = Self {
         id: -135,
         registry_key: "minecraft:tube_coral_wall_fan",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF: Self = Self {
         id: -333,
         registry_key: "minecraft:tuff",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_BRICK_DOUBLE_SLAB: Self = Self {
         id: -756,
         registry_key: "minecraft:tuff_brick_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_BRICK_SLAB: Self = Self {
         id: -755,
         registry_key: "minecraft:tuff_brick_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_BRICK_STAIRS: Self = Self {
         id: -757,
         registry_key: "minecraft:tuff_brick_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_BRICK_WALL: Self = Self {
         id: -758,
         registry_key: "minecraft:tuff_brick_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_BRICKS: Self = Self {
         id: -754,
         registry_key: "minecraft:tuff_bricks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_DOUBLE_SLAB: Self = Self {
         id: -745,
         registry_key: "minecraft:tuff_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_SLAB: Self = Self {
         id: -744,
         registry_key: "minecraft:tuff_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_STAIRS: Self = Self {
         id: -746,
         registry_key: "minecraft:tuff_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TUFF_WALL: Self = Self {
         id: -747,
         registry_key: "minecraft:tuff_wall",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TURTLE_EGG: Self = Self {
         id: -159,
         registry_key: "minecraft:turtle_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TURTLE_HELMET: Self = Self {
         id: 612,
         registry_key: "minecraft:turtle_helmet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TURTLE_SCUTE: Self = Self {
         id: 611,
         registry_key: "minecraft:turtle_scute",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TURTLE_SPAWN_EGG: Self = Self {
         id: 519,
         registry_key: "minecraft:turtle_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const TWISTING_VINES: Self = Self {
         id: -287,
         registry_key: "minecraft:twisting_vines",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNDERWATER_TNT: Self = Self {
         id: -985,
         registry_key: "minecraft:underwater_tnt",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNDERWATER_TORCH: Self = Self {
         id: 239,
         registry_key: "minecraft:underwater_torch",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNDYED_SHULKER_BOX: Self = Self {
         id: 205,
         registry_key: "minecraft:undyed_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNKNOWN: Self = Self {
         id: -305,
         registry_key: "minecraft:unknown",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNLIT_REDSTONE_TORCH: Self = Self {
         id: 75,
         registry_key: "minecraft:unlit_redstone_torch",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNPOWERED_COMPARATOR: Self = Self {
         id: 149,
         registry_key: "minecraft:unpowered_comparator",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const UNPOWERED_REPEATER: Self = Self {
         id: 93,
         registry_key: "minecraft:unpowered_repeater",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VAULT: Self = Self {
         id: -314,
         registry_key: "minecraft:vault",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VERDANT_FROGLIGHT: Self = Self {
         id: -470,
         registry_key: "minecraft:verdant_froglight",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VEX_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 730,
         registry_key: "minecraft:vex_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VEX_SPAWN_EGG: Self = Self {
         id: 510,
         registry_key: "minecraft:vex_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VILLAGER_SPAWN_EGG: Self = Self {
         id: 482,
         registry_key: "minecraft:villager_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VINDICATOR_SPAWN_EGG: Self = Self {
         id: 508,
         registry_key: "minecraft:vindicator_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const VINE: Self = Self {
         id: 106,
         registry_key: "minecraft:vine",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WALL_BANNER: Self = Self {
         id: 177,
         registry_key: "minecraft:wall_banner",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WALL_SIGN: Self = Self {
         id: 68,
         registry_key: "minecraft:wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WANDERING_TRADER_SPAWN_EGG: Self = Self {
         id: 526,
         registry_key: "minecraft:wandering_trader_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARD_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 728,
         registry_key: "minecraft:ward_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARDEN_SPAWN_EGG: Self = Self {
         id: 674,
         registry_key: "minecraft:warden_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_BUTTON: Self = Self {
         id: -261,
         registry_key: "minecraft:warped_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_DOOR: Self = Self {
         id: 660,
         registry_key: "minecraft:warped_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_DOUBLE_SLAB: Self = Self {
         id: -267,
         registry_key: "minecraft:warped_double_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_FENCE: Self = Self {
         id: -257,
         registry_key: "minecraft:warped_fence",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_FENCE_GATE: Self = Self {
         id: -259,
         registry_key: "minecraft:warped_fence_gate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_FUNGUS: Self = Self {
         id: -229,
         registry_key: "minecraft:warped_fungus",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_FUNGUS_ON_A_STICK: Self = Self {
         id: 661,
@@ -48954,871 +48954,871 @@ impl BedrockItem {
         registry_key: "minecraft:warped_hanging_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_HYPHAE: Self = Self {
         id: -298,
         registry_key: "minecraft:warped_hyphae",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_NYLIUM: Self = Self {
         id: -233,
         registry_key: "minecraft:warped_nylium",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_PLANKS: Self = Self {
         id: -243,
         registry_key: "minecraft:warped_planks",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_PRESSURE_PLATE: Self = Self {
         id: -263,
         registry_key: "minecraft:warped_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_ROOTS: Self = Self {
         id: -224,
         registry_key: "minecraft:warped_roots",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_SHELF: Self = Self {
         id: -1058,
         registry_key: "minecraft:warped_shelf",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_SIGN: Self = Self {
         id: 658,
         registry_key: "minecraft:warped_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_SLAB: Self = Self {
         id: -265,
         registry_key: "minecraft:warped_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_STAIRS: Self = Self {
         id: -255,
         registry_key: "minecraft:warped_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_STANDING_SIGN: Self = Self {
         id: -251,
         registry_key: "minecraft:warped_standing_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_STEM: Self = Self {
         id: -226,
         registry_key: "minecraft:warped_stem",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_TRAPDOOR: Self = Self {
         id: -247,
         registry_key: "minecraft:warped_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_WALL_SIGN: Self = Self {
         id: -253,
         registry_key: "minecraft:warped_wall_sign",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WARPED_WART_BLOCK: Self = Self {
         id: -227,
         registry_key: "minecraft:warped_wart_block",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WATER: Self = Self {
         id: 9,
         registry_key: "minecraft:water",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WATER_BUCKET: Self = Self {
         id: 394,
         registry_key: "minecraft:water_bucket",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WATERLILY: Self = Self {
         id: 111,
         registry_key: "minecraft:waterlily",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_CHISELED_COPPER: Self = Self {
         id: -764,
         registry_key: "minecraft:waxed_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER: Self = Self {
         id: -344,
         registry_key: "minecraft:waxed_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_BARS: Self = Self {
         id: -1070,
         registry_key: "minecraft:waxed_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_BULB: Self = Self {
         id: -780,
         registry_key: "minecraft:waxed_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_CHAIN: Self = Self {
         id: -1078,
         registry_key: "minecraft:waxed_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_CHEST: Self = Self {
         id: -1035,
         registry_key: "minecraft:waxed_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_DOOR: Self = Self {
         id: -788,
         registry_key: "minecraft:waxed_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1043,
         registry_key: "minecraft:waxed_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_GRATE: Self = Self {
         id: -772,
         registry_key: "minecraft:waxed_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_LANTERN: Self = Self {
         id: -1087,
         registry_key: "minecraft:waxed_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_COPPER_TRAPDOOR: Self = Self {
         id: -796,
         registry_key: "minecraft:waxed_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_CUT_COPPER: Self = Self {
         id: -351,
         registry_key: "minecraft:waxed_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_CUT_COPPER_SLAB: Self = Self {
         id: -365,
         registry_key: "minecraft:waxed_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_CUT_COPPER_STAIRS: Self = Self {
         id: -358,
         registry_key: "minecraft:waxed_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -372,
         registry_key: "minecraft:waxed_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_CHISELED_COPPER: Self = Self {
         id: -765,
         registry_key: "minecraft:waxed_exposed_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER: Self = Self {
         id: -345,
         registry_key: "minecraft:waxed_exposed_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_BARS: Self = Self {
         id: -1071,
         registry_key: "minecraft:waxed_exposed_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_BULB: Self = Self {
         id: -781,
         registry_key: "minecraft:waxed_exposed_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_CHAIN: Self = Self {
         id: -1079,
         registry_key: "minecraft:waxed_exposed_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_CHEST: Self = Self {
         id: -1036,
         registry_key: "minecraft:waxed_exposed_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_DOOR: Self = Self {
         id: -789,
         registry_key: "minecraft:waxed_exposed_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1044,
         registry_key: "minecraft:waxed_exposed_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_GRATE: Self = Self {
         id: -773,
         registry_key: "minecraft:waxed_exposed_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_LANTERN: Self = Self {
         id: -1088,
         registry_key: "minecraft:waxed_exposed_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_COPPER_TRAPDOOR: Self = Self {
         id: -797,
         registry_key: "minecraft:waxed_exposed_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_CUT_COPPER: Self = Self {
         id: -352,
         registry_key: "minecraft:waxed_exposed_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_CUT_COPPER_SLAB: Self = Self {
         id: -366,
         registry_key: "minecraft:waxed_exposed_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_CUT_COPPER_STAIRS: Self = Self {
         id: -359,
         registry_key: "minecraft:waxed_exposed_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -373,
         registry_key: "minecraft:waxed_exposed_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_EXPOSED_LIGHTNING_ROD: Self = Self {
         id: -1063,
         registry_key: "minecraft:waxed_exposed_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_LIGHTNING_ROD: Self = Self {
         id: -1062,
         registry_key: "minecraft:waxed_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_CHISELED_COPPER: Self = Self {
         id: -766,
         registry_key: "minecraft:waxed_oxidized_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER: Self = Self {
         id: -446,
         registry_key: "minecraft:waxed_oxidized_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_BARS: Self = Self {
         id: -1073,
         registry_key: "minecraft:waxed_oxidized_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_BULB: Self = Self {
         id: -783,
         registry_key: "minecraft:waxed_oxidized_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_CHAIN: Self = Self {
         id: -1081,
         registry_key: "minecraft:waxed_oxidized_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_CHEST: Self = Self {
         id: -1038,
         registry_key: "minecraft:waxed_oxidized_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_DOOR: Self = Self {
         id: -791,
         registry_key: "minecraft:waxed_oxidized_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1046,
         registry_key: "minecraft:waxed_oxidized_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_GRATE: Self = Self {
         id: -775,
         registry_key: "minecraft:waxed_oxidized_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_LANTERN: Self = Self {
         id: -1090,
         registry_key: "minecraft:waxed_oxidized_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_COPPER_TRAPDOOR: Self = Self {
         id: -799,
         registry_key: "minecraft:waxed_oxidized_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_CUT_COPPER: Self = Self {
         id: -447,
         registry_key: "minecraft:waxed_oxidized_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_CUT_COPPER_SLAB: Self = Self {
         id: -449,
         registry_key: "minecraft:waxed_oxidized_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_CUT_COPPER_STAIRS: Self = Self {
         id: -448,
         registry_key: "minecraft:waxed_oxidized_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -450,
         registry_key: "minecraft:waxed_oxidized_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_OXIDIZED_LIGHTNING_ROD: Self = Self {
         id: -1065,
         registry_key: "minecraft:waxed_oxidized_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_CHISELED_COPPER: Self = Self {
         id: -767,
         registry_key: "minecraft:waxed_weathered_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER: Self = Self {
         id: -346,
         registry_key: "minecraft:waxed_weathered_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_BARS: Self = Self {
         id: -1072,
         registry_key: "minecraft:waxed_weathered_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_BULB: Self = Self {
         id: -782,
         registry_key: "minecraft:waxed_weathered_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_CHAIN: Self = Self {
         id: -1080,
         registry_key: "minecraft:waxed_weathered_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_CHEST: Self = Self {
         id: -1037,
         registry_key: "minecraft:waxed_weathered_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_DOOR: Self = Self {
         id: -790,
         registry_key: "minecraft:waxed_weathered_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1045,
         registry_key: "minecraft:waxed_weathered_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_GRATE: Self = Self {
         id: -774,
         registry_key: "minecraft:waxed_weathered_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_LANTERN: Self = Self {
         id: -1089,
         registry_key: "minecraft:waxed_weathered_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_COPPER_TRAPDOOR: Self = Self {
         id: -798,
         registry_key: "minecraft:waxed_weathered_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_CUT_COPPER: Self = Self {
         id: -353,
         registry_key: "minecraft:waxed_weathered_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_CUT_COPPER_SLAB: Self = Self {
         id: -367,
         registry_key: "minecraft:waxed_weathered_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_CUT_COPPER_STAIRS: Self = Self {
         id: -360,
         registry_key: "minecraft:waxed_weathered_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -374,
         registry_key: "minecraft:waxed_weathered_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAXED_WEATHERED_LIGHTNING_ROD: Self = Self {
         id: -1064,
         registry_key: "minecraft:waxed_weathered_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 736,
         registry_key: "minecraft:wayfinder_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_CHISELED_COPPER: Self = Self {
         id: -762,
         registry_key: "minecraft:weathered_chiseled_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER: Self = Self {
         id: -342,
         registry_key: "minecraft:weathered_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_BARS: Self = Self {
         id: -1068,
         registry_key: "minecraft:weathered_copper_bars",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_BULB: Self = Self {
         id: -778,
         registry_key: "minecraft:weathered_copper_bulb",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_CHAIN: Self = Self {
         id: -1076,
         registry_key: "minecraft:weathered_copper_chain",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_CHEST: Self = Self {
         id: -1033,
         registry_key: "minecraft:weathered_copper_chest",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_DOOR: Self = Self {
         id: -786,
         registry_key: "minecraft:weathered_copper_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_GOLEM_STATUE: Self = Self {
         id: -1041,
         registry_key: "minecraft:weathered_copper_golem_statue",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_GRATE: Self = Self {
         id: -770,
         registry_key: "minecraft:weathered_copper_grate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_LANTERN: Self = Self {
         id: -1085,
         registry_key: "minecraft:weathered_copper_lantern",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_COPPER_TRAPDOOR: Self = Self {
         id: -794,
         registry_key: "minecraft:weathered_copper_trapdoor",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_CUT_COPPER: Self = Self {
         id: -349,
         registry_key: "minecraft:weathered_cut_copper",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_CUT_COPPER_SLAB: Self = Self {
         id: -363,
         registry_key: "minecraft:weathered_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_CUT_COPPER_STAIRS: Self = Self {
         id: -356,
         registry_key: "minecraft:weathered_cut_copper_stairs",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_DOUBLE_CUT_COPPER_SLAB: Self = Self {
         id: -370,
         registry_key: "minecraft:weathered_double_cut_copper_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEATHERED_LIGHTNING_ROD: Self = Self {
         id: -1060,
         registry_key: "minecraft:weathered_lightning_rod",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEB: Self = Self {
         id: 30,
         registry_key: "minecraft:web",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WEEPING_VINES: Self = Self {
         id: -231,
         registry_key: "minecraft:weeping_vines",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WET_SPONGE: Self = Self {
         id: -984,
         registry_key: "minecraft:wet_sponge",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHEAT: Self = Self {
         id: 366,
         registry_key: "minecraft:wheat",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const WHEAT_SEEDS : Self = Self { id : 320 , registry_key : "minecraft:wheat_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x0Fminecraft:wheat\0\0" } ;
-    pub const WHITE_BUNDLE : Self = Self { id : 279 , registry_key : "minecraft:white_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x0Fstacked_by_data\0\x03\x06damage\0\x01\rhand_equipped\0\x03\x11enchantable_value\0\x01\x0Eallow_off_hand\0\x01\x12hidden_in_commands\x02\x01\x0Eliquid_clipped\0\x03\x0Cuse_duration\0\x03\x0Emax_stack_size\x02\x03\x0Bframe_count\x02\x05\x0Cmining_speed\0\0\x80?\x08\x10enchantable_slot\x04none\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x03\ruse_animation\0\x01\x04foil\0\x01\x0Eshould_despawn\x01\x01\x17can_destroy_in_creative\x01\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_white_open_back\x08\x07default\x0Cbundle_white\x08\x11bundle_open_front\x17bundle_white_open_front\0\0\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
+    pub const WHEAT_SEEDS : Self = Self { id : 320 , registry_key : "minecraft:wheat_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\x0Eminecraft:seed\x08\x0Bcrop_result\x0Fminecraft:wheat\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\0\0" } ;
+    pub const WHITE_BUNDLE : Self = Self { id : 279 , registry_key : "minecraft:white_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x0Fitem_properties\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x03\x06damage\0\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x17bundle_white_open_front\x08\x10bundle_open_back\x16bundle_white_open_back\x08\x07default\x0Cbundle_white\0\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\x01\x0Eliquid_clipped\0\x03\x11creative_category\x06\x03\x0Emax_stack_size\x02\x01\x0Fstacked_by_data\0\x01\x04foil\0\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x04none\x01\rhand_equipped\0\x03\ruse_animation\0\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\x01\x17can_destroy_in_creative\x01\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0" } ;
     pub const WHITE_CANDLE: Self = Self {
         id: -413,
         registry_key: "minecraft:white_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_CANDLE_CAKE: Self = Self {
         id: -430,
         registry_key: "minecraft:white_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_CARPET: Self = Self {
         id: 171,
         registry_key: "minecraft:white_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_CONCRETE: Self = Self {
         id: 236,
         registry_key: "minecraft:white_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_CONCRETE_POWDER: Self = Self {
         id: 237,
         registry_key: "minecraft:white_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_DYE: Self = Self {
         id: 442,
         registry_key: "minecraft:white_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_GLAZED_TERRACOTTA: Self = Self {
         id: 220,
         registry_key: "minecraft:white_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_HARNESS: Self = Self {
         id: 770,
         registry_key: "minecraft:white_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_SHULKER_BOX: Self = Self {
         id: 218,
         registry_key: "minecraft:white_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_STAINED_GLASS: Self = Self {
         id: 241,
         registry_key: "minecraft:white_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_STAINED_GLASS_PANE: Self = Self {
         id: 160,
         registry_key: "minecraft:white_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_TERRACOTTA: Self = Self {
         id: 159,
         registry_key: "minecraft:white_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_TULIP: Self = Self {
         id: -835,
         registry_key: "minecraft:white_tulip",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WHITE_WOOL: Self = Self {
         id: 35,
         registry_key: "minecraft:white_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WILD_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 727,
         registry_key: "minecraft:wild_armor_trim_smithing_template",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WILDFLOWERS: Self = Self {
         id: -1024,
         registry_key: "minecraft:wildflowers",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const WIND_CHARGE : Self = Self { id : 284 , registry_key : "minecraft:wind_charge" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x16minecraft:display_name\x08\x05value\x15item.wind_charge.name\0\t\titem_tags\0\0\n\x12minecraft:cooldown\x08\x08category\x0Bwind_charge\x05\x08duration\0\0\0?\x08\x04type\x03use\0\n\x14minecraft:projectile\x05\x16minimum_critical_power\0\0\0\0\x08\x11projectile_entity\"minecraft:wind_charge_projectile<>\0\n\x13minecraft:throwable\x01\x12do_swing_animation\x01\x05\x12launch_power_scale\0\0\xC0?\x05\x10max_launch_power\0\0\xC0?\x05\x11min_draw_duration\0\0\0\0\x01\x1Cscale_power_by_draw_duration\0\x05\x11max_draw_duration\0\0\0\0\0\n\x0Fitem_properties\x01\x04foil\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x01\rhand_equipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bwind_charge\0\0\x03\ruse_animation\0\x03\x11enchantable_value\0\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x03\x06damage\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x80\x01\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\0\0" } ;
+    pub const WIND_CHARGE : Self = Self { id : 284 , registry_key : "minecraft:wind_charge" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\0\0\n\x0Fitem_properties\x03\x0Cuse_duration\0\x01\x0Eallow_off_hand\0\x03\x11enchantable_value\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bwind_charge\0\0\x01\x0Eliquid_clipped\0\x01\x12hidden_in_commands\x02\x01\x0Eshould_despawn\x01\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x03\ruse_animation\0\x03\x0Emax_stack_size\x80\x01\x03\x06damage\0\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\0\n\x12minecraft:cooldown\x08\x08category\x0Bwind_charge\x05\x08duration\0\0\0?\x08\x04type\x03use\0\n\x14minecraft:projectile\x08\x11projectile_entity\"minecraft:wind_charge_projectile<>\x05\x16minimum_critical_power\0\0\0\0\0\n\x16minecraft:display_name\x08\x05value\x15item.wind_charge.name\0\n\x13minecraft:throwable\x05\x12launch_power_scale\0\0\xC0?\x05\x11max_draw_duration\0\0\0\0\x05\x11min_draw_duration\0\0\0\0\x05\x10max_launch_power\0\0\xC0?\x01\x1Cscale_power_by_draw_duration\0\x01\x12do_swing_animation\x01\0\0" } ;
     pub const WITCH_SPAWN_EGG: Self = Self {
         id: 485,
         registry_key: "minecraft:witch_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WITHER_ROSE: Self = Self {
         id: -216,
         registry_key: "minecraft:wither_rose",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WITHER_SKELETON_SKULL: Self = Self {
         id: -965,
         registry_key: "minecraft:wither_skeleton_skull",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WITHER_SKELETON_SPAWN_EGG: Self = Self {
         id: 498,
         registry_key: "minecraft:wither_skeleton_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WITHER_SPAWN_EGG: Self = Self {
         id: 542,
         registry_key: "minecraft:wither_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOLF_ARMOR: Self = Self {
         id: 747,
@@ -49832,240 +49832,240 @@ impl BedrockItem {
         registry_key: "minecraft:wolf_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOOD: Self = Self {
         id: 827,
         registry_key: "minecraft:wood",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_AXE: Self = Self {
         id: 342,
         registry_key: "minecraft:wooden_axe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_BUTTON: Self = Self {
         id: 143,
         registry_key: "minecraft:wooden_button",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_DOOR: Self = Self {
         id: 391,
         registry_key: "minecraft:wooden_door",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_HOE: Self = Self {
         id: 361,
         registry_key: "minecraft:wooden_hoe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_PICKAXE: Self = Self {
         id: 341,
         registry_key: "minecraft:wooden_pickaxe",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_PRESSURE_PLATE: Self = Self {
         id: 72,
         registry_key: "minecraft:wooden_pressure_plate",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_SHOVEL: Self = Self {
         id: 340,
         registry_key: "minecraft:wooden_shovel",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOODEN_SLAB: Self = Self {
         id: 814,
         registry_key: "minecraft:wooden_slab",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const WOODEN_SPEAR : Self = Self { id : 263 , registry_key : "minecraft:wooden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\t\titem_tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\n\x16minecraft:display_name\x08\x05value\x16item.wooden_spear.name\0\n\x0Eminecraft:fuel\x05\x08duration\0\0 A\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\x11damage_multiplier333?\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x02\x0Cmax_duration,\x01\x05\tmin_speed\0\0\0\0\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0`A\x02\x0Cmax_durationd\0\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x14knockback_conditions\x02\x0Cmax_duration\xC8\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\x05\rhitbox_margin\0\0\x80>\x02\x05delay\x0F\0\x05\x0Fdamage_modifier\0\0\0\0\0\0\n\x18minecraft:swing_duration\x05\x05valueff&?\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.wooden_spear.attack_hit\x08\x0Battack_miss\x1Ditem.wooden_spear.attack_miss\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x15item.wooden_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\0\n\x0Fitem_properties\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x01\x0Eshould_despawn\x01\x01\x0Eliquid_clipped\0\x01\rhand_equipped\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nwood_spear\0\0\x08\x10enchantable_slot\x0Bmelee_spear\x03\x06damage\x02\x01\x04foil\0\x01\x17can_destroy_in_creative\x01\x03\x11enchantable_value\x1E\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x11creative_category\x06\x01\x0Eallow_off_hand\0\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x08\x08category\x05spear\x05\x08durationff&?\0\n\x14minecraft:durability\x03\x0Emax_durabilityx\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x15minecraft:enchantable\x01\x05value\x0F\x08\x04slot\x0Bmelee_spear\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x16minecraft:wooden_spear\0\n\rrepair_amount\x08\nexpression)context.other->query.remaining_durability\x02\x07version\r\0\0\0\t\x05items\n\x02\x08\x04tags\x1Eq.all_tags('minecraft:planks')\0\n\rrepair_amount\x08\nexpression\x1Bquery.max_durability * 0.25\x02\x07version\r\0\0\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\0" } ;
+    pub const WOODEN_SPEAR : Self = Self { id : 263 , registry_key : "minecraft:wooden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x18minecraft:swing_duration\x05\x05valueff&?\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\0\t\titem_tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0F\0\n\x16minecraft:display_name\x08\x05value\x16item.wooden_spear.name\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0`A\x02\x0Cmax_durationd\0\0\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration,\x01\0\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xC8\0\0\x02\x05delay\x0F\0\x05\x0Fdamage_modifier\0\0\0\0\x05\x11damage_multiplier333?\x05\rhitbox_margin\0\0\x80>\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durabilityx\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x08\x04type\x06attack\x05\x08durationff&?\0\n\x0Fitem_properties\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x03\x11enchantable_value\x1E\x03\x11creative_category\x06\x01\x12hidden_in_commands\x02\x03\x06damage\x02\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x08\x10enchantable_slot\x0Bmelee_spear\x01\rhand_equipped\x01\x01\x0Eliquid_clipped\0\x01\x0Fstacked_by_data\0\x08\x0Ecreative_group\0\x01\x04foil\0\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\x80\xE4\xAF\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nwood_spear\0\0\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.wooden_spear.attack_hit\x08\x0Battack_miss\x1Ditem.wooden_spear.attack_miss\0\n\x17minecraft:use_modifiers\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x15item.wooden_spear.use\x01\x0Femit_vibrations\0\x05\x0Cuse_duration\0\xA0\x8CG\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x16minecraft:wooden_spear\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression)context.other->query.remaining_durability\0\0\n\rrepair_amount\x02\x07version\r\0\x08\nexpression\x1Bquery.max_durability * 0.25\0\t\x05items\n\x02\x08\x04tags\x1Eq.all_tags('minecraft:planks')\0\0\0\n\x0Eminecraft:fuel\x05\x08duration\0\0 A\0\0" } ;
     pub const WOODEN_SWORD: Self = Self {
         id: 339,
         registry_key: "minecraft:wooden_sword",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WOOL: Self = Self {
         id: 795,
         registry_key: "minecraft:wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WRITABLE_BOOK: Self = Self {
         id: 550,
         registry_key: "minecraft:writable_book",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const WRITTEN_BOOK: Self = Self {
         id: 551,
         registry_key: "minecraft:written_book",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
-    pub const YELLOW_BUNDLE : Self = Self { id : 280 , registry_key : "minecraft:yellow_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\n\x0Fitem_properties\x01\x0Fstacked_by_data\0\x03\x06damage\0\x03\x11creative_category\x06\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\x03\x0Cuse_duration\0\x01\x0Eallow_off_hand\0\x01\rhand_equipped\0\x03\x0Emax_stack_size\x02\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x17bundle_yellow_open_back\x08\x11bundle_open_front\x18bundle_yellow_open_front\x08\x07default\rbundle_yellow\0\0\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\x11enchantable_value\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0" } ;
+    pub const YELLOW_BUNDLE : Self = Self { id : 280 , registry_key : "minecraft:yellow_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\t\titem_tags\0\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x04none\x05\x0Cmining_speed\0\0\x80?\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\x03\ruse_animation\0\x03\x06damage\0\x03\x0Cuse_duration\0\x01\x04foil\0\x01\x0Eshould_despawn\x01\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x01\rhand_equipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x17bundle_yellow_open_back\x08\x11bundle_open_front\x18bundle_yellow_open_front\x08\x07default\rbundle_yellow\0\0\x01\x0Fstacked_by_data\0\x03\x0Bframe_count\x02\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0" } ;
     pub const YELLOW_CANDLE: Self = Self {
         id: -417,
         registry_key: "minecraft:yellow_candle",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_CANDLE_CAKE: Self = Self {
         id: -434,
         registry_key: "minecraft:yellow_candle_cake",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_CARPET: Self = Self {
         id: -600,
         registry_key: "minecraft:yellow_carpet",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_CONCRETE: Self = Self {
         id: -631,
         registry_key: "minecraft:yellow_concrete",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_CONCRETE_POWDER: Self = Self {
         id: -712,
         registry_key: "minecraft:yellow_concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_DYE: Self = Self {
         id: 438,
         registry_key: "minecraft:yellow_dye",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_GLAZED_TERRACOTTA: Self = Self {
         id: 224,
         registry_key: "minecraft:yellow_glazed_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_HARNESS: Self = Self {
         id: 771,
         registry_key: "minecraft:yellow_harness",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_SHULKER_BOX: Self = Self {
         id: -616,
         registry_key: "minecraft:yellow_shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_STAINED_GLASS: Self = Self {
         id: -676,
         registry_key: "minecraft:yellow_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_STAINED_GLASS_PANE: Self = Self {
         id: -646,
         registry_key: "minecraft:yellow_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_TERRACOTTA: Self = Self {
         id: -727,
         registry_key: "minecraft:yellow_terracotta",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const YELLOW_WOOL: Self = Self {
         id: -558,
         registry_key: "minecraft:yellow_wool",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOGLIN_SPAWN_EGG: Self = Self {
         id: 532,
         registry_key: "minecraft:zoglin_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOMBIE_HEAD: Self = Self {
         id: -966,
         registry_key: "minecraft:zombie_head",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOMBIE_HORSE_SPAWN_EGG: Self = Self {
         id: 502,
         registry_key: "minecraft:zombie_horse_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOMBIE_NAUTILUS_SPAWN_EGG: Self = Self {
         id: 785,
         registry_key: "minecraft:zombie_nautilus_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOMBIE_PIGMAN_SPAWN_EGG: Self = Self {
         id: 481,
         registry_key: "minecraft:zombie_pigman_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOMBIE_SPAWN_EGG: Self = Self {
         id: 480,
         registry_key: "minecraft:zombie_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ZOMBIE_VILLAGER_SPAWN_EGG: Self = Self {
         id: 511,
         registry_key: "minecraft:zombie_villager_spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
-        definition_components: b"",
+        definition_components: b"\n\0\0",
     };
     pub const ALL_BEDROCK_ITMES: &'static [&'static Self] = &[
         &Self::ACACIA_BOAT,

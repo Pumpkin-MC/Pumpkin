@@ -905,7 +905,7 @@ pub struct BedrockItem {
     registry_key: String,
     version: BedrockItemVersion,
     component_based: bool,
-    components: Option<Nbt>,
+    components: Nbt,
 }
 
 /// Reads `items.json` and generates the complete item registry `TokenStream`.
@@ -1132,17 +1132,15 @@ pub fn build() -> TokenStream {
             version: item.version,
             component_based: item.component_based,
             components: if let Some(c) = components {
-                Some(Nbt::new("".to_string(), c.clone()))
+                Nbt::new("".to_string(), c.clone())
             } else {
                 if item.component_based {
                     eprintln!(
                         "Couldn't find the components for a component based item: {}.",
                         item.name
                     );
-                    Some(Nbt::new("".to_string(), NbtCompound::new()))
-                } else {
-                    None
                 }
+                Nbt::new("".to_string(), NbtCompound::new())
             },
         });
     }
@@ -1209,12 +1207,8 @@ pub fn build() -> TokenStream {
         );
         let component_based = item.component_based;
 
-        let components_bytes = item.components.map(|c| c.write_bedrock());
-
-        let mut components_bytes_lit = LitByteStr::new(
-            components_bytes.as_deref().unwrap_or(&[]),
-            Span::call_site(),
-        );
+        let mut components_bytes_lit =
+            LitByteStr::new(&*item.components.write_bedrock(), Span::call_site());
 
         bedrock_constants.extend(quote! {
             pub const #const_ident: Self = Self {
