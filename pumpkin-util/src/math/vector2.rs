@@ -88,10 +88,17 @@ impl<T: Math + Copy + Float> Vector2<T> {
         self.length_squared().sqrt()
     }
 
-    /// Returns a normalized version of the vector with length 1.
+    /// Returns a normalized version of the vector, or the zero vector when its
+    /// length is negligible (prevents division by zero yielding NaN/infinity).
     #[must_use]
     pub fn normalize(&self) -> Self {
         let length = self.length();
+        if length < T::from(1.0e-4).unwrap() {
+            return Self {
+                x: T::zero(),
+                y: T::zero(),
+            };
+        }
         Self {
             x: self.x / length,
             y: self.y / length,
