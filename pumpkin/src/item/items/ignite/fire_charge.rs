@@ -43,9 +43,7 @@ impl ItemBehaviour for FireChargeItem {
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
 
-                    world
-                        .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
-                        .await;
+                    world.play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos);
                 },
                 player,
                 location,

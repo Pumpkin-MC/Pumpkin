@@ -8,7 +8,7 @@ use pumpkin_data::sound::Sound;
 
 use crate::entity::Entity;
 use crate::entity::projectile::ThrownItemEntity;
-use crate::entity::projectile::wind_charge::WindChargeEntity;
+use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
 use crate::item::{ItemBehaviour, ItemMetadata};
 
 pub struct WindChargeItem;
@@ -33,17 +33,16 @@ impl ItemBehaviour for WindChargeItem {
 
             // TODO: Implement Cooldown to throw the item
 
-            world
-                .play_sound(
-                    Sound::EntityWindChargeThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityWindChargeThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
 
             let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
-            let wind_charge = ThrownItemEntity::new(entity, &player.living_entity.entity);
+            let wind_charge =
+                ThrownItemEntity::new(entity, &player.living_entity.entity, WIND_CHARGE_GRAVITY);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
 
@@ -57,7 +56,7 @@ impl ItemBehaviour for WindChargeItem {
             );
             // TODO: player.incrementStat(Stats.USED)
 
-            // TODO: Implement that the projectile will explode on impact on ground
+            // TODO: Implement that the projectile will explode on impact
             world
                 .spawn_entity(Arc::new(WindChargeEntity::new(wind_charge)))
                 .await;

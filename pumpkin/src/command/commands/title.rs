@@ -53,14 +53,22 @@ impl CommandExecutor for ClearOrResetExecutor {
                     } else {
                         "commands.title.cleared.single"
                     };
-                    TextComponent::translate(text, [targets[0].get_display_name().await])
+                    TextComponent::translate_cross(
+                        text,
+                        text,
+                        [targets[0].get_display_name().await],
+                    )
                 } else {
                     let text = if reset {
                         "commands.title.reset.multiple"
                     } else {
                         "commands.title.cleared.multiple"
                     };
-                    TextComponent::translate(text, [TextComponent::text(targets.len().to_string())])
+                    TextComponent::translate_cross(
+                        text,
+                        text,
+                        [TextComponent::text(targets.len().to_string())],
+                    )
                 })
                 .await;
 
@@ -94,12 +102,14 @@ impl CommandExecutor for TitleExecutor {
             let mode_name = format!("{mode:?}").to_lowercase();
             sender
                 .send_message(if targets.len() == 1 {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        format!("commands.title.show.{mode_name}.single").clone(),
                         format!("commands.title.show.{mode_name}.single"),
                         [targets[0].get_display_name().await],
                     )
                 } else {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        format!("commands.title.show.{mode_name}.multiple"),
                         format!("commands.title.show.{mode_name}.multiple"),
                         [TextComponent::text(targets.len().to_string())],
                     )
@@ -135,12 +145,14 @@ impl CommandExecutor for TimesTitleExecutor {
 
             sender
                 .send_message(if targets.len() == 1 {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        "commands.title.times.single",
                         "commands.title.times.single",
                         [targets[0].get_display_name().await],
                     )
                 } else {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        "commands.title.times.multiple",
                         "commands.title.times.multiple",
                         [TextComponent::text(targets.len().to_string())],
                     )

@@ -15,6 +15,8 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
+const GRAVITY: f64 = 0.0;
+
 pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
     shooter_id: Option<i32>,
@@ -23,22 +25,21 @@ pub struct FireworkRocketEntity {
 }
 
 impl FireworkRocketEntity {
-    pub async fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
-        entity
-            .set_velocity(Vector3::new(
-                random.next_triangular(0.0, 0.002_297),
-                0.05,
-                random.next_triangular(0.0, 0.002_297),
-            ))
-            .await;
+        entity.set_velocity(Vector3::new(
+            random.next_triangular(0.0, 0.002_297),
+            0.05,
+            random.next_triangular(0.0, 0.002_297),
+        ));
         Self {
             entity: ThrownItemEntity {
                 entity,
                 owner_id: None,
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
+                gravity: GRAVITY,
             },
             shooter_id: None,
             life: 0.into(),
@@ -48,20 +49,17 @@ impl FireworkRocketEntity {
         }
     }
 
-    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         // Set random initial velocity
         // Set on the inner entity after constructing ThrownItemEntity
-        let thrown = ThrownItemEntity::new(entity, shooter);
-        thrown
-            .entity
-            .set_velocity(Vector3::new(
-                random.next_triangular(0.0, 0.002_297),
-                0.05,
-                random.next_triangular(0.0, 0.002_297),
-            ))
-            .await;
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
+        thrown.entity.set_velocity(Vector3::new(
+            random.next_triangular(0.0, 0.002_297),
+            0.05,
+            random.next_triangular(0.0, 0.002_297),
+        ));
 
         // Set random life
         let rocket = Self {
@@ -73,24 +71,18 @@ impl FireworkRocketEntity {
         };
 
         // Set shooter metadata
-        rocket
-            .entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::ATTACHED_TO_TARGET,
-                MetaDataType::OPTIONAL_INT,
-                OptionalInt(Some(shooter.entity_id)),
-            )])
-            .await;
+        rocket.entity.entity.send_meta_data(&[Metadata::new(
+            TrackedData::ATTACHED_TO_TARGET,
+            MetaDataType::OPTIONAL_INT,
+            OptionalInt(Some(shooter.entity_id)),
+        )]);
 
         rocket
     }
 
     pub async fn explode_and_remove(&self, world: &World) {
         let entity = self.get_entity();
-        world
-            .send_entity_status(entity, EntityStatus::FireworksExplode)
-            .await;
+        world.send_entity_status(entity, EntityStatus::FireworksExplode);
 
         // TODO: Explode/colors
 
@@ -126,10 +118,10 @@ impl EntityBase for FireworkRocketEntity {
                         let new_shooter_vel =
                             shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
 
-                        shooter.set_velocity(new_shooter_vel).await;
+                        shooter.set_velocity(new_shooter_vel);
 
                         entity.set_pos(shooter.pos.load());
-                        entity.set_velocity(new_shooter_vel).await;
+                        entity.set_velocity(new_shooter_vel);
                     }
                 }
             } else {
@@ -137,7 +129,7 @@ impl EntityBase for FireworkRocketEntity {
                 velocity.x *= 1.15;
                 velocity.z *= 1.15;
                 velocity.y += 0.04;
-                entity.set_velocity(velocity).await;
+                entity.set_velocity(velocity);
             }
 
             // Increment life and check for explosion

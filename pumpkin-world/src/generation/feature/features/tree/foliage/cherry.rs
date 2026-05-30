@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::int_provider::IntProvider,
+    math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -27,10 +27,12 @@ impl CherryFoliagePlacer {
         leaf_radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
         let pos = node.center.up_height(offset);
         let current_radius = leaf_radius + node.foliage_radius - 1;
         FoliagePlacer::generate_square(
+            &mut foliage_positions,
             self,
             chunk,
             random,
@@ -41,6 +43,7 @@ impl CherryFoliagePlacer {
             foliage_provider,
         );
         FoliagePlacer::generate_square(
+            &mut foliage_positions,
             self,
             chunk,
             random,
@@ -52,6 +55,7 @@ impl CherryFoliagePlacer {
         );
         for y in (0..=foliage_height - 5).rev() {
             FoliagePlacer::generate_square(
+                &mut foliage_positions,
                 self,
                 chunk,
                 random,
@@ -64,6 +68,7 @@ impl CherryFoliagePlacer {
         }
 
         FoliagePlacer::generate_square_with_hanging_leaves(
+            &mut foliage_positions,
             self,
             chunk,
             random,
@@ -77,6 +82,7 @@ impl CherryFoliagePlacer {
         );
 
         FoliagePlacer::generate_square_with_hanging_leaves(
+            &mut foliage_positions,
             self,
             chunk,
             random,
@@ -88,6 +94,7 @@ impl CherryFoliagePlacer {
             self.hanging_leaves_chance,
             self.hanging_leaves_extension_chance,
         );
+        foliage_positions
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator) -> i32 {
         self.height.get(random)

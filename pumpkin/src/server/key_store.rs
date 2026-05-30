@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use num_bigint::BigInt;
-use pkcs8::EncodePublicKey;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
+use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 use sha1::Sha1;
 use sha2::Digest;

@@ -53,16 +53,11 @@ impl StructureGenerator for BuriedTreasureGenerator {
     }
 }
 
-#[derive(Clone)]
 pub struct BuriedTreasurePiece {
     piece: StructurePiece,
 }
 
 impl StructurePieceBase for BuriedTreasurePiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

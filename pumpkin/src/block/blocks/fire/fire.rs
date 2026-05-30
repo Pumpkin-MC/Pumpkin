@@ -1,5 +1,5 @@
 use pumpkin_data::biome::Biome;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
@@ -54,14 +54,10 @@ impl FireBlock {
             .is_some_and(|f| f.burn_chance > 0)
     }
 
-    async fn are_blocks_around_flammable(
-        &self,
-        block_accessor: &dyn BlockAccessor,
-        pos: &BlockPos,
-    ) -> bool {
+    fn are_blocks_around_flammable(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let block_state = block_accessor.get_block_state(&neighbor_pos).await;
+            let block_state = block_accessor.get_block_state(&neighbor_pos);
             if Self::is_flammable(block_state) {
                 return true;
             }
@@ -69,21 +65,21 @@ impl FireBlock {
         false
     }
 
-    pub async fn get_state_for_position(
+    pub fn get_state_for_position(
         &self,
         world: &World,
         block: &Block,
         pos: &BlockPos,
     ) -> BlockStateId {
         let down_pos = pos.down();
-        let down_state = world.get_block_state(&down_pos).await;
+        let down_state = world.get_block_state(&down_pos);
         if Self::is_flammable(down_state) || down_state.is_side_solid(BlockDirection::Up) {
             return block.default_state.id;
         }
         let mut fire_props = FireProperties::from_state_id(block.default_state.id, block);
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos).await;
+            let neighbor_state = world.get_block_state(&neighbor_pos);
             if Self::is_flammable(neighbor_state) {
                 match direction {
                     BlockDirection::North => fire_props.north = true,
@@ -99,16 +95,16 @@ impl FireBlock {
     }
 
     // Used for spreading fire
-    pub async fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> i32 {
-        let block_state = world.get_block_state(pos).await;
+    pub fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> i32 {
+        let block_state = world.get_block_state(pos);
         if !block_state.is_air() {
             return 0;
         }
         let mut total_burn_chance = 0;
 
         for dir in BlockDirection::all() {
-            let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
-            if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
+            let neighbor_block = world.get_block(&pos.offset(dir.to_offset()));
+            if world.get_fluid(&pos.offset(dir.to_offset())).name != Fluid::EMPTY.name {
                 continue; // Skip if there is a fluid
             }
             if let Some(flammable) = &neighbor_block.flammable {
@@ -130,7 +126,7 @@ impl FireBlock {
         block.flammable.as_ref().map_or(0, |f| f.burn_chance.into())
     }
 
-    async fn is_increased_burnout_biome(world: &World, pos: &BlockPos) -> bool {
+    fn is_increased_burnout_biome(world: &World, pos: &BlockPos) -> bool {
         // Fire burnout increases in the Nether
         if world.dimension == Dimension::THE_NETHER {
             return true;
@@ -138,7 +134,7 @@ impl FireBlock {
 
         // Fire burnout increases in specific biomes
         // TODO: Use proper tag or bool for this when available
-        let biome_id = world.level.get_rough_biome(pos).await.id;
+        let biome_id = world.level.get_rough_biome(pos).id;
         matches!(
             biome_id,
             id if id == Biome::BAMBOO_JUNGLE.id
@@ -152,20 +148,18 @@ impl FireBlock {
         )
     }
 
-    async fn try_spreading_fire(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u16) {
-        let block = world.get_block(pos).await;
+    async fn try_spreading_fire(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u8) {
+        let block = world.get_block(pos);
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
             let old_block = block;
             if rand::rng().random_range(0..(age + 10) as i32) < 5
                 && !Self::is_near_rain(world.as_ref(), pos)
             {
-                let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15);
-                let state_id = self
-                    .get_state_for_position(world.as_ref(), &Block::FIRE, pos)
-                    .await;
+                let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15) as u8;
+                let state_id = self.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
-                fire_props.age = EnumVariants::from_index(new_age);
+                fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
@@ -195,24 +189,22 @@ impl BlockBehaviour for FireBlock {
                 return;
             }
 
-            let dimension = args.world.dimension;
+            let dimension = &args.world.dimension;
             // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-            if (dimension == Dimension::OVERWORLD || dimension == Dimension::THE_NETHER)
+            if (dimension == &Dimension::OVERWORLD || dimension == &Dimension::THE_NETHER)
                 && let Some(portal) =
-                    NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
+                    NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X)
             {
                 portal.create(args.world).await;
                 return;
             }
 
-            args.world
-                .schedule_block_tick(
-                    args.block,
-                    *args.position,
-                    Self::get_fire_tick_delay() as u8,
-                    TickPriority::Normal,
-                )
-                .await;
+            args.world.schedule_block_tick(
+                args.block,
+                *args.position,
+                Self::get_fire_tick_delay() as u8,
+                TickPriority::Normal,
+            );
         })
     }
 
@@ -225,44 +217,34 @@ impl BlockBehaviour for FireBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if self
-                .can_place_at(CanPlaceAtArgs {
-                    server: None,
-                    world: Some(args.world),
-                    block_accessor: args.world,
-                    block: &Block::FIRE,
-                    state: Block::FIRE.default_state,
-                    position: args.position,
-                    direction: None,
-                    player: None,
-                    use_item_on: None,
-                })
-                .await
-            {
+            if self.can_place_at(CanPlaceAtArgs {
+                server: None,
+                world: Some(args.world),
+                block_accessor: args.world,
+                block: &Block::FIRE,
+                state: Block::FIRE.default_state,
+                position: args.position,
+                direction: None,
+                player: None,
+                use_item_on: None,
+            }) {
                 let old_fire_props = FireProperties::from_state_id(args.state_id, &Block::FIRE);
-                let fire_state_id = self
-                    .get_state_for_position(args.world, &Block::FIRE, args.position)
-                    .await;
+                let fire_state_id =
+                    self.get_state_for_position(args.world, &Block::FIRE, args.position);
                 let mut fire_props = FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-                fire_props.age = EnumVariants::from_index(old_fire_props.age.to_index());
+                fire_props.age = old_fire_props.age;
                 return fire_props.to_state_id(&Block::FIRE);
             }
             Block::AIR.default_state.id
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let state = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            if state.is_side_solid(BlockDirection::Up) {
-                return true;
-            }
-            self.are_blocks_around_flammable(args.block_accessor, args.position)
-                .await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let state = args.block_accessor.get_block_state(&args.position.down());
+        if state.is_side_solid(BlockDirection::Up) {
+            return true;
+        }
+        Self::are_blocks_around_flammable(args.block_accessor, args.position)
     }
 
     #[expect(clippy::too_many_lines)]
@@ -271,30 +253,25 @@ impl BlockBehaviour for FireBlock {
             let (world, block, pos) = (args.world, args.block, args.position);
 
             // Schedule next tick first
-            world
-                .schedule_block_tick(
-                    block,
-                    *pos,
-                    Self::get_fire_tick_delay() as u8,
-                    TickPriority::Normal,
-                )
-                .await;
+            world.schedule_block_tick(
+                block,
+                *pos,
+                Self::get_fire_tick_delay() as u8,
+                TickPriority::Normal,
+            );
 
             // Check if fire can survive
-            if !Self
-                .can_place_at(CanPlaceAtArgs {
-                    server: None,
-                    world: Some(world),
-                    block_accessor: world.as_ref(),
-                    block,
-                    state: block.default_state,
-                    position: pos,
-                    direction: None,
-                    player: None,
-                    use_item_on: None,
-                })
-                .await
-            {
+            if !self.can_place_at(CanPlaceAtArgs {
+                server: None,
+                world: Some(world),
+                block_accessor: world.as_ref(),
+                block,
+                state: block.default_state,
+                position: pos,
+                direction: None,
+                player: None,
+                use_item_on: None,
+            }) {
                 world
                     .set_block_state(
                         pos,
@@ -305,8 +282,8 @@ impl BlockBehaviour for FireBlock {
                 return;
             }
 
-            let block_state = world.get_block_state(pos).await;
-            let block_below = world.get_block(&pos.down()).await;
+            let block_state = world.get_block_state(pos);
+            let block_below = world.get_block(&pos.down());
 
             // Check for infiniburn blocks (depending on dimension)
             let infiniburn = match world.dimension.id {
@@ -323,7 +300,7 @@ impl BlockBehaviour for FireBlock {
             };
 
             let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
-            let age = fire_props.age.to_index();
+            let age = fire_props.age;
 
             // Check if rain should extinguish the fire
             if !infiniburn && Self::is_near_rain(world.as_ref(), pos) {
@@ -341,10 +318,10 @@ impl BlockBehaviour for FireBlock {
             }
 
             // Increment age
-            let random = rand::rng().random_range(0..3) / 2;
+            let random = (rand::rng().random_range(0..3) / 2) as u8;
             let new_age = (age + random).min(15);
             if new_age != age {
-                fire_props.age = EnumVariants::from_index(new_age);
+                fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
@@ -353,8 +330,8 @@ impl BlockBehaviour for FireBlock {
 
             if !infiniburn {
                 // Check if fire should extinguish due to lack of fuel
-                if !self.are_blocks_around_flammable(world.as_ref(), pos).await {
-                    let block_below_state = world.get_block_state(&pos.down()).await;
+                if !Self::are_blocks_around_flammable(world.as_ref(), pos) {
+                    let block_below_state = world.get_block_state(&pos.down());
                     if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
                         world
                             .set_block_state(
@@ -370,7 +347,7 @@ impl BlockBehaviour for FireBlock {
                 // At max age, fire has a chance to extinguish if not on flammable block
                 if new_age == 15
                     && rand::rng().random_range(0..4) == 0
-                    && !Self::is_flammable(world.get_block_state(&pos.down()).await)
+                    && !Self::is_flammable(world.get_block_state(&pos.down()))
                 {
                     world
                         .set_block_state(
@@ -384,7 +361,7 @@ impl BlockBehaviour for FireBlock {
             }
 
             // Burn adjacent blocks
-            let extra = if Self::is_increased_burnout_biome(world, pos).await {
+            let extra = if Self::is_increased_burnout_biome(world, pos) {
                 -50 // Increases chance of block being destroyed
             } else {
                 0
@@ -448,7 +425,7 @@ impl BlockBehaviour for FireBlock {
                     for yy in -1..=4 {
                         if xx != 0 || yy != 0 || zz != 0 {
                             let offset_pos = pos.offset(Vector3::new(xx, yy, zz));
-                            let ignite_odds = self.get_burn_chance(world, &offset_pos).await;
+                            let ignite_odds = self.get_burn_chance(world, &offset_pos);
 
                             if ignite_odds > 0 {
                                 // Skip if spreding is disabled or if there are no players nearby
@@ -473,7 +450,7 @@ impl BlockBehaviour for FireBlock {
                                     (ignite_odds + 40 + difficulty * 7) / (new_age as i32 + 30);
 
                                 // Reduce spread odds in certain biomes
-                                if Self::is_increased_burnout_biome(world, &offset_pos).await {
+                                if Self::is_increased_burnout_biome(world, &offset_pos) {
                                     odds /= 2; // Fire spreads 50% slower
                                 }
 
@@ -481,14 +458,17 @@ impl BlockBehaviour for FireBlock {
                                     && rand::rng().random_range(0..rate) <= odds
                                     && !Self::is_near_rain(world.as_ref(), &offset_pos)
                                 {
-                                    let spread_age =
-                                        (new_age + rand::rng().random_range(0..5) / 4).min(15);
-                                    let fire_state_id = self
-                                        .get_state_for_position(world.as_ref(), block, &offset_pos)
-                                        .await;
+                                    let spread_age = (new_age + rand::rng().random_range(0..5) / 4)
+                                        .min(15)
+                                        as u8;
+                                    let fire_state_id = self.get_state_for_position(
+                                        world.as_ref(),
+                                        block,
+                                        &offset_pos,
+                                    );
                                     let mut new_fire_props =
                                         FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-                                    new_fire_props.age = EnumVariants::from_index(spread_age);
+                                    new_fire_props.age = spread_age;
 
                                     world
                                         .set_block_state(
@@ -508,7 +488,7 @@ impl BlockBehaviour for FireBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            FireBlockBase::broken(args.world, *args.position).await;
+            FireBlockBase::broken(args.world, *args.position);
         })
     }
 }

@@ -7,7 +7,7 @@
 //! # Quick start
 //!
 //! ```rust,ignore
-//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin};
+//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin, permissions::permissions};
 //!
 //! struct MyPlugin;
 //!
@@ -20,6 +20,7 @@
 //!             authors: vec!["you".into()],
 //!             description: "An example plugin.".into(),
 //!             dependencies: vec![],
+//!             permissions: vec![permissions::NETWORK_DNS.into()],
 //!         }
 //!     }
 //! }
@@ -34,6 +35,11 @@ use crate::{
 
 pub mod commands;
 pub mod events;
+pub mod forms;
+/// Constants for plugin permissions.
+///
+/// Use these in your `PluginMetadata` to request access to specific host features.
+pub mod permissions;
 pub mod scheduler;
 
 pub mod command {
@@ -43,10 +49,17 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
-    block_entity, command as command_wit, common,
+    bedrock_packets, block_entity, boss_bar, command as command_wit, common,
     context::{Context, Server},
-    entity, gui, permission, player, scoreboard, server, text, world,
+    entity,
+    entity_types::EntityType,
+    gui, i18n, java_dialogs, java_packets, particles, permission, player, scoreboard, server, text,
+    world,
 };
+
+pub mod java_dialog {
+    pub use crate::wit::pumpkin::plugin::java_dialogs::{ActionButton, DialogBody, DialogType};
+}
 
 pub mod logging;
 
@@ -77,6 +90,8 @@ pub struct PluginMetadata {
     pub description: String,
     /// The list of plugin dependencies.
     pub dependencies: Vec<String>,
+    /// The list of permissions requested by the plugin.
+    pub permissions: Vec<String>,
 }
 
 impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
@@ -89,6 +104,7 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
             authors: metadata.authors,
             description: metadata.description,
             dependencies: metadata.dependencies,
+            permissions: metadata.permissions,
         }
     }
 }
@@ -126,13 +142,14 @@ impl wit::Guest for Component {
         args: command::ConsumedArgs,
     ) -> Result<i32, command::CommandError> {
         let handlers = COMMAND_HANDLERS.lock().unwrap();
-        if let Some(handler) = handlers.get(&command_id) {
-            handler.handle(sender, server, args)
-        } else {
-            Err(command::CommandError::CommandFailed(TextComponent::text(
-                &format!("no handler registered for command id {command_id}"),
-            )))
-        }
+        handlers.get(&command_id).map_or_else(
+            || {
+                Err(command::CommandError::CommandFailed(TextComponent::text(
+                    &format!("no handler registered for command id {command_id}"),
+                )))
+            },
+            |handler| handler.handle(sender, server, args),
+        )
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.

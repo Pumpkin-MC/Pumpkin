@@ -25,10 +25,12 @@ pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
 pumpkin-inventory.workspace = true
 pumpkin-world.workspace = true
-pumpkin-data.workspace = true
-pumpkin-protocol.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
+pumpkin-codecs.workspace = true
 
+dashmap.workspace = true
 crossbeam.workspace = true
 uuid.workspace = true
 tokio = { workspace = true, features = [
@@ -48,7 +50,10 @@ notify.workspace = true
 
 # config
 serde.workspace = true
+serde_repr.workspace = true
 serde_json.workspace = true
+
+colored.workspace = true
 
 bytes.workspace = true
 
@@ -61,7 +66,6 @@ rustyline.workspace = true
 
 # encryption
 rsa.workspace = true
-pkcs8.workspace = true
 
 # authentication
 ureq = { workspace = true, features = ["json"] }
@@ -88,29 +92,30 @@ rustc-hash.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 
 # System details & Rustc version
-sysinfo = "0.38"
-rustc_version_runtime = "0.3"
+sysinfo.workspace = true
+rustc_version_runtime.workspace = true
 
 flate2.workspace = true
 console-subscriber = { workspace = true, optional = true }
 
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
-wasmparser = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+hyper = { workspace = true }
 
-ordered-float = "5.3.0"
+ordered-float.workspace = true
 
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
 
 bitflags = { workspace = true }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [dev-dependencies]
 tempfile.workspace = true
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
-tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
 
 [lints]
 workspace = true

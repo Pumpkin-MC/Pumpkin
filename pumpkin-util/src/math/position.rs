@@ -7,6 +7,8 @@ use std::hash::Hash;
 
 use crate::math::vector2::Vector2;
 use num_traits::Euclid;
+use pumpkin_codecs::codec::list::validate_fixed_size;
+use pumpkin_codecs::{DataResult, FlatTryFrom, IntStream, comap_flat_map_codec_impl};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// An iterator that yields all `BlockPos` positions within a cuboid region.
@@ -631,6 +633,29 @@ impl<'de> Deserialize<'de> for BlockPos {
     }
 }
 
+impl From<&BlockPos> for IntStream {
+    fn from(value: &BlockPos) -> Self {
+        let Vector3 { x, y, z } = value.0;
+        Self(vec![x, y, z])
+    }
+}
+
+impl FlatTryFrom<IntStream> for BlockPos {
+    fn flat_try_from(value: IntStream) -> DataResult<Self> {
+        validate_fixed_size(value.0, 3).flat_map(|v| {
+            v.try_into().map_or_else(
+                |_| DataResult::new_error("Expected 3 elements"),
+                |arr| {
+                    let [x, y, z]: [i32; 3] = arr;
+                    DataResult::new_success(Self(Vector3::new(x, y, z)))
+                },
+            )
+        })
+    }
+}
+
+comap_flat_map_codec_impl!(IntStream => BlockPos, BlockPos::flat_try_from, IntStream::from);
+
 impl fmt::Display for BlockPos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}, {}, {}", self.0.x, self.0.y, self.0.z)
@@ -684,4 +709,62 @@ pub const fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
     let z = get_local_cord(block_pos.0.z);
     let y = get_local_cord(block_pos.0.y);
     vector3::packed_local(&Vector3::new(x, y, z))
+}
+
+#[cfg(test)]
+mod test {
+    use crate::math::position::BlockPos;
+    use pumpkin_codecs::{assert_decode, assert_encode_success};
+    use pumpkin_nbt::nbt_ops::NbtOps;
+    use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn codec() {
+        assert_encode_success!(
+            BlockPos::new(1, 2, 3),
+            NbtOps,
+            NbtTag::IntArray(vec![1, 2, 3])
+        );
+        assert_encode_success!(
+            BlockPos::new(-1000, 200, 4521),
+            NbtOps,
+            NbtTag::IntArray(vec![-1000, 200, 4521])
+        );
+
+        assert_decode!(
+            BlockPos,
+            NbtTag::IntArray(vec![1, 2, 3]),
+            NbtOps,
+            is_success
+        );
+
+        assert_decode!(BlockPos, NbtTag::List(vec![]), NbtOps, is_error);
+        assert_decode!(
+            BlockPos,
+            NbtTag::List(vec![NbtTag::Int(1), NbtTag::Float(2.0), NbtTag::Int(3)]),
+            NbtOps,
+            is_success
+        );
+        assert_decode!(
+            BlockPos,
+            NbtTag::List(vec![
+                NbtTag::Int(1),
+                NbtTag::Float(2.0),
+                NbtTag::String("69".into())
+            ]),
+            NbtOps,
+            is_error
+        );
+        assert_decode!(
+            BlockPos,
+            NbtTag::List(vec![
+                NbtTag::Int(1),
+                NbtTag::Float(2.0),
+                NbtTag::Int(3),
+                NbtTag::Byte(3)
+            ]),
+            NbtOps,
+            is_error
+        );
+    }
 }

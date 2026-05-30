@@ -21,14 +21,17 @@ pub enum WeirdScaledMapper {
 }
 impl WeirdScaledMapper {
     #[inline]
-    pub fn max_multiplier(&self) -> f64 {
+    #[must_use]
+    pub const fn max_multiplier(&self) -> f64 {
         match self {
             Self::Tunnels => 2.0,
             Self::Caves => 3.0,
         }
     }
     #[inline]
-    pub fn scale(&self, value: f64) -> f64 {
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub const fn scale(&self, value: f64) -> f64 {
         match self {
             Self::Tunnels => {
                 if value < -0.5 {
@@ -95,7 +98,8 @@ pub struct LinearData {
 }
 impl LinearData {
     #[inline]
-    pub fn apply_density(&self, density: f64) -> f64 {
+    #[must_use]
+    pub const fn apply_density(&self, density: f64) -> f64 {
         match self.operation {
             LinearOperation::Add => density + self.argument,
             LinearOperation::Mul => density * self.argument,
@@ -117,7 +121,9 @@ pub struct UnaryData {
 }
 impl UnaryData {
     #[inline]
-    pub fn apply_density(&self, density: f64) -> f64 {
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub const fn apply_density(&self, density: f64) -> f64 {
         match self.operation {
             UnaryOperation::Abs => density.abs(),
             UnaryOperation::Square => density * density,
@@ -156,7 +162,8 @@ pub struct ClampData {
 }
 impl ClampData {
     #[inline]
-    pub fn apply_density(&self, density: f64) -> f64 {
+    #[must_use]
+    pub const fn apply_density(&self, density: f64) -> f64 {
         density.clamp(self.min_value, self.max_value)
     }
 }

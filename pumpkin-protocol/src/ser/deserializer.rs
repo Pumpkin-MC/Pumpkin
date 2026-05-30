@@ -26,9 +26,10 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     type Error = ReadingError;
 
     fn deserialize_any<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        unimplemented!(
+        Err(ReadingError::Message(
             "This is impossible to do, since you cannot infer the data structure from the packet"
-        )
+                .into(),
+        ))
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
@@ -100,15 +101,19 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     }
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        visitor.visit_str(&self.inner.get_string()?)
+        visitor.visit_str(&self.inner.get_str()?)
     }
 
     fn deserialize_bytes<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        Err(ReadingError::Message(
+            "deserialize_bytes not implemented".into(),
+        ))
     }
 
     fn deserialize_byte_buf<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        Err(ReadingError::Message(
+            "deserialize_byte_buf not implemented".into(),
+        ))
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
@@ -136,7 +141,9 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         _name: &'static str,
         _visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        Err(ReadingError::Message(
+            "deserialize_newtype_struct not implemented".into(),
+        ))
     }
 
     fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
@@ -254,14 +261,18 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     }
 
     fn deserialize_identifier<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        Err(ReadingError::Message(
+            "deserialize_identifier not implemented".into(),
+        ))
     }
 
     fn deserialize_ignored_any<V: Visitor<'de>>(
         self,
         _visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        Err(ReadingError::Message(
+            "deserialize_ignored_any not implemented".into(),
+        ))
     }
 }
 

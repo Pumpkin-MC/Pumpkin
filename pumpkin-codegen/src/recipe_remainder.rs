@@ -20,6 +20,7 @@ pub fn build() -> TokenStream {
         .collect();
     quote! {
         #[must_use]
+        #[allow(clippy::match_same_arms)]
         pub const fn get_recipe_remainder_id(item_id: u16) -> Option<u16> {
             match item_id {
                 #(#match_arms)*

@@ -72,27 +72,19 @@ impl StructureGenerator for StrongholdGenerator {
             let mut last_piece_type: Option<StrongholdPieceType> = None;
             let mut has_portal_room = false;
 
-            // let attempt_seed = get_carver_seed(
-            //     &mut context.random,
-            //     context.seed as u64,
-            //     context.chunk_x,
-            //     context.chunk_z,
-            // );
-
             let start_x = section_coords::section_to_block(context.chunk_x) + 2;
             let start_z = section_coords::section_to_block(context.chunk_z) + 2;
 
             let start_piece = SpiralStaircasePiece::new_start(&mut random, start_x, start_z);
-            let start_box: Box<dyn StructurePieceBase> = Box::new(start_piece.clone());
+
+            let base_piece = start_piece.piece.piece.clone();
 
             // In Vanilla, pieces_to_process is 'start.pieces'
             let mut pieces_to_process: Vec<Box<dyn StructurePieceBase>> = Vec::new();
 
-            collector.add_piece(start_box);
-
             // Initial Fill
             start_piece.fill_openings(
-                &start_piece.piece.piece,
+                &base_piece,
                 &mut random,
                 &mut weights,
                 &mut last_piece_type,
@@ -101,12 +93,15 @@ impl StructureGenerator for StrongholdGenerator {
                 &mut pieces_to_process,
             );
 
+            collector.add_piece(Box::new(start_piece));
+
             // Growth Loop
             while !pieces_to_process.is_empty() {
                 let idx = random.next_bounded_i32(pieces_to_process.len() as i32) as usize;
                 let piece = pieces_to_process.remove(idx);
+
                 piece.fill_openings(
-                    &start_piece.piece.piece,
+                    &base_piece,
                     &mut random,
                     &mut weights,
                     &mut last_piece_type,
@@ -114,6 +109,9 @@ impl StructureGenerator for StrongholdGenerator {
                     &mut collector,
                     &mut pieces_to_process,
                 );
+
+                // Move into collector AFTER processing its children
+                collector.add_piece(piece);
             }
 
             // Shift height
@@ -253,7 +251,6 @@ fn get_initial_weights() -> Vec<PieceWeight> {
     ]
 }
 
-#[derive(Clone)]
 pub struct StrongholdPiece {
     pub piece: StructurePiece,
     pub entry_door: EntranceType,
@@ -624,7 +621,6 @@ impl StrongholdPiece {
         };
 
         if let Some(p) = next_piece {
-            collector.add_piece(p.clone_box());
             return Some(p);
         }
 

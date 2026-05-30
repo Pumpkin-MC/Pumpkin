@@ -147,7 +147,7 @@ impl BowItem {
             ArrowPickup::Allowed
         };
 
-        let arrow = ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup).await;
+        let arrow = ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup);
 
         // Set velocity based on player's look direction and power
         let yaw = player.living_entity.entity.yaw.load();
@@ -174,6 +174,6 @@ impl BowItem {
             sound_pitch,
             0.0,
         );
-        world.broadcast_packet_all(&sound_packet).await;
+        world.broadcast_packet_all(&sound_packet);
     }
 }

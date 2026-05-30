@@ -20,14 +20,16 @@ impl BlockBehaviour for LadderBlock {
         Box::pin(async move {
             let clicked_pos = args.use_item_on.position;
             let (clicked_block, clicked_block_state_id) =
-                args.world.get_block_and_state_id(&clicked_pos).await;
+                args.world.get_block_and_state_id(&clicked_pos);
             if clicked_block == &Block::LADDER {
                 //you can't click on a ladder and place a ladder
                 let props =
                     LadderLikeProperties::from_state_id(clicked_block_state_id, clicked_block);
                 let sub = args.position.0.sub(&clicked_pos.0);
-                let dir = horizontal_facing_from_offset(sub).unwrap();
-                if props.facing == dir.to_horizontal_facing().unwrap() {
+                if let Some(dir) = horizontal_facing_from_offset(sub)
+                    && let Some(horizontal_facing) = dir.to_horizontal_facing()
+                    && props.facing == horizontal_facing
+                {
                     return Block::AIR.default_state.id;
                 }
             }
@@ -38,32 +40,30 @@ impl BlockBehaviour for LadderBlock {
                 if dir == Facing::Up || dir == Facing::Down {
                     continue;
                 }
-                if !can_place_ladder_at(args.world, args.position, dir.to_block_direction()).await {
+                if !can_place_ladder_at(args.world, args.position, dir.to_block_direction()) {
                     continue;
                 }
                 props.facing = dir
                     .opposite()
                     .to_block_direction()
                     .to_horizontal_facing()
-                    .unwrap();
+                    .expect("Opposite of horizontal direction should be horizontal");
                 return props.to_state_id(args.block);
             }
             Block::AIR.default_state.id
         })
     }
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            for dir in BlockDirection::horizontal() {
-                let Some(world) = args.world else {
-                    //this won't happen
-                    return false;
-                };
-                if can_place_ladder_at(world, args.position, dir).await {
-                    return true;
-                }
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        for dir in BlockDirection::horizontal() {
+            let Some(world) = args.world else {
+                //this won't happen
+                return false;
+            };
+            if can_place_ladder_at(world, args.position, dir) {
+                return true;
             }
-            false
-        })
+        }
+        false
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
@@ -77,7 +77,6 @@ impl BlockBehaviour for LadderBlock {
                     args.position,
                     props.facing.to_block_direction().opposite(),
                 )
-                .await
             {
                 return 0;
             }
@@ -87,7 +86,7 @@ impl BlockBehaviour for LadderBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             if Block::from_state_id(state_id) != &Block::LADDER {
                 return;
             }
@@ -96,12 +95,9 @@ impl BlockBehaviour for LadderBlock {
                 args.world,
                 args.position,
                 props.facing.to_block_direction().opposite(),
-            )
-            .await
-            {
+            ) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
         })
     }
@@ -116,9 +112,8 @@ pub const fn horizontal_facing_from_offset(offset: Vector3<i32>) -> Option<Block
         _ => None,
     }
 }
-async fn can_place_ladder_at(world: &World, block_pos: &BlockPos, facing: BlockDirection) -> bool {
+fn can_place_ladder_at(world: &World, block_pos: &BlockPos, facing: BlockDirection) -> bool {
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
-        .await
         .is_side_solid(facing.opposite())
 }

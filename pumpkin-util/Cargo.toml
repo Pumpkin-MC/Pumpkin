@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 pumpkin-nbt.workspace = true
+pumpkin-codecs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 bytes.workspace = true
@@ -27,6 +28,10 @@ base64.workspace = true
 p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
 ecdsa.workspace = true
+rsa.workspace = true
+sha2.workspace = true
+crypto-bigint.workspace = true
+ureq.workspace = true
 
 [lints]
 workspace = true

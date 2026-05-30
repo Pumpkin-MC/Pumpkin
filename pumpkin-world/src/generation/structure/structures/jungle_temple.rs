@@ -70,7 +70,6 @@ impl StructureGenerator for JungleTempleGenerator {
         })
     }
 }
-#[derive(Clone)]
 pub struct JungleTemplePiece {
     // Composition: Rust uses a base struct to mimic the ScatteredFeaturePiece inheritance
     piece: StructurePiece,
@@ -81,10 +80,6 @@ pub struct JungleTemplePiece {
     placed_trap_2: bool,
 }
 impl StructurePieceBase for JungleTemplePiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece
     }
@@ -395,7 +390,7 @@ impl StructurePieceBase for JungleTemplePiece {
             self.piece.add_block(chunk, r_state, 9, -3, 5, bb);
             self.piece
                 .add_block(chunk, Block::MOSSY_COBBLESTONE.default_state, 9, -3, 4, bb);
-        }
+        };
         self.piece.add_block(chunk, redstone_wire_ns, 9, -2, 4, bb);
         /*if !self.placed_trap_2 {
             self.placed_trap_2 = this.createDispenser(
@@ -529,7 +524,7 @@ impl StructurePieceBase for JungleTemplePiece {
         }*/
     }
 }
-fn set_side_dir(props: &mut RedstoneWireLikeProperties, facing: HorizontalFacing) {
+const fn set_side_dir(props: &mut RedstoneWireLikeProperties, facing: HorizontalFacing) {
     match facing {
         HorizontalFacing::North => props.north = NorthRedstone::Side,
         HorizontalFacing::South => props.south = SouthRedstone::Side,

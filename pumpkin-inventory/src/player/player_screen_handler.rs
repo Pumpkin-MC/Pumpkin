@@ -81,6 +81,7 @@ impl PlayerScreenHandler {
         player_inventory: &Arc<PlayerInventory>,
         window_type: Option<WindowType>,
         sync_id: u8,
+        provider: Option<Arc<dyn crate::crafting::recipe_provider::RecipeProvider>>,
     ) -> Self {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(2, 2));
@@ -91,7 +92,7 @@ impl PlayerScreenHandler {
         };
 
         player_screen_handler
-            .add_recipe_slots(crafting_inventory)
+            .add_recipe_slots(crafting_inventory, provider)
             .await;
 
         // Add armor slots (head, chest, legs, feet)
@@ -118,6 +119,10 @@ impl PlayerScreenHandler {
 
 impl ScreenHandler for PlayerScreenHandler {
     fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 

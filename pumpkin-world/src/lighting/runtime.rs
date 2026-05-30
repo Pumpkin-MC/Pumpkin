@@ -8,20 +8,20 @@ use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 pub struct DynamicLightEngine {
-    decrease_block_light_queue: SegQueue<(BlockPos, u8)>,
-    increase_block_light_queue: SegQueue<(BlockPos, u8)>,
-    decrease_sky_light_queue: SegQueue<(BlockPos, u8)>,
-    increase_sky_light_queue: SegQueue<(BlockPos, u8)>,
+    block_decrease: SegQueue<(BlockPos, u8)>,
+    block_increase: SegQueue<(BlockPos, u8)>,
+    sky_decrease: SegQueue<(BlockPos, u8)>,
+    sky_increase: SegQueue<(BlockPos, u8)>,
 }
 
 impl DynamicLightEngine {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            decrease_block_light_queue: SegQueue::new(),
-            increase_block_light_queue: SegQueue::new(),
-            decrease_sky_light_queue: SegQueue::new(),
-            increase_sky_light_queue: SegQueue::new(),
+            block_decrease: SegQueue::new(),
+            block_increase: SegQueue::new(),
+            sky_decrease: SegQueue::new(),
+            sky_increase: SegQueue::new(),
         }
     }
 }
@@ -32,7 +32,7 @@ impl Default for DynamicLightEngine {
 }
 impl DynamicLightEngine {
     /// Checks if there is an open sky above the given position (no opaque blocks blocking sky light).
-    async fn has_open_sky_above(&self, level: &Arc<Level>, pos: &BlockPos) -> bool {
+    fn has_open_sky_above(level: &Arc<Level>, pos: &BlockPos) -> bool {
         let max_y = 319; // Maximum build height in Minecraft, can be adjusted if needed
         let mut current_pos = *pos;
 
@@ -40,7 +40,7 @@ impl DynamicLightEngine {
         while current_pos.0.y < max_y {
             current_pos.0.y += 1;
 
-            let state = level.get_block_state(&current_pos).await.to_state();
+            let state = level.get_block_state(&current_pos).to_state();
             if state.opacity > 0 {
                 return false; // Hit an opaque block before reaching sky
             }
@@ -51,40 +51,40 @@ impl DynamicLightEngine {
 
     /// Handles all lighting updates triggered by a block change (placement/break).
     /// This updates Block Light, Sky Light, and ensures the source block is valid.
-    pub async fn update_lighting_at(&self, level: &Arc<Level>, pos: BlockPos) {
+    pub fn update_lighting_at(&self, level: &Arc<Level>, pos: BlockPos) {
         // Block Light
-        self.check_block_light_updates(level, pos).await;
-        self.perform_block_light_updates(level).await;
+        self.check_block_light_updates(level, pos);
+        self.perform_block_light_updates(level);
 
         // Sky Light
-        self.check_sky_light_updates(level, pos).await;
-        self.perform_sky_light_updates(level).await;
+        self.check_sky_light_updates(level, pos);
+        self.perform_sky_light_updates(level);
     }
 
     pub fn queue_block_light_decrease(&self, pos: BlockPos, level: u8) {
-        self.decrease_block_light_queue.push((pos, level));
+        self.block_decrease.push((pos, level));
     }
 
     pub fn queue_block_light_increase(&self, pos: BlockPos, level: u8) {
-        self.increase_block_light_queue.push((pos, level));
+        self.block_increase.push((pos, level));
     }
 
     pub fn queue_sky_light_decrease(&self, pos: BlockPos, level: u8) {
-        self.decrease_sky_light_queue.push((pos, level));
+        self.sky_decrease.push((pos, level));
     }
 
     pub fn queue_sky_light_increase(&self, pos: BlockPos, level: u8) {
-        self.increase_sky_light_queue.push((pos, level));
+        self.sky_increase.push((pos, level));
     }
 
-    pub async fn perform_block_light_updates(&self, level: &Arc<Level>) -> i32 {
+    pub fn perform_block_light_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
 
         // Keep processing until both queues are empty
         // Light propagation queues new updates, so we need to process until convergence
         loop {
-            let decrease_updates = self.perform_block_light_decrease_updates(level).await;
-            let increase_updates = self.perform_block_light_increase_updates(level).await;
+            let decrease_updates = self.perform_block_light_decrease_updates(level);
+            let increase_updates = self.perform_block_light_increase_updates(level);
 
             updates += decrease_updates + increase_updates;
 
@@ -97,41 +97,34 @@ impl DynamicLightEngine {
         updates
     }
 
-    async fn perform_block_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_block_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
 
-        while let Some((pos, expected_light)) = self.decrease_block_light_queue.pop() {
-            self.propagate_block_light_decrease(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.block_decrease.pop() {
+            self.propagate_block_light_decrease(level, &pos, expected_light);
             updates += 1;
         }
 
         updates
     }
 
-    async fn perform_block_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_block_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
 
-        while let Some((pos, expected_light)) = self.increase_block_light_queue.pop() {
-            self.propagate_block_light_increase(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.block_increase.pop() {
+            self.propagate_block_light_increase(level, &pos, expected_light);
             updates += 1;
         }
 
         updates
     }
 
-    async fn propagate_block_light_increase(
-        &self,
-        level: &Arc<Level>,
-        pos: &BlockPos,
-        light_level: u8,
-    ) {
+    fn propagate_block_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
-            if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos).await {
-                let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
+            if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos) {
+                let neighbor_state = level.get_block_state(&neighbor_pos).to_state();
                 let opacity = neighbor_state.opacity.max(1);
                 let new_light = light_level.saturating_sub(opacity);
 
@@ -139,7 +132,6 @@ impl DynamicLightEngine {
                 if new_light > neighbor_light
                     && self
                         .set_block_light_level(level, &neighbor_pos, new_light)
-                        .await
                         .is_ok()
                     && new_light > 1
                 {
@@ -149,14 +141,14 @@ impl DynamicLightEngine {
         }
     }
 
-    async fn propagate_block_light_decrease(
+    fn propagate_block_light_decrease(
         &self,
         level: &Arc<Level>,
         pos: &BlockPos,
         removed_light_level: u8,
     ) {
         // Check what the current light level actually is at this position
-        let current_level = self.get_block_light_level(level, pos).await.unwrap_or(0);
+        let current_level = self.get_block_light_level(level, pos).unwrap_or(0);
 
         // Only propagate decrease if this position hasn't already been reset to 0
         // This prevents positions that were intentionally set to 0 from propagating light
@@ -165,13 +157,12 @@ impl DynamicLightEngine {
             for dir in BlockDirection::all() {
                 let neighbor_pos = pos.offset(dir.to_offset());
 
-                if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos).await
-                {
+                if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos) {
                     if neighbor_light == 0 {
                         continue; // Skip if already 0
                     }
 
-                    let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
+                    let neighbor_state = level.get_block_state(&neighbor_pos).to_state();
                     let opacity = neighbor_state.opacity.max(1);
 
                     let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
@@ -181,15 +172,12 @@ impl DynamicLightEngine {
 
                         if neighbor_luminance == 0 {
                             // No self-emission, darken it completely and continue propagation
-                            self.set_block_light_level(level, &neighbor_pos, 0)
-                                .await
-                                .unwrap();
+                            self.set_block_light_level(level, &neighbor_pos, 0).ok();
                             self.queue_block_light_decrease(neighbor_pos, neighbor_light);
                         } else {
                             // Has self-emission, set to its own light and re-propagate from it
                             self.set_block_light_level(level, &neighbor_pos, neighbor_luminance)
-                                .await
-                                .unwrap();
+                                .ok();
                             self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
                         }
                     } else {
@@ -201,47 +189,42 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
+    pub fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         match level.lighting_config {
             LightingEngineConfig::Full => {
-                self.set_block_light_level(level, &pos, 15).await.unwrap();
+                self.set_block_light_level(level, &pos, 15).ok();
                 return;
             }
             LightingEngineConfig::Dark => {
-                self.set_block_light_level(level, &pos, 0).await.unwrap();
+                self.set_block_light_level(level, &pos, 0).ok();
                 return;
             }
             LightingEngineConfig::Default => {}
         }
 
-        let current_light = self.get_block_light_level(level, &pos).await.unwrap_or(0);
-        let block_state = level.get_block_state(&pos).await.to_state();
+        let current_light = self.get_block_light_level(level, &pos).unwrap_or(0);
+        let block_state = level.get_block_state(&pos).to_state();
         let expected_light = block_state.luminance;
 
         // Handle light decrease (removing light source or placing opaque block)
         if expected_light < current_light {
             // Set to expected value immediately, then queue decrease to darken neighbors
-            self.set_block_light_level(level, &pos, expected_light)
-                .await
-                .unwrap();
+            self.set_block_light_level(level, &pos, expected_light).ok();
             self.queue_block_light_decrease(pos, current_light);
         } else if expected_light > current_light {
             // Handle light increase (placing light source)
-            self.set_block_light_level(level, &pos, expected_light)
-                .await
-                .unwrap();
+            self.set_block_light_level(level, &pos, expected_light).ok();
             self.queue_block_light_increase(pos, expected_light);
         }
 
         // Only check neighbors if we didn't trigger a decrease
         // Decrease propagation handles re-validating neighbors
         if expected_light >= current_light {
-            self.check_neighbors_light_updates(level, pos, expected_light)
-                .await;
+            self.check_neighbors_light_updates(level, pos, expected_light);
         }
     }
 
-    pub async fn check_neighbors_light_updates(
+    pub fn check_neighbors_light_updates(
         &self,
         level: &Arc<Level>,
         pos: BlockPos,
@@ -249,7 +232,7 @@ impl DynamicLightEngine {
     ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
-            if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos).await
+            if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos)
                 && neighbor_light > current_light + 1
             {
                 self.queue_block_light_increase(neighbor_pos, neighbor_light);
@@ -257,11 +240,11 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn perform_sky_light_updates(&self, level: &Arc<Level>) -> i32 {
+    pub fn perform_sky_light_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
         loop {
-            let decrease_updates = self.perform_sky_light_decrease_updates(level).await;
-            let increase_updates = self.perform_sky_light_increase_updates(level).await;
+            let decrease_updates = self.perform_sky_light_decrease_updates(level);
+            let increase_updates = self.perform_sky_light_increase_updates(level);
 
             updates += decrease_updates + increase_updates;
 
@@ -272,37 +255,30 @@ impl DynamicLightEngine {
         updates
     }
 
-    async fn perform_sky_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_sky_light_decrease_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
-        while let Some((pos, expected_light)) = self.decrease_sky_light_queue.pop() {
-            self.propagate_sky_light_decrease(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.sky_decrease.pop() {
+            self.propagate_sky_light_decrease(level, &pos, expected_light);
             updates += 1;
         }
         updates
     }
 
-    async fn perform_sky_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
+    fn perform_sky_light_increase_updates(&self, level: &Arc<Level>) -> i32 {
         let mut updates = 0;
-        while let Some((pos, expected_light)) = self.increase_sky_light_queue.pop() {
-            self.propagate_sky_light_increase(level, &pos, expected_light)
-                .await;
+        while let Some((pos, expected_light)) = self.sky_increase.pop() {
+            self.propagate_sky_light_increase(level, &pos, expected_light);
             updates += 1;
         }
         updates
     }
 
-    async fn propagate_sky_light_increase(
-        &self,
-        level: &Arc<Level>,
-        pos: &BlockPos,
-        light_level: u8,
-    ) {
+    fn propagate_sky_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
-            let neighbor_light = self.get_sky_light_level(level, &neighbor_pos).await;
-            let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
+            let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
+            let neighbor_state = level.get_block_state(&neighbor_pos).to_state();
             let opacity = neighbor_state.opacity;
 
             // Calculate new light level for neighbor
@@ -317,8 +293,7 @@ impl DynamicLightEngine {
             // Only propagate if new light is brighter than current light
             if new_light > neighbor_light {
                 self.set_sky_light_level(level, &neighbor_pos, new_light)
-                    .await
-                    .unwrap();
+                    .ok();
 
                 if new_light > 0 {
                     self.queue_sky_light_increase(neighbor_pos, new_light);
@@ -327,21 +302,16 @@ impl DynamicLightEngine {
         }
     }
 
-    async fn propagate_sky_light_decrease(
-        &self,
-        level: &Arc<Level>,
-        pos: &BlockPos,
-        removed_light: u8,
-    ) {
+    fn propagate_sky_light_decrease(&self, level: &Arc<Level>, pos: &BlockPos, removed_light: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
-            let neighbor_light = self.get_sky_light_level(level, &neighbor_pos).await;
+            let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
             if neighbor_light == 0 {
                 continue; // Already dark
             }
 
-            let neighbor_state = level.get_block_state(&neighbor_pos).await.to_state();
+            let neighbor_state = level.get_block_state(&neighbor_pos).to_state();
             let opacity = neighbor_state.opacity;
 
             // Calculate what we would have given this neighbor
@@ -353,9 +323,7 @@ impl DynamicLightEngine {
 
             if neighbor_light == expected || neighbor_light < removed_light {
                 // This neighbor was lit by us, darken it
-                self.set_sky_light_level(level, &neighbor_pos, 0)
-                    .await
-                    .unwrap();
+                self.set_sky_light_level(level, &neighbor_pos, 0).ok();
                 self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
             } else if neighbor_light > removed_light {
                 // Neighbor has brighter light from another source
@@ -365,21 +333,21 @@ impl DynamicLightEngine {
         }
     }
 
-    pub async fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
+    pub fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         match level.lighting_config {
             LightingEngineConfig::Full => {
-                self.set_sky_light_level(level, &pos, 15).await.unwrap();
+                self.set_sky_light_level(level, &pos, 15).ok();
                 return;
             }
             LightingEngineConfig::Dark => {
-                self.set_sky_light_level(level, &pos, 0).await.unwrap();
+                self.set_sky_light_level(level, &pos, 0).ok();
                 return;
             }
             LightingEngineConfig::Default => {}
         }
 
-        let current_light = self.get_sky_light_level(level, &pos).await;
-        let block_state = level.get_block_state(&pos).await.to_state();
+        let current_light = self.get_sky_light_level(level, &pos);
+        let block_state = level.get_block_state(&pos).to_state();
         let opacity = block_state.opacity;
 
         // Calculate expected sky light
@@ -388,7 +356,7 @@ impl DynamicLightEngine {
             0
         } else {
             // Check if there's open sky above
-            let has_sky = self.has_open_sky_above(level, &pos).await;
+            let has_sky = Self::has_open_sky_above(level, &pos);
 
             if has_sky {
                 // Direct sunlight, reduced by opacity
@@ -400,7 +368,7 @@ impl DynamicLightEngine {
                 for dir in BlockDirection::all() {
                     let neighbor_pos = pos.offset(dir.to_offset());
 
-                    let neighbor_light = self.get_sky_light_level(level, &neighbor_pos).await;
+                    let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
                     // Calculate potential light from this neighbor
                     let potential = if neighbor_light == 15 && dir == BlockDirection::Up {
                         // Sky light at 15 from above stays 15
@@ -421,97 +389,57 @@ impl DynamicLightEngine {
         // Update if needed
         if expected_light < current_light {
             // Light decreased
-            self.set_sky_light_level(level, &pos, expected_light)
-                .await
-                .unwrap();
+            self.set_sky_light_level(level, &pos, expected_light).ok();
             self.queue_sky_light_decrease(pos, current_light);
         } else if expected_light > current_light {
             // Light increased
-            self.set_sky_light_level(level, &pos, expected_light)
-                .await
-                .unwrap();
+            self.set_sky_light_level(level, &pos, expected_light).ok();
             self.queue_sky_light_increase(pos, expected_light);
         }
 
         // Notify neighbors if light increased or stayed same
         if expected_light >= current_light {
-            self.check_neighbors_sky_light_updates(pos, expected_light)
-                .await;
+            self.check_neighbors_sky_light_updates(pos, expected_light);
         }
     }
 
-    pub async fn check_neighbors_sky_light_updates(&self, pos: BlockPos, current_light: u8) {
+    pub fn check_neighbors_sky_light_updates(&self, pos: BlockPos, current_light: u8) {
         // When we update a position, propagate to neighbors
         if current_light > 0 {
             self.queue_sky_light_increase(pos, current_light);
         }
     }
 
-    pub async fn get_block_light_level(
-        &self,
-        level: &Arc<Level>,
-        position: &BlockPos,
-    ) -> Option<u8> {
+    pub fn get_block_light_level_sync(&self, level: &Level, position: &BlockPos) -> Option<u8> {
         let (chunk_pos, relative) = position.chunk_and_chunk_relative_position();
 
-        level
-            .get_or_fetch_chunk(chunk_pos, |chunk| {
-                let section_idx = (relative.y - chunk.section.min_y) as usize / 16;
-                let light_engine = chunk.light_engine.lock().ok()?;
+        level.read_chunk_sync(&chunk_pos, |chunk| {
+            let section_idx = (relative.y - chunk.section.min_y) as usize / 16;
+            let light_engine = chunk.light_engine.lock().ok()?;
 
-                light_engine
-                    .block_light
-                    .get(section_idx)?
-                    .get(
-                        relative.x as usize,
-                        (relative.y - chunk.section.min_y) as usize % 16,
-                        relative.z as usize,
-                    )
-                    .into()
-            })
-            .await
-    }
-
-    pub async fn set_block_light_level(
-        &self,
-        level: &Arc<Level>,
-        position: &BlockPos,
-        light_level: u8,
-    ) -> Result<(), String> {
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        level
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
-                let section_index =
-                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
-                // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap();
-                if section_index >= light_engine.block_light.len() {
-                    return Err("Invalid section index".to_string());
-                }
-                let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
-                light_engine.block_light[section_index].set(
+            light_engine
+                .block_light
+                .get(section_idx)?
+                .get(
                     relative.x as usize,
-                    relative_y,
+                    (relative.y - chunk.section.min_y) as usize % 16,
                     relative.z as usize,
-                    light_level,
-                );
-                // Mark chunk as dirty so lighting changes are saved to disk
-                if !chunk.is_dirty() {
-                    chunk.mark_dirty(true);
-                }
-                Ok(())
-            })
-            .await
+                )
+                .into()
+        })?
     }
 
-    pub async fn get_sky_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> u8 {
+    pub fn get_sky_light_level_sync(&self, level: &Level, position: &BlockPos) -> u8 {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         level
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+            .read_chunk_sync(&chunk_coordinate, |chunk| {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
 
-                let light_engine = chunk.light_engine.lock().unwrap();
+                let light_engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 // Bounds check for section index (lock the light engine)
                 if section_index >= light_engine.sky_light.len() {
                     return 15;
@@ -523,38 +451,116 @@ impl DynamicLightEngine {
                     relative.z as usize,
                 )
             })
-            .await
+            .unwrap_or(0)
     }
 
-    pub async fn set_sky_light_level(
+    pub fn get_block_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> Option<u8> {
+        let (chunk_pos, relative) = position.chunk_and_chunk_relative_position();
+
+        level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                let section_idx = (relative.y - chunk.section.min_y) as usize / 16;
+                let light_engine = chunk.light_engine.lock().ok()?;
+
+                let light_level = light_engine.block_light.get(section_idx)?.get(
+                    relative.x as usize,
+                    (relative.y - chunk.section.min_y) as usize % 16,
+                    relative.z as usize,
+                );
+
+                Some(light_level)
+            })
+            .flatten()
+    }
+
+    pub fn set_block_light_level(
         &self,
         level: &Arc<Level>,
         position: &BlockPos,
         light_level: u8,
     ) -> Result<(), String> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        level.read_chunk_sync(&chunk_coordinate, |chunk| {
+            let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+            // Bounds check for section index
+            let mut light_engine = chunk
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if section_index >= light_engine.block_light.len() {
+                return Err("Invalid section index".to_string());
+            }
+            let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+            light_engine.block_light[section_index].set(
+                relative.x as usize,
+                relative_y,
+                relative.z as usize,
+                light_level,
+            );
+            // Mark chunk as dirty so lighting changes are saved to disk
+            if !chunk.is_dirty() {
+                chunk.mark_dirty(true);
+            }
+            Ok(())
+        });
+        Ok(())
+    }
+
+    pub fn get_sky_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> u8 {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         level
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+            .read_chunk_sync(&chunk_coordinate, |chunk| {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
-                // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap();
+
+                let light_engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                // Bounds check for section index (lock the light engine)
                 if section_index >= light_engine.sky_light.len() {
-                    return Err("Invalid section index".to_string());
+                    return 15;
                 }
-                let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
-                light_engine.sky_light[section_index].set(
+
+                light_engine.sky_light[section_index].get(
                     relative.x as usize,
-                    relative_y,
+                    (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
                     relative.z as usize,
-                    light_level,
-                );
-                // Mark chunk as dirty so lighting changes are saved to disk
-                if !chunk.is_dirty() {
-                    chunk.mark_dirty(true);
-                }
-                Ok(())
+                )
             })
-            .await
+            .unwrap_or(0)
+    }
+
+    pub fn set_sky_light_level(
+        &self,
+        level: &Arc<Level>,
+        position: &BlockPos,
+        light_level: u8,
+    ) -> Result<(), String> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        level.read_chunk_sync(&chunk_coordinate, |chunk| {
+            let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+            // Bounds check for section index
+            let mut light_engine = chunk
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if section_index >= light_engine.sky_light.len() {
+                return Err("Invalid section index".to_string());
+            }
+            let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+            light_engine.sky_light[section_index].set(
+                relative.x as usize,
+                relative_y,
+                relative.z as usize,
+                light_level,
+            );
+            // Mark chunk as dirty so lighting changes are saved to disk
+            if !chunk.is_dirty() {
+                chunk.mark_dirty(true);
+            }
+            Ok(())
+        });
+        Ok(())
     }
 }

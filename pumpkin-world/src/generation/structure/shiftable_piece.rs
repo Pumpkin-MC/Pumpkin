@@ -14,7 +14,6 @@ use crate::{
 
 pub const DEFAULT_H_POS: i32 = -1;
 
-#[derive(Clone)]
 pub struct ShiftableStructurePiece {
     pub piece: StructurePiece,
     h_pos: i32,

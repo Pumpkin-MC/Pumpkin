@@ -1,4 +1,5 @@
 use crate::generation::proto_chunk::GenerationCache;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
@@ -13,7 +14,7 @@ impl FreezeTopLayerFeature {
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
-        _feature_name: &str,
+        _feature_name: pumpkin_data::placed_feature::PlacedFeature,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -52,7 +53,11 @@ impl FreezeTopLayerFeature {
                     let below_raw = GenerationCache::get_block_state(chunk, &below_vec);
 
                     // topPos must be air; belowPos must not be air (something to stand on)
-                    if top_raw.to_state().is_air() && !below_raw.to_state().is_air() {
+                    if top_raw.to_state().is_air()
+                        && !below_raw.to_state().is_air()
+                        && !Block::from_state_id(below_raw.to_state().id)
+                            .has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
+                    {
                         chunk.set_block_state(&top_vec, Block::SNOW.default_state);
 
                         // Update the `snowy` block-state property on the block below if it has one

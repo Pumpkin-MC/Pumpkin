@@ -15,7 +15,7 @@ use crate::{
             trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
         },
     },
-    world::BlockRegistryExt,
+    world::WorldPortalExt,
 };
 
 pub struct MegaJungleTrunkPlacer;
@@ -23,7 +23,7 @@ pub struct MegaJungleTrunkPlacer;
 impl MegaJungleTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,

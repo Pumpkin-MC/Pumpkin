@@ -26,7 +26,7 @@ impl Default for RCONConfig {
             enabled: false,
             address: SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 25575),
             password: String::new(),
-            max_connections: 0,
+            max_connections: 10,
             logging: RCONLogging::default(),
         }
     }

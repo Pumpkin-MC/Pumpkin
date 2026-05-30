@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{Block, entity::EntityType};
+use pumpkin_inventory::screen_handler::ClickType;
 use pumpkin_protocol::java::server::play::ActionType;
 use pumpkin_util::{
     GameMode, Hand,
@@ -58,14 +59,18 @@ pub(super) const fn from_wasm_position(
 
 pub(super) const fn to_wasm_block_position(
     position: BlockPos,
-) -> pumpkin::plugin::common::BlockPosition {
-    (position.0.x, position.0.y, position.0.z)
+) -> pumpkin::plugin::common::BlockPos {
+    pumpkin::plugin::common::BlockPos {
+        x: position.0.x,
+        y: position.0.y,
+        z: position.0.z,
+    }
 }
 
 pub(super) const fn from_wasm_block_position(
-    position: pumpkin::plugin::common::BlockPosition,
+    position: pumpkin::plugin::common::BlockPos,
 ) -> BlockPos {
-    BlockPos::new(position.0, position.1, position.2)
+    BlockPos::new(position.x, position.y, position.z)
 }
 
 pub(super) fn to_wasm_block_name(block: &'static Block) -> String {
@@ -134,6 +139,36 @@ pub(super) const fn from_wasm_game_mode(game_mode: pumpkin::plugin::common::Game
         pumpkin::plugin::common::GameMode::Creative => GameMode::Creative,
         pumpkin::plugin::common::GameMode::Adventure => GameMode::Adventure,
         pumpkin::plugin::common::GameMode::Spectator => GameMode::Spectator,
+    }
+}
+
+pub(super) const fn to_wasm_click_type(click_type: ClickType) -> pumpkin::plugin::gui::ClickType {
+    match click_type {
+        ClickType::Left => pumpkin::plugin::gui::ClickType::Left,
+        ClickType::Right => pumpkin::plugin::gui::ClickType::Right,
+        ClickType::ShiftLeft => pumpkin::plugin::gui::ClickType::ShiftLeft,
+        ClickType::ShiftRight => pumpkin::plugin::gui::ClickType::ShiftRight,
+        ClickType::Middle => pumpkin::plugin::gui::ClickType::Middle,
+        ClickType::Drop => pumpkin::plugin::gui::ClickType::Drop,
+        ClickType::ControlDrop => pumpkin::plugin::gui::ClickType::ControlDrop,
+        ClickType::DoubleClick => pumpkin::plugin::gui::ClickType::DoubleClick,
+        ClickType::NumberKey(_) => pumpkin::plugin::gui::ClickType::NumberKey,
+        ClickType::Unknown => pumpkin::plugin::gui::ClickType::Unknown,
+    }
+}
+
+pub(super) const fn from_wasm_click_type(click_type: pumpkin::plugin::gui::ClickType) -> ClickType {
+    match click_type {
+        pumpkin::plugin::gui::ClickType::Left => ClickType::Left,
+        pumpkin::plugin::gui::ClickType::Right => ClickType::Right,
+        pumpkin::plugin::gui::ClickType::ShiftLeft => ClickType::ShiftLeft,
+        pumpkin::plugin::gui::ClickType::ShiftRight => ClickType::ShiftRight,
+        pumpkin::plugin::gui::ClickType::Middle => ClickType::Middle,
+        pumpkin::plugin::gui::ClickType::Drop => ClickType::Drop,
+        pumpkin::plugin::gui::ClickType::ControlDrop => ClickType::ControlDrop,
+        pumpkin::plugin::gui::ClickType::DoubleClick => ClickType::DoubleClick,
+        pumpkin::plugin::gui::ClickType::NumberKey => ClickType::NumberKey(0), // Default to 0
+        pumpkin::plugin::gui::ClickType::Unknown => ClickType::Unknown,
     }
 }
 

@@ -6,7 +6,7 @@ use crate::block::{
 };
 use crate::block::{BlockFuture, BlockIsReplacing};
 use crate::entity::EntityBase;
-use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
@@ -32,10 +32,9 @@ impl BlockBehaviour for SeaPickleBlock {
                 || !args
                     .world
                     .get_block(&args.position.down())
-                    .await
                     .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                 || !SeaPickleProperties::from_state_id(
-                    args.world.get_block_state_id(args.position).await,
+                    args.world.get_block_state_id(args.position),
                     args.block,
                 )
                 .waterlogged
@@ -62,23 +61,17 @@ impl BlockBehaviour for SeaPickleBlock {
                         );
                         if &lv == args.position
                             || rand::rng().random_range(0..6) != 0
-                            || !args.world.get_block(&lv).await.eq(&Block::WATER)
+                            || !args.world.get_block(&lv).eq(&Block::WATER)
                             || !args
                                 .world
                                 .get_block(&lv.down())
-                                .await
                                 .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                         {
                             continue;
                         }
                         let mut sea_pickle_prop = SeaPickleProperties::default(args.block);
 
-                        sea_pickle_prop.pickles = match rand::rng().random_range(0..4) + 1 {
-                            1 => Integer1To4::L1,
-                            2 => Integer1To4::L2,
-                            3 => Integer1To4::L3,
-                            _ => Integer1To4::L4,
-                        };
+                        sea_pickle_prop.pickles = rand::rng().random_range(1..=4);
                         args.world
                             .set_block_state(
                                 &lv,
@@ -98,7 +91,7 @@ impl BlockBehaviour for SeaPickleBlock {
                 count += 1;
             }
             let mut sea_pickle_prop = SeaPickleProperties::default(args.block);
-            sea_pickle_prop.pickles = Integer1To4::L4;
+            sea_pickle_prop.pickles = 4;
             args.world
                 .set_block_state(
                     args.position,
@@ -117,12 +110,8 @@ impl BlockBehaviour for SeaPickleBlock {
                 && let BlockIsReplacing::Itself(state_id) = args.replacing
             {
                 let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, args.block);
-                if sea_pickle_prop.pickles != Integer1To4::L4 {
-                    sea_pickle_prop.pickles = match sea_pickle_prop.pickles {
-                        Integer1To4::L1 => Integer1To4::L2,
-                        Integer1To4::L2 => Integer1To4::L3,
-                        _ => Integer1To4::L4,
-                    };
+                if sea_pickle_prop.pickles < 4 {
+                    sea_pickle_prop.pickles += 1;
                 }
                 return sea_pickle_prop.to_state_id(args.block);
             }
@@ -133,22 +122,14 @@ impl BlockBehaviour for SeaPickleBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let support_block = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            support_block.is_center_solid(BlockDirection::Up)
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let support_block = args.block_accessor.get_block_state(&args.position.down());
+        support_block.is_center_solid(BlockDirection::Up)
     }
 
-    fn can_update_at<'a>(&'a self, args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            args.player.get_entity().pose.load() != EntityPose::Crouching
-                && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles
-                    != Integer1To4::L4
-        })
+    fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
+        args.player.get_entity().pose.load() != EntityPose::Crouching
+            && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles < 4
     }
 
     fn get_state_for_neighbor_update<'a>(

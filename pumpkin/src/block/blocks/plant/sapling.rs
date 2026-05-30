@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::{BlockProperties, Integer0To1};
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -18,10 +18,10 @@ pub struct SaplingBlock;
 
 impl SaplingBlock {
     async fn generate(&self, world: &Arc<World>, pos: &BlockPos) {
-        let (block, state) = world.get_block_and_state_id(pos).await;
+        let (block, state) = world.get_block_and_state_id(pos);
         let mut props = SaplingProperties::from_state_id(state, block);
-        if props.stage == Integer0To1::L0 {
-            props.stage = Integer0To1::L1;
+        if props.stage == 0 {
+            props.stage = 1;
             world
                 .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                 .await;
@@ -32,10 +32,8 @@ impl SaplingBlock {
 }
 
 impl BlockBehaviour for SaplingBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(

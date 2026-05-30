@@ -22,6 +22,7 @@ use pumpkin_data::{
     tag::Taggable,
     tracked_data::TrackedData,
 };
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{CEntityPositionSync, Metadata},
@@ -67,7 +68,7 @@ pub struct EndermanEntity {
 }
 
 impl EndermanEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let entity = Self {
             mob_entity,
@@ -82,14 +83,14 @@ impl EndermanEntity {
             Arc::downgrade(&mob_arc)
         };
 
-        let mut navigator = mob_arc.mob_entity.navigator.lock().await;
+        let mut navigator = mob_arc.mob_entity.navigator.lock().unwrap();
         navigator.set_mob_dimensions(0.6, 2.9);
         navigator.set_pathfinding_malus(PathType::Water, -1.0);
         drop(navigator);
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
@@ -114,7 +115,7 @@ impl EndermanEntity {
         mob_arc
     }
 
-    pub async fn teleport_randomly(&self) -> bool {
+    pub fn teleport_randomly(&self) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let pos = entity.pos.load();
         let (x, y, z) = {
@@ -126,10 +127,10 @@ impl EndermanEntity {
             )
         };
 
-        self.teleport_to(x, y, z).await
+        self.teleport_to(x, y, z)
     }
 
-    pub async fn teleport_towards(&self, target: &dyn EntityBase) -> bool {
+    pub fn teleport_towards(&self, target: &dyn EntityBase) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let pos = entity.pos.load();
         let target_pos = target.get_entity().pos.load();
@@ -155,10 +156,10 @@ impl EndermanEntity {
             )
         };
 
-        self.teleport_to(x, y, z).await
+        self.teleport_to(x, y, z)
     }
 
-    pub async fn teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
+    pub fn teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let origin = entity.pos.load();
         let world = entity.world.load();
@@ -173,7 +174,7 @@ impl EndermanEntity {
         let mut found_ground = false;
         loop {
             let below_pos = BlockPos::new(block_x, block_y - 1, block_z);
-            let below_state = world.get_block_state(&below_pos).await;
+            let below_state = world.get_block_state(&below_pos);
             if below_state.is_solid() {
                 found_ground = true;
                 break;
@@ -190,7 +191,7 @@ impl EndermanEntity {
         }
 
         let dest_pos = BlockPos::new(block_x, block_y, block_z);
-        let dest_fluid = world.get_fluid(&dest_pos).await;
+        let dest_fluid = world.get_fluid(&dest_pos);
         if dest_fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
             return false;
         }
@@ -201,41 +202,35 @@ impl EndermanEntity {
             Vector3::new(x - half_width, target_y, z - half_width),
             Vector3::new(x + half_width, target_y + height, z + half_width),
         );
-        if !world.is_space_empty(bb).await {
+        if !world.is_space_empty(bb) {
             return false;
         }
 
         let new_pos = Vector3::new(x, target_y, z);
 
         for pos in &[origin, new_pos] {
-            world
-                .spawn_particle(
-                    *pos,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    0.0,
-                    128,
-                    Particle::Portal,
-                )
-                .await;
-            world
-                .play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos)
-                .await;
+            world.spawn_particle(
+                *pos,
+                Vector3::new(0.0, 0.0, 0.0),
+                0.0,
+                128,
+                Particle::Portal,
+            );
+            world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
         }
 
         entity.set_pos(new_pos);
 
-        world
-            .broadcast_packet_all(&CEntityPositionSync::new(
-                entity.entity_id.into(),
-                new_pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                entity.yaw.load(),
-                entity.pitch.load(),
-                entity.on_ground.load(Ordering::Relaxed),
-            ))
-            .await;
+        world.broadcast_packet_all(&CEntityPositionSync::new(
+            entity.entity_id.into(),
+            new_pos,
+            Vector3::new(0.0, 0.0, 0.0),
+            entity.yaw.load(),
+            entity.pitch.load(),
+            entity.on_ground.load(Ordering::Relaxed),
+        ));
 
-        self.mob_entity.navigator.lock().await.stop();
+        self.mob_entity.navigator.lock().unwrap().stop();
 
         true
     }
@@ -246,7 +241,7 @@ impl EndermanEntity {
         drop(mob_target);
 
         if target.is_some() {
-            self.set_angry(true).await;
+            self.set_angry(true);
             // Use attribute modifier instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
@@ -267,8 +262,8 @@ impl EndermanEntity {
                 .await;
             }
         } else {
-            self.set_angry(false).await;
-            self.set_provoked(false).await;
+            self.set_angry(false);
+            self.set_provoked(false);
             if self.speed_boosted.swap(false, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
 
@@ -285,7 +280,7 @@ impl EndermanEntity {
         }
     }
 
-    pub async fn set_angry(&self, angry: bool) {
+    pub fn set_angry(&self, angry: bool) {
         self.angry.store(angry, Ordering::Relaxed);
         self.mob_entity
             .living_entity
@@ -294,15 +289,14 @@ impl EndermanEntity {
                 TrackedData::CREEPY,
                 MetaDataType::BOOLEAN,
                 angry,
-            )])
-            .await;
+            )]);
     }
 
     pub fn is_angry(&self) -> bool {
         self.angry.load(Ordering::Relaxed)
     }
 
-    pub async fn set_provoked(&self, provoked: bool) {
+    pub fn set_provoked(&self, provoked: bool) {
         self.provoked.store(provoked, Ordering::Relaxed);
         self.mob_entity
             .living_entity
@@ -311,11 +305,10 @@ impl EndermanEntity {
                 TrackedData::STARED_AT,
                 MetaDataType::BOOLEAN,
                 provoked,
-            )])
-            .await;
+            )]);
     }
 
-    pub async fn set_carried_block(&self, block_state: Option<u16>) {
+    pub fn set_carried_block(&self, block_state: Option<u16>) {
         self.carried_block.store(block_state);
         let value = block_state.map_or(VarInt(0), |id| VarInt(id as i32));
         self.mob_entity
@@ -325,8 +318,7 @@ impl EndermanEntity {
                 TrackedData::CARRY_STATE,
                 MetaDataType::OPTIONAL_BLOCK_STATE,
                 value,
-            )])
-            .await;
+            )]);
     }
 
     pub fn get_carried_block(&self) -> Option<u16> {
@@ -334,14 +326,17 @@ impl EndermanEntity {
     }
 
     pub async fn is_player_staring(&self, player: &Player) -> bool {
-        let equipment = player.living_entity.entity_equipment.lock().await;
-        let head_item = equipment.get(&EquipmentSlot::HEAD);
-        let head_stack = head_item.lock().await;
-        if !head_stack.is_empty() && head_stack.item == &Item::CARVED_PUMPKIN {
-            return false;
+        let equipment = player.living_entity.entity_equipment.try_lock();
+        if let Ok(equipment) = equipment {
+            let head_item = equipment.get(&EquipmentSlot::HEAD);
+            let head_stack = head_item.try_lock();
+            if let Ok(head_stack) = head_stack
+                && !head_stack.is_empty()
+                && head_stack.item == &Item::CARVED_PUMPKIN
+            {
+                return false;
+            }
         }
-        drop(head_stack);
-        drop(equipment);
 
         let entity = &self.mob_entity.living_entity.entity;
         let enderman_pos = entity.pos.load();
@@ -385,7 +380,7 @@ impl EndermanEntity {
         let world = entity.world.load();
         world
             .raycast(enderman_eye_pos, player_eye_pos, async |block_pos, w| {
-                let state = w.get_block_state(block_pos).await;
+                let state = w.get_block_state(block_pos);
                 state.is_solid()
             })
             .await
@@ -393,25 +388,21 @@ impl EndermanEntity {
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 impl NBTStorage for EndermanEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             if let Some(block_state) = self.carried_block.load() {
-                nbt.put_bool(true);
-                nbt.put_int(block_state as i32);
-            } else {
-                nbt.put_bool(false);
+                nbt.put_int("carriedBlockState", block_state as i32);
             }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            if nbt.get_bool().unwrap_or(false) {
-                let block_state = nbt.get_int().unwrap_or(0);
-                self.set_carried_block(Some(block_state as u16)).await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            if let Some(block_state) = nbt.get_int("carriedBlockState") {
+                self.set_carried_block(Some(block_state as u16));
             }
         })
     }
@@ -460,7 +451,7 @@ impl Mob for EndermanEntity {
         Box::pin(async move {
             if is_projectile {
                 for _ in 0..64 {
-                    if self.teleport_randomly().await {
+                    if self.teleport_randomly() {
                         return false;
                     }
                 }
@@ -480,7 +471,7 @@ impl Mob for EndermanEntity {
             }
             let should_teleport = self.get_random().random_range(0..10) != 0;
             if should_teleport {
-                self.teleport_randomly().await;
+                self.teleport_randomly();
             }
         })
     }

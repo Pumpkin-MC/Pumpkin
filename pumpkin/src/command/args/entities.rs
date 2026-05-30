@@ -120,7 +120,7 @@ impl FromStr for EntityFilter {
                 }
                 Ok(Self::Sort(sort))
             }
-            _ => todo!("{key}"),
+            _ => Err(format!("Unimplemented key: {key}")),
         }
     }
 }
@@ -402,7 +402,11 @@ pub(crate) fn parse_target_selector_with_context(
     parse_target_selector(raw_arg.value).map_err(|error| {
         syntax_error_for_arg_with_cursor(
             raw_arg,
-            TextComponent::translate(translation::ARGUMENT_ENTITY_INVALID, []),
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_INVALID,
+                translation::java::ARGUMENT_ENTITY_INVALID,
+                [],
+            ),
             error.cursor,
         )
     })
@@ -415,7 +419,11 @@ pub(crate) fn ensure_player_only_selector(
     if selector.includes_entities() {
         Err(syntax_error_for_arg_with_cursor(
             raw_arg,
-            TextComponent::translate(translation::ARGUMENT_PLAYER_ENTITIES, []),
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_PLAYER_ENTITIES,
+                translation::java::ARGUMENT_PLAYER_ENTITIES,
+                [],
+            ),
             0,
         ))
     } else {
@@ -463,7 +471,7 @@ mod test {
         let Err(error) = parse_target_selector_with_context(raw_arg) else {
             panic!("expected selector parsing to fail");
         };
-        let cursor = error.context.unwrap().cursor;
+        let cursor = error.context.expect("Error should have context").cursor;
         assert_eq!(cursor, 7);
     }
 
@@ -476,14 +484,16 @@ mod test {
             end: input.len(),
             input,
         };
-        let selector = "@e".parse::<TargetSelector>().unwrap();
+        let selector = "@e"
+            .parse::<TargetSelector>()
+            .expect("Selector should be valid");
 
         let error = ensure_player_only_selector(&selector, raw_arg).unwrap_err();
         let translate_key = match error.message.0.content.as_ref() {
             pumpkin_util::text::TextContent::Translate { translate, .. } => translate.as_ref(),
             _ => "",
         };
-        assert_eq!(translate_key, translation::ARGUMENT_PLAYER_ENTITIES);
-        assert_eq!(error.context.unwrap().cursor, 4);
+        assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_ENTITIES);
+        assert_eq!(error.context.expect("Error should have context").cursor, 4);
     }
 }

@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_CHAT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
 use crate::{
     ClientPacket, WritingError,
@@ -27,7 +27,7 @@ pub struct CPlayerChatMessage {
     /// The RSA signature (256 bytes) verifying the message's authenticity.
     pub message_signature: Option<Box<[u8]>>,
     /// The raw plain-text content of the message.
-    pub message: String,
+    pub message: Box<str>,
     /// Epoch timestamp (milliseconds) when the message was sent.
     pub timestamp: i64,
     /// A random 64-bit value used to ensure signature uniqueness.
@@ -58,7 +58,7 @@ impl CPlayerChatMessage {
         sender: uuid::Uuid,
         index: VarInt,
         message_signature: Option<Box<[u8]>>,
-        message: String,
+        message: Box<str>,
         timestamp: i64,
         salt: i64,
         previous_messages: Box<[PreviousMessage]>,
@@ -91,7 +91,7 @@ impl ClientPacket for CPlayerChatMessage {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

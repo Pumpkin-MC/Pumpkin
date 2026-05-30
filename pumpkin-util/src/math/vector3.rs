@@ -1,10 +1,12 @@
 use bytes::BufMut;
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-use num_traits::{Float, Num};
-
 use super::position::BlockPos;
 use super::vector2::Vector2;
+use crate::math::vector_codec_impl;
+use num_traits::{Float, Num};
+use pumpkin_codecs::codec::list::validate_fixed_size;
+use pumpkin_codecs::{DataResult, Decode, DynamicOps, Encode, FlatTryFrom};
 
 /// A 3-dimensional vector with components of type `T`.
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
@@ -103,6 +105,21 @@ impl<T> Vector3<T> {
     #[must_use]
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
+    }
+}
+
+impl Vector3<f64> {
+    #[must_use]
+    pub fn from_yaw_pitch(yaw: f32, pitch: f32) -> Self {
+        let yaw_rad = f64::from(yaw).to_radians();
+        let pitch_rad = f64::from(pitch).to_radians();
+
+        let cos_pitch = pitch_rad.cos();
+        let sin_pitch = pitch_rad.sin();
+        let cos_yaw = yaw_rad.cos();
+        let sin_yaw = yaw_rad.sin();
+
+        Self::new(-cos_pitch * sin_yaw, -sin_pitch, cos_pitch * cos_yaw)
     }
 }
 
@@ -748,6 +765,8 @@ impl serde::Serialize for Vector3<i32> {
         serializer.serialize_bytes(&buf)
     }
 }
+
+vector_codec_impl!(Vector3<T>, 3, x, y, z);
 
 /// Packs a chunk position vector into a single 64-bit integer.
 ///

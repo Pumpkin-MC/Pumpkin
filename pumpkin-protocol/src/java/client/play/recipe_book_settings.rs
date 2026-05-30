@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_RECIPE_BOOK_SETTINGS;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
@@ -42,7 +42,7 @@ impl ClientPacket for CRecipeBookSettings {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_bool(self.crafting_open)?;

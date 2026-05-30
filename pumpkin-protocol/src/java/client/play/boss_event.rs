@@ -5,7 +5,7 @@ use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, WritingError};
 use pumpkin_data::packet::clientbound::PLAY_BOSS_EVENT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the "Boss Bar" displayed at the top of the player's screen.
 ///
@@ -30,7 +30,7 @@ impl ClientPacket for CBossEvent<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

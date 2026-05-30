@@ -3,7 +3,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
@@ -14,13 +15,15 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
+use pumpkin_protocol::bedrock::client::AbilityLayer;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
-use pumpkin_protocol::bedrock::client::update_abilities::{
-    Ability, AbilityLayer, CUpdateAbilities,
-};
+use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -29,9 +32,9 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
+use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -44,26 +47,30 @@ use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
 use pumpkin_inventory::screen_handler::{
-    InventoryPlayer, PlayerFuture, ScreenHandler, ScreenHandlerFactory, ScreenHandlerListener,
+    ClickType, InventoryPlayer, PlayerFuture, ScreenHandler, ScreenHandlerFactory,
+    ScreenHandlerListener,
 };
 use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
-    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
-    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
+    CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
     CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
     CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
     CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
-    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata,
-    PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon,
+    MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::SClickSlot;
+use pumpkin_protocol::java::server::play::{
+    SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
+};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -87,6 +94,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
+use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
@@ -107,7 +115,7 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4790; // 26.1.2
 
-struct HeapNode(i32, Vector2<i32>, SyncChunk);
+struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
 
@@ -133,10 +141,10 @@ pub struct ChunkManager {
     chunks_per_tick: usize,
     center: Vector2<i32>,
     view_distance: u8,
-    chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+    chunk_listener: Receiver<(Vector2<i32>, Weak<ChunkData>)>,
     chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
-    entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
+    entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
     batches_sent_since_ack: u8,
     last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
@@ -150,7 +158,7 @@ impl ChunkManager {
     #[must_use]
     pub fn new(
         chunks_per_tick: usize,
-        chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+        chunk_listener: Receiver<(Vector2<i32>, Weak<ChunkData>)>,
         world: Arc<World>,
     ) -> Self {
         Self {
@@ -192,13 +200,15 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
+        while let Ok((pos, chunk_weak)) = self.chunk_listener.try_recv() {
             let dst = Self::chebyshev(pos, self.center);
             if dst > i32::from(self.view_distance) {
                 continue;
             }
-            if self.should_enqueue_chunk(pos, &chunk) {
-                self.chunk_queue.push(HeapNode(dst, pos, chunk));
+            if let Some(chunk) = chunk_weak.upgrade()
+                && self.should_enqueue_chunk(pos, &chunk)
+            {
+                self.chunk_queue.push(HeapNode(dst, pos, chunk_weak));
             }
         }
     }
@@ -244,6 +254,11 @@ impl ChunkManager {
                 && !unloading_chunks.contains(pos)
         });
 
+        self.entity_chunk_queue.retain(|(pos, _)| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+                && !unloading_chunks.contains(pos)
+        });
+
         let mut tasks: Vec<_> = self
             .chunk_queue
             .drain()
@@ -261,7 +276,7 @@ impl ChunkManager {
                 let chunk = chunk.value().clone();
                 if self.should_enqueue_chunk(*pos, &chunk) {
                     let dst = (pos.x - center.x).abs().max((pos.y - center.y).abs());
-                    tasks.push(HeapNode(dst, *pos, chunk));
+                    tasks.push(HeapNode(dst, *pos, Arc::downgrade(&chunk)));
                 }
             }
         }
@@ -309,17 +324,19 @@ impl ChunkManager {
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
 
-    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
-        if self.should_enqueue_chunk(position, &chunk) {
+    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) {
+        if self.should_enqueue_chunk(position, chunk) {
             let dst = (position.x - self.center.x)
                 .abs()
                 .max((position.y - self.center.y).abs());
-            self.chunk_queue.push(HeapNode(dst, position, chunk));
+            self.chunk_queue
+                .push(HeapNode(dst, position, Arc::downgrade(chunk)));
         }
     }
 
-    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
-        self.entity_chunk_queue.push_back((position, chunk));
+    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: &SyncEntityChunk) {
+        self.entity_chunk_queue
+            .push_back((position, Arc::downgrade(chunk)));
     }
 
     #[must_use]
@@ -332,8 +349,12 @@ impl ChunkManager {
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let take = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
         let mut chunks = Vec::with_capacity(take);
-        for _ in 0..take {
-            chunks.push(self.chunk_queue.pop().unwrap().2);
+        while chunks.len() < take
+            && let Some(node) = self.chunk_queue.pop()
+        {
+            if let Some(chunk) = node.2.upgrade() {
+                chunks.push(chunk);
+            }
         }
         self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
@@ -347,22 +368,31 @@ impl ChunkManager {
             .len()
             .min(self.chunks_per_tick.max(1));
 
-        let chunks: Box<[Arc<ChunkEntityData>]> = self
-            .entity_chunk_queue
-            .drain(..chunk_size)
-            .map(|(_, chunk)| chunk)
-            .collect();
+        let mut chunks = Vec::with_capacity(chunk_size);
+        while chunks.len() < chunk_size
+            && let Some((_, weak_chunk)) = self.entity_chunk_queue.pop_front()
+        {
+            if let Some(chunk) = weak_chunk.upgrade() {
+                chunks.push(chunk);
+            }
+        }
 
         self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
 
-        chunks
+        chunks.into_boxed_slice()
     }
 }
 
 /// Represents a Minecraft player entity.
 ///
 /// A `Player` is a special type of entity that represents a human player connected to the server.
+#[derive(Clone, Copy, Debug)]
+pub struct ItemCooldown {
+    pub start_tick: i32,
+    pub duration: i32,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -381,7 +411,7 @@ pub struct Player {
     /// The player's previous gamemode
     pub previous_gamemode: AtomicCell<Option<GameMode>>,
     /// The player's spawnpoint
-    pub respawn_point: AtomicCell<Option<RespawnPoint>>,
+    pub respawn_point: Mutex<Option<RespawnPoint>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's breath level
@@ -414,12 +444,6 @@ pub struct Player {
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
-    /// Whether we are waiting for a response after sending a keep alive packet.
-    pub wait_for_keep_alive: AtomicBool,
-    /// The keep alive packet payload we send. The client should respond with the same id.
-    pub keep_alive_id: AtomicI64,
-    /// The last time we sent a keep alive packet.
-    pub last_keep_alive_time: AtomicCell<Instant>,
     /// The last time the player performed an action (for idle timeout).
     pub last_action_time: AtomicCell<Instant>,
     /// The ping in millis.
@@ -435,6 +459,7 @@ pub struct Player {
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
+    pub bedrock_spawned: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Item usage tracking for bows, crossbows, etc.
@@ -447,6 +472,7 @@ pub struct Player {
     pub experience_progress: AtomicCell<f32>,
     /// The player's total experience points.
     pub experience_points: AtomicI32,
+    pub item_cooldowns: Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
@@ -460,12 +486,72 @@ pub struct Player {
     pub tab_list_header: Mutex<TextComponent>,
     pub tab_list_footer: Mutex<TextComponent>,
     pub display_name: Mutex<Option<TextComponent>>,
+    pub tab_list_name: Mutex<Option<TextComponent>>,
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
+    pub enchantment_seed: AtomicI32,
+    pub fishing_bobber: AtomicI32,
+    pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
+}
+
+use base64::prelude::*;
+use pumpkin_protocol::Property;
+use serde::Deserialize;
+use std::io::Read;
+
+#[derive(Deserialize)]
+struct TexturesProperty {
+    textures: Textures,
+}
+
+#[derive(Deserialize)]
+struct Textures {
+    #[serde(rename = "SKIN")]
+    skin: Option<SkinTexture>,
+}
+
+#[derive(Deserialize)]
+struct SkinTexture {
+    url: String,
 }
 
 impl Player {
+    #[must_use]
+    pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
+        let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
+        let decoded = BASE64_STANDARD
+            .decode(textures_prop.value.as_bytes())
+            .ok()?;
+        let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
+        let url = textures.textures.skin?.url;
+
+        let resp = ureq::get(&url).call().ok()?;
+        let mut buf = Vec::new();
+        resp.into_body().into_reader().read_to_end(&mut buf).ok()?;
+        let img = image::load_from_memory(&buf).ok()?;
+
+        let width = img.width();
+        let mut height = img.height();
+
+        if width != 64 || (height != 32 && height != 64) {
+            return None;
+        }
+
+        let mut rgba = img.into_rgba8().into_raw();
+
+        if height == 32 {
+            rgba.resize(64 * 64 * 4, 0);
+            height = 64;
+        }
+
+        let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        skin.image_width = width;
+        skin.image_height = height;
+        skin.skin_data = rgba;
+        Some(skin)
+    }
+
     #[expect(clippy::too_many_lines)]
     pub async fn new(
         client: ClientPlatform,
@@ -501,12 +587,26 @@ impl Player {
         let ender_chest_inventory = Arc::new(EnderChestInventory::new());
 
         let player_screen_handler = Arc::new(Mutex::new(
-            PlayerScreenHandler::new(&inventory, None, 0).await,
+            PlayerScreenHandler::new(
+                &inventory,
+                None,
+                0,
+                Some(world.server.upgrade().unwrap().recipe_manager.clone()),
+            )
+            .await,
         ));
 
         // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
+
+        let properties = gameprofile.properties.load().clone();
+        let bedrock_skin = tokio::task::spawn_blocking(move || {
+            Self::fetch_skin(&properties)
+                .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
+        })
+        .await
+        .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
 
         Self {
             living_entity,
@@ -518,6 +618,7 @@ impl Player {
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
+            enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
@@ -532,7 +633,7 @@ impl Player {
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
-            respawn_point: AtomicCell::new(None),
+            respawn_point: Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
@@ -542,13 +643,11 @@ impl Player {
                 // Since 1 is not possible in vanilla it is used as uninit
                 NonZeroU8::new(1).unwrap(),
             )),
-            wait_for_keep_alive: AtomicBool::new(false),
-            keep_alive_id: AtomicI64::new(0),
-            last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
+            bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -571,6 +670,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            item_cooldowns: Mutex::new(HashMap::new()),
             // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(
                 16,
@@ -592,9 +692,12 @@ impl Player {
             tab_list_header: Mutex::new(TextComponent::text("")),
             tab_list_footer: Mutex::new(TextComponent::text("")),
             display_name: Mutex::new(None),
+            tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
-            tab_list_listed: AtomicBool::new(true),
+            tab_list_listed: AtomicBool::new(false),
+            fishing_bobber: AtomicI32::new(-1),
+            bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
         }
     }
 
@@ -606,61 +709,107 @@ impl Player {
             .await;
     }
 
+    pub async fn start_cooldown(&self, group: String, duration: i32) {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        cooldowns.insert(
+            group.clone(),
+            ItemCooldown {
+                start_tick: self.tick_counter.load(Ordering::Relaxed),
+                duration,
+            },
+        );
+        self.client
+            .send_packet_now(&CItemCooldown::new(group, VarInt(duration)))
+            .await;
+    }
+
+    pub async fn get_cooldown(&self, group: &str) -> f32 {
+        let cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            let elapsed = current_tick - cooldown.start_tick;
+            if elapsed < cooldown.duration {
+                return 1.0 - (elapsed as f32 / cooldown.duration as f32);
+            }
+        }
+        0.0
+    }
+
+    pub async fn is_on_cooldown(&self, group: &str) -> bool {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            if current_tick - cooldown.start_tick < cooldown.duration {
+                return true;
+            }
+            cooldowns.remove(group);
+        }
+        false
+    }
+
     pub async fn set_display_name(&self, display_name: Option<TextComponent>) {
         *self.display_name.lock().await = display_name.clone();
         // Update the tab list for everyone
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+            }],
+        ));
     }
 
-    pub async fn set_tab_list_order(&self, order: i32) {
+    pub async fn get_tab_list_name(&self) -> Option<TextComponent> {
+        self.tab_list_name.lock().await.clone()
+    }
+
+    pub async fn set_tab_list_name(&self, name: Option<TextComponent>) {
+        *self.tab_list_name.lock().await = name.clone();
+        let world = self.world();
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
+            }],
+        ));
+    }
+
+    pub fn set_tab_list_order(&self, order: i32) {
         self.tab_list_order.store(order, Ordering::Relaxed);
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListOrder(VarInt(order))],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateListOrder(VarInt(order))],
+            }],
+        ));
     }
 
-    pub async fn set_tab_list_latency(&self, latency: i32) {
+    pub fn set_tab_list_latency(&self, latency: i32) {
         self.tab_list_latency.store(latency, Ordering::Relaxed);
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_LATENCY.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateLatency(VarInt(latency))],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_LATENCY.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateLatency(VarInt(latency))],
+            }],
+        ));
     }
 
-    pub async fn set_tab_list_listed(&self, listed: bool) {
+    pub fn set_tab_list_listed(&self, listed: bool) {
         self.tab_list_listed.store(listed, Ordering::Relaxed);
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_LISTED.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListed(listed)],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_LISTED.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateListed(listed)],
+            }],
+        ));
     }
 
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
@@ -707,7 +856,10 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        level.clean_entity_chunks(&chunks_to_clean);
+        if !chunks_to_clean.is_empty() {
+            level.clean_entity_chunks(&chunks_to_clean);
+            world.remove_entities_in_chunks(&chunks_to_clean);
+        }
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -721,6 +873,7 @@ impl Player {
         //self.world().level.list_cached();
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn attack(&self, victim: Arc<dyn EntityBase>) {
         let world = self.world();
         let server = world.server.upgrade().unwrap();
@@ -775,6 +928,23 @@ impl Player {
 
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
+
+        if let Some(strength) = self
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::STRENGTH)
+            .await
+        {
+            damage += 3.0 * (f64::from(strength.amplifier) + 1.0);
+        }
+        if let Some(weakness) = self
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::WEAKNESS)
+            .await
+        {
+            damage -= 4.0 * (f64::from(weakness.amplifier) + 1.0);
+        }
+        damage = damage.max(0.0);
+
         let pos = victim_entity.pos.load();
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
@@ -782,25 +952,59 @@ impl Player {
             damage *= 1.5;
         }
 
+        let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
+        if is_mace_smash {
+            let fall_distance = self.living_entity.fall_distance.load();
+            damage += 1.5 * f64::from(fall_distance);
+        }
+
         if !victim
             .damage_with_context(
                 &*victim,
                 damage as f32,
-                DamageType::PLAYER_ATTACK,
+                if is_mace_smash {
+                    DamageType::MACE_SMASH
+                } else {
+                    DamageType::PLAYER_ATTACK
+                },
                 None,
                 Some(self),
                 Some(self),
             )
             .await
         {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &self.living_entity.entity.pos.load(),
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityPlayerAttackNodamage,
+                SoundCategory::Players,
+                &self.living_entity.entity.pos.load(),
+            );
             return;
+        }
+
+        if let Some(enchantments) = item_stack
+            .lock()
+            .await
+            .get_data_component::<EnchantmentsImpl>()
+        {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                if **enchantment == Enchantment::FIRE_ASPECT {
+                    victim_entity.set_on_fire_for_ticks(*level as u32 * 80);
+                }
+            }
+        }
+
+        if is_mace_smash {
+            let fall_distance = self.living_entity.fall_distance.load();
+            self.living_entity.fall_distance.store(0.0);
+            world.play_sound(
+                if fall_distance > 5.0 {
+                    Sound::ItemMaceSmashGroundHeavy
+                } else {
+                    Sound::ItemMaceSmashGround
+                },
+                SoundCategory::Players,
+                &pos,
+            );
         }
 
         player_attack_sound(&pos, &world, attack_type).await;
@@ -822,7 +1026,43 @@ impl Player {
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                    combat::spawn_sweep_particle(attacker_entity, &world, &pos);
+
+                    let mut sweep_damage = 1.0;
+                    if let Some(enchantments) = item_stack
+                        .lock()
+                        .await
+                        .get_data_component::<EnchantmentsImpl>()
+                    {
+                        for (enchantment, level) in enchantments.enchantment.iter() {
+                            if **enchantment == Enchantment::SWEEPING_EDGE {
+                                sweep_damage +=
+                                    damage as f32 * (*level as f32 / (*level as f32 + 1.0));
+                            }
+                        }
+                    }
+
+                    let search_box = BoundingBox::new(
+                        Vector3::new(pos.x - 1.0, pos.y - 0.5, pos.z - 1.0),
+                        Vector3::new(pos.x + 1.0, pos.y + 0.5, pos.z + 1.0),
+                    );
+                    let victims = world.get_all_at_box(&search_box);
+                    for other_victim in victims {
+                        if other_victim.get_entity().entity_id != victim_entity.entity_id
+                            && other_victim.get_entity().entity_id != attacker_entity.entity_id
+                        {
+                            other_victim
+                                .damage_with_context(
+                                    other_victim.as_ref(),
+                                    sweep_damage,
+                                    DamageType::PLAYER_ATTACK,
+                                    None,
+                                    Some(self),
+                                    Some(self),
+                                )
+                                .await;
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -870,12 +1110,10 @@ impl Player {
 
         if slot_index == self.inventory.get_selected_slot() as usize {
             self.living_entity
-                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)])
-                .await;
+                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)]);
         } else if slot_index == PlayerInventory::OFF_HAND_SLOT {
             self.living_entity
-                .send_equipment_changes(&[(EquipmentSlot::OFF_HAND, stack)])
-                .await;
+                .send_equipment_changes(&[(EquipmentSlot::OFF_HAND, stack)]);
         }
     }
 
@@ -915,12 +1153,10 @@ impl Player {
             // Send the break status before clearing the slot so the client can
             // use the item texture for break particles.
             if result == pumpkin_data::item_stack::DamageResult::Broken {
-                self.world()
-                    .send_entity_status(
-                        &self.living_entity.entity,
-                        super::equipment_break_status(slot),
-                    )
-                    .await;
+                self.world().send_entity_status(
+                    &self.living_entity.entity,
+                    super::equipment_break_status(slot),
+                );
             }
 
             self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
@@ -930,8 +1166,7 @@ impl Player {
             .await;
 
             self.living_entity
-                .send_equipment_changes(&[(slot.clone(), updated_stack)])
-                .await;
+                .send_equipment_changes(&[(slot.clone(), updated_stack)]);
 
             return true;
         }
@@ -976,21 +1211,16 @@ impl Player {
         block_pos: BlockPos,
         yaw: f32,
         pitch: f32,
+        forced: bool,
     ) -> bool {
-        if let Some(respawn_point) = self.respawn_point.load()
+        if !forced
+            && let Some(respawn_point) = self.respawn_point.lock().await.as_ref()
             && dimension == respawn_point.dimension
             && block_pos == respawn_point.position
         {
             return false;
         }
 
-        self.respawn_point.store(Some(RespawnPoint {
-            dimension,
-            position: block_pos,
-            yaw,
-            force: false,
-        }));
-
         self.client
             .send_packet_now(&CPlayerSpawnPosition::new(
                 block_pos,
@@ -999,33 +1229,14 @@ impl Player {
                 dimension.minecraft_name.to_owned(),
             ))
             .await;
+
+        *self.respawn_point.lock().await = Some(RespawnPoint {
+            dimension,
+            position: block_pos,
+            yaw,
+            force: forced,
+        });
         true
-    }
-
-    /// Sets the respawn point with force=true, bypassing bed/anchor checks.
-    /// Used by /spawnpoint command.
-    pub async fn set_respawn_point_forced(
-        &self,
-        dimension: Dimension,
-        block_pos: BlockPos,
-        yaw: f32,
-        pitch: f32,
-    ) {
-        self.respawn_point.store(Some(RespawnPoint {
-            dimension,
-            position: block_pos,
-            yaw,
-            force: true,
-        }));
-
-        self.client
-            .send_packet_now(&CPlayerSpawnPosition::new(
-                block_pos,
-                yaw,
-                pitch,
-                dimension.minecraft_name.to_owned(),
-            ))
-            .await;
     }
 
     /// Calculates the player's respawn point based on stored spawn data.
@@ -1047,16 +1258,17 @@ impl Player {
         type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
         type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 
-        let respawn_point = self.respawn_point.load()?;
+        let respawn_guard = self.respawn_point.lock().await;
+        let respawn_point = respawn_guard.as_ref()?;
         let world = self.world();
         let pos = &respawn_point.position;
-        let (block, state_id) = world.get_block_and_state_id(pos).await;
+        let (block, state_id) = world.get_block_and_state_id(pos);
 
         // If force is set (from /spawnpoint command), validate position is safe
         if respawn_point.force {
             // For forced spawn, check if both the block and block above allow mob spawn
-            let block_state = world.get_block_state(pos).await;
-            let above_state = world.get_block_state(&pos.up()).await;
+            let block_state = world.get_block_state(pos);
+            let above_state = world.get_block_state(&pos.up());
 
             // Check if blocks are passable (non-solid or air)
             let block_safe = block_state.is_air() || !block_state.is_solid();
@@ -1076,7 +1288,7 @@ impl Player {
                     position,
                     yaw: respawn_point.yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension,
+                    dimension: respawn_point.dimension.clone(),
                 });
             }
             return None;
@@ -1090,13 +1302,13 @@ impl Player {
             // Try positions around the bed based on facing direction
             // Vanilla tries multiple offset patterns; we use a simplified version
             if let Some(spawn_pos) =
-                Self::find_bed_spawn_position(&world, pos, facing, respawn_point.yaw).await
+                Self::find_bed_spawn_position(&world, pos, facing, respawn_point.yaw)
             {
                 return Some(CalculatedRespawnPoint {
                     position: spawn_pos,
                     yaw: respawn_point.yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension,
+                    dimension: respawn_point.dimension.clone(),
                 });
             }
             return None;
@@ -1104,10 +1316,8 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            use pumpkin_data::block_properties::Integer0To4;
-
             let anchor_props = AnchorProperties::from_state_id(state_id, block);
-            let charges = anchor_props.charges.to_index();
+            let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work
             if charges == 0 {
@@ -1115,11 +1325,11 @@ impl Player {
             }
 
             // Try positions around the anchor
-            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos).await {
+            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
-                new_props.charges = Integer0To4::from_index(new_charges);
+                new_props.charges = new_charges;
                 world
                     .set_block_state(
                         pos,
@@ -1132,7 +1342,7 @@ impl Player {
                     position: spawn_pos,
                     yaw: respawn_point.yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension,
+                    dimension: respawn_point.dimension.clone(),
                 });
             }
             return None;
@@ -1144,7 +1354,7 @@ impl Player {
     /// Find a valid spawn position around a bed.
     /// Vanilla uses a complex algorithm based on bed facing direction.
     /// We use a simplified version that tries cardinal directions first.
-    async fn find_bed_spawn_position(
+    fn find_bed_spawn_position(
         world: &Arc<crate::world::World>,
         bed_pos: &BlockPos,
         facing: HorizontalFacing,
@@ -1160,7 +1370,7 @@ impl Player {
                 bed_pos.0.z + dz,
             ));
 
-            if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos) {
                 return Some(pos);
             }
 
@@ -1170,13 +1380,13 @@ impl Player {
                 bed_pos.0.y - 1,
                 bed_pos.0.z + dz,
             ));
-            if let Some(pos) = Self::find_respawn_pos(world, &check_pos_down).await {
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos_down) {
                 return Some(pos);
             }
         }
 
         // Try on the bed itself as last resort
-        if let Some(pos) = Self::find_respawn_pos(world, bed_pos).await {
+        if let Some(pos) = Self::find_respawn_pos(world, bed_pos) {
             return Some(pos);
         }
 
@@ -1211,7 +1421,7 @@ impl Player {
     }
 
     /// Find a valid spawn position around a respawn anchor.
-    async fn find_anchor_spawn_position(
+    fn find_anchor_spawn_position(
         world: &Arc<crate::world::World>,
         anchor_pos: &BlockPos,
     ) -> Option<Vector3<f64>> {
@@ -1236,7 +1446,7 @@ impl Player {
                     anchor_pos.0.z + dz,
                 ));
 
-                if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+                if let Some(pos) = Self::find_respawn_pos(world, &check_pos) {
                     return Some(pos);
                 }
             }
@@ -1244,26 +1454,23 @@ impl Player {
 
         // Also try directly above the anchor
         let above_pos = anchor_pos.up();
-        Self::find_respawn_pos(world, &above_pos).await
+        Self::find_respawn_pos(world, &above_pos)
     }
 
     /// Check if a position is valid for respawning (vanilla Dismounting.findRespawnPos logic).
     /// Returns the spawn position if valid, None otherwise.
-    async fn find_respawn_pos(
-        world: &Arc<crate::world::World>,
-        pos: &BlockPos,
-    ) -> Option<Vector3<f64>> {
-        let state = world.get_block_state(pos).await;
-        let below_state = world.get_block_state(&pos.down()).await;
+    fn find_respawn_pos(world: &Arc<crate::world::World>, pos: &BlockPos) -> Option<Vector3<f64>> {
+        let state = world.get_block_state(pos);
+        let below_state = world.get_block_state(&pos.down());
 
         // Check if block at position is invalid for spawn (e.g., inside solid block)
-        let block = world.get_block(pos).await;
+        let block = world.get_block(pos);
         if block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
             return None;
         }
 
         // Check if block above is also invalid
-        let above_block = world.get_block(&pos.up()).await;
+        let above_block = world.get_block(&pos.up());
         if above_block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
             return None;
         }
@@ -1294,28 +1501,26 @@ impl Player {
         );
 
         // Check if the space is empty (no block collisions)
-        if !world.is_space_empty(player_box).await {
+        if !world.is_space_empty(player_box) {
             return None;
         }
 
         Some(spawn_pos)
     }
 
-    pub async fn sleep(&self, bed_head_pos: BlockPos) {
+    pub fn sleep(&self, bed_head_pos: BlockPos) {
         // TODO: Stop riding
 
-        self.get_entity().set_pose(EntityPose::Sleeping).await;
+        self.get_entity().set_pose(EntityPose::Sleeping);
         self.living_entity
             .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
-        self.get_entity()
-            .send_meta_data(&[Metadata::new(
-                TrackedData::SLEEPING_POS_ID,
-                MetaDataType::OPTIONAL_BLOCK_POS,
-                Some(bed_head_pos),
-            )])
-            .await;
-        self.get_entity().set_velocity(Vector3::default()).await;
+        self.get_entity().send_meta_data(&[Metadata::new(
+            TrackedData::SLEEPING_POS_ID,
+            MetaDataType::OPTIONAL_BLOCK_POS,
+            Some(bed_head_pos),
+        )]);
+        self.get_entity().set_velocity(Vector3::default());
 
         self.sleeping_since.store(Some(0));
     }
@@ -1367,7 +1572,7 @@ impl Player {
         false
     }
 
-    async fn can_fit_pose(&self, pose: EntityPose) -> bool {
+    fn can_fit_pose(&self, pose: EntityPose) -> bool {
         let entity = self.get_entity();
         let dimensions = Entity::get_entity_dimensions(pose);
         let position = entity.pos.load();
@@ -1376,12 +1581,11 @@ impl Player {
             .world
             .load()
             .is_space_empty(aabb.contract_all(1.0E-7))
-            .await
     }
 
     pub async fn update_player_pose(&self) {
         let entity = self.get_entity();
-        if !self.can_fit_pose(EntityPose::Swimming).await {
+        if !self.can_fit_pose(EntityPose::Swimming) {
             return;
         }
 
@@ -1402,70 +1606,100 @@ impl Player {
 
         let new_pose = if self.gamemode.load() == GameMode::Spectator
             || entity.has_vehicle().await
-            || self.can_fit_pose(desired_pose).await
+            || self.can_fit_pose(desired_pose)
         {
             desired_pose
-        } else if self.can_fit_pose(EntityPose::Crouching).await {
+        } else if self.can_fit_pose(EntityPose::Crouching) {
             EntityPose::Crouching
         } else {
             EntityPose::Swimming
         };
 
         if entity.pose.load() != new_pose {
-            entity.set_pose(new_pose).await;
+            entity.set_pose(new_pose);
         }
     }
 
     pub async fn wake_up(&self) {
         let world = self.world();
-        let respawn_point = self
-            .respawn_point
-            .load()
-            .expect("Player waking up should have it's respawn point set on the bed.");
+        let respawn_point = self.respawn_point.lock().await;
+        let Some(respawn_point) = respawn_point.as_ref() else {
+            warn!("Player waking up should have it's respawn point set on the bed");
+            return;
+        };
 
-        let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
+        let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position);
         BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
-        self.living_entity
-            .entity
-            .set_pose(EntityPose::Standing)
-            .await;
+        self.living_entity.entity.set_pose(EntityPose::Standing);
         self.living_entity.entity.set_pos(self.position());
-        self.living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::SLEEPING_POS_ID,
-                MetaDataType::OPTIONAL_BLOCK_POS,
-                None::<BlockPos>,
-            )])
-            .await;
+        self.living_entity.entity.send_meta_data(&[Metadata::new(
+            TrackedData::SLEEPING_POS_ID,
+            MetaDataType::OPTIONAL_BLOCK_POS,
+            None::<BlockPos>,
+        )]);
 
         let chunk_pos = self.living_entity.entity.chunk_pos.load();
-        world
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
-            )
-            .await;
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
+        );
 
         self.sleeping_since.store(None);
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
-        match mode {
-            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
+        match &self.client {
+            ClientPlatform::Java(client) => match mode {
+                TitleMode::Title => client.enqueue_packet(&CTitleText::new(text)).await,
+                TitleMode::SubTitle => client.enqueue_packet(&CSubtitle::new(text)).await,
+                TitleMode::ActionBar => client.enqueue_packet(&CActionBar::new(text)).await,
+            },
+            ClientPlatform::Bedrock(client) => {
+                let action_type = match mode {
+                    TitleMode::Title => 2,
+                    TitleMode::SubTitle => 3,
+                    TitleMode::ActionBar => 4,
+                };
+                client
+                    .send_game_packet(
+                        &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                            action_type,
+                            text.clone().get_text(),
+                            0,
+                            0,
+                            0,
+                        ),
+                    )
+                    .await;
+            }
         }
     }
 
     pub async fn send_title_animation(&self, fade_in: i32, stay: i32, fade_out: i32) {
-        self.client
-            .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(
+                        &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                            5,
+                            String::new(),
+                            fade_in,
+                            stay,
+                            fade_out,
+                        ),
+                    )
+                    .await;
+            }
+        }
     }
 
-    pub async fn spawn_particle(
+    pub fn spawn_particle(
         &self,
         position: Vector3<f64>,
         offset: Vector3<f32>,
@@ -1473,18 +1707,16 @@ impl Player {
         particle_count: i32,
         particle: Particle,
     ) {
-        self.client
-            .enqueue_packet(&CParticle::new(
-                false,
-                false,
-                position,
-                offset,
-                max_speed,
-                particle_count,
-                VarInt(particle as i32),
-                &[],
-            ))
-            .await;
+        self.client.try_enqueue_packet(&CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            VarInt(particle as i32),
+            &[],
+        ));
     }
 
     pub async fn play_sound(
@@ -1612,6 +1844,16 @@ impl Player {
                             })
                             .await;
                     }
+
+                    if !self.bedrock_spawned.load(Ordering::Relaxed) && chunk_count > 4 {
+                        let mut frame_set = FrameSet::default();
+
+                        bedrock_client
+                            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+                            .await;
+                        bedrock_client.send_frame_set(frame_set, 0x84).await;
+                        self.bedrock_spawned.store(true, Ordering::Relaxed);
+                    }
                 }
             }
         }
@@ -1630,7 +1872,7 @@ impl Player {
         if self.mining.load(Ordering::Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world();
-            let state = world.get_block_state(&pos).await;
+            let state = world.get_block_state(&pos);
             // Is the block broken?
             if state.is_air() {
                 world
@@ -1662,6 +1904,7 @@ impl Player {
         // experience handling
         self.tick_experience().await;
         self.tick_health().await;
+        self.tick_maps(server).await;
 
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
@@ -1674,32 +1917,14 @@ impl Player {
             if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
                 self.kick(
                     DisconnectReason::KickedForIdle,
-                    TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IDLING, []),
+                    TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        [],
+                    ),
                 )
                 .await;
-                return;
             }
-        }
-
-        // TODO This should only be handled by the ClientPlatform
-        if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            if matches!(self.client, ClientPlatform::Bedrock(_)) {
-                return;
-            }
-            // We never got a response from the last keep alive we sent.
-            if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                self.kick(
-                    DisconnectReason::Timeout,
-                    TextComponent::translate(translation::DISCONNECT_TIMEOUT, []),
-                )
-                .await;
-                return;
-            }
-            self.wait_for_keep_alive.store(true, Ordering::Relaxed);
-            self.last_keep_alive_time.store(now);
-            let id = now.elapsed().as_millis() as i64;
-            self.keep_alive_id.store(id, Ordering::Relaxed);
-            self.client.enqueue_packet(&CKeepAlive::new(id)).await;
         }
     }
 
@@ -1900,7 +2125,7 @@ impl Player {
     }
 
     /// Updates the client of the player's current permission level.
-    pub async fn send_permission_lvl_update(&self) {
+    pub fn send_permission_lvl_update(&self) {
         let status = match self.permission_lvl.load() {
             PermissionLvl::Zero => EntityStatus::PermissionLevelAll,
             PermissionLvl::One => EntityStatus::PermissionLevelModerators,
@@ -1909,8 +2134,7 @@ impl Player {
             PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
         self.world()
-            .send_entity_status(&self.living_entity.entity, status)
-            .await;
+            .send_entity_status(&self.living_entity.entity, status);
     }
 
     /// Sets the player's difficulty level.
@@ -1933,9 +2157,14 @@ impl Player {
         command_dispatcher: &CommandDispatcher,
     ) {
         self.permission_lvl.store(lvl);
-        self.send_permission_lvl_update().await;
+        self.send_permission_lvl_update();
 
-        client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
+        if let ClientPlatform::Bedrock(_) = &self.client {
+            client_suggestions::send_bedrock_commands_packet(self, server, command_dispatcher)
+                .await;
+        } else {
+            client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
+        }
     }
 
     /// Sends the world time to only this player.
@@ -2046,7 +2275,7 @@ impl Player {
                         1,
                     )).await;
 
-                self.send_permission_lvl_update().await;
+                self.send_permission_lvl_update();
 
                 player.clone().request_teleport(position, yaw, pitch).await;
                 player.living_entity.entity.last_pos.store(position);
@@ -2150,7 +2379,7 @@ impl Player {
     }
 
     pub async fn heal(&self, additional_health: f32) {
-        self.living_entity.heal(additional_health).await;
+        self.living_entity.heal(additional_health);
         self.send_health().await;
     }
 
@@ -2159,13 +2388,26 @@ impl Player {
             return;
         }
 
-        self.client
-            .enqueue_packet(&CSetHealth::new(
-                self.living_entity.health.load(),
-                self.hunger_manager.level.load().into(),
-                self.hunger_manager.saturation.load(),
-            ))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSetHealth::new(
+                        self.living_entity.health.load(),
+                        self.hunger_manager.level.load().into(),
+                        self.hunger_manager.saturation.load(),
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(
+                        &pumpkin_protocol::bedrock::client::set_health::CSetHealth::new(
+                            self.living_entity.health.load() as i32,
+                        ),
+                    )
+                    .await;
+            }
+        }
     }
 
     pub async fn tick_health(&self) {
@@ -2191,7 +2433,7 @@ impl Player {
     }
 
     pub async fn set_health(&self, health: f32) {
-        self.living_entity.set_health(health).await;
+        self.living_entity.set_health(health);
         self.send_health().await;
     }
 
@@ -2263,7 +2505,11 @@ impl Player {
         drop(banned_players);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                [],
+            )
         });
 
         self.kick(DisconnectReason::Kicked, kick_reason).await;
@@ -2294,7 +2540,11 @@ impl Player {
         drop(banned_ips);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                [],
+            )
         });
 
         let affected = server.get_players_by_ip(target_ip).await;
@@ -2332,7 +2582,7 @@ impl Player {
         }
 
         // Reset air supply & drowning ticks on death
-        self.breath_manager.reset(self).await;
+        self.breath_manager.reset(self);
 
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
@@ -2403,14 +2653,27 @@ impl Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
                         }],
-                    ))
-                    .await;
+                    ));
 
-                self.client
-                    .enqueue_packet(&CGameEvent::new(
-                        GameEvent::ChangeGameMode,
-                        gamemode as i32 as f32,
-                    )).await;
+                match &self.client {
+                    crate::net::ClientPlatform::Java(client) => {
+                        client
+                            .enqueue_packet(&CGameEvent::new(
+                                GameEvent::ChangeGameMode,
+                                gamemode as i32 as f32,
+                            ))
+                            .await;
+                    }
+                    crate::net::ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(
+                                &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGamemode {
+                                    gamemode,
+                                },
+                            )
+                            .await;
+                    }
+                }
 
                 true
             }
@@ -2422,23 +2685,20 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub async fn send_client_information(&self) {
+    pub fn send_client_information(&self) {
         let config = self.config.load();
-        self.living_entity
-            .entity
-            .send_meta_data(&[
-                Metadata::new(
-                    TrackedData::PLAYER_MODE_CUSTOMISATION,
-                    MetaDataType::BYTE,
-                    config.skin_parts,
-                ),
-                // Metadata::new(
-                //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::ARM,
-                //     VarInt(config.main_hand as u8 as i32),
-                // ),
-            ])
-            .await;
+        self.living_entity.entity.send_meta_data(&[
+            Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            ),
+            // Metadata::new(
+            //     TrackedData::DATA_MAIN_ARM_ID,
+            //     MetaDataType::ARM,
+            //     VarInt(config.main_hand as u8 as i32),
+            // ),
+        ]);
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
@@ -2546,8 +2806,9 @@ impl Player {
         );
 
         // TODO: Merge stacks together
-        let item_entity =
-            Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
+        let item_entity = Arc::new(ItemEntity::new_with_velocity(
+            entity, item_stack, velocity, 40,
+        ));
         self.world().spawn_entity(item_entity).await;
     }
 
@@ -2589,7 +2850,7 @@ impl Player {
             (EquipmentSlot::MAIN_HAND, main_hand_item),
             (EquipmentSlot::OFF_HAND, off_hand_item),
         ];
-        self.living_entity.send_equipment_changes(equipment).await;
+        self.living_entity.send_equipment_changes(equipment);
         // todo this.player.stopUsingItem();
     }
 
@@ -2606,7 +2867,9 @@ impl Player {
             }
             ClientPlatform::Bedrock(client) => {
                 client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .send_game_packet(&SText::system_message(text.clone().0.to_bedrock_legacy(
+                        Locale::from_str(&self.config.load().locale).unwrap_or(Locale::EnUs),
+                    )))
                     .await;
             }
         }
@@ -2631,6 +2894,68 @@ impl Player {
                     points.into(),
                 ))
                 .await;
+        }
+    }
+
+    pub async fn tick_maps(&self, server: &Server) {
+        use pumpkin_data::data_component_impl::MapIdImpl;
+        use pumpkin_data::item::Item;
+
+        for hand in Hand::all() {
+            let item_in_hand = self.inventory.get_stack_in_hand(hand).await;
+
+            let stack = item_in_hand.lock().await;
+            if stack.item.id == Item::FILLED_MAP.id
+                && let Some(map_id_comp) = stack.get_data_component::<MapIdImpl>()
+            {
+                let map_id = map_id_comp.id;
+                if let Some(map_data_arc) = server.map_manager.get_map(map_id) {
+                    let mut map_data = map_data_arc.lock().await;
+                    map_data.update(self);
+
+                    let tick_count = self.tick_counter.load(Ordering::Relaxed);
+                    if map_data.dirty || tick_count % 10 == 0 {
+                        let scale = 1 << map_data.scale;
+                        let pos = self.position();
+                        let dx = pos.x - map_data.center_x as f64;
+                        let dz = pos.z - map_data.center_z as f64;
+
+                        let icon_x = (dx / scale as f64 * 2.0).clamp(-128.0, 127.0) as i8;
+                        let icon_z = (dz / scale as f64 * 2.0).clamp(-128.0, 127.0) as i8;
+
+                        let yaw = self.living_entity.entity.yaw.load();
+                        let icon_direction =
+                            ((((yaw * 16.0 / 360.0).round() as i32 + 8) % 16 + 16) % 16) as i8;
+
+                        let icons = [MapIcon {
+                            icon_type: VarInt(0), // White pointer
+                            x: icon_x,
+                            z: icon_z,
+                            direction: icon_direction,
+                            display_name: None,
+                        }];
+
+                        let data = map_data.dirty.then(|| MapPatch {
+                            columns: 128,
+                            rows: 128,
+                            x: 0,
+                            z: 0,
+                            data: &*map_data.colors,
+                        });
+
+                        self.client
+                            .enqueue_packet(&CMapItemData {
+                                map_id: VarInt(map_id),
+                                scale: map_data.scale,
+                                locked: map_data.locked,
+                                icons: Some(&icons),
+                                data,
+                            })
+                            .await;
+                        map_data.dirty = false;
+                    }
+                }
+            }
         }
     }
 
@@ -2797,10 +3122,14 @@ impl Player {
 
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
-        let total_exp = experience::points_to_level(current_level) + current_points;
-        let new_total_exp = total_exp + added_points;
-        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
+
+        let total_exp = experience::points_to_level(current_level) as i64 + current_points as i64;
+        let new_total_exp = total_exp + added_points as i64;
+        let safe_new_total = new_total_exp.clamp(0, i32::MAX as i64) as i32;
+
+        let (new_level, new_points) = experience::total_to_level_and_points(safe_new_total);
         let progress = experience::progress_in_level(new_points, new_level);
+
         self.set_experience(new_level, progress, new_points).await;
     }
 
@@ -2860,8 +3189,7 @@ impl Player {
         .await;
 
         self.living_entity
-            .send_equipment_changes(&[(equipment_slot, updated_stack)])
-            .await;
+            .send_equipment_changes(&[(equipment_slot, updated_stack)]);
 
         xp
     }
@@ -2872,7 +3200,7 @@ impl Player {
             .store(current_id % 100 + 1, Ordering::Relaxed);
     }
 
-    pub async fn close_handled_screen(&self) {
+    pub async fn close_handled_screen(self: &Arc<Self>) {
         self.client
             .enqueue_packet(&CCloseContainer::new(
                 self.current_screen_handler
@@ -2887,19 +3215,31 @@ impl Player {
         self.on_handled_screen_closed().await;
     }
 
-    pub async fn on_handled_screen_closed(&self) {
-        self.current_screen_handler
-            .lock()
-            .await
-            .lock()
-            .await
-            .on_closed(self)
-            .await;
+    pub async fn on_handled_screen_closed(self: &Arc<Self>) {
+        let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
+            self.current_screen_handler.lock().await.clone();
+
+        let window_type = {
+            let mut handler = current_screen_handler.lock().await;
+            let wt = handler.window_type();
+            handler.on_closed(self.as_ref()).await;
+            wt
+        };
+
+        if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(
+                    crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
+                        self,
+                        window_type,
+                    ),
+                )
+                .await;
+        }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.player_screen_handler.clone();
-        let current_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
-            self.current_screen_handler.lock().await.clone();
 
         if !Arc::ptr_eq(&player_screen_handler, &current_screen_handler) {
             player_screen_handler
@@ -2925,8 +3265,21 @@ impl Player {
             .await;
     }
 
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+        self.update_last_action_time();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler_arc.lock().await;
+
+        if let Some(anvil_handler) = screen_handler
+            .as_any_mut()
+            .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
+        {
+            anvil_handler.update_item_name(packet.item_name).await;
+        }
+    }
+
     pub async fn open_handled_screen(
-        &self,
+        self: &Arc<Self>,
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
@@ -2948,7 +3301,7 @@ impl Player {
             .create_screen_handler(
                 self.screen_handler_sync_id.load(Ordering::Relaxed),
                 &self.inventory,
-                self,
+                self.as_ref(),
             )
             .await
         {
@@ -2976,7 +3329,7 @@ impl Player {
     }
 
     pub async fn open_handled_screen_direct(
-        &self,
+        self: &Arc<Self>,
         screen_handler: Arc<Mutex<dyn ScreenHandler>>,
         title: TextComponent,
     ) {
@@ -3009,14 +3362,23 @@ impl Player {
         self.open_container_pos.store(None);
     }
 
-    pub async fn on_slot_click(&self, packet: SClickSlot) {
+    #[allow(clippy::too_many_lines)]
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
         self.update_last_action_time();
-        let screen_handler = self.current_screen_handler.lock().await;
-        let mut screen_handler = screen_handler.lock().await;
-        let behaviour = screen_handler.get_behaviour();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler_arc.lock().await;
 
-        // behaviour is dropped here
-        if i32::from(behaviour.sync_id) != packet.sync_id.0 {
+        let (sync_id, container_slots, allow_grab_items, allow_put_items) = {
+            let b = screen_handler.get_behaviour();
+            (
+                b.sync_id,
+                b.container_slots,
+                b.allow_grab_items,
+                b.allow_put_items,
+            )
+        };
+
+        if i32::from(sync_id) != packet.sync_id.0 {
             return;
         }
 
@@ -3025,7 +3387,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(self.as_ref()) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -3046,7 +3408,146 @@ impl Player {
             return;
         }
 
-        let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
+        // Fire InventoryClickEvent
+        let clicked_item = if slot >= 0 {
+            let slot_obj = &screen_handler.get_behaviour().slots[slot as usize];
+            Some(slot_obj.get_cloned_stack().await)
+        } else {
+            None
+        };
+
+        let cursor_item = Some(
+            screen_handler
+                .get_behaviour()
+                .cursor_stack
+                .lock()
+                .await
+                .clone(),
+        );
+        let raw_slot = slot; // For now raw_slot == slot, as we don't have separate view/inventory indexing yet
+        let hotbar_button = if matches!(packet.mode, SlotActionType::Swap) {
+            packet.button
+        } else {
+            -1
+        };
+
+        let click_type = match packet.mode {
+            SlotActionType::Pickup => {
+                if packet.button == 0 {
+                    ClickType::Left
+                } else {
+                    ClickType::Right
+                }
+            }
+            SlotActionType::QuickMove => {
+                if packet.button == 0 {
+                    ClickType::ShiftLeft
+                } else {
+                    ClickType::ShiftRight
+                }
+            }
+            SlotActionType::Swap => ClickType::NumberKey(packet.button as u8),
+            SlotActionType::Clone => ClickType::Middle,
+            SlotActionType::Throw => {
+                if packet.button == 0 {
+                    ClickType::Drop
+                } else {
+                    ClickType::ControlDrop
+                }
+            }
+            SlotActionType::QuickCraft => {
+                if [0, 4, 8].contains(&packet.button) {
+                    ClickType::Left
+                } else if [1, 5, 9].contains(&packet.button) {
+                    ClickType::Right
+                } else {
+                    ClickType::Middle
+                }
+            }
+            SlotActionType::PickupAll => ClickType::DoubleClick,
+        };
+
+        send_cancellable! {{
+            server;
+            InventoryClickEvent::new(
+                self,
+                screen_handler.window_type(),
+                click_type,
+                slot,
+                raw_slot,
+                clicked_item,
+                cursor_item,
+                i32::from(hotbar_button),
+            );
+            'after: {}
+            'cancelled: {
+                screen_handler.cancel().await;
+                return;
+            }
+        }}
+
+        // Enforce flags
+        let is_container_slot = slot >= 0 && i32::from(slot) < container_slots as i32;
+
+        match packet.mode {
+            SlotActionType::Pickup => {
+                let cursor_stack = screen_handler.get_behaviour().cursor_stack.lock().await;
+                if is_container_slot {
+                    if !cursor_stack.is_empty() && !allow_put_items {
+                        drop(cursor_stack);
+                        screen_handler.cancel().await;
+                        return;
+                    }
+                    if cursor_stack.is_empty() && !allow_grab_items {
+                        drop(cursor_stack);
+                        screen_handler.cancel().await;
+                        return;
+                    }
+                }
+            }
+            SlotActionType::QuickMove => {
+                if is_container_slot && !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+                if !is_container_slot && !allow_put_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Swap => {
+                if is_container_slot && (!allow_grab_items || !allow_put_items) {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Throw => {
+                if is_container_slot && !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::QuickCraft => {
+                if !allow_put_items {
+                    // Dragging items into slots
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::PickupAll => {
+                if !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Clone => {}
+        }
+
+        let not_in_sync = packet.revision.0
+            != (screen_handler
+                .get_behaviour()
+                .revision
+                .load(Ordering::Relaxed) as i32);
 
         screen_handler.disable_sync();
         screen_handler
@@ -3054,7 +3555,7 @@ impl Player {
                 i32::from(slot),
                 i32::from(packet.button),
                 packet.mode.clone(),
-                self,
+                self.as_ref(),
             )
             .await;
 
@@ -3069,11 +3570,23 @@ impl Player {
             screen_handler.update_to_client().await;
         } else {
             screen_handler.send_content_updates().await;
-            drop(screen_handler);
         }
     }
 
-    /// Check if the player has a specific permission
+    /// Handles when the player clicks a button in a container (e.g. Enchantment Table)
+    pub async fn on_container_button_click(self: &Arc<Self>, packet: SContainerButtonClick) {
+        let screen_handler = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler.lock().await;
+
+        if i32::from(screen_handler.sync_id()) != packet.window_id.0 {
+            return;
+        }
+
+        screen_handler
+            .on_button_click(self.as_ref(), packet.button_id.0)
+            .await;
+    }
+
     pub async fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
         let perm_manager = server.permission_manager.read().await;
         let result = perm_manager
@@ -3099,20 +3612,30 @@ impl Player {
     /// Swing the hand of the player
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
-        let entity_id = VarInt(self.entity_id());
-        let chunk_pos = self.living_entity.entity.chunk_pos.load();
+        let entity_id = self.entity_id();
 
         let animation = match hand {
-            Hand::Left => Animation::SwingMainArm,
-            Hand::Right => Animation::SwingOffhand,
+            Hand::Right => Animation::SwingMainArm,
+            Hand::Left => Animation::SwingOffhand,
         };
 
-        let packet = CEntityAnimation::new(entity_id, animation);
+        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
+            VarInt(entity_id),
+            animation,
+        );
+
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            runtime_entity_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+        };
+
         if all {
-            world.broadcast_to_chunk(chunk_pos, &packet).await;
+            world.broadcast_editioned(&je_packet, &be_packet).await;
         } else {
             world
-                .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
+                .broadcast_packet_except_editioned(&[self.gameprofile.id], &je_packet, &be_packet)
                 .await;
         }
     }
@@ -3188,7 +3711,7 @@ impl Player {
     }
 
     /// Returns the main non-air `BlockPos` underneath the player.
-    pub async fn get_supporting_block_pos(&self) -> Option<BlockPos> {
+    pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
         let entity = self.get_entity();
         let entity_pos = entity.pos.load();
         let aabb = entity.bounding_box.load();
@@ -3208,7 +3731,7 @@ impl Player {
 
         // Iterate through candidates
         for pos in BlockPos::iterate(min_pos, max_pos) {
-            let (_, state) = world.get_block_and_state(&pos).await;
+            let (_, state) = world.get_block_and_state(&pos);
 
             // Only consider physical blocks
             if state.is_air() {
@@ -3257,7 +3780,7 @@ impl Player {
             entity_pos.z.floor() as i32,
         );
 
-        let state = world.get_block_state(&fallback_pos).await;
+        let state = world.get_block_state(&fallback_pos);
         (!state.is_air()).then_some(fallback_pos)
     }
 
@@ -3275,10 +3798,9 @@ impl PartialEq for Player {
 }
 
 impl NBTStorage for Player {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            nbt.put_int(DATA_VERSION);
-            nbt.put_string(self.world().dimension.minecraft_name);
+            nbt.put_int("DataVersion", DATA_VERSION);
             self.living_entity.write_nbt(nbt).await;
             self.inventory.write_nbt(nbt).await;
             self.ender_chest_inventory.write_nbt(nbt).await;
@@ -3288,43 +3810,48 @@ impl NBTStorage for Player {
             let total_exp =
                 experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
                     + self.experience_points.load(Ordering::Relaxed);
-            nbt.put_int(total_exp);
-
-            nbt.put_byte(self.gamemode.load() as i8);
+            nbt.put_int("XpTotal", total_exp);
+            nbt.put_byte("playerGameType", self.gamemode.load() as i8);
             if let Some(previous_gamemode) = self.previous_gamemode.load() {
-                nbt.put_bool(true);
-                nbt.put_byte(previous_gamemode as i8);
-            } else {
-                nbt.put_bool(false);
+                nbt.put_byte("previousPlayerGameType", previous_gamemode as i8);
             }
 
-            nbt.put_bool(self.has_played_before.load(Ordering::Relaxed));
+            nbt.put_bool(
+                "HasPlayedBefore",
+                self.has_played_before.load(Ordering::Relaxed),
+            );
+
+            // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
-            if let Some(respawn) = self.respawn_point.load().as_ref() {
-                nbt.put_bool(true);
-                nbt.put_int(respawn.position.0.x);
-                nbt.put_int(respawn.position.0.y);
-                nbt.put_int(respawn.position.0.z);
-                nbt.put_string(respawn.dimension.minecraft_name);
-                nbt.put_bool(respawn.force);
-            } else {
-                nbt.put_bool(false);
+            nbt.put_string(
+                "Dimension",
+                self.world().dimension.minecraft_name.to_string(),
+            );
+
+            if let Some(respawn) = self.respawn_point.lock().await.as_ref() {
+                nbt.put_int("SpawnX", respawn.position.0.x);
+                nbt.put_int("SpawnY", respawn.position.0.y);
+                nbt.put_int("SpawnZ", respawn.position.0.z);
+                nbt.put_string(
+                    "SpawnDimension",
+                    respawn.dimension.minecraft_name.to_owned(),
+                );
+                nbt.put_bool("SpawnForced", respawn.force);
             }
+            nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            let _version = nbt.get_int().unwrap_or(0);
-            let _dimension_name = nbt.get_string().unwrap_or_default();
-
             self.living_entity.read_nbt(nbt).await;
             self.inventory.read_nbt_non_mut(nbt).await;
             self.ender_chest_inventory.read_nbt_non_mut(nbt).await;
             self.abilities.lock().await.read_nbt(nbt).await;
 
-            let total_exp = nbt.get_int().unwrap_or(0);
+            // Load from total XP
+            let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
             let (level, points) = experience::total_to_level_and_points(total_exp);
             let progress = experience::progress_in_level(level, points);
             self.experience_level.store(level, Ordering::Relaxed);
@@ -3332,36 +3859,44 @@ impl NBTStorage for Player {
             self.experience_points.store(points, Ordering::Relaxed);
 
             self.gamemode.store(
-                GameMode::try_from(nbt.get_byte().unwrap_or(0)).unwrap_or(GameMode::Survival),
+                GameMode::try_from(nbt.get_byte("playerGameType").unwrap_or(0))
+                    .unwrap_or(GameMode::Survival),
             );
 
-            if nbt.get_bool().unwrap_or(false) {
-                self.previous_gamemode
-                    .store(GameMode::try_from(nbt.get_byte().unwrap_or(0)).ok());
-            }
+            self.previous_gamemode.store(
+                nbt.get_byte("previousPlayerGameType")
+                    .and_then(|byte| GameMode::try_from(byte).ok()),
+            );
 
-            self.has_played_before
-                .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
+            self.has_played_before.store(
+                nbt.get_bool("HasPlayedBefore").unwrap_or(false),
+                Ordering::Relaxed,
+            );
 
             self.hunger_manager.read_nbt(nbt).await;
 
-            if nbt.get_bool().unwrap_or(false) {
-                let x = nbt.get_int().unwrap_or(0);
-                let y = nbt.get_int().unwrap_or(0);
-                let z = nbt.get_int().unwrap_or(0);
+            // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
+            if let (Some(x), Some(y), Some(z)) = (
+                nbt.get_int("SpawnX"),
+                nbt.get_int("SpawnY"),
+                nbt.get_int("SpawnZ"),
+            ) {
                 let dim = nbt
-                    .get_string()
-                    .ok()
-                    .and_then(|s| Dimension::from_name(s.as_str()).copied())
-                    .unwrap_or(self.world().dimension);
-                let force = nbt.get_bool().unwrap_or(false);
-                self.respawn_point.store(Some(RespawnPoint {
+                    .get_string("SpawnDimension")
+                    .and_then(|s| Dimension::from_name(s).cloned())
+                    .unwrap_or_else(|| self.world().dimension.clone());
+                let force = nbt.get_bool("SpawnForced").unwrap_or(false);
+                *self.respawn_point.lock().await = Some(RespawnPoint {
                     dimension: dim,
                     position: BlockPos(Vector3::new(x, y, z)),
                     yaw: 0.0,
                     force,
-                }));
+                });
             }
+            self.enchantment_seed.store(
+                nbt.get_int("XpSeed").unwrap_or(rand::random()),
+                Ordering::Relaxed,
+            );
         })
     }
 }
@@ -3369,76 +3904,106 @@ impl NBTStorage for Player {
 impl NBTStorageInit for Player {}
 
 impl NBTStorage for PlayerInventory {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             // Save the selected slot (hotbar)
-            nbt.put_u8(self.get_selected_slot());
+            nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
-            // Save items count then items
-            let mut present_items = Vec::new();
+            // Create inventory list with the correct capacity (inventory size)
+            let mut items: Vec<NbtTag> = Vec::with_capacity(41);
             for (i, item) in self.main_inventory.iter().enumerate() {
                 let stack = item.lock().await;
                 if !stack.is_empty() {
-                    present_items.push((i as u8, stack.clone()));
+                    let mut item_compound = NbtCompound::new();
+                    item_compound.put_byte("Slot", i as i8);
+                    stack.write_item_stack(&mut item_compound);
+                    drop(stack);
+                    items.push(NbtTag::Compound(item_compound));
                 }
-            }
-            nbt.put_u32(present_items.len() as u32);
-            for (slot, stack) in present_items {
-                nbt.put_u8(slot);
-                stack.write_item_stack_pnbt(nbt);
             }
 
-            // Save equipment
-            #[allow(clippy::default_trait_access)]
-            for slot in [
-                EquipmentSlot::OffHand(Default::default()),
-                EquipmentSlot::Head(Default::default()),
-                EquipmentSlot::Chest(Default::default()),
-                EquipmentSlot::Legs(Default::default()),
-                EquipmentSlot::Feet(Default::default()),
-            ] {
-                // Find the actual slot in self.equipment_slots
-                let mut found = false;
-                for s in self.equipment_slots.values() {
-                    if mem::discriminant(s) == mem::discriminant(&slot) {
-                        let stack_binding = self.entity_equipment.lock().await.get(s);
-                        let stack = stack_binding.lock().await;
-                        if !stack.is_empty() {
-                            nbt.put_bool(true);
-                            stack.write_item_stack_pnbt(nbt);
-                            found = true;
+            let mut equipment_compound = NbtCompound::new();
+            for slot in self.equipment_slots.values() {
+                let stack_binding = self.entity_equipment.lock().await.get(slot);
+                let stack = stack_binding.lock().await;
+                if !stack.is_empty() {
+                    let mut item_compound = NbtCompound::new();
+                    stack.write_item_stack(&mut item_compound);
+                    drop(stack);
+                    match slot {
+                        EquipmentSlot::OffHand(_) => {
+                            equipment_compound.put_compound("offhand", item_compound);
                         }
-                        break;
+                        EquipmentSlot::Feet(_) => {
+                            equipment_compound.put_compound("feet", item_compound);
+                        }
+                        EquipmentSlot::Legs(_) => {
+                            equipment_compound.put_compound("legs", item_compound);
+                        }
+                        EquipmentSlot::Chest(_) => {
+                            equipment_compound.put_compound("chest", item_compound);
+                        }
+                        EquipmentSlot::Head(_) => {
+                            equipment_compound.put_compound("head", item_compound);
+                        }
+                        _ => {
+                            warn!("Invalid equipment slot for a player");
+                        }
                     }
                 }
-                if !found {
-                    nbt.put_bool(false);
-                }
             }
+            nbt.put_compound("equipment", equipment_compound);
+            nbt.put("Inventory", NbtTag::List(items));
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
             // Read selected hotbar slot
-            self.set_selected_slot(nbt.get_u8().unwrap_or(0));
-
+            self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
             // Process inventory list
-            let items_len = nbt.get_u32().unwrap_or(0) as usize;
-            for _ in 0..items_len {
-                let slot = nbt.get_u8().unwrap_or(0) as usize;
-                if let Some(item_stack) = ItemStack::read_item_stack_pnbt(nbt) {
-                    self.set_stack(slot, item_stack).await;
+            if let Some(inventory_list) = nbt.get_list("Inventory") {
+                for tag in inventory_list {
+                    if let Some(item_compound) = tag.extract_compound()
+                        && let Some(slot_byte) = item_compound.get_byte("Slot")
+                    {
+                        let slot = slot_byte as usize;
+                        if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                            self.set_stack(slot, item_stack).await;
+                        }
+                    }
                 }
             }
 
-            // Read equipment
-            for slot_idx in [40, 39, 38, 37, 36] {
-                // offhand, head, chest, legs, feet
-                if nbt.get_bool().unwrap_or(false)
-                    && let Some(item_stack) = ItemStack::read_item_stack_pnbt(nbt)
+            if let Some(equipment) = nbt.get_compound("equipment") {
+                if let Some(offhand) = equipment.get_compound("offhand")
+                    && let Some(item_stack) = ItemStack::read_item_stack(offhand)
                 {
-                    self.set_stack(slot_idx, item_stack).await;
+                    self.set_stack(40, item_stack).await;
+                }
+
+                if let Some(head) = equipment.get_compound("head")
+                    && let Some(item_stack) = ItemStack::read_item_stack(head)
+                {
+                    self.set_stack(39, item_stack).await;
+                }
+
+                if let Some(chest) = equipment.get_compound("chest")
+                    && let Some(item_stack) = ItemStack::read_item_stack(chest)
+                {
+                    self.set_stack(38, item_stack).await;
+                }
+
+                if let Some(legs) = equipment.get_compound("legs")
+                    && let Some(item_stack) = ItemStack::read_item_stack(legs)
+                {
+                    self.set_stack(37, item_stack).await;
+                }
+
+                if let Some(feet) = equipment.get_compound("feet")
+                    && let Some(item_stack) = ItemStack::read_item_stack(feet)
+                {
+                    self.set_stack(36, item_stack).await;
                 }
             }
         })
@@ -3448,32 +4013,38 @@ impl NBTStorage for PlayerInventory {
 impl NBTStorageInit for PlayerInventory {}
 
 impl NBTStorage for EnderChestInventory {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            // Save items count then items
-            let mut present_items = Vec::new();
+            // Create item list with the correct capacity (inventory size)
+            let mut items: Vec<NbtTag> = Vec::with_capacity(Self::INVENTORY_SIZE);
             for (i, item) in self.items.iter().enumerate() {
                 let stack = item.lock().await;
                 if !stack.is_empty() {
-                    present_items.push((i as u8, stack.clone()));
+                    let mut item_compound = NbtCompound::new();
+                    item_compound.put_byte("Slot", i as i8);
+                    stack.write_item_stack(&mut item_compound);
+                    drop(stack);
+                    items.push(NbtTag::Compound(item_compound));
                 }
             }
-            nbt.put_u32(present_items.len() as u32);
-            for (slot, stack) in present_items {
-                nbt.put_u8(slot);
-                stack.write_item_stack_pnbt(nbt);
-            }
+
+            nbt.put("EnderItems", NbtTag::List(items));
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             // Process item list
-            let items_len = nbt.get_u32().unwrap_or(0) as usize;
-            for _ in 0..items_len {
-                let slot = nbt.get_u8().unwrap_or(0) as usize;
-                if let Some(item_stack) = ItemStack::read_item_stack_pnbt(nbt) {
-                    self.set_stack(slot, item_stack).await;
+            if let Some(item_list) = nbt.get_list("EnderItems") {
+                for tag in item_list {
+                    if let Some(item_compound) = tag.extract_compound()
+                        && let Some(slot_byte) = item_compound.get_byte("Slot")
+                    {
+                        let slot = slot_byte as usize;
+                        if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                            self.set_stack(slot, item_stack).await;
+                        }
+                    }
                 }
             }
         })
@@ -3557,7 +4128,7 @@ impl EntityBase for Player {
                                     entity.on_ground.load(Ordering::SeqCst),
                                 )
                             )
-                            .await;
+                            ;
                     }
                 }}
             } else {
@@ -3614,6 +4185,12 @@ impl EntityBase for Player {
         self
     }
 
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        // vanilla: min(level * 7, 100)
+        let level = self.experience_level.load(Ordering::Relaxed);
+        (level * 7).min(100) as u32
+    }
+
     fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.living_entity.tick_in_void(dyn_self).await;
@@ -3649,27 +4226,31 @@ pub struct Abilities {
 }
 
 impl NBTStorage for Abilities {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            nbt.put_bool(self.invulnerable);
-            nbt.put_bool(self.flying);
-            nbt.put_bool(self.allow_flying);
-            nbt.put_bool(self.creative);
-            nbt.put_bool(self.allow_modify_world);
-            nbt.put_float(self.fly_speed);
-            nbt.put_float(self.walk_speed);
+            let mut component = NbtCompound::new();
+            component.put_bool("invulnerable", self.invulnerable);
+            component.put_bool("flying", self.flying);
+            component.put_bool("mayfly", self.allow_flying);
+            component.put_bool("instabuild", self.creative);
+            component.put_bool("mayBuild", self.allow_modify_world);
+            component.put_float("flySpeed", self.fly_speed);
+            component.put_float("walkSpeed", self.walk_speed);
+            nbt.put_compound("abilities", component);
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.invulnerable = nbt.get_bool().unwrap_or(false);
-            self.flying = nbt.get_bool().unwrap_or(false);
-            self.allow_flying = nbt.get_bool().unwrap_or(false);
-            self.creative = nbt.get_bool().unwrap_or(false);
-            self.allow_modify_world = nbt.get_bool().unwrap_or(false);
-            self.fly_speed = nbt.get_float().unwrap_or(0.05);
-            self.walk_speed = nbt.get_float().unwrap_or(0.1);
+            if let Some(component) = nbt.get_compound("abilities") {
+                self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
+                self.flying = component.get_bool("flying").unwrap_or(false);
+                self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
+                self.creative = component.get_bool("instabuild").unwrap_or(false);
+                self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
+                self.fly_speed = component.get_float("flySpeed").unwrap_or(0.05);
+                self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.1);
+            }
         })
     }
 }
@@ -3716,7 +4297,7 @@ impl Abilities {
 }
 
 /// Represents the player's stored respawn point (bed/anchor/forced).
-#[derive(Copy, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
     pub dimension: Dimension,
     pub position: BlockPos,
@@ -3724,9 +4305,6 @@ pub struct RespawnPoint {
     pub force: bool,
 }
 
-/// Calculated respawn position ready for use.
-/// Returned by `calculate_respawn_point()`.
-#[derive(Debug, Clone)]
 pub struct CalculatedRespawnPoint {
     /// The exact position to spawn at (centered in block).
     pub position: Vector3<f64>,
@@ -3905,6 +4483,31 @@ impl InventoryPlayer for Player {
         self.gamemode.load() == GameMode::Creative
     }
 
+    fn is_creative(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
+
+    fn experience_level(&self) -> i32 {
+        self.experience_level
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            self.add_experience_levels(levels).await;
+        })
+    }
+
+    fn enchantment_seed(&self) -> i32 {
+        self.enchantment_seed.load(Ordering::Relaxed)
+    }
+
+    fn set_enchantment_seed(&self, seed: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            self.enchantment_seed.store(seed, Ordering::Relaxed);
+        })
+    }
+
     fn get_inventory(&self) -> Arc<PlayerInventory> {
         self.inventory.clone()
     }
@@ -3964,28 +4567,24 @@ impl InventoryPlayer for Player {
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
             let chunk_pos = self.living_entity.entity.chunk_pos.load();
-            self.world()
-                .broadcast_to_chunk_except(
-                    chunk_pos,
-                    &[self.get_entity().entity_uuid],
-                    &CSetEquipment::new(
-                        self.entity_id().into(),
-                        vec![(
-                            slot.discriminant(),
-                            ItemStackSerializer::from(stack.clone()),
-                        )],
-                    ),
-                )
-                .await;
+            self.world().broadcast_to_chunk_except(
+                chunk_pos,
+                &[self.get_entity().entity_uuid],
+                &CSetEquipment::new(
+                    self.entity_id().into(),
+                    vec![(
+                        slot.discriminant(),
+                        ItemStackSerializer::from(stack.clone()),
+                    )],
+                ),
+            );
 
             if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
-                self.world()
-                    .play_sound_event(
-                        equippable.equip_sound.clone(),
-                        SoundCategory::Players,
-                        &self.position(),
-                    )
-                    .await;
+                self.world().play_sound_event(
+                    &equippable.equip_sound,
+                    SoundCategory::Players,
+                    &self.position(),
+                );
             }
         })
     }

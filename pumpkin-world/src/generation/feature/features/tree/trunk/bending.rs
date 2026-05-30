@@ -10,7 +10,7 @@ use crate::{
         block_state_provider::BlockStateProvider,
         feature::features::tree::{TreeNode, trunk::TrunkPlacer},
     },
-    world::BlockRegistryExt,
+    world::WorldPortalExt,
 };
 
 pub struct BendingTrunkPlacer {
@@ -22,7 +22,7 @@ impl BendingTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,

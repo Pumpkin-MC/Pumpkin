@@ -134,7 +134,6 @@ impl StructureGenerator for IglooGenerator {
 }
 
 /// Single igloo structure piece containing dome and optional basement.
-#[derive(Clone)]
 pub struct IglooPiece {
     shiftable_structure_piece: ShiftableStructurePiece,
     top_template: Arc<StructureTemplate>,
@@ -146,10 +145,6 @@ pub struct IglooPiece {
 }
 
 impl StructurePieceBase for IglooPiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

@@ -18,10 +18,8 @@ impl BlockMetadata for KelpBlock {
 }
 
 impl BlockBehaviour for KelpBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
@@ -40,7 +38,7 @@ impl BlockBehaviour for KelpBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let support_pos = args.position.down();
-            let support_block = args.world.get_block(&support_pos).await;
+            let support_block = args.world.get_block(&support_pos);
             if support_block == &Block::KELP {
                 args.world
                     .set_block_state(
@@ -55,7 +53,7 @@ impl BlockBehaviour for KelpBlock {
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let support_pos = args.position.down();
-            let support_block = args.world.get_block(&support_pos).await;
+            let support_block = args.world.get_block(&support_pos);
             if support_block == &Block::KELP_PLANT {
                 args.world
                     .set_block_state(
@@ -77,7 +75,7 @@ impl BlockBehaviour for KelpBlock {
 }
 
 impl PlantBlockBase for KelpBlock {
-    async fn can_plant_on_top(
+    fn can_plant_on_top(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
@@ -85,15 +83,14 @@ impl PlantBlockBase for KelpBlock {
         // Determine support block
         let support_pos = pos;
         let (replacing_block, replacing_block_state) =
-            block_accessor.get_block_and_state(&pos.up()).await;
-        let (support_block, support_block_state) =
-            block_accessor.get_block_and_state(support_pos).await;
+            block_accessor.get_block_and_state(&pos.up());
+        let (support_block, support_block_state) = block_accessor.get_block_and_state(support_pos);
         if replacing_block == &Block::WATER {
             let water_props =
                 WaterLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
 
             //Only allow placing kelp on either full water or downward flowing water
-            if water_props.level as u8 != 0 && water_props.level as u8 != 8 {
+            if water_props.level != 0 && water_props.level != 8 {
                 return false;
             }
         } else {
@@ -122,7 +119,7 @@ impl PlantBlockBase for KelpBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             return Block::WATER.default_state.id;
         }
         block_state

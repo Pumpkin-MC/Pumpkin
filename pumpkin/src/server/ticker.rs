@@ -1,5 +1,12 @@
-use crate::{STOP_INTERRUPT, server::Server};
+use crate::{
+    STOP_INTERRUPT,
+    plugin::server::{
+        server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
+    },
+    server::Server,
+};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::time::{Instant, sleep_until};
 use tracing::debug;
@@ -17,18 +24,31 @@ impl Ticker {
 
             manager.tick();
 
+            let tick_number = server.tick_count.load(Ordering::Relaxed);
+            let _ = server
+                .plugin_manager
+                .fire(ServerTickStartEvent::new(tick_number))
+                .await;
+
             if manager.is_sprinting() {
                 manager.start_sprint_tick_work();
                 server.tick().await;
 
                 if manager.end_sprint_tick_work() {
-                    manager.finish_tick_sprint(server).await;
+                    manager.finish_tick_sprint(server);
                 }
             } else {
                 server.tick().await;
             }
 
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
+
+            let tick_number = server.tick_count.load(Ordering::Relaxed);
+            let _ = server
+                .plugin_manager
+                .fire(ServerTickEndEvent::new(tick_number, tick_duration_nanos))
+                .await;
+
             server.update_tick_times(tick_duration_nanos).await;
 
             let tick_interval = if manager.is_sprinting() {

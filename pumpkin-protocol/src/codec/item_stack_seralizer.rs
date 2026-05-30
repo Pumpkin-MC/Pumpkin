@@ -5,7 +5,7 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,
@@ -13,6 +13,7 @@ use serde::{
 };
 use std::borrow::Cow;
 
+#[derive(Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
 fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
@@ -161,7 +162,7 @@ impl ItemStackSerializer<'_> {
     pub fn write_with_version(
         &self,
         write: impl std::io::Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
         let mut network_serializer = serializer::Serializer::new(write);
@@ -174,7 +175,7 @@ impl ItemStackSerializer<'_> {
     }
 
     #[must_use]
-    pub fn to_stack_for_version(self, version: &MinecraftVersion) -> ItemStack {
+    pub fn to_stack_for_version(self, version: &JavaMinecraftVersion) -> ItemStack {
         let mut stack = self.0.into_owned();
         if stack.is_empty() {
             return stack;

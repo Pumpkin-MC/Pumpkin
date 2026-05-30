@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::entities::{has_block_block_entity, piston::PistonBlockEntity};
 use pumpkin_data::{
     Block, BlockDirection, BlockState, FacingExt,
     block_properties::{
@@ -9,11 +10,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{has_block_block_entity, piston::PistonBlockEntity},
-    world::BlockFlags,
-};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 use rand::RngExt;
 use rustc_hash::FxHashMap;
 
@@ -94,8 +91,7 @@ impl BlockBehaviour for PistonBlock {
             let pos = args
                 .position
                 .offset(props.facing.to_block_direction().to_offset());
-            let (block_to_check, block_to_check_state_id) =
-                args.world.get_block_and_state_id(&pos).await;
+            let (block_to_check, block_to_check_state_id) = args.world.get_block_and_state_id(&pos);
             if &Block::PISTON_HEAD == block_to_check {
                 let head_props =
                     PistonHeadProperties::from_state_id(block_to_check_state_id, block_to_check);
@@ -147,7 +143,7 @@ impl BlockBehaviour for PistonBlock {
                 args.data,
             );
 
-            let state = world.get_block_state(pos).await;
+            let state = world.get_block_state(pos);
             let mut props = PistonProps::from_state_id(state.id, block);
             let dir = props.facing.to_block_direction();
 
@@ -183,22 +179,20 @@ impl BlockBehaviour for PistonBlock {
                     .await;
                 // Play piston extend sound
                 let pitch = rand::rng().random_range(0.6f32..0.85);
-                world
-                    .play_sound_fine(
-                        Sound::BlockPistonExtend,
-                        SoundCategory::Blocks,
-                        &pos.to_centered_f64(),
-                        0.5,
-                        pitch,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    Sound::BlockPistonExtend,
+                    SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    0.5,
+                    pitch,
+                );
                 return true;
             }
             // Reduce Piston
 
             let extended_pos = pos.offset(dir.to_offset());
 
-            if let Some(block_entity) = world.get_block_entity(&extended_pos).await
+            if let Some(block_entity) = world.get_block_entity(&extended_pos)
                 && let Some(piston) = block_entity.as_any().downcast_ref::<PistonBlockEntity>()
             {
                 piston.finish(world.clone()).await;
@@ -222,27 +216,25 @@ impl BlockBehaviour for PistonBlock {
 
             let mut props = PistonProps::default(block);
             props.facing = BlockDirection::by_index((data & 7) as usize)
-                .unwrap()
+                .expect("Invalid block direction index")
                 .to_facing();
 
-            world
-                .add_block_entity(Arc::new(PistonBlockEntity {
-                    position: *pos,
-                    facing: dir,
-                    pushed_block_state: BlockState::from_id(props.to_state_id(block)),
-                    current_progress: 0.0.into(),
-                    last_progress: 0.0.into(),
-                    extending: false,
-                    source: true,
-                }))
-                .await;
+            world.add_block_entity(Arc::new(PistonBlockEntity {
+                position: *pos,
+                facing: dir,
+                pushed_block_state: BlockState::from_id(props.to_state_id(block)),
+                current_progress: 0.0.into(),
+                last_progress: 0.0.into(),
+                extending: false,
+                source: true,
+            }));
 
             world.update_neighbors(pos, None).await;
             if sticky {
                 let pull_pos = pos.offset_dir(dir.to_offset(), 2);
-                let (block, state) = world.get_block_and_state(&pull_pos).await;
+                let (block, state) = world.get_block_and_state(&pull_pos);
                 let piston_piece = if block == &Block::MOVING_PISTON
-                    && let Some(entity) = world.get_block_entity(&pull_pos).await
+                    && let Some(entity) = world.get_block_entity(&pull_pos)
                     && let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>()
                     && piston.facing == dir
                     && piston.extending
@@ -284,15 +276,13 @@ impl BlockBehaviour for PistonBlock {
             }
             // Play piston contract sound
             let pitch = rand::rng().random_range(0.6f32..0.75);
-            world
-                .play_sound_fine(
-                    Sound::BlockPistonContract,
-                    SoundCategory::Blocks,
-                    &pos.to_centered_f64(),
-                    0.5,
-                    pitch,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::BlockPistonContract,
+                SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+                0.5,
+                pitch,
+            );
             true
         })
     }
@@ -301,7 +291,7 @@ impl BlockBehaviour for PistonBlock {
 async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDirection) -> bool {
     for dir in BlockDirection::all() {
         let neighbor_pos = block_pos.offset(dir.to_offset());
-        let (block, state) = world.get_block_and_state(&neighbor_pos).await;
+        let (block, state) = world.get_block_and_state(&neighbor_pos);
         // Pistons can't be powered from the same direction as they are facing
         if dir == piston_dir
             || !is_emitting_redstone_power(block, state, world, &neighbor_pos, dir).await
@@ -311,13 +301,13 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
         return true;
     }
     let neighbor_pos = block_pos.offset(BlockDirection::Down.to_offset());
-    let (block, state) = world.get_block_and_state(&neighbor_pos).await;
+    let (block, state) = world.get_block_and_state(&neighbor_pos);
     if is_emitting_redstone_power(block, state, world, block_pos, BlockDirection::Down).await {
         return true;
     }
     for dir in BlockDirection::all() {
         let neighbor_pos = block_pos.up().offset(dir.to_offset());
-        let (block, state) = world.get_block_and_state(&neighbor_pos).await;
+        let (block, state) = world.get_block_and_state(&neighbor_pos);
         if dir == BlockDirection::Down
             || !is_emitting_redstone_power(block, state, world, &neighbor_pos, dir).await
         {
@@ -329,7 +319,7 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
 }
 
 pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-    let state = world.get_block_state(block_pos).await;
+    let state = world.get_block_state(block_pos);
     let props = PistonProps::from_state_id(state.id, block);
     let dir = props.facing.to_block_direction();
     let should_extent = should_extend(world, block_pos, dir).await;
@@ -345,15 +335,18 @@ pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         }
     } else if !should_extent && props.extended {
         let new_pos = block_pos.offset_dir(dir.to_offset(), 2);
-        let (new_block, new_state) = world.get_block_and_state_id(&new_pos).await;
+        let (new_block, new_state) = world.get_block_and_state_id(&new_pos);
         let mut r#type = 1;
 
         if new_block == &Block::MOVING_PISTON {
             let new_props = MovingPistonLikeProperties::from_state_id(new_state, new_block);
             if new_props.facing == props.facing
-                && let Some(entity) = world.get_block_entity(&new_pos).await
+                && let Some(entity) = world.get_block_entity(&new_pos)
             {
-                let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
+                let piston = entity
+                    .as_any()
+                    .downcast_ref::<PistonBlockEntity>()
+                    .expect("Block entity at MOVING_PISTON should be PistonBlockEntity");
                 if piston.extending && piston.current_progress.load() < 0.5
                 // TODO: more stuff...
                 {
@@ -377,7 +370,7 @@ async fn move_piston(
     sticky: bool,
 ) -> bool {
     let extended_pos = block_pos.offset(dir.to_offset());
-    if !extend && world.get_block(&extended_pos).await == &Block::PISTON_HEAD {
+    if !extend && world.get_block(&extended_pos) == &Block::PISTON_HEAD {
         world
             .set_block_state(
                 &extended_pos,
@@ -397,7 +390,7 @@ async fn move_piston(
     let mut moved_block_states: Vec<&BlockState> = Vec::new();
 
     for &block_pos in &moved_blocks {
-        let block_state = world.get_block_state(&block_pos).await;
+        let block_state = world.get_block_state(&block_pos);
         moved_block_states.push(block_state);
         moved_blocks_map.insert(block_pos, block_state);
     }
@@ -408,7 +401,7 @@ async fn move_piston(
     let move_direction = if extend { dir } else { dir.opposite() };
 
     for &broken_block_pos in broken_blocks.iter().rev() {
-        let block_state = world.get_block_state(&broken_block_pos).await;
+        let block_state = world.get_block_state(&broken_block_pos);
         world
             .break_block(
                 &broken_block_pos,
@@ -420,7 +413,7 @@ async fn move_piston(
     }
 
     for (index, &moved_block_pos) in moved_blocks.iter().rev().enumerate() {
-        let block_state = world.get_block_state(&moved_block_pos).await;
+        let block_state = world.get_block_state(&moved_block_pos);
         let target_pos = moved_block_pos.offset(move_direction.to_offset());
         moved_blocks_map.remove(&target_pos);
 
@@ -433,17 +426,15 @@ async fn move_piston(
             .await;
 
         if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
-            world
-                .add_block_entity(Arc::new(PistonBlockEntity {
-                    position: target_pos,
-                    facing: dir.to_facing().to_block_direction(),
-                    pushed_block_state: moved_state,
-                    current_progress: 0.0.into(),
-                    last_progress: 0.0.into(),
-                    extending: extend,
-                    source: false,
-                }))
-                .await;
+            world.add_block_entity(Arc::new(PistonBlockEntity {
+                position: target_pos,
+                facing: dir.to_facing().to_block_direction(),
+                pushed_block_state: moved_state,
+                current_progress: 0.0.into(),
+                last_progress: 0.0.into(),
+                extending: extend,
+                source: false,
+            }));
         }
         affected_block_states.push(block_state);
     }
@@ -468,17 +459,15 @@ async fn move_piston(
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = dir.to_facing();
         props.r#type = pistion_type;
-        world
-            .add_block_entity(Arc::new(PistonBlockEntity {
-                position: extended_pos,
-                facing: dir.to_facing().to_block_direction(),
-                pushed_block_state: BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
-                current_progress: 0.0.into(),
-                last_progress: 0.0.into(),
-                extending: true,
-                source: true,
-            }))
-            .await;
+        world.add_block_entity(Arc::new(PistonBlockEntity {
+            position: extended_pos,
+            facing: dir.to_facing().to_block_direction(),
+            pushed_block_state: BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
+            current_progress: 0.0.into(),
+            last_progress: 0.0.into(),
+            extending: true,
+            source: true,
+        }));
     }
 
     let air_state = Block::AIR.default_state.id;

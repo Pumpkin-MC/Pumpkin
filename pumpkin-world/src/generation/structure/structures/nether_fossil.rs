@@ -106,7 +106,6 @@ impl StructureGenerator for NetherFossilGenerator {
     }
 }
 
-#[derive(Clone)]
 struct NetherFossilPiece {
     shiftable_structure_piece: ShiftableStructurePiece,
     template: Arc<StructureTemplate>,
@@ -156,10 +155,6 @@ impl NetherFossilPiece {
 }
 
 impl StructurePieceBase for NetherFossilPiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

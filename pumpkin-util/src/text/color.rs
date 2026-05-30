@@ -307,6 +307,28 @@ impl NamedColor {
             Self::White => RGBColor::new(255, 255, 255),
         }
     }
+
+    #[must_use]
+    pub const fn to_legacy_char(&self) -> char {
+        match self {
+            Self::Black => '0',
+            Self::DarkBlue => '1',
+            Self::DarkGreen => '2',
+            Self::DarkAqua => '3',
+            Self::DarkRed => '4',
+            Self::DarkPurple => '5',
+            Self::Gold => '6',
+            Self::Gray => '7',
+            Self::DarkGray => '8',
+            Self::Blue => '9',
+            Self::Green => 'a',
+            Self::Aqua => 'b',
+            Self::Red => 'c',
+            Self::LightPurple => 'd',
+            Self::Yellow => 'e',
+            Self::White => 'f',
+        }
+    }
 }
 
 impl TryFrom<&str> for NamedColor {

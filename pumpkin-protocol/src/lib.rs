@@ -12,7 +12,7 @@ use hybrid_array::{Array, sizes::U1};
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
-    version::MinecraftVersion,
+    version::JavaMinecraftVersion,
 };
 use ser::{ReadingError, WritingError};
 use serde::{
@@ -110,12 +110,14 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
                         })?);
                     }
                     IdOrStateDeserializer::Id(id) => {
-                        debug_assert!(*id == 0);
+                        debug_assert_eq!(*id, 0);
                         // Get the data
                         let value = T::deserialize(deserializer)?;
                         *self = IdOrStateDeserializer::Value(value);
                     }
-                    IdOrStateDeserializer::Value(_) => unreachable!(),
+                    IdOrStateDeserializer::Value(_) => {
+                        return Err(serde::de::Error::custom("Unreachable state reached"));
+                    }
                 }
 
                 Ok(())
@@ -132,14 +134,14 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
                     return Ok(IdOr::Id(id - 1));
                 }
             }
-            _ => unreachable!(),
+            _ => return Err(serde::de::Error::custom("Unreachable state reached")),
         }
 
         let _ = seq.next_element_seed(&mut state)?;
 
         match state {
             IdOrStateDeserializer::Value(val) => Ok(IdOr::Value(val)),
-            _ => unreachable!(),
+            _ => Err(serde::de::Error::custom("Unreachable state reached")),
         }
     }
 }
@@ -268,8 +270,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
             } else {
                 let out_block: &mut Array<u8, U1> = (&mut out[..])
                     .try_into()
-                    .expect("Output slice size does not match block size");
-                cipher.encrypt_b2b(block, out_block).unwrap();
+                    .map_err(|_| Error::other("Output slice size does not match block size"))?;
+                cipher
+                    .encrypt_b2b(block, out_block)
+                    .map_err(|_| Error::other("Encryption failed"))?;
             }
 
             let write = Pin::new(&mut ref_self.write);
@@ -318,12 +322,12 @@ pub trait ClientPacket: MultiVersionJavaPacket {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError>;
 }
 
 pub trait ServerPacket: MultiVersionJavaPacket + Sized {
-    fn read(read: impl Read, version: &MinecraftVersion) -> Result<Self, ReadingError>;
+    fn read(read: impl Read, version: &JavaMinecraftVersion) -> Result<Self, ReadingError>;
 }
 
 pub trait BClientPacket: Packet {
@@ -361,6 +365,8 @@ pub enum PacketDecodeError {
     NotCompressed,
     #[error("the connection has closed")]
     ConnectionClosed,
+    #[error("{0}")]
+    Message(String),
 }
 
 impl From<ReadingError> for PacketDecodeError {
@@ -369,7 +375,7 @@ impl From<ReadingError> for PacketDecodeError {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct StatusResponse {
     /// The version on which the server is running. (Optional)
     pub version: Option<Version>,
@@ -382,7 +388,7 @@ pub struct StatusResponse {
     /// Whether players are forced to use secure chat.
     pub enforce_secure_chat: bool,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Version {
     /// The name of the version (e.g. 1.21.4)
     pub name: String,
@@ -390,7 +396,7 @@ pub struct Version {
     pub protocol: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Players {
     /// The maximum player count that the server allows.
     pub max: u32,
@@ -401,7 +407,7 @@ pub struct Players {
     pub sample: Vec<Sample>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Sample {
     /// The player's name.
     pub name: String,
@@ -412,11 +418,11 @@ pub struct Sample {
 // basically game profile
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Property {
-    pub name: String,
+    pub name: Box<str>,
     // base 64
-    pub value: String,
+    pub value: Box<str>,
     // base 64
-    pub signature: Option<String>,
+    pub signature: Option<Box<str>>,
 }
 
 #[derive(Serialize)]
@@ -537,20 +543,20 @@ mod test {
     };
 
     #[test]
-    fn serde_id_or_id() {
+    fn serde_id_or_id() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
 
         let id = IdOr::<SoundEvent>::Id(0);
-        id.serialize(&mut Serializer::new(&mut buf)).unwrap();
+        id.serialize(&mut Serializer::new(&mut buf))?;
 
-        let deser_id =
-            IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice())).unwrap();
+        let deser_id = IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice()))?;
 
         assert!(id == deser_id);
+        Ok(())
     }
 
     #[test]
-    fn serde_id_or_value() {
+    fn serde_id_or_value() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let event = SoundEvent {
             sound_name: "test".to_string(),
@@ -558,11 +564,11 @@ mod test {
         };
 
         let id = IdOr::<SoundEvent>::Value(event);
-        id.serialize(&mut Serializer::new(&mut buf)).unwrap();
+        id.serialize(&mut Serializer::new(&mut buf))?;
 
-        let deser_id =
-            IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice())).unwrap();
+        let deser_id = IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice()))?;
 
         assert!(id == deser_id);
+        Ok(())
     }
 }

@@ -13,9 +13,12 @@ pub mod arrow;
 pub mod egg;
 pub mod ender_pearl;
 pub mod eye_of_ender;
+pub mod fireball;
 pub mod firework_rocket;
+pub mod fishing_bobber;
 pub mod lingering_potion;
 pub mod shulker_bullet;
+pub mod small_fireball;
 pub mod snowball;
 pub mod splash_potion;
 pub mod wind_charge;
@@ -31,6 +34,9 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::LINGERING_POTION
         || *entity_type == EntityType::ENDER_PEARL
         || *entity_type == EntityType::SHULKER_BULLET
+        || *entity_type == EntityType::FIREBALL
+        || *entity_type == EntityType::SMALL_FIREBALL
+        || *entity_type == EntityType::FISHING_BOBBER
 }
 
 pub struct ThrownItemEntity {
@@ -38,10 +44,11 @@ pub struct ThrownItemEntity {
     pub owner_id: Option<i32>,
     pub collides_with_projectiles: bool,
     pub has_hit: AtomicBool,
+    pub gravity: f64,
 }
 
 impl ThrownItemEntity {
-    pub fn new(entity: Entity, owner: &Entity) -> Self {
+    pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
         entity.pos.store(owner_pos);
@@ -50,6 +57,7 @@ impl ThrownItemEntity {
             owner_id: Some(owner.entity_id),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity,
         }
     }
 
@@ -132,7 +140,7 @@ impl ThrownItemEntity {
 
         // Send updated velocity to clients
         let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        world.broadcast_packet_all(&packet).await;
+        world.broadcast_packet_all(&packet);
 
         // Calculate search box for collisions
         let search_box = BoundingBox::new(
@@ -251,9 +259,8 @@ impl ThrownItemEntity {
     const fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
-    #[allow(clippy::unused_self)]
     const fn get_gravity(&self) -> f64 {
-        0.03
+        self.gravity
     }
 }
 

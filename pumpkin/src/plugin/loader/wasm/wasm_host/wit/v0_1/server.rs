@@ -1,17 +1,25 @@
 use pumpkin_util::text::TextComponent;
-use uuid::Uuid;
 use wasmtime::component::Resource;
 
+use crate::command::CommandSender;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
+use pumpkin::plugin::server::CommandSender as WasmCommandSender;
+
 use super::player::text_component_from_resource;
-use crate::plugin::loader::wasm::wasm_host::{
-    state::{PluginHostState, ServerResource},
-    wit::v0_1::pumpkin::{
-        self,
-        plugin::{
-            player::Player,
-            server::{Difficulty, Server},
+use crate::plugin::{
+    loader::wasm::wasm_host::{
+        state::{PluginHostState, ServerResource},
+        wit::v0_1::pumpkin::{
+            self,
+            plugin::{
+                player::Player,
+                server::{Difficulty, Dimension, Server, SysInfo},
+                uuid::Uuid as WitUuid,
+            },
         },
+        wit::v0_1::uuid::UuidExt,
     },
+    permissions,
 };
 
 impl PluginHostState {
@@ -25,6 +33,39 @@ impl PluginHostState {
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
 impl pumpkin::plugin::server::HostServer for PluginHostState {
+    async fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
+        let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
+
+        let mut sys = sysinfo::System::new_all();
+        sys.refresh_all();
+
+        let cpu_count = (has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU))
+            .then(|| sys.cpus().len() as u32);
+
+        let (total_memory, used_memory) =
+            if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_RAM) {
+                (Some(sys.total_memory()), Some(sys.used_memory()))
+            } else {
+                (None, None)
+            };
+
+        let (os_name, os_version) =
+            if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_OS) {
+                (sysinfo::System::name(), sysinfo::System::os_version())
+            } else {
+                (None, None)
+            };
+
+        Ok(SysInfo {
+            cpu_count,
+            total_memory,
+            used_memory,
+            os_name,
+            os_version,
+            pumpkin_version: env!("CARGO_PKG_VERSION").to_string(),
+        })
+    }
+
     async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
         let resource = self.get_server_res(&res)?;
 
@@ -98,11 +139,9 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     async fn get_player_by_uuid(
         &mut self,
         _rep: Resource<Server>,
-        id: String,
+        id: WitUuid,
     ) -> wasmtime::Result<Option<Resource<Player>>> {
-        let Ok(uuid) = Uuid::parse_str(&id) else {
-            return Ok(None);
-        };
+        let uuid = WitUuid::from_wit(&id);
 
         let server = self
             .server
@@ -156,6 +195,28 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             }))
     }
 
+    async fn create_world(
+        &mut self,
+        _rep: Resource<Server>,
+        name: String,
+        dimension: Dimension,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        let internal_dim = match dimension {
+            Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
+            Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
+            Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
+        };
+
+        let world = server.create_world(name, internal_dim).await;
+        self.add_world(world)
+            .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+    }
+
     async fn broadcast(&mut self, _rep: Resource<Server>, message: String) -> wasmtime::Result<()> {
         let server = self
             .server
@@ -189,6 +250,39 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         server
             .broadcast_tab_list_header_footer(&header, &footer)
             .await;
+        Ok(())
+    }
+
+    async fn execute_command(
+        &mut self,
+        _rep: Resource<Server>,
+        command: String,
+        sender: WasmCommandSender,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        let native_sender = match sender {
+            WasmCommandSender::Console => CommandSender::Console,
+            WasmCommandSender::Player(player_res) => {
+                // Extract the native Player reference from the WASM resource
+                let player_resource =
+                    self.resource_table
+                        .get::<crate::plugin::loader::wasm::wasm_host::state::PlayerResource>(
+                        &Resource::new_own(player_res.rep()),
+                    )?;
+
+                CommandSender::Player(player_resource.provider.clone())
+            }
+        };
+
+        let dispatcher = server.command_dispatcher.read().await;
+        dispatcher
+            .handle_command(&native_sender.into_source(server).await, &command)
+            .await;
+
         Ok(())
     }
 
@@ -285,6 +379,17 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         Ok(super::events::to_wasm_game_mode(
             server.basic_config.default_gamemode,
         ))
+    }
+
+    async fn get_recipe_manager(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Resource<WitRecipeManager>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        self.add_recipe_manager(server.recipe_manager.clone())
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {

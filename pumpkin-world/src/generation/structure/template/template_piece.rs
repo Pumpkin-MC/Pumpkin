@@ -28,7 +28,6 @@ use super::{BlockMirror, BlockRotation, BlockStateResolver, StructureTemplate};
 /// - Applying rotation and mirror transformations
 /// - Placing blocks at world coordinates
 /// - Skipping structure void blocks
-#[derive(Clone)]
 pub struct TemplatePiece {
     /// The underlying structure piece metadata.
     pub piece: StructurePiece,
@@ -159,10 +158,6 @@ impl TemplatePiece {
 }
 
 impl StructurePieceBase for TemplatePiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

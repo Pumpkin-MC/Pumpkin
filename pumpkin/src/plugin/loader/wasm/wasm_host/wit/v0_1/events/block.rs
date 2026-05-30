@@ -28,7 +28,7 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
         Event::BlockRedstoneEvent(BlockRedstoneEventData {
             target_world,
             state_id: self.block_state_id,
-            block_position: to_wasm_block_position(self.block_pos),
+            block_pos: to_wasm_block_position(self.block_pos),
             old_current: self.old_current,
             new_current: self.new_current,
             cancelled: self.cancelled,
@@ -40,7 +40,7 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
             Event::BlockRedstoneEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
                 block_state_id: data.state_id,
-                block_pos: from_wasm_block_position(data.block_position),
+                block_pos: from_wasm_block_position(data.block_pos),
                 old_current: data.old_current,
                 new_current: data.new_current,
                 cancelled: data.cancelled,
@@ -61,7 +61,7 @@ impl ToFromWasmEvent for BlockBreakEvent {
         Event::BlockBreakEvent(BlockBreakEventData {
             player,
             block: to_wasm_block_name(self.block),
-            block_position: to_wasm_block_position(self.block_position),
+            block_pos: to_wasm_block_position(self.block_position),
             exp: self.exp,
             should_drop: self.drop,
             cancelled: self.cancelled,
@@ -73,7 +73,7 @@ impl ToFromWasmEvent for BlockBreakEvent {
             Event::BlockBreakEvent(data) => Self {
                 player: data.player.map(|player| consume_player(state, &player)),
                 block: from_wasm_block_name(&data.block),
-                block_position: from_wasm_block_position(data.block_position),
+                block_position: from_wasm_block_position(data.block_pos),
                 exp: data.exp,
                 drop: data.should_drop,
                 cancelled: data.cancelled,
@@ -145,7 +145,7 @@ impl ToFromWasmEvent for BlockGrowEvent {
             old_state_id: self.old_state_id,
             new_block: to_wasm_block_name(self.new_block),
             new_state_id: self.new_state_id,
-            block_position: to_wasm_block_position(self.block_pos),
+            block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
         })
     }
@@ -158,7 +158,7 @@ impl ToFromWasmEvent for BlockGrowEvent {
                 old_state_id: data.old_state_id,
                 new_block: from_wasm_block_name(&data.new_block),
                 new_state_id: data.new_state_id,
-                block_pos: from_wasm_block_position(data.block_position),
+                block_pos: from_wasm_block_position(data.block_pos),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -176,7 +176,7 @@ impl ToFromWasmEvent for BlockPlaceEvent {
             player,
             block_placed: to_wasm_block_name(self.block_placed),
             block_placed_against: to_wasm_block_name(self.block_placed_against),
-            block_position: to_wasm_block_position(self.block_position),
+            block_pos: to_wasm_block_position(self.block_position),
             can_build: self.can_build,
             cancelled: self.cancelled,
         })
@@ -188,7 +188,7 @@ impl ToFromWasmEvent for BlockPlaceEvent {
                 player: consume_player(state, &data.player),
                 block_placed: from_wasm_block_name(&data.block_placed),
                 block_placed_against: from_wasm_block_name(&data.block_placed_against),
-                block_position: from_wasm_block_position(data.block_position),
+                block_position: from_wasm_block_position(data.block_pos),
                 can_build: data.can_build,
                 cancelled: data.cancelled,
             },

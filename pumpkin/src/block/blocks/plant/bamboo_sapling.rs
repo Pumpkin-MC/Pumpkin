@@ -22,11 +22,8 @@ use crate::block::{
 pub struct BambooSaplingBlock;
 
 impl BlockBehaviour for BambooSaplingBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, &args.position.down())
-                .await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, &args.position.down())
     }
 
     fn use_with_item<'a>(
@@ -57,7 +54,7 @@ impl BlockBehaviour for BambooSaplingBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if args.block == &Block::BAMBOO_SAPLING
-                && args.world.get_block(&args.position.up()).await == &Block::BAMBOO
+                && args.world.get_block(&args.position.up()) == &Block::BAMBOO
             {
                 args.world
                     .set_block_state(
@@ -75,11 +72,11 @@ impl BlockBehaviour for BambooSaplingBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position).await {
+            if !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position) {
                 return Block::AIR.default_state.id;
             }
             if args.direction == BlockDirection::Up
-                && args.world.get_block(args.neighbor_position).await == &Block::BAMBOO
+                && args.world.get_block(args.neighbor_position) == &Block::BAMBOO
             {
                 return Block::BAMBOO.default_state.id;
             }
@@ -89,7 +86,7 @@ impl BlockBehaviour for BambooSaplingBlock {
 
     fn random_tick<'a>(&'a self, args: crate::block::RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state_above = args.world.get_block_state(&args.position.up()).await;
+            let state_above = args.world.get_block_state(&args.position.up());
             if !state_above.is_air() || rand::rng().random_range(0..3) > 0 {
                 return;
             }
@@ -108,12 +105,12 @@ impl BlockBehaviour for BambooSaplingBlock {
 }
 
 impl PlantBlockBase for BambooSaplingBlock {
-    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
+    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down())
     }
 
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos);
         block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO)
     }
 }

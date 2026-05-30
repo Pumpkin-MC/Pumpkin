@@ -1,5 +1,6 @@
 /* This file is generated. Do not edit manually. */
 #[must_use]
+#[allow(clippy::too_many_lines, clippy::match_same_arms)]
 pub const fn get_composter_increase_chance_from_item_id(item_id: u16) -> Option<f32> {
     match item_id {
         49 => Some(0.3f32),

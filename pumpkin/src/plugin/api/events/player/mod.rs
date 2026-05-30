@@ -1,7 +1,11 @@
+pub mod bedrock_form_response;
 pub mod changed_main_hand;
+pub mod custom_click_action;
 pub mod egg_throw;
 pub mod exp_change;
 pub mod fish;
+pub mod inventory_close;
+pub mod inventory_interact;
 pub mod item_held;
 pub mod player_change_world;
 pub mod player_chat;

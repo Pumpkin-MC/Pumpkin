@@ -3,10 +3,13 @@ use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
 use uuid::Uuid;
 
-use crate::{codec::var_uint::VarUInt, serial::PacketRead};
+use crate::{
+    codec::{var_int::VarInt, var_uint::VarUInt},
+    serial::PacketRead,
+};
 
 impl PacketRead for bool {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
@@ -135,7 +138,7 @@ impl PacketRead for String {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         const MAX_STRING_LENGTH: usize = 32767;
 
-        let len = u32::read(reader)? as usize;
+        let len = VarUInt::read(reader)?.0 as usize;
 
         if len > MAX_STRING_LENGTH {
             return Err(Error::new(
@@ -184,6 +187,16 @@ impl<T: PacketRead> PacketRead for Vector2<T> {
             x: T::read(reader)?,
             y: T::read(reader)?,
         })
+    }
+}
+
+impl PacketRead for BlockPos {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self(Vector3 {
+            x: VarInt::read(reader)?.0,
+            y: VarInt::read(reader)?.0,
+            z: VarInt::read(reader)?.0,
+        }))
     }
 }
 

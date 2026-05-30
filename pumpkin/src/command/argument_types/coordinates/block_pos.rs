@@ -1,19 +1,28 @@
+use std::pin::Pin;
+
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::coordinates::Coordinates;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder, TextCoordinates};
 use crate::world::World;
 use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
 
-pub const NOT_LOADED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_UNLOADED);
-pub const OUT_OF_WORLD_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFWORLD);
-pub const OUT_OF_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFBOUNDS);
+pub const NOT_LOADED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_UNLOADED,
+    translation::java::ARGUMENT_POS_UNLOADED,
+);
+pub const OUT_OF_WORLD_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_OUTOFWORLD,
+    translation::java::ARGUMENT_POS_OUTOFWORLD,
+);
+pub const OUT_OF_BOUNDS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_OUTOFBOUNDS,
+    translation::java::ARGUMENT_POS_OUTOFBOUNDS,
+);
 
 /// An argument type for a 3-dimensional vector representing a block position.
 ///
@@ -45,6 +54,26 @@ impl ArgumentType for BlockPosArgumentType {
 
     fn examples(&self) -> Vec<String> {
         examples!("1 3 5", "-3 ~24 ~-1", "80 80 80", "^ ^9 ^56")
+    }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        _context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        Box::pin(async move {
+            let remainder = builder.remaining();
+
+            let suggestioned_coordinates = if remainder.bytes().next() == Some(b'^') {
+                TextCoordinates::Local
+            } else {
+                TextCoordinates::Global
+            };
+
+            builder.suggest_3d_coordinates(suggestioned_coordinates, |value| {
+                self.parse(&mut StringReader::new(value)).is_ok()
+            })
+        })
     }
 }
 
@@ -103,7 +132,11 @@ impl BlockPosArgumentType {
         world: &World,
     ) -> Result<BlockPos, CommandSyntaxError> {
         let pos = Self::get_block_pos(context, name)?;
-        if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
+        if world
+            .level
+            .read_chunk_sync(&pos.chunk_position(), |_| ())
+            .is_none()
+        {
             Err(NOT_LOADED_ERROR_TYPE.create_without_context())
         } else if !world.is_in_build_limit(pos) {
             Err(OUT_OF_WORLD_ERROR_TYPE.create_without_context())

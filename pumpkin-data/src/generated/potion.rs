@@ -616,6 +616,7 @@ impl Potion {
             blend: false,
         }],
     };
+    #[must_use]
     pub fn from_name(name: &str) -> Option<&'static Self> {
         match name {
             "awkward" => Some(&Self::AWKWARD),

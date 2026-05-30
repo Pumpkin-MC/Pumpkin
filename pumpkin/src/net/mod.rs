@@ -1,19 +1,24 @@
+use crate::{
+    entity::player::ChatMode,
+    net::{bedrock::BedrockClient, java::JavaClient},
+    server::Server,
+};
+use arc_swap::ArcSwap;
+use bytes::Bytes;
 use std::{
     net::SocketAddr,
     num::NonZeroU8,
     sync::{Arc, atomic::Ordering},
 };
 
-use crate::{
-    entity::player::ChatMode,
-    net::{bedrock::BedrockClient, java::JavaClient},
-    server::Server,
-};
-
 use pumpkin_data::translation;
-use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
-use serde::Deserialize;
+use pumpkin_protocol::{BClientPacket, ClientPacket, Property};
+use pumpkin_util::{
+    Hand, ProfileAction,
+    text::TextComponent,
+    version::{BedrockMinecraftVersion, JavaMinecraftVersion},
+};
+use serde::{Deserialize, Deserializer};
 use sha1::Digest;
 use sha2::Sha256;
 use tokio::task::JoinHandle;
@@ -28,13 +33,33 @@ mod proxy;
 pub mod query;
 pub mod rcon;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct GameProfile {
     pub id: Uuid,
     pub name: String,
-    pub properties: Vec<Property>,
+    #[serde(deserialize_with = "from_vec")]
+    pub properties: ArcSwap<Vec<Property>>,
     #[serde(rename = "profileActions")]
     pub profile_actions: Option<Vec<ProfileAction>>,
+}
+
+impl Clone for GameProfile {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            name: self.name.clone(),
+            properties: ArcSwap::new(self.properties.load().clone()),
+            profile_actions: self.profile_actions.clone(),
+        }
+    }
+}
+
+fn from_vec<'de, D>(deserializer: D) -> Result<ArcSwap<Vec<Property>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Vec::<Property>::deserialize(deserializer)?;
+    Ok(ArcSwap::new(Arc::new(v)))
 }
 
 pub fn offline_uuid(username: &str) -> Result<Uuid, uuid::Error> {
@@ -83,6 +108,11 @@ impl Default for PlayerConfig {
     }
 }
 
+pub enum PacketHandlerResult {
+    Stop,
+    ReadyToPlay(GameProfile, PlayerConfig),
+}
+
 /// This is just a Wrapper for both Java & Bedrock connections
 #[expect(clippy::large_enum_variant)]
 pub enum ClientPlatform {
@@ -101,21 +131,21 @@ impl ClientPlatform {
     /// This function should only be used where you know that the client is bedrock!
     #[inline]
     #[must_use]
-    pub fn bedrock(&self) -> &Arc<BedrockClient> {
+    pub const fn bedrock(&self) -> Option<&Arc<BedrockClient>> {
         if let Self::Bedrock(client) = self {
-            return client;
+            return Some(client);
         }
-        unreachable!()
+        None
     }
 
     /// This function should only be used where you know that the client is java!
     #[inline]
     #[must_use]
-    pub fn java(&self) -> &JavaClient {
+    pub const fn java(&self) -> Option<&JavaClient> {
         if let Self::Java(client) = self {
-            return client;
+            return Some(client);
         }
-        unreachable!()
+        None
     }
 
     #[must_use]
@@ -123,6 +153,27 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.is_closed(),
             Self::Bedrock(bedrock) => bedrock.is_closed(),
+        }
+    }
+
+    pub fn java_version(&self) -> JavaMinecraftVersion {
+        match self {
+            Self::Java(java) => java.version.load(),
+            Self::Bedrock(_) => JavaMinecraftVersion::Unknown,
+        }
+    }
+
+    pub fn bedrock_version(&self) -> BedrockMinecraftVersion {
+        match self {
+            Self::Java(_) => BedrockMinecraftVersion::Unknown,
+            Self::Bedrock(bedrock) => bedrock.version.load(),
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet_data(packet_data),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
         }
     }
 
@@ -144,17 +195,68 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+    pub async fn enqueue_packet_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
         match self {
-            Self::Java(java) => java.enqueue_packet(packet).await,
-            Self::Bedrock(_) => (),
+            Self::Java(java) => java.enqueue_packet(je_packet).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet(be_packet).await,
+        }
+    }
+
+    pub fn try_enqueue_packet_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(je_packet),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(be_packet),
+        }
+    }
+
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        if let Self::Java(java) = self {
+            java.enqueue_packet(packet).await;
+        }
+    }
+
+    pub async fn enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
+        if let Self::Bedrock(bedrock) = self {
+            bedrock.enqueue_packet(packet).await;
+        }
+    }
+
+    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        if let Self::Java(java) = self {
+            java.try_enqueue_packet(packet);
+        }
+    }
+
+    pub fn try_enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
+        if let Self::Bedrock(bedrock) = self {
+            bedrock.try_enqueue_packet(packet);
         }
     }
 
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
+        if let Self::Java(java) = self {
+            java.send_packet_now(packet).await;
+        }
+    }
+
+    pub async fn send_be_packet_now<P: BClientPacket>(&self, packet: &P) {
+        if let Self::Bedrock(bedrock) = self {
+            bedrock.send_game_packet(packet).await;
+        }
+    }
+
+    pub async fn send_packet_now_data(&self, data: Bytes) {
         match self {
-            Self::Java(java) => java.send_packet_now(packet).await,
-            Self::Bedrock(_) => (),
+            Self::Java(java) => java.send_packet_now_data(data).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet_data(data).await,
         }
     }
 
@@ -177,13 +279,15 @@ pub async fn can_not_join(
 
     let mut banned_players = server.data.banned_player_list.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
-        let text = TextComponent::translate(
-            translation::MULTIPLAYER_DISCONNECT_BANNED_REASON,
+        let text = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
-            Some(expires) => text.add_child(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
+            Some(expires) => text.add_child(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
@@ -198,8 +302,9 @@ pub async fn can_not_join(
         let whitelist = server.data.whitelist_config.read().await;
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
-            return Some(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+            return Some(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
                 &[],
             ));
         }
@@ -212,13 +317,15 @@ pub async fn can_not_join(
         .await
         .get_entry(&address.ip())
     {
-        let text = TextComponent::translate(
-            translation::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
+        let text = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
-            Some(expires) => text.add_child(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
+            Some(expires) => text.add_child(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
@@ -236,6 +343,8 @@ pub enum EncryptionError {
     FailedDecrypt,
     #[error("shared secret has the wrong length")]
     SharedWrongLength,
+    #[error("encryption is already enabled")]
+    AlreadyEncrypted,
 }
 
 fn is_valid_player_name(name: &str) -> bool {

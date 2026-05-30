@@ -19,6 +19,9 @@ libfuzzer-sys = "0.4"
 [dependencies.pumpkin-protocol]
 path = ".."
 
+[dependencies.pumpkin]
+path = "../../pumpkin"
+
 [dependencies.pumpkin-util]
 path = "../../pumpkin-util"
 
@@ -46,6 +49,20 @@ bench = false
 [[bin]]
 name = "encoder_bedrock"
 path = "fuzz_targets/encoder_bedrock.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "query_decoder"
+path = "fuzz_targets/query_decoder.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rcon_decoder"
+path = "fuzz_targets/rcon_decoder.rs"
 test = false
 doc = false
 bench = false
