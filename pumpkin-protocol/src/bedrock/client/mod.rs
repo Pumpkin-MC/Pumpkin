@@ -37,6 +37,7 @@ pub mod start_game;
 pub mod transfer;
 pub mod update_abilities;
 pub mod update_attributes;
+pub mod update_block;
 
 pub use add_actor::*;
 pub use add_player::*;
@@ -77,3 +78,4 @@ pub use start_game::*;
 pub use transfer::*;
 pub use update_abilities::*;
 pub use update_attributes::*;
+pub use update_block::*;

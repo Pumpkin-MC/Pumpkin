@@ -976,12 +976,48 @@ impl World {
             let chunk_pos = Vector2::new(chunk_section.x, chunk_section.z);
             if updates.len() == 1 {
                 let (block_pos, block_state_id) = updates[0];
-                self.broadcast_to_chunk(
+                let be_block_id = BlockState::to_be_network_id(block_state_id);
+                self.broadcast_to_chunk_editioned_sync(
                     chunk_pos,
                     &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
+                        block_pos,
+                        be_block_id as u32,
+                    ),
                 );
             } else {
-                self.broadcast_to_chunk(chunk_pos, &CMultiBlockUpdate::new(&updates));
+                let players = self.players.load();
+                let mut java_recipients = Vec::new();
+
+                let recipients = players.iter().filter(|p| {
+                    let center = p.living_entity.entity.chunk_pos.load();
+                    let view_distance = get_view_distance(p).get() as i32;
+                    is_within_view_distance(chunk_pos, center, view_distance)
+                });
+
+                for p in recipients {
+                    match &p.client {
+                        ClientPlatform::Java(_) => java_recipients.push(p),
+                        ClientPlatform::Bedrock(be_client) => {
+                            for (block_pos, block_state_id) in &updates {
+                                let be_block_id = BlockState::to_be_network_id(*block_state_id);
+                                be_client.try_enqueue_packet(
+                                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
+                                        *block_pos,
+                                        be_block_id as u32,
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+
+                let recipients_by_version =
+                    Self::collect_java_recipients_by_version(java_recipients.into_iter());
+                Self::broadcast_java_grouped(
+                    &CMultiBlockUpdate::new(&updates),
+                    recipients_by_version,
+                );
             }
         }
     }
