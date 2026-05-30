@@ -16,7 +16,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_protocol::java::client::play::CSoundEffect;
-use pumpkin_protocol::java::client::play::CTakeItemEntity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
