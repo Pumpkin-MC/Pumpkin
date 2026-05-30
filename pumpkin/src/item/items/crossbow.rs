@@ -121,7 +121,7 @@ impl ItemBehaviour for CrossbowItem {
                         SoundCategory::Players,
                         &player.position(),
                     );
-                };
+                }
             }
             player.living_entity.clear_active_hand().await;
         })
