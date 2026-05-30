@@ -246,16 +246,19 @@ impl TryFrom<i32> for Hand {
 
     /// Converts an integer into a `Hand`.
     ///
+    /// In the Minecraft protocol, gameplay packets (`SwingArm`, `UseItemOn`, `UseItem`)
+    /// use `0` for the main hand and `1` for the off hand.
+    ///
     /// # Parameters
-    /// - `0`: `Left`
-    /// - `1`: `Right`
+    /// - `0`: `Right` (Main Hand)
+    /// - `1`: `Left` (Off Hand)
     ///
     /// # Errors
     /// Returns `InvalidHand` if the value is not 0 or 1.
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::Left),
-            1 => Ok(Self::Right),
+            0 => Ok(Self::Right),
+            1 => Ok(Self::Left),
             _ => Err(InvalidHand),
         }
     }

@@ -42,25 +42,33 @@ impl JavaClient {
             return;
         }
 
-        if let (Ok(main_hand), Ok(chat_mode)) = (
-            Hand::try_from(client_information.main_hand.0),
-            ChatMode::try_from(client_information.chat_mode.0),
-        ) {
-            *self.config.lock().await = Some(PlayerConfig {
-                locale: client_information.locale,
-                // client_information.view_distance was checked above to be > 0 so compiler should optimize this out.
-                view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
-                chat_mode,
-                chat_colors: client_information.chat_colors,
-                skin_parts: client_information.skin_parts,
-                main_hand,
-                text_filtering: client_information.text_filtering,
-                server_listing: client_information.server_listing,
-            });
-        } else {
+        // In ClientSettings, `main_hand` uses 0=Left, 1=Right — the inverse of
+        // gameplay packets — so we map it manually instead of using `Hand::try_from`.
+        let main_hand = match client_information.main_hand.0 {
+            0 => Hand::Left,
+            1 => Hand::Right,
+            _ => {
+                self.kick(TextComponent::text("Invalid hand or chat type"))
+                    .await;
+                return;
+            }
+        };
+        let Ok(chat_mode) = ChatMode::try_from(client_information.chat_mode.0) else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
                 .await;
-        }
+            return;
+        };
+        *self.config.lock().await = Some(PlayerConfig {
+            locale: client_information.locale,
+            // client_information.view_distance was checked above to be > 0 so compiler should optimize this out.
+            view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
+            chat_mode,
+            chat_colors: client_information.chat_colors,
+            skin_parts: client_information.skin_parts,
+            main_hand,
+            text_filtering: client_information.text_filtering,
+            server_listing: client_information.server_listing,
+        });
     }
 
     pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {

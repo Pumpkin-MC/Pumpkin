@@ -1453,10 +1453,23 @@ impl JavaClient {
         player: &Arc<Player>,
         client_information: SClientInformationPlay,
     ) {
-        if let (Ok(main_hand), Ok(chat_mode)) = (
-            Hand::try_from(client_information.main_hand.0),
-            ChatMode::try_from(client_information.chat_mode.0),
-        ) {
+        // In ClientSettings, `main_hand` uses 0=Left, 1=Right — the inverse of
+        // gameplay packets — so we map it manually instead of using `Hand::try_from`.
+        let main_hand = match client_information.main_hand.0 {
+            0 => Hand::Left,
+            1 => Hand::Right,
+            _ => {
+                self.kick(TextComponent::text("Invalid hand or chat type"))
+                    .await;
+                return;
+            }
+        };
+        let Ok(chat_mode) = ChatMode::try_from(client_information.chat_mode.0) else {
+            self.kick(TextComponent::text("Invalid hand or chat type"))
+                .await;
+            return;
+        };
+        {
             if client_information.view_distance <= 0 {
                 self.kick(TextComponent::text(
                     "Cannot have zero or negative view distance!",
@@ -1526,9 +1539,6 @@ impl JavaClient {
                 );
                 player.send_client_information();
             }
-        } else {
-            self.kick(TextComponent::text("Invalid hand or chat type"))
-                .await;
         }
     }
 
@@ -2029,7 +2039,7 @@ impl JavaClient {
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
 
-        let item = if matches!(hand, Hand::Left) {
+        let item = if matches!(hand, Hand::Right) {
             held_item
         } else {
             off_hand_item
@@ -2085,7 +2095,7 @@ impl JavaClient {
             }
         }
 
-        let slot_index = if matches!(hand, Hand::Left) {
+        let slot_index = if matches!(hand, Hand::Right) {
             inventory.get_selected_slot() as usize
         } else {
             PlayerInventory::OFF_HAND_SLOT
@@ -2245,7 +2255,7 @@ impl JavaClient {
         };
         self.update_sequence(player, use_item.sequence.0);
 
-        let item_in_hand = if hand == Hand::Left {
+        let item_in_hand = if hand == Hand::Right {
             inventory.held_item()
         } else {
             inventory.off_hand_item().await
