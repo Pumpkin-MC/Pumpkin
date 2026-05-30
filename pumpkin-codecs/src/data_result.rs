@@ -572,30 +572,23 @@ impl<R> DataResult<R> {
     ///
     /// The [`Lifecycle`] of the returned `DataResult` is the addition of both results.
     pub fn with_errors_from<T>(self, result: &DataResult<T>) -> Self {
-        match (&self, result) {
-            // If both values are successes, do nothing.
-            // If `self` is already an error result, do nothing.
-            (Self::Success { .. }, DataResult::Success { .. }) | (Self::Error { .. }, _) => self,
+        let current_lifecycle = self.lifecycle();
+
+        match (self, result) {
+            (s @ Self::Error { .. }, _) | (s, DataResult::Success { .. }) => s,
 
             (
-                Self::Success { .. },
+                Self::Success { result: val, .. },
                 DataResult::Error {
                     message,
                     lifecycle: other_lifecycle,
                     ..
                 },
-            ) => {
-                let self_lifecycle = self.lifecycle();
-                if let Self::Success { result, .. } = self {
-                    Self::new_partial_error_with_lifecycle(
-                        message.clone(),
-                        result,
-                        self_lifecycle.add(*other_lifecycle),
-                    )
-                } else {
-                    unreachable!()
-                }
-            }
+            ) => Self::new_partial_error_with_lifecycle(
+                message.clone(),
+                val,
+                current_lifecycle.add(*other_lifecycle),
+            ),
         }
     }
 

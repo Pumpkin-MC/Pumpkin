@@ -1,4 +1,4 @@
-use crate::deserializer::NbtReadHelper;
+use crate::deserializer::NbtReadHelperJava;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::io::{Cursor, Read, Seek, Write};
@@ -17,7 +17,7 @@ pub fn read_gzip_compound_tag(input: impl Read + Seek) -> Result<NbtCompound, Er
     let mut decoder = GzDecoder::new(input).take(64 * 1024 * 1024); // 64 MB limit
     let mut buf = Vec::new();
     decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
-    let mut reader = NbtReadHelper::new(Cursor::new(buf));
+    let mut reader = NbtReadHelperJava::new(Cursor::new(buf));
 
     // Read the NBT data directly from the decoder stream
     let nbt = Nbt::read(&mut reader)?;

@@ -528,10 +528,11 @@ impl<'a> CommandContextBuilder<'a> {
         } else {
             let mut previous = self.root;
             for node in &self.nodes {
-                if (self.range.start..=self.range.end).contains(&cursor) {
+                let node_range = node.range;
+                if (node_range.start..=node_range.end).contains(&cursor) {
                     return SuggestionContext {
                         parent: previous,
-                        starting_position: self.range.start,
+                        starting_position: node_range.start,
                     };
                 }
                 previous = node.node;

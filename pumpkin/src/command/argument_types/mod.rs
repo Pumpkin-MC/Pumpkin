@@ -224,6 +224,8 @@ pub mod entity_anchor;
 pub mod entity_selector;
 pub mod game_profile;
 pub mod identifier;
+pub mod nbt;
 pub mod range;
+pub mod slot;
 pub mod time;
 pub mod uuid;

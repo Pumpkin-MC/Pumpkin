@@ -138,6 +138,7 @@ pub fn build() -> TokenStream {
         }
 
         impl CaveCarverConfig {
+            #[must_use]
             pub const fn default() -> Self {
                 Self {
                     horizontal_radius_multiplier: FloatProvider::Constant(1.0),

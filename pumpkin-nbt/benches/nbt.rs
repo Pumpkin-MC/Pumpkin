@@ -47,7 +47,7 @@ fn create_large_compound(depth: usize) -> NbtCompound {
     compound.put_string("string", "Hello test benchmark data".to_string());
     compound.put(
         "byte_array",
-        NbtTag::ByteArray(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        NbtTag::ByteArray(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9].into()),
     );
     compound.put(
         "int_array",
@@ -73,38 +73,70 @@ fn create_large_compound(depth: usize) -> NbtCompound {
 
 pub fn bench_nbt(c: &mut Criterion) {
     let test_data = create_large_test_data(5);
-    let mut ser_bytes = Vec::new();
-    serializer::to_bytes(&test_data, &mut ser_bytes).unwrap();
+    let mut ser_bytes_java = Vec::new();
+    let mut ser_bytes_bedrock = Vec::new();
+    serializer::to_bytes(&test_data, &mut ser_bytes_java).unwrap();
+    serializer::to_bytes_bedrock(&test_data, &mut ser_bytes_bedrock).unwrap();
 
     let compound_data = create_large_compound(5);
     let nbt_wrapper = Nbt::new(String::new(), compound_data.clone());
-    let wrapper_bytes = nbt_wrapper.write();
+    let wrapper_bytes_java = nbt_wrapper.clone().write();
+    let wrapper_bytes_bedrock = nbt_wrapper.write_bedrock();
 
-    c.bench_function("nbt/serialize/serde", |b| {
+    c.bench_function("nbt/java/serialize/serde", |b| {
         b.iter(|| {
             let mut out = Vec::new();
             serializer::to_bytes(&test_data, &mut out).unwrap();
         });
     });
 
-    c.bench_function("nbt/deserialize/serde", |b| {
+    c.bench_function("nbt/java/deserialize/serde", |b| {
         b.iter(|| {
-            let cursor = Cursor::new(&ser_bytes);
+            let cursor = Cursor::new(&ser_bytes_java);
             let _: LargeTest = deserializer::from_bytes(cursor).unwrap();
         });
     });
 
-    c.bench_function("nbt/serialize/raw", |b| {
+    c.bench_function("nbt/java/serialize/raw", |b| {
         b.iter(|| {
             let nbt = Nbt::new(String::new(), compound_data.clone());
             let _ = nbt.write();
         });
     });
 
-    c.bench_function("nbt/deserialize/raw", |b| {
+    c.bench_function("nbt/java/deserialize/raw", |b| {
         b.iter(|| {
-            let mut cursor = Cursor::new(&wrapper_bytes);
-            let mut reader = deserializer::NbtReadHelper::new(&mut cursor);
+            let mut cursor = Cursor::new(&wrapper_bytes_java);
+            let mut reader = deserializer::NbtReadHelperJava::new(&mut cursor);
+            Nbt::read(&mut reader).unwrap();
+        });
+    });
+
+    c.bench_function("nbt/bedrock/serialize/serde", |b| {
+        b.iter(|| {
+            let mut out = Vec::new();
+            serializer::to_bytes_bedrock(&test_data, &mut out).unwrap();
+        });
+    });
+
+    c.bench_function("nbt/bedrock/deserialize/serde", |b| {
+        b.iter(|| {
+            let cursor = Cursor::new(&ser_bytes_bedrock);
+            let _: LargeTest = deserializer::from_bytes_bedrock(cursor).unwrap();
+        });
+    });
+
+    c.bench_function("nbt/bedrock/serialize/raw", |b| {
+        b.iter(|| {
+            let nbt = Nbt::new(String::new(), compound_data.clone());
+            let _ = nbt.write_bedrock();
+        });
+    });
+
+    c.bench_function("nbt/bedrock/deserialize/raw", |b| {
+        b.iter(|| {
+            let mut cursor = Cursor::new(&wrapper_bytes_bedrock);
+            let mut reader = deserializer::NbtReadHelperBedrock::new(&mut cursor);
             Nbt::read(&mut reader).unwrap();
         });
     });

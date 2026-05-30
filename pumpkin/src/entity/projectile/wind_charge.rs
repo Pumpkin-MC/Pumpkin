@@ -17,6 +17,7 @@ use crate::{
 
 const EXPLOSION_POWER: f32 = 1.2;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
+pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
 
 pub struct WindChargeEntity {
     deflect_cooldown: AtomicU8,

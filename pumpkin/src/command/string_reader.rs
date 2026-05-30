@@ -328,6 +328,13 @@ impl<'a> StringReader<'a> {
         }
     }
 
+    /// Keeps skipping characters in the reader until a space or the end of the string is encountered.
+    pub fn read_until_space(&mut self) {
+        while !matches!(self.peek(), None | Some(' ')) {
+            self.skip();
+        }
+    }
+
     /// Converts this reader into a `'static` form, which
     /// is useful for snapshotting the reader.
     #[must_use]
@@ -374,9 +381,9 @@ mod test {
         assert!(reader.can_read_chars(7));
         assert!(!reader.can_read_chars(8));
 
-        reader.expect('l').unwrap();
+        reader.expect('l').expect("Expected 'l'");
         reader.skip();
-        reader.expect('o').unwrap();
+        reader.expect('o').expect("Expected 'o'");
 
         // Note: 🎃 carries 4 bytes in UTF-8
         assert!(reader.can_read_bytes(6));
@@ -415,10 +422,10 @@ mod test {
         assert_eq!(reader.read_long(), Ok(7890123456));
         reader.skip_whitespace();
 
-        assert!((reader.read_float().unwrap() - 1.233f32).abs() < 1e-07);
+        assert!((reader.read_float().expect("Expected float") - 1.233f32).abs() < 1e-07);
         reader.skip_whitespace();
 
-        assert!((reader.read_double().unwrap() - 1.592394582f64).abs() < 1e-15);
+        assert!((reader.read_double().expect("Expected double") - 1.592394582f64).abs() < 1e-15);
         reader.skip_whitespace();
 
         assert_eq!(reader.read_bool(), Ok(false));

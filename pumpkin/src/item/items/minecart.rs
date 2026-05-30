@@ -28,7 +28,10 @@ impl MinecartItem {
             val if val == Item::HOPPER_MINECART.id => &EntityType::HOPPER_MINECART,
             val if val == Item::FURNACE_MINECART.id => &EntityType::FURNACE_MINECART,
             val if val == Item::COMMAND_BLOCK_MINECART.id => &EntityType::COMMAND_BLOCK_MINECART,
-            _ => unreachable!(),
+            _ => {
+                tracing::error!("Unknown minecart item ID: {}", item.id);
+                &EntityType::MINECART
+            }
         }
     }
 }

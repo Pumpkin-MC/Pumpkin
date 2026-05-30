@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
@@ -16,7 +16,7 @@ const MAX_COOKIE_LENGTH: usize = 5120;
 #[java_packet(CONFIG_COOKIE_RESPONSE)]
 pub struct SConfigCookieResponse {
     /// The unique identifier for the cookie being returned
-    pub key: ResourceLocation,
+    pub key: Box<str>,
     /// Indicates whether a payload is attached to this response
     pub has_payload: bool,
     /// The actual data stored in the cookie. Limited to 5120 bytes
@@ -26,7 +26,7 @@ pub struct SConfigCookieResponse {
 impl ServerPacket for SConfigCookieResponse {
     fn read(read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let mut read = read;
-        let key = read.get_string()?;
+        let key = read.get_str()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {

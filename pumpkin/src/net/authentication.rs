@@ -106,7 +106,7 @@ pub fn authenticate(
 
 pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<(), TextureError> {
     let from64 = general_purpose::STANDARD
-        .decode(&property.value)
+        .decode(property.value.as_bytes())
         .map_err(|e| TextureError::DecodeError(e.to_string()))?;
     let textures: ProfileTextures =
         serde_json::from_slice(&from64).map_err(|e| TextureError::JSONError(e.to_string()))?;

@@ -317,7 +317,7 @@ impl BlockBehaviour for SignBlock {
                 crate::net::ClientPlatform::Java(java) => {
                     java.send_sign_packet(*args.position, true).await;
                 }
-                crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
+                crate::net::ClientPlatform::Bedrock(_bedrock) => {}
             }
         })
     }
@@ -458,7 +458,7 @@ impl BlockBehaviour for SignBlock {
                     java.send_sign_packet(*args.position, is_facing_front_text)
                         .await;
                 }
-                ClientPlatform::Bedrock(_bedrock) => todo!(),
+                ClientPlatform::Bedrock(_bedrock) => {}
             }
 
             BlockActionResult::SuccessServer

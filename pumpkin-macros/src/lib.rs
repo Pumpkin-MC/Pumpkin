@@ -484,7 +484,9 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        unimplemented!()
+        return syn::Error::new(name.span(), "Only structs are supported")
+            .to_compile_error()
+            .into();
     };
 
     let expanded = quote! {
@@ -539,7 +541,9 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        unimplemented!()
+        return syn::Error::new(name.span(), "Only structs are supported")
+            .to_compile_error()
+            .into();
     };
 
     let expanded = quote! {

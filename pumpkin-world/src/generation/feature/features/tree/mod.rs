@@ -42,7 +42,7 @@ impl TreeFeature {
         chunk: &mut T,
         min_y: i8,
         height: u16,
-        feature_name: &str, // This placed feature
+        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -90,7 +90,7 @@ impl TreeFeature {
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
-        _feature_name: &str, // This placed feature
+        _feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> (Vec<BlockPos>, Vec<BlockPos>, Vec<BlockPos>) {

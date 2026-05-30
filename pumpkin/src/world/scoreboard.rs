@@ -2,11 +2,15 @@ use std::collections::HashMap;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
-    NumberFormat,
+    BClientPacket, ClientPacket, NumberFormat,
+    bedrock::client::scoreboard::{
+        CRemoveObjective as BRemoveObjective, CSetDisplayObjective as BSetDisplayObjective,
+        CSetScore as BSetScore, ScoreEntry as BScoreEntry,
+    },
     codec::var_int::VarInt,
     java::client::play::{
-        CDisplayObjective, CSetPlayerTeam, CUpdateObjectives, CUpdateScore, RenderType, TeamMethod,
-        TeamParameters,
+        CDisplayObjective, CSetPlayerTeam, CUpdateObjectives, CUpdateScore, Mode, RenderType,
+        TeamMethod, TeamParameters,
     },
 };
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -22,7 +26,15 @@ pub struct Scoreboard {
 }
 
 impl Scoreboard {
-    pub fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'static>) {
+    async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
+        world: &World,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        world.broadcast_editioned(je_packet, be_packet).await;
+    }
+
+    pub async fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'static>) {
         if self.objectives.contains_key(objective.name) {
             warn!(
                 "Tried to create an objective which already exists: {}",
@@ -30,22 +42,36 @@ impl Scoreboard {
             );
             return;
         }
-        world.broadcast_packet_all(&CUpdateObjectives::new(
+
+        let je_update = CUpdateObjectives::new(
             objective.name.to_string(),
-            pumpkin_protocol::java::client::play::Mode::Add,
+            Mode::Add,
             objective.display_name.clone(),
             objective.render_type,
             objective.number_format.clone(),
-        ));
-        world.broadcast_packet_all(&CDisplayObjective::new(
-            ScoreboardDisplaySlot::Sidebar,
-            objective.name.to_string(),
-        ));
+        );
+
+        let be_update = BSetDisplayObjective {
+            display_slot: "sidebar".to_string(), // Default to sidebar
+            objective_name: objective.name.to_string(),
+            display_name: objective.display_name.clone().get_text(),
+            criteria_name: "dummy".to_string(),
+            sort_order: VarInt(0),
+        };
+
+        Self::broadcast_editioned(world, &je_update, &be_update).await;
+
+        let je_display =
+            CDisplayObjective::new(ScoreboardDisplaySlot::Sidebar, objective.name.to_string());
+        // Bedrock's SetDisplayObjective already sets the slot.
+
+        world.broadcast_packet_all(&je_display);
+
         self.objectives
             .insert(objective.name.to_string(), objective);
     }
 
-    pub fn remove_objective(&mut self, world: &World, name: &str) {
+    pub async fn remove_objective(&mut self, world: &World, name: &str) {
         if !self.objectives.contains_key(name) {
             warn!(
                 "Tried to remove an objective which does not exist: {}",
@@ -53,18 +79,26 @@ impl Scoreboard {
             );
             return;
         }
-        world.broadcast_packet_all(&CUpdateObjectives::new(
+
+        let je_packet = CUpdateObjectives::new(
             name.to_string(),
-            pumpkin_protocol::java::client::play::Mode::Remove,
+            Mode::Remove,
             TextComponent::empty(),
-            pumpkin_protocol::java::client::play::RenderType::Integer,
+            RenderType::Integer,
             None,
-        ));
+        );
+
+        let be_packet = BRemoveObjective {
+            objective_name: name.to_string(),
+        };
+
+        Self::broadcast_editioned(world, &je_packet, &be_packet).await;
+
         self.objectives.remove(name);
         self.scores.remove(name);
     }
 
-    pub fn update_score(&mut self, world: &World, score: ScoreboardScore<'static>) {
+    pub async fn update_score(&mut self, world: &World, score: ScoreboardScore<'static>) {
         if !self.objectives.contains_key(score.objective_name) {
             warn!(
                 "Tried to place a score into an objective which does not exist: {}",
@@ -72,13 +106,28 @@ impl Scoreboard {
             );
             return;
         }
-        world.broadcast_packet_all(&CUpdateScore::new(
+
+        let je_packet = CUpdateScore::new(
             score.entity_name.to_string(),
             score.objective_name.to_string(),
             score.value,
             score.display_name.clone(),
             score.number_format.clone(),
-        ));
+        );
+
+        let be_packet = BSetScore {
+            action: VarInt(0), // Change
+            entries: vec![BScoreEntry {
+                scoreboard_id: score.entity_name.as_ptr() as i64, // Hacky ID
+                objective_name: score.objective_name.to_string(),
+                score: score.value,
+                entry_type: VarInt(3), // Fake player/Literal
+                entity_unique_id: 0,
+                custom_name: score.entity_name.to_string(),
+            }],
+        };
+
+        Self::broadcast_editioned(world, &je_packet, &be_packet).await;
 
         self.scores
             .entry(score.objective_name.to_string())
@@ -86,11 +135,23 @@ impl Scoreboard {
             .insert(score.entity_name.to_string(), score);
     }
 
-    pub fn remove_score(&mut self, world: &World, entity_name: &str, objective_name: &str) {
-        world.broadcast_packet_all(&CUpdateScore::new_remove(
-            entity_name.to_string(),
-            objective_name.to_string(),
-        ));
+    pub async fn remove_score(&mut self, world: &World, entity_name: &str, objective_name: &str) {
+        let je_packet =
+            CUpdateScore::new_remove(entity_name.to_string(), objective_name.to_string());
+
+        let be_packet = BSetScore {
+            action: VarInt(1), // Remove
+            entries: vec![BScoreEntry {
+                scoreboard_id: entity_name.as_ptr() as i64,
+                objective_name: objective_name.to_string(),
+                score: VarInt(0),
+                entry_type: VarInt(3),
+                entity_unique_id: 0,
+                custom_name: entity_name.to_string(),
+            }],
+        };
+
+        Self::broadcast_editioned(world, &je_packet, &be_packet).await;
 
         if let Some(objective_scores) = self.scores.get_mut(objective_name) {
             objective_scores.remove(entity_name);
@@ -120,7 +181,7 @@ impl Scoreboard {
             team_name: team.name.clone(),
             method: TeamMethod::Create,
             parameters: Some(parameters),
-            players: team.players.clone(),
+            players: team.players.clone().into(),
         });
 
         self.teams.insert(team.name.clone(), team);
@@ -146,7 +207,7 @@ impl Scoreboard {
             team_name: team.name.clone(),
             method: TeamMethod::Update,
             parameters: Some(parameters),
-            players: Vec::new(),
+            players: Box::new([]),
         });
 
         self.teams.insert(team.name.clone(), team);
@@ -162,7 +223,7 @@ impl Scoreboard {
             team_name: name.to_string(),
             method: TeamMethod::Remove,
             parameters: None,
-            players: Vec::new(),
+            players: Box::new([]),
         });
 
         self.teams.remove(name);
@@ -185,7 +246,7 @@ impl Scoreboard {
             team_name: team_name.to_string(),
             method: TeamMethod::AddPlayers,
             parameters: None,
-            players: vec![player.clone()],
+            players: vec![player.clone()].into(),
         });
 
         team.players.push(player);
@@ -208,7 +269,7 @@ impl Scoreboard {
             team_name: team_name.to_string(),
             method: TeamMethod::RemovePlayers,
             parameters: None,
-            players: vec![player.to_string()],
+            players: vec![player.to_string()].into(),
         });
 
         team.players.retain(|p| p != player);

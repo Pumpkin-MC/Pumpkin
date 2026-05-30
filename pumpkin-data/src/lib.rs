@@ -92,6 +92,7 @@ pub mod meta_data_type;
 pub mod noise_parameter;
 
 #[cfg(feature = "biome")]
+#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/biome.rs"]
 pub mod biome;
@@ -184,6 +185,14 @@ pub mod world {
     pub use super::world_event::*;
 }
 
+#[rustfmt::skip]
+#[path = "generated/placed_feature.rs"]
+pub mod placed_feature;
+
+#[rustfmt::skip]
+#[path = "generated/configured_feature.rs"]
+pub mod configured_feature;
+
 #[cfg(feature = "scoreboard")]
 #[rustfmt::skip]
 #[path = "generated/scoreboard_slot.rs"]
@@ -200,6 +209,7 @@ pub mod damage;
 pub mod fluid;
 
 #[cfg(feature = "block")]
+#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;
@@ -308,3 +318,8 @@ pub mod carver;
 #[rustfmt::skip]
 #[path = "generated/villager.rs"]
 pub mod villager;
+
+#[cfg(feature = "slot_ranges")]
+#[rustfmt::skip]
+#[path = "generated/slot_ranges.rs"]
+pub mod slot_ranges;

@@ -474,11 +474,13 @@ impl<'a> ChunkNoiseRouter<'a> {
         for cell_cache_index in indices {
             let (component_stack, component) = components.split_at_mut(*cell_cache_index);
 
-            let ChunkNoiseFunctionComponent::Chunk(chunk) = component.first_mut().unwrap() else {
-                unreachable!();
+            let Some(ChunkNoiseFunctionComponent::Chunk(chunk)) = component.first_mut() else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
             let ChunkSpecificNoiseFunctionComponent::CellCache(cell_cache) = chunk else {
-                unreachable!();
+                tracing::error!("Expected ChunkSpecificNoiseFunctionComponent::CellCache");
+                continue;
             };
 
             ChunkNoiseFunctionComponent::fill_from_stack(
@@ -502,13 +504,17 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let (component_stack, component) = components.split_at_mut(*interpolator_index);
 
-            let ChunkNoiseFunctionComponent::Chunk(chunk) = component.first_mut().unwrap() else {
-                unreachable!();
+            let Some(ChunkNoiseFunctionComponent::Chunk(chunk)) = component.first_mut() else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
-                unreachable!();
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
             };
 
             let start_index = density_interpolator.yz_to_buf_index(0, cell_z);
@@ -535,13 +541,17 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                unreachable!();
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
 
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
-                unreachable!();
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
             };
 
             density_interpolator.interpolate_x(delta);
@@ -554,13 +564,17 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                unreachable!();
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
 
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
-                unreachable!();
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
             };
 
             density_interpolator.interpolate_y(delta);
@@ -573,12 +587,16 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                unreachable!();
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
-                unreachable!();
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
             };
 
             density_interpolator.interpolate_z(delta);
@@ -591,12 +609,16 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                unreachable!();
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
-                unreachable!();
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
             };
 
             density_interpolator.on_sampled_cell_corners(cell_y_position, cell_z_position);
@@ -609,12 +631,16 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                unreachable!();
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
-                unreachable!();
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
             };
 
             density_interpolator.swap_buffers();

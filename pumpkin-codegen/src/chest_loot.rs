@@ -153,6 +153,7 @@ pub fn build() -> TokenStream {
 
     // Emit get_chest_loot_table
     all_tokens.extend(quote! {
+        #[must_use]
         pub fn get_chest_loot_table(key: &str) -> Option<&'static ChestLootTable> {
             match key {
                 #(#table_keys => Some(&#table_idents),)*

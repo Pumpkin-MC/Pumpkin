@@ -572,9 +572,7 @@ impl SnbtParser<'_, '_> {
                     None
                 }
             }
-            EscapeSequenceBranch::UnicodeName(_name) => {
-                todo!("Unicode Name functionality has not been implemented yet")
-            }
+            EscapeSequenceBranch::UnicodeName(_name) => None,
         }
     }
 
@@ -839,9 +837,13 @@ impl SnbtParser<'_, '_> {
                     Number::Short(short) => NbtTag::Short(short),
                     Number::Int(int) => NbtTag::Int(int),
                     Number::Long(long) => NbtTag::Long(long),
-                    _ => unreachable!(
-                        "Got a floating-point number when only integers should be returned"
-                    ),
+                    _ => {
+                        self.store_dynamic_error(
+                            &INVALID_CODEPOINT,
+                            "Expected integer".to_string(),
+                        );
+                        return None;
+                    }
                 }
             }
             Literal::String(string) => NbtTag::String(string.into()),

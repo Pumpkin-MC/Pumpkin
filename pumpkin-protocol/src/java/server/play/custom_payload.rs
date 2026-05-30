@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_CUSTOM_PAYLOAD;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
@@ -17,7 +17,7 @@ const MAX_PAYLOAD_SIZE: usize = 32_767;
 pub struct SCustomPayload {
     /// The name of the channel used to distinguish different types of messages.
     /// Example: `minecraft:brand` or `voicechat:request_secret`.
-    pub channel: ResourceLocation,
+    pub channel: Box<str>,
     /// The payload sent by the client.
     pub data: Box<[u8]>,
 }
@@ -25,7 +25,7 @@ pub struct SCustomPayload {
 impl ServerPacket for SCustomPayload {
     fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            channel: read.get_string()?,
+            channel: read.get_str()?,
             data: read.read_remaining_to_boxed_slice(MAX_PAYLOAD_SIZE)?,
         })
     }

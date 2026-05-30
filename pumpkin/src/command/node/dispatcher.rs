@@ -224,7 +224,12 @@ impl CommandDispatcher {
     pub async fn execute(&self, parsed: ParsingResult<'_>) -> Result<i32, CommandSyntaxError> {
         if parsed.reader.peek().is_some() {
             return if parsed.errors.len() == 1 {
-                Err(parsed.errors.values().next().unwrap().clone())
+                Err(parsed
+                    .errors
+                    .values()
+                    .next()
+                    .expect("Errors length is 1, so next should exist")
+                    .clone())
             } else if parsed.context.range.is_empty() {
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
             } else {
@@ -290,7 +295,7 @@ impl CommandDispatcher {
             let mut context = context_so_far.clone();
             let mut reader = original_reader.clone();
             let parse_result = {
-                if let Err(error) = self.tree.parse(child, &mut reader, &mut context) {
+                if let Err(error) = self.tree.parse(child, &mut reader, &mut context).await {
                     Err(error)
                 } else {
                     let peek = reader.peek();
@@ -358,7 +363,7 @@ impl CommandDispatcher {
 
                     (a_reader_remaining, a_has_errors).cmp(&(b_reader_remaining, b_has_errors))
                 })
-                .unwrap()
+                .expect("Potentials list is not empty")
         }
     }
 
@@ -528,10 +533,15 @@ impl CommandDispatcher {
                             // For custom suggestions sent by the server, we simply
                             // wait instead of adding the future to join.
                             provided_suggestions.push(provider.suggest(&context, builder).await);
-                            None
                         } else {
-                            Some(node.meta.argument_type.list_suggestions(&context, builder))
+                            provided_suggestions.push(
+                                node.meta
+                                    .argument_type
+                                    .list_suggestions(&context, builder)
+                                    .await,
+                            );
                         }
+                        None
                     }
                 };
 
@@ -892,7 +902,10 @@ impl CommandDispatcher {
                             }
                         }
                         if child_usages.len() == 1 {
-                            let mut child_usage = child_usages.into_iter().next().unwrap();
+                            let mut child_usage = child_usages
+                                .into_iter()
+                                .next()
+                                .expect("Child usages length is 1, so next should exist");
                             if is_optional {
                                 child_usage = format!(
                                     "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"

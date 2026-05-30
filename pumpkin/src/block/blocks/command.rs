@@ -61,7 +61,11 @@ impl CommandBlock {
             warn!("Command block has no matching entity");
             return false;
         };
-        let command_entity: &CommandBlockEntity = before_entity.as_any().downcast_ref().unwrap();
+        let Some(command_entity) = before_entity.as_any().downcast_ref::<CommandBlockEntity>()
+        else {
+            warn!("Block entity at {} is not a command block", before.0);
+            return false;
+        };
 
         command_entity.success_count.load(Ordering::Relaxed) > 0
     }
@@ -122,7 +126,10 @@ impl CommandBlock {
             return;
         }
 
-        let command_entity: Arc<CommandBlockEntity> = Arc::downcast(block_entity).unwrap();
+        let Ok(command_entity) = Arc::downcast::<CommandBlockEntity>(block_entity) else {
+            warn!("Failed to downcast block entity to CommandBlockEntity");
+            return;
+        };
 
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
@@ -164,7 +171,11 @@ impl CommandBlock {
                 break;
             };
 
-            let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+            let Some(command_entity) = block_entity.as_any().downcast_ref::<CommandBlockEntity>()
+            else {
+                warn!("Block entity at {} is not a command block", pos);
+                break;
+            };
             let powered = command_entity.powered.load(Ordering::Relaxed);
             let auto = command_entity.auto.load(Ordering::Relaxed);
             let state_id = world.get_block_state_id(&pos);
@@ -174,7 +185,10 @@ impl CommandBlock {
                 let conditions_met = Self::conditions_met(&world, &pos, direction);
                 if conditions_met {
                     let command = command_entity.command.lock().await;
-                    let entity = world.get_block_entity(&pos).unwrap();
+                    let Some(entity) = world.get_block_entity(&pos) else {
+                        warn!("Command block entity disappeared during execution");
+                        break;
+                    };
                     Self::execute(server, world.clone(), entity, &command).await;
                 } else if props.conditional {
                     command_entity.success_count.store(0, Ordering::Release);
@@ -238,10 +252,12 @@ impl BlockBehaviour for CommandBlock {
                 if block_entity.resource_location() != CommandBlockEntity::ID {
                     return;
                 }
-                let command_entity = block_entity
-                    .as_any()
-                    .downcast_ref::<CommandBlockEntity>()
-                    .unwrap();
+                let Some(command_entity) =
+                    block_entity.as_any().downcast_ref::<CommandBlockEntity>()
+                else {
+                    warn!("Block entity at {} is not a command block", args.position);
+                    return;
+                };
 
                 Self::update(
                     args.world,
@@ -268,7 +284,11 @@ impl BlockBehaviour for CommandBlock {
                 return;
             }
 
-            let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+            let Some(command_entity) = block_entity.as_any().downcast_ref::<CommandBlockEntity>()
+            else {
+                warn!("Block entity at {} is not a command block", args.position);
+                return;
+            };
             let Some(server) = args.world.server.upgrade() else {
                 return;
             };

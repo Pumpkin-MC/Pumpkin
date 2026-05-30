@@ -17,7 +17,7 @@ pub struct SHandShake {
     /// The protocol version of the client (e.g., 767 for 1.21).
     pub protocol_version: VarInt,
     /// The hostname or IP used by the client to connect
-    pub server_address: String,
+    pub server_address: Box<str>,
     /// The port number used by the client to connect
     pub server_port: u16,
     /// The state the client wants to transition to (1 for Status, 2 for Login)
@@ -28,7 +28,7 @@ impl ServerPacket for SHandShake {
     fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             protocol_version: read.get_var_int()?,
-            server_address: read.get_string_bounded(255)?,
+            server_address: read.get_str_bounded(255)?,
             server_port: read.get_u16_be()?,
             next_state: read
                 .get_var_int()?

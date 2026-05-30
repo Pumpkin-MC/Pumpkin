@@ -1326,10 +1326,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             .properties
             .load()
             .iter()
-            .find(|p| p.name == "textures")
+            .find(|p| p.name.as_ref() == "textures")
             .map(|p| PlayerSkin {
-                value: p.value.clone(),
-                signature: p.signature.clone(),
+                value: p.value.to_string(),
+                signature: p.signature.as_ref().map(std::string::ToString::to_string),
             }))
     }
 
@@ -1341,11 +1341,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let mut properties = (**player.gameprofile.properties.load()).clone();
 
-        properties.retain(|p| p.name != "textures");
+        properties.retain(|p| p.name.as_ref() != "textures");
         properties.push(Property {
             name: "textures".into(),
-            value: skin.value,
-            signature: skin.signature,
+            value: skin.value.into(),
+            signature: skin.signature.map(std::convert::Into::into),
         });
 
         player.gameprofile.properties.store(Arc::new(properties));
@@ -1465,7 +1465,11 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        Ok(to_wasm_java_version(player.client.java().version.load()))
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        Ok(to_wasm_java_version(client.version.load()))
     }
 
     async fn get_brand(
@@ -1481,14 +1485,11 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        Ok(player
+        let client = player
             .client
             .java()
-            .brand
-            .lock()
-            .await
-            .clone()
-            .unwrap_or_default())
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        Ok(client.brand.lock().await.clone().unwrap_or_default())
     }
 
     async fn get_server_address(
@@ -1504,7 +1505,11 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        Ok(player.client.java().server_address.lock().await.clone())
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        Ok(client.server_address.lock().await.to_string())
     }
 
     async fn get_settings(
@@ -1574,10 +1579,14 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
         if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_java_packet(
-            &packet, player.client.java().version.load(),
+            &packet, client.version.load(),
         ) {
-            player.client.java().send_packet_now_data(bytes).await;
+            client.send_packet_now_data(bytes).await;
         }
         Ok(())
     }

@@ -87,7 +87,8 @@ impl BlockBehaviour for PressurePlateBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::can_pressure_plate_place_at(args.world.unwrap(), args.position)
+        args.world
+            .is_some_and(|world| Self::can_pressure_plate_place_at(world, args.position))
     }
 }
 

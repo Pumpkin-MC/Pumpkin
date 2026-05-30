@@ -1,4 +1,5 @@
 use pumpkin_data::BlockDirection as InternalBlockDirection;
+use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInstrument;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
@@ -13,7 +14,8 @@ use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpa
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, PistonBehavior as WitPistonBehavior,
+    BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
+    NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, TextComponentResource, WorldResource},
@@ -29,6 +31,49 @@ pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitB
         InternalBlockDirection::South => WitBlockDirection::South,
         InternalBlockDirection::West => WitBlockDirection::West,
         InternalBlockDirection::East => WitBlockDirection::East,
+    }
+}
+
+pub(crate) const fn to_wit_noteblock_instrument(
+    instr: InternalNoteblockInstrument,
+) -> WitNoteblockInstrument {
+    match instr {
+        InternalNoteblockInstrument::Harp => WitNoteblockInstrument::Harp,
+        InternalNoteblockInstrument::Basedrum => WitNoteblockInstrument::Basedrum,
+        InternalNoteblockInstrument::Snare => WitNoteblockInstrument::Snare,
+        InternalNoteblockInstrument::Hat => WitNoteblockInstrument::Hat,
+        InternalNoteblockInstrument::Bass => WitNoteblockInstrument::Bass,
+        InternalNoteblockInstrument::Flute => WitNoteblockInstrument::Flute,
+        InternalNoteblockInstrument::Bell => WitNoteblockInstrument::Bell,
+        InternalNoteblockInstrument::Guitar => WitNoteblockInstrument::Guitar,
+        InternalNoteblockInstrument::Chime => WitNoteblockInstrument::Chime,
+        InternalNoteblockInstrument::Xylophone => WitNoteblockInstrument::Xylophone,
+        InternalNoteblockInstrument::IronXylophone => WitNoteblockInstrument::IronXylophone,
+        InternalNoteblockInstrument::CowBell => WitNoteblockInstrument::CowBell,
+        InternalNoteblockInstrument::Didgeridoo => WitNoteblockInstrument::Didgeridoo,
+        InternalNoteblockInstrument::Bit => WitNoteblockInstrument::Bit,
+        InternalNoteblockInstrument::Banjo => WitNoteblockInstrument::Banjo,
+        InternalNoteblockInstrument::Pling => WitNoteblockInstrument::Pling,
+        InternalNoteblockInstrument::Trumpet => WitNoteblockInstrument::Trumpet,
+        InternalNoteblockInstrument::TrumpetExposed => WitNoteblockInstrument::TrumpetExposed,
+        InternalNoteblockInstrument::TrumpetOxidized => WitNoteblockInstrument::TrumpetOxidized,
+        InternalNoteblockInstrument::TrumpetWeathered => WitNoteblockInstrument::TrumpetWeathered,
+        InternalNoteblockInstrument::Zombie => WitNoteblockInstrument::Zombie,
+        InternalNoteblockInstrument::Skeleton => WitNoteblockInstrument::Skeleton,
+        InternalNoteblockInstrument::Creeper => WitNoteblockInstrument::Creeper,
+        InternalNoteblockInstrument::Dragon => WitNoteblockInstrument::Dragon,
+        InternalNoteblockInstrument::WitherSkeleton => WitNoteblockInstrument::WitherSkeleton,
+        InternalNoteblockInstrument::Piglin => WitNoteblockInstrument::Piglin,
+        InternalNoteblockInstrument::CustomHead => WitNoteblockInstrument::CustomHead,
+    }
+}
+
+pub(crate) const fn to_wit_bounding_box(
+    bb: pumpkin_util::math::boundingbox::BoundingBox,
+) -> WitBoundingBox {
+    WitBoundingBox {
+        min: (bb.min.x, bb.min.y, bb.min.z),
+        max: (bb.max.x, bb.max.y, bb.max.z),
     }
 }
 
@@ -102,6 +147,30 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
                 PistonBehavior::Ignore => WitPistonBehavior::Ignore,
                 PistonBehavior::PushOnly => WitPistonBehavior::PushOnly,
             },
+            burnable: state.burnable(),
+            tool_required: state.tool_required(),
+            sided_transparency: state.sided_transparency(),
+            replaceable: state.replaceable(),
+            is_solid_block: state.is_solid_block(),
+            block_entity_type: state.block_entity_type,
+            instrument: to_wit_noteblock_instrument(state.instrument),
+            collision_shapes: state
+                .get_block_collision_shapes()
+                .map(to_wit_bounding_box)
+                .collect(),
+            outline_shapes: state
+                .get_block_outline_shapes()
+                .map(to_wit_bounding_box)
+                .collect(),
+            down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
+            up_side_solid: state.is_side_solid(InternalBlockDirection::Up),
+            north_side_solid: state.is_side_solid(InternalBlockDirection::North),
+            south_side_solid: state.is_side_solid(InternalBlockDirection::South),
+            west_side_solid: state.is_side_solid(InternalBlockDirection::West),
+            east_side_solid: state.is_side_solid(InternalBlockDirection::East),
+            down_center_solid: state.is_center_solid(InternalBlockDirection::Down),
+            up_center_solid: state.is_center_solid(InternalBlockDirection::Up),
+            map_color: pumpkin_data::Block::from_state_id(state.id).map_color,
         })
     }
 

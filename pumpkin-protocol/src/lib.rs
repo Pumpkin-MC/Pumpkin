@@ -115,7 +115,9 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
                         let value = T::deserialize(deserializer)?;
                         *self = IdOrStateDeserializer::Value(value);
                     }
-                    IdOrStateDeserializer::Value(_) => unreachable!(),
+                    IdOrStateDeserializer::Value(_) => {
+                        return Err(serde::de::Error::custom("Unreachable state reached"));
+                    }
                 }
 
                 Ok(())
@@ -132,14 +134,14 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
                     return Ok(IdOr::Id(id - 1));
                 }
             }
-            _ => unreachable!(),
+            _ => return Err(serde::de::Error::custom("Unreachable state reached")),
         }
 
         let _ = seq.next_element_seed(&mut state)?;
 
         match state {
             IdOrStateDeserializer::Value(val) => Ok(IdOr::Value(val)),
-            _ => unreachable!(),
+            _ => Err(serde::de::Error::custom("Unreachable state reached")),
         }
     }
 }
@@ -416,11 +418,11 @@ pub struct Sample {
 // basically game profile
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Property {
-    pub name: String,
+    pub name: Box<str>,
     // base 64
-    pub value: String,
+    pub value: Box<str>,
     // base 64
-    pub signature: Option<String>,
+    pub signature: Option<Box<str>>,
 }
 
 #[derive(Serialize)]

@@ -149,7 +149,9 @@ async fn register_player_event(
             register_typed_event::<PlayerToggleSprintEvent>(resource, handler, priority, blocking)
                 .await;
         }
-        _ => unreachable!("non-player event should not be routed to register_player_event"),
+        _ => {
+            tracing::error!("non-player event should not be routed to register_player_event");
+        }
     }
 }
 
@@ -181,7 +183,9 @@ async fn register_world_event(
         EventType::SpawnChangeEvent => {
             register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
         }
-        _ => unreachable!("non-world event should not be routed to register_world_event"),
+        _ => {
+            tracing::error!("non-world event should not be routed to register_world_event");
+        }
     }
 }
 
@@ -217,7 +221,9 @@ async fn register_block_event(
         EventType::BlockPlaceEvent => {
             register_typed_event::<BlockPlaceEvent>(resource, handler, priority, blocking).await;
         }
-        _ => unreachable!("non-block event should not be routed to register_block_event"),
+        _ => {
+            tracing::error!("non-block event should not be routed to register_block_event");
+        }
     }
 }
 async fn register_server_event(
@@ -229,7 +235,7 @@ async fn register_server_event(
 ) {
     use crate::plugin::server::{
         server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
-        server_tick_start::ServerTickStartEvent,
+        server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
     };
 
     match event_type {
@@ -240,11 +246,16 @@ async fn register_server_event(
             register_typed_event::<ServerBroadcastEvent>(resource, handler, priority, blocking)
                 .await;
         }
+        EventType::ServerTickEndEvent => {
+            register_typed_event::<ServerTickEndEvent>(resource, handler, priority, blocking).await;
+        }
         EventType::ServerTickStartEvent => {
             register_typed_event::<ServerTickStartEvent>(resource, handler, priority, blocking)
                 .await;
         }
-        _ => unreachable!("non-server event should not be routed to register_server_event"),
+        _ => {
+            tracing::error!("non-server event should not be routed to register_server_event");
+        }
     }
 }
 
@@ -309,6 +320,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         match event_type {
             event_type @ (EventType::ServerCommandEvent
             | EventType::ServerBroadcastEvent
+            | EventType::ServerTickEndEvent
             | EventType::ServerTickStartEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
             }

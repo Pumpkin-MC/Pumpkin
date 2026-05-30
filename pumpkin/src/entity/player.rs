@@ -4,7 +4,7 @@ use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
@@ -15,12 +15,11 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
+use pumpkin_protocol::bedrock::client::AbilityLayer;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
-use pumpkin_protocol::bedrock::client::update_abilities::{
-    Ability, AbilityLayer, CUpdateAbilities,
-};
+use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
@@ -62,12 +61,12 @@ use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
     CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
-    CKeepAlive, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
-    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty,
-    CSetContainerSlot, CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth,
-    CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
-    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
+    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
+    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon,
+    MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -445,12 +444,6 @@ pub struct Player {
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
-    /// Whether we are waiting for a response after sending a keep alive packet.
-    pub wait_for_keep_alive: AtomicBool,
-    /// The keep alive packet payload we send. The client should respond with the same id.
-    pub keep_alive_id: AtomicI64,
-    /// The last time we sent a keep alive packet.
-    pub last_keep_alive_time: AtomicCell<Instant>,
     /// The last time the player performed an action (for idle timeout).
     pub last_action_time: AtomicCell<Instant>,
     /// The ping in millis.
@@ -499,9 +492,66 @@ pub struct Player {
     pub tab_list_listed: AtomicBool,
     pub enchantment_seed: AtomicI32,
     pub fishing_bobber: AtomicI32,
+    pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
+}
+
+use base64::prelude::*;
+use pumpkin_protocol::Property;
+use serde::Deserialize;
+use std::io::Read;
+
+#[derive(Deserialize)]
+struct TexturesProperty {
+    textures: Textures,
+}
+
+#[derive(Deserialize)]
+struct Textures {
+    #[serde(rename = "SKIN")]
+    skin: Option<SkinTexture>,
+}
+
+#[derive(Deserialize)]
+struct SkinTexture {
+    url: String,
 }
 
 impl Player {
+    #[must_use]
+    pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
+        let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
+        let decoded = BASE64_STANDARD
+            .decode(textures_prop.value.as_bytes())
+            .ok()?;
+        let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
+        let url = textures.textures.skin?.url;
+
+        let resp = ureq::get(&url).call().ok()?;
+        let mut buf = Vec::new();
+        resp.into_body().into_reader().read_to_end(&mut buf).ok()?;
+        let img = image::load_from_memory(&buf).ok()?;
+
+        let width = img.width();
+        let mut height = img.height();
+
+        if width != 64 || (height != 32 && height != 64) {
+            return None;
+        }
+
+        let mut rgba = img.into_rgba8().into_raw();
+
+        if height == 32 {
+            rgba.resize(64 * 64 * 4, 0);
+            height = 64;
+        }
+
+        let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        skin.image_width = width;
+        skin.image_height = height;
+        skin.skin_data = rgba;
+        Some(skin)
+    }
+
     #[expect(clippy::too_many_lines)]
     pub async fn new(
         client: ClientPlatform,
@@ -550,6 +600,14 @@ impl Player {
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
 
+        let properties = gameprofile.properties.load().clone();
+        let bedrock_skin = tokio::task::spawn_blocking(move || {
+            Self::fetch_skin(&properties)
+                .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
+        })
+        .await
+        .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
+
         Self {
             living_entity,
             config: ArcSwap::new(Arc::new(config)),
@@ -585,9 +643,6 @@ impl Player {
                 // Since 1 is not possible in vanilla it is used as uninit
                 NonZeroU8::new(1).unwrap(),
             )),
-            wait_for_keep_alive: AtomicBool::new(false),
-            keep_alive_id: AtomicI64::new(0),
-            last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
@@ -642,6 +697,7 @@ impl Player {
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(false),
             fishing_bobber: AtomicI32::new(-1),
+            bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
         }
     }
 
@@ -1868,33 +1924,7 @@ impl Player {
                     ),
                 )
                 .await;
-                return;
             }
-        }
-
-        // TODO This should only be handled by the ClientPlatform
-        if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            if matches!(self.client, ClientPlatform::Bedrock(_)) {
-                return;
-            }
-            // We never got a response from the last keep alive we sent.
-            if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                self.kick(
-                    DisconnectReason::Timeout,
-                    TextComponent::translate_cross(
-                        translation::java::DISCONNECT_TIMEOUT,
-                        translation::bedrock::DISCONNECT_TIMEOUT,
-                        [],
-                    ),
-                )
-                .await;
-                return;
-            }
-            self.wait_for_keep_alive.store(true, Ordering::Relaxed);
-            self.last_keep_alive_time.store(now);
-            let id = now.elapsed().as_millis() as i64;
-            self.keep_alive_id.store(id, Ordering::Relaxed);
-            self.client.enqueue_packet(&CKeepAlive::new(id)).await;
         }
     }
 
@@ -3580,21 +3610,33 @@ impl Player {
     }
 
     /// Swing the hand of the player
-    pub fn swing_hand(&self, hand: Hand, all: bool) {
+    pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
-        let entity_id = VarInt(self.entity_id());
-        let chunk_pos = self.living_entity.entity.chunk_pos.load();
+        let entity_id = self.entity_id();
 
         let animation = match hand {
-            Hand::Left => Animation::SwingMainArm,
-            Hand::Right => Animation::SwingOffhand,
+            Hand::Right => Animation::SwingMainArm,
+            Hand::Left => Animation::SwingOffhand,
         };
 
-        let packet = CEntityAnimation::new(entity_id, animation);
+        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
+            VarInt(entity_id),
+            animation,
+        );
+
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            runtime_entity_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+        };
+
         if all {
-            world.broadcast_to_chunk(chunk_pos, &packet);
+            world.broadcast_editioned(&je_packet, &be_packet).await;
         } else {
-            world.broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet);
+            world
+                .broadcast_packet_except_editioned(&[self.gameprofile.id], &je_packet, &be_packet)
+                .await;
         }
     }
 

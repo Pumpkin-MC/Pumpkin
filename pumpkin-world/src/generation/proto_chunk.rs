@@ -343,6 +343,7 @@ impl ProtoChunk {
             }
         }
 
+        proto_chunk.stage = StagedChunkEnum::from(chunk_data.status);
         proto_chunk
     }
     #[inline]
@@ -408,7 +409,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -416,7 +417,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -424,7 +425,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -432,7 +433,11 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_motion_blocking_block_no_leaves_height_exclusive(
+        &self,
+        x: i32,
+        z: i32,
+    ) -> i32 {
         let local_x = x & 15;
         let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
@@ -545,6 +550,7 @@ impl ProtoChunk {
     }
 
     pub fn step_to_biomes(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::Empty);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
         let horizontal_biome_end = biome_coords::from_block(16);
@@ -561,7 +567,7 @@ impl ProtoChunk {
     }
 
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
-        //debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
 
         let settings = generator.settings;
         let generation_shape = &settings.shape;
@@ -995,8 +1001,7 @@ impl ProtoChunk {
                     && let Some(features_at_step) = biome.features.get(step)
                 {
                     for &feature_id in *features_at_step {
-                        features_to_run
-                            .push(feature_id.strip_prefix("minecraft:").unwrap_or(feature_id));
+                        features_to_run.push(feature_id);
                     }
                 }
             }
@@ -1004,8 +1009,8 @@ impl ProtoChunk {
             features_to_run.sort_unstable();
             features_to_run.dedup();
 
-            for (p, feature_id) in features_to_run.into_iter().enumerate() {
-                if let Some(feature) = PLACED_FEATURES.get(feature_id) {
+            for (p, feature_enum) in features_to_run.into_iter().enumerate() {
+                if let Some(feature) = PLACED_FEATURES.get(&feature_enum) {
                     let decorator_seed = get_decorator_seed(population_seed, p as u64, step as u64);
                     let mut random =
                         RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
@@ -1015,7 +1020,7 @@ impl ProtoChunk {
                         block_registry,
                         min_y as i8,
                         height as u16,
-                        feature_id,
+                        feature_enum,
                         &mut random,
                         origin_pos,
                     );
@@ -1131,6 +1136,7 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
         let random_config = &generator.random_config;
         let settings = generator.settings;
         let global_cache = &generator.global_structure_cache;
@@ -1216,6 +1222,7 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
         let random_config = &generator.random_config;
         let settings = generator.settings;
         let dimension = &generator.dimension;

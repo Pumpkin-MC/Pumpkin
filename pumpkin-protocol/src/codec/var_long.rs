@@ -20,7 +20,7 @@ pub type VarLongType = i64;
 /**
  * A variable-length long type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VarLong(pub VarLongType);
 
 impl VarLong {

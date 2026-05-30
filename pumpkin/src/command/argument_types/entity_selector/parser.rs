@@ -1,20 +1,26 @@
+use crate::command::argument_types::entity::ENTITY_SELECTOR_PERMISSION;
 use crate::command::argument_types::entity_selector::option::{
     EntitySelectorOption, INAPPLICABLE_OPTION_ERROR_TYPE, UNKNOWN_OPTION_ERROR_TYPE,
 };
 use crate::command::argument_types::entity_selector::{
     EntitySelector, EntitySelectorPredicate, Order, PositionFunction, RotationType,
 };
+use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::SuggestionText;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use bitflags::bitflags;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use std::pin::Pin;
 use uuid::Uuid;
 
 pub const INVALID_NAME_OR_UUID_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
@@ -103,6 +109,7 @@ pub struct EntitySelectorParser<'b, 'a> {
     uses_selector_variable: bool,
     includes_entities: bool,
     pub(crate) is_current_entity: bool,
+    pub(crate) suggestions: EntitySelectorParserSuggestions,
 
     flags: Flags,
 }
@@ -134,6 +141,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             includes_entities: false,
             is_current_entity: false,
             flags: Flags::empty(),
+            suggestions: EntitySelectorParserSuggestions::Nothing,
         }
     }
 
@@ -213,8 +221,9 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     }
 
     /// Tries to parse the selector from the provided [`StringReader`].
-    pub fn parse(mut self) -> Result<EntitySelector, CommandSyntaxError> {
+    pub fn parse(&mut self) -> Result<(), CommandSyntaxError> {
         self.start_position = self.reader.cursor();
+        self.suggestions = EntitySelectorParserSuggestions::NameOrSelector;
         if self.reader.peek() == Some('@') {
             if !self.allows_selector_variable {
                 return Err(SELECTORS_NOT_ALLOWED_ERROR_TYPE.create(self.reader));
@@ -224,16 +233,24 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
         } else {
             self.parse_name_or_uuid()?;
         }
+        Ok(())
+    }
+
+    /// Tries to parse the selector from the provided [`StringReader`], and consumes
+    /// itself in the process.
+    pub fn parse_and_consume(mut self) -> Result<EntitySelector, CommandSyntaxError> {
+        self.parse()?;
         Ok(self.selector())
     }
 
     fn parse_selector(&mut self) -> Result<(), CommandSyntaxError> {
         self.uses_selector_variable = true;
+        self.suggestions = EntitySelectorParserSuggestions::Selector;
         if !self.reader.can_read_char() {
             return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
         }
         let i = self.reader.cursor();
-        let char = self.reader.read().unwrap();
+        let char = self.reader.read().expect("can_read_char is true");
         let mut add_alive_predicate = false;
         match char {
             'a' => {
@@ -282,8 +299,10 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
         if add_alive_predicate {
             self.predicates.push(EntitySelectorPredicate::IsAlive);
         }
+        self.suggestions = EntitySelectorParserSuggestions::OpenOptions;
         if self.reader.peek() == Some('[') {
             self.reader.skip();
+            self.suggestions = EntitySelectorParserSuggestions::OptionsKeyOrClose;
             //
             self.parse_options()?;
         }
@@ -291,6 +310,10 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     }
 
     fn parse_name_or_uuid(&mut self) -> Result<(), CommandSyntaxError> {
+        if self.reader.can_read_char() {
+            self.suggestions = EntitySelectorParserSuggestions::Name;
+        }
+
         let i = self.reader.cursor();
         let string = self.reader.read_string()?;
         if let Ok(uuid) = string.parse() {
@@ -312,6 +335,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     }
 
     fn parse_options(&mut self) -> Result<(), CommandSyntaxError> {
+        self.suggestions = EntitySelectorParserSuggestions::OptionsKey;
         self.reader.skip_whitespace();
         while self.reader.can_read_char() && self.reader.peek() != Some(']') {
             self.reader.skip_whitespace();
@@ -333,8 +357,10 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
                 }
                 self.reader.skip();
                 self.reader.skip_whitespace();
+                self.suggestions = EntitySelectorParserSuggestions::Nothing;
                 option.modify_parser(self)?;
                 self.reader.skip_whitespace();
+                self.suggestions = EntitySelectorParserSuggestions::OptionsNextOrClose;
                 if let Some(peeked) = self.reader.peek() {
                     if peeked != ',' {
                         if peeked != ']' {
@@ -343,6 +369,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
                         break;
                     }
                     self.reader.skip();
+                    self.suggestions = EntitySelectorParserSuggestions::OptionsKey;
                 }
             } else {
                 self.reader.set_cursor(i);
@@ -353,6 +380,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
         }
         if self.reader.can_read_char() {
             self.reader.skip();
+            self.suggestions = EntitySelectorParserSuggestions::Nothing;
             Ok(())
         } else {
             Err(EXPECTED_END_OF_OPTIONS_ERROR_TYPE.create(self.reader))
@@ -408,5 +436,189 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     /// Sets this parse to not include non-player entities.
     pub const fn set_includes_entities(&mut self, value: bool) {
         self.includes_entities = value;
+    }
+
+    /// Fills the given builder with suggestions.
+    pub fn fill_suggestions(
+        &self,
+        builder: &SuggestionsBuilder,
+        names: impl FnOnce(SuggestionsBuilder) -> SuggestionsBuilder,
+    ) -> Suggestions {
+        self.suggestions
+            .fill_suggestions(builder.create_offset(self.reader.cursor()), names, self)
+    }
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+pub(crate) enum EntitySelectorParserSuggestions {
+    #[default]
+    Nothing,
+
+    Selector,
+    OpenOptions,
+    OptionsKeyOrClose,
+    Name,
+    OptionsKey,
+    OptionsNextOrClose,
+    NameOrSelector,
+    Sort,
+    Gamemode,
+}
+
+impl EntitySelectorParserSuggestions {
+    pub fn fill_suggestions(
+        self,
+        mut builder: SuggestionsBuilder,
+        names: impl FnOnce(SuggestionsBuilder) -> SuggestionsBuilder,
+        parser: &EntitySelectorParser,
+    ) -> Suggestions {
+        match self {
+            Self::Nothing => {}
+            Self::Selector => {
+                let mut sub = builder.create_offset(builder.start - 1);
+                sub = Self::fill_selector_suggestions(sub);
+                builder = builder.append(sub);
+            }
+            Self::OpenOptions => {
+                builder = builder.suggest("[");
+            }
+            Self::OptionsKeyOrClose => {
+                builder = builder.suggest("]");
+                builder = EntitySelectorOption::suggest_names(parser, builder);
+            }
+            Self::Name => {
+                let mut sub = builder.create_offset(parser.start_position);
+                sub = names(sub);
+                builder = builder.append(sub);
+            }
+            Self::OptionsKey => builder = EntitySelectorOption::suggest_names(parser, builder),
+            Self::OptionsNextOrClose => {
+                builder = builder.suggest(",");
+                builder = builder.suggest("]");
+            }
+            Self::NameOrSelector => {
+                builder = names(builder);
+                if parser.allows_selector_variable {
+                    builder = Self::fill_selector_suggestions(builder);
+                }
+            }
+            Self::Sort => {
+                builder =
+                    builder.filter_and_suggest(&["nearest", "furthest", "random", "arbitrary"]);
+            }
+            Self::Gamemode => {
+                let mut prefix = builder.remaining_lowercase();
+                let mut add_normal = !parser.has_flag(Flags::GAMEMODE_NOT_EQUALS_SET);
+                let mut add_inverted = true;
+
+                if !prefix.is_empty() {
+                    // ! is an ASCII character, so this is fine.
+                    if prefix.as_bytes()[0] == b'!' {
+                        add_normal = false;
+                        prefix = &prefix[1..];
+                    } else {
+                        add_inverted = false;
+                    }
+                }
+
+                let mut suggestions: Vec<SuggestionText> =
+                    Vec::with_capacity(GameMode::VALUES.len() * 2);
+                for gamemode in GameMode::VALUES {
+                    if gamemode.name().starts_with(prefix) {
+                        if add_inverted {
+                            suggestions.push(format!("!{}", gamemode.name()).into());
+                        }
+                        if add_normal {
+                            suggestions.push(gamemode.name().into());
+                        }
+                    }
+                }
+                for suggestion in suggestions {
+                    builder = builder.suggest(suggestion);
+                }
+            }
+        }
+
+        builder.build()
+    }
+
+    fn fill_selector_suggestions(mut builder: SuggestionsBuilder) -> SuggestionsBuilder {
+        builder = builder.suggest_with_tooltip(
+            "@p",
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_SELECTOR_NEARESTPLAYER,
+                translation::java::ARGUMENT_ENTITY_SELECTOR_NEARESTPLAYER,
+                [],
+            ),
+        );
+        builder = builder.suggest_with_tooltip(
+            "@a",
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_SELECTOR_ALLPLAYERS,
+                translation::java::ARGUMENT_ENTITY_SELECTOR_ALLPLAYERS,
+                [],
+            ),
+        );
+        builder = builder.suggest_with_tooltip(
+            "@r",
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_SELECTOR_RANDOMPLAYER,
+                translation::java::ARGUMENT_ENTITY_SELECTOR_RANDOMPLAYER,
+                [],
+            ),
+        );
+        builder = builder.suggest_with_tooltip(
+            "@s",
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_SELECTOR_SELF,
+                translation::java::ARGUMENT_ENTITY_SELECTOR_SELF,
+                [],
+            ),
+        );
+        builder = builder.suggest_with_tooltip(
+            "@e",
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_SELECTOR_ALLENTITIES,
+                translation::java::ARGUMENT_ENTITY_SELECTOR_ALLENTITIES,
+                [],
+            ),
+        );
+        builder = builder.suggest_with_tooltip(
+            "@n",
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_SELECTOR_NEARESTENTITY,
+                translation::java::ARGUMENT_ENTITY_SELECTOR_NEARESTENTITY,
+                [],
+            ),
+        );
+        builder
+    }
+
+    pub fn list_suggestions<'a>(
+        context: &'a CommandContext<'_>,
+        suggestions_builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        Box::pin(async move {
+            let mut reader = StringReader::new(suggestions_builder.input.clone());
+            reader.set_cursor(suggestions_builder.start);
+            let mut parser = EntitySelectorParser::new(
+                &mut reader,
+                context
+                    .source
+                    .has_permission(ENTITY_SELECTOR_PERMISSION)
+                    .await,
+            );
+
+            let _ = parser.parse();
+
+            parser.fill_suggestions(&suggestions_builder, |mut suggestions| {
+                for player in context.server().get_all_players() {
+                    suggestions =
+                        suggestions.filter_and_suggest_one(player.gameprofile.name.clone());
+                }
+                // ONLY FOR EntityArgumentType: This is server-side, so no other entity will show up.
+                suggestions
+            })
+        })
     }
 }

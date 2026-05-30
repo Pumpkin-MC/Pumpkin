@@ -1,1 +1,0 @@
-interface entity { use %world.{entity, raycast-result, block-direction}; }

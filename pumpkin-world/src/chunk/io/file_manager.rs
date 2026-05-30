@@ -268,7 +268,7 @@ where
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(s) => s,
                         Err(ChunkReadingError::ChunkNotExist) => {
-                            unreachable!("get_serializer always returns a default serializer")
+                            return;
                         }
                         Err(err) => {
                             // Best-effort: report the error for the first coord in the batch.
@@ -332,7 +332,9 @@ where
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(s) => s,
                         Err(ChunkReadingError::ChunkNotExist) => {
-                            unreachable!("get_serializer always returns a default serializer")
+                            return Err(ChunkWritingError::IoError(std::io::Error::other(
+                                "get_serializer returned ChunkNotExist",
+                            )));
                         }
                         Err(ChunkReadingError::IoError(err)) => {
                             error!("I/O error reading region before write: {err}");
@@ -379,7 +381,7 @@ where
                             serializer
                                 .write(&path)
                                 .await
-                                .map_err(ChunkWritingError::IoError)?
+                                .map_err(ChunkWritingError::IoError)?;
                             // Read-lock released here.
                         };
 

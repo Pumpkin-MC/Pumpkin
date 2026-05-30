@@ -13,14 +13,35 @@ const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
     let assets = [
-        (JavaMinecraftVersion::V_1_20_5, "1_21_synced_registries.json"),
+        (
+            JavaMinecraftVersion::V_1_20_5,
+            "1_21_synced_registries.json",
+        ),
         (JavaMinecraftVersion::V_1_21, "1_21_synced_registries.json"),
-        (JavaMinecraftVersion::V_1_21_2, "1_21_2_synced_registries.json"),
-        (JavaMinecraftVersion::V_1_21_4, "1_21_4_synced_registries.json"),
-        (JavaMinecraftVersion::V_1_21_5, "1_21_5_synced_registries.json"),
-        (JavaMinecraftVersion::V_1_21_6, "1_21_6_synced_registries.json"),
-        (JavaMinecraftVersion::V_1_21_7, "1_21_7_synced_registries.json"),
-        (JavaMinecraftVersion::V_1_21_9, "1_21_9_synced_registries.json"),
+        (
+            JavaMinecraftVersion::V_1_21_2,
+            "1_21_2_synced_registries.json",
+        ),
+        (
+            JavaMinecraftVersion::V_1_21_4,
+            "1_21_4_synced_registries.json",
+        ),
+        (
+            JavaMinecraftVersion::V_1_21_5,
+            "1_21_5_synced_registries.json",
+        ),
+        (
+            JavaMinecraftVersion::V_1_21_6,
+            "1_21_6_synced_registries.json",
+        ),
+        (
+            JavaMinecraftVersion::V_1_21_7,
+            "1_21_7_synced_registries.json",
+        ),
+        (
+            JavaMinecraftVersion::V_1_21_9,
+            "1_21_9_synced_registries.json",
+        ),
         (
             JavaMinecraftVersion::V_1_21_11,
             "1_21_11_synced_registries.json",
@@ -125,7 +146,9 @@ pub(crate) fn build() -> TokenStream {
         #static_values
 
         impl Registry {
+            #[must_use]
             pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
+                #[allow(clippy::match_same_arms)]
                 let static_regs = match version {
                     #match_arms
                     _ => #latest_registry,

@@ -37,6 +37,8 @@ impl BitSet {
 
 impl Serialize for BitSet {
     fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        todo!()
+        Err(serde::ser::Error::custom(
+            "BitSet serialization not implemented",
+        ))
     }
 }

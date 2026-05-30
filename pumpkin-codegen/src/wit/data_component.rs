@@ -23,8 +23,7 @@ pub fn build() -> String {
         let name = raw_name
             .strip_prefix("minecraft:")
             .unwrap_or(raw_name)
-            .replace('_', "-")
-            .replace('/', "-");
+            .replace(['_', '/'], "-");
         component_enum.case(name);
     }
 

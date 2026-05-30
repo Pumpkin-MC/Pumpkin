@@ -294,6 +294,7 @@ impl CustomBossbars {
                         &bossbar.bossbar_data.uuid,
                         bossbar.bossbar_data.color,
                         bossbar.bossbar_data.division,
+                        bossbar.bossbar_data.flags,
                     )
                     .await;
             }
@@ -333,6 +334,7 @@ impl CustomBossbars {
                         &bossbar.bossbar_data.uuid,
                         bossbar.bossbar_data.color,
                         bossbar.bossbar_data.division,
+                        bossbar.bossbar_data.flags,
                     )
                     .await;
             }

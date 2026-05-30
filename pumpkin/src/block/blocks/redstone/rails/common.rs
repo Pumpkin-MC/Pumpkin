@@ -181,7 +181,13 @@ fn compute_flanking_rail_new_shape(
         }
         1 => [connected_towards[0], flanking_from],
         0 => [flanking_from, flanking_from.opposite()],
-        _ => unreachable!("Rails only have two sides"),
+        _ => {
+            tracing::error!(
+                "Rails only have two sides, but got {}",
+                connected_towards.len()
+            );
+            return rail.properties.shape();
+        }
     };
 
     // Handle rails that want to be straight

@@ -105,7 +105,7 @@ use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::projectile::small_fireball::SmallFireballEntity;
 use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
-use crate::entity::projectile::wind_charge::WindChargeEntity;
+use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::entity::{Entity, EntityBase, mob};
@@ -250,6 +250,7 @@ pub fn from_type(
                 owner_id: None,
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
+                gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new(thrown))
         }
@@ -259,6 +260,7 @@ pub fn from_type(
                 owner_id: None,
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
+                gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new(thrown))
         }

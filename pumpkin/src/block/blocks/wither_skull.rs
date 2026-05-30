@@ -38,7 +38,10 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                         0 => *pos,
                         1 => pos.offset(opposite.to_offset()),
                         2 => pos.offset(dir.to_offset()),
-                        _ => unreachable!(),
+                        _ => {
+                            tracing::error!("Invalid offset in wither skull check: {}", offset);
+                            *pos
+                        }
                     };
 
                     let top_middle = center_skull_pos.down();

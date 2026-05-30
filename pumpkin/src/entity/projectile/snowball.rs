@@ -10,6 +10,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_util::math::vector3::Vector3;
 
+const GRAVITY: f64 = 0.03;
+
 pub struct SnowballEntity {
     pub thrown: ThrownItemEntity,
 }
@@ -25,13 +27,14 @@ impl SnowballEntity {
             owner_id: None,
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity: GRAVITY,
         };
 
         Self { thrown }
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
         thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         Self { thrown }
     }

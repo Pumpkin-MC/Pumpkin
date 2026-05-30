@@ -1,8 +1,10 @@
+pub mod actor_event;
 pub mod animate;
 pub mod client_cache_status;
 pub mod command_request;
 pub mod container_close;
 pub mod interaction;
+pub mod inventory_transaction;
 pub mod loading_screen;
 pub mod login;
 pub mod modal_form_response;
