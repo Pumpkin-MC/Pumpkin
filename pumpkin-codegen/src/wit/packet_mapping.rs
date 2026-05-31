@@ -235,7 +235,11 @@ fn parse_packet_file(
 
 fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
     match ty {
-        syn::Type::Path(tp) => (tp.path.segments.last().unwrap().ident.to_string(), false, false),
+        syn::Type::Path(tp) => (
+            tp.path.segments.last().unwrap().ident.to_string(),
+            false,
+            false,
+        ),
         syn::Type::Reference(tr) => {
             let (name, _, is_slice) = get_type_info(&tr.elem);
             (name, true, is_slice)

@@ -15,7 +15,10 @@ pub fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_6, "1_21_6_meta_data_type.json"),
         (JavaMinecraftVersion::V_1_21_7, "1_21_7_meta_data_type.json"),
         (JavaMinecraftVersion::V_1_21_9, "1_21_9_meta_data_type.json"),
-        (JavaMinecraftVersion::V_1_21_11, "1_21_11_meta_data_type.json"),
+        (
+            JavaMinecraftVersion::V_1_21_11,
+            "1_21_11_meta_data_type.json",
+        ),
         (JavaMinecraftVersion::V_26_1, "26_1_meta_data_type.json"),
     ];
 

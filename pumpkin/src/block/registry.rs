@@ -35,6 +35,7 @@ use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
+use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
 use crate::block::blocks::infested::InfestedBlock;
@@ -301,6 +302,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralPlantBlock);
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
+    manager.register(GrassBlock);
 
     manager.register(FallingBlock);
 

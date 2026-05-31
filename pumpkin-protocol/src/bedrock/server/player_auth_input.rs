@@ -199,7 +199,7 @@ pub enum InputData {
     StartFlying = 42,
     StopFlying = 43,
     ClientAckServerData = 44,
-    ClientPredictedVehicle = 45, // Renamed to match Go
+    ClientPredictedVehicle = 45,
     PaddlingLeft = 46,
     PaddlingRight = 47,
     BlockBreakingDelayEnabled = 48,

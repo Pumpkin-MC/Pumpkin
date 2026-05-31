@@ -217,7 +217,11 @@ impl CrashReport {
                 "Operating System: {}",
                 System::long_os_version().unwrap_or("Unknown".to_string())
             );
-            writeln_output!(&mut output, "Kernel: {}", System::kernel_long_version());
+            writeln_output!(
+                &mut output,
+                "Kernel: {}",
+                System::kernel_version().unwrap_or_else(|| "Unknown".to_string())
+            );
             writeln_output!(
                 &mut output,
                 "Physical Memory: {} MiB/{} MiB used, {} MiB free",

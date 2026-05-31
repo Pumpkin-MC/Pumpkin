@@ -71,8 +71,9 @@ use super::features::{
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
 
-pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
-    LazyLock::new(build_configured_features);
+pub static CONFIGURED_FEATURES: LazyLock<
+    HashMap<pumpkin_data::configured_feature::ConfiguredFeature, ConfiguredFeature>,
+> = LazyLock::new(build_configured_features);
 
 pub enum ConfiguredFeature {
     NoOp,
@@ -150,7 +151,7 @@ impl ConfiguredFeature {
         block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature_name: &str, // This placed feature
+        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

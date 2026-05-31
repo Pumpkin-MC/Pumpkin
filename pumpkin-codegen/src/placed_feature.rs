@@ -1,7 +1,60 @@
+use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use serde_json::Value;
 use std::fs;
+
+/// Reads `placed_feature.json` and emits the complete `PlacedFeature` enum `TokenStream`.
+pub fn build_enum() -> TokenStream {
+    let json_content = fs::read_to_string("../assets/placed_feature.json")
+        .expect("Failed to read placed_feature.json");
+    let json: Value =
+        serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
+
+    let mut from_name_arms = Vec::new();
+    let mut to_name_arms = Vec::new();
+
+    let variants: Vec<TokenStream> = json
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(name, _)| {
+            let variant_name = format_ident!("{}", name.to_pascal_case());
+            from_name_arms.push(quote! {
+                #name => Some(Self::#variant_name),
+            });
+            to_name_arms.push(quote! {
+                Self::#variant_name => #name,
+            });
+            quote! {
+                #variant_name,
+            }
+        })
+        .collect();
+
+    quote! {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub enum PlacedFeature {
+            #(#variants)*
+        }
+
+        impl PlacedFeature {
+            pub fn from_name(name: &str) -> Option<Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                match name {
+                    #(#from_name_arms)*
+                    _ => None,
+                }
+            }
+
+            pub const fn to_name(&self) -> &'static str {
+                match self {
+                    #(#to_name_arms)*
+                }
+            }
+        }
+    }
+}
 
 /// Reads `placed_feature.json` and emits the complete `build_placed_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
@@ -15,16 +68,17 @@ pub fn build() -> TokenStream {
         .unwrap()
         .iter()
         .map(|(name, value)| {
+            let variant_name = format_ident!("{}", name.to_pascal_case());
             let pf = value_to_placed_feature(value);
             quote! {
-                map.insert(#name.to_string(), #pf);
+                map.insert(pumpkin_data::placed_feature::PlacedFeature::#variant_name, #pf);
             }
         })
         .collect();
 
     quote! {
         #[allow(clippy::all, unused_imports, dead_code)]
-        fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
+        fn build_placed_features() -> std::collections::HashMap<pumpkin_data::placed_feature::PlacedFeature, PlacedFeature> {
             use crate::generation::block_predicate::{
                 AllOfBlockPredicate, AnyOfBlockPredicate, BlockPredicate,
                 HasSturdyFacePredicate, InsideWorldBoundsBlockPredicate,
@@ -86,7 +140,8 @@ fn value_to_feature(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
             let name = s.strip_prefix("minecraft:").unwrap_or(s);
-            quote! { Feature::Named(#name.to_string()) }
+            let variant_name = format_ident!("{}", name.to_pascal_case());
+            quote! { Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::#variant_name) }
         }
         Value::Object(_) => {
             let cf = value_to_inline_configured_feature(v);

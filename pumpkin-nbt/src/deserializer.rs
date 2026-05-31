@@ -321,7 +321,7 @@ impl<'de, R: NbtReadHelper> de::Deserializer<'de> for &mut Deserializer<R> {
                     INT_ARRAY_ID => INT_ID,
                     LONG_ARRAY_ID => LONG_ID,
                     BYTE_ARRAY_ID => BYTE_ID,
-                    _ => unreachable!(),
+                    _ => return Err(Error::SerdeError("Unreachable state reached".to_string())),
                 };
 
                 let remaining_values = self.input.get_i32()?;
@@ -354,7 +354,7 @@ impl<'de, R: NbtReadHelper> de::Deserializer<'de> for &mut Deserializer<R> {
                     NbtTag::Float(value) => visitor.visit_f32::<Error>(value)?,
                     NbtTag::Double(value) => visitor.visit_f64::<Error>(value)?,
                     NbtTag::String(value) => visitor.visit_string::<Error>(value.into())?,
-                    _ => unreachable!(),
+                    _ => return Err(Error::SerdeError("Unreachable state reached".to_string())),
                 };
                 Ok(result)
             }

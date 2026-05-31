@@ -19,7 +19,9 @@ pub struct PacketId {
 impl PacketId {
     #[doc = r" Converts the requested protocol version into the corresponding packet ID."]
     #[doc = r" Returns -1 if the packet does not exist in that version."]
-    pub fn to_id(&self, version: JavaMinecraftVersion) -> i32 {
+    #[must_use]
+    pub const fn to_id(&self, version: JavaMinecraftVersion) -> i32 {
+        #[allow(clippy::match_same_arms)]
         match version {
             pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => self.v1_20_5,
             pumpkin_util::version::JavaMinecraftVersion::V_1_21 => self.v1_21,

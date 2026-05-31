@@ -181,6 +181,7 @@ pub enum FormResponse {
 }
 
 impl FormResponse {
+    #[must_use]
     pub fn parse(data: Option<String>) -> Self {
         match data {
             None => Self::Closed,

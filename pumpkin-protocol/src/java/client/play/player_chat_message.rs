@@ -27,7 +27,7 @@ pub struct CPlayerChatMessage {
     /// The RSA signature (256 bytes) verifying the message's authenticity.
     pub message_signature: Option<Box<[u8]>>,
     /// The raw plain-text content of the message.
-    pub message: String,
+    pub message: Box<str>,
     /// Epoch timestamp (milliseconds) when the message was sent.
     pub timestamp: i64,
     /// A random 64-bit value used to ensure signature uniqueness.
@@ -58,7 +58,7 @@ impl CPlayerChatMessage {
         sender: uuid::Uuid,
         index: VarInt,
         message_signature: Option<Box<[u8]>>,
-        message: String,
+        message: Box<str>,
         timestamp: i64,
         salt: i64,
         previous_messages: Box<[PreviousMessage]>,

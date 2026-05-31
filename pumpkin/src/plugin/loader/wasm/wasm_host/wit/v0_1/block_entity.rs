@@ -82,7 +82,13 @@ const fn to_wasm_dye_color(color: InternalDyeColor) -> DyeColor {
 
 fn to_wasm_sign_text(text: &InternalText) -> SignText {
     SignText {
-        messages: text.messages.lock().unwrap().to_vec(),
+        messages: text
+            .messages
+            .lock()
+            .unwrap()
+            .clone()
+            .map(str::into_string)
+            .to_vec(),
         color: to_wasm_dye_color(text.get_color()),
         has_glowing_text: text
             .has_glowing_text

@@ -166,9 +166,9 @@ impl ProtoNode<'_> {
                     })?;
                     write.write_string(suggestion_type.resource_location())?;
                 }
-                _ => unimplemented!(
-                    "`ProtoNode::FLAG_HAS_SUGGESTION_TYPE` is only implemented for `ProtoNodeType::Argument`"
-                ),
+                _ => return Err(WritingError::Message(
+                    "`ProtoNode::FLAG_HAS_SUGGESTION_TYPE` is only implemented for `ProtoNodeType::Argument`".into()
+                )),
             }
         }
 
@@ -200,7 +200,7 @@ pub enum ArgumentType<'a> {
     Component,
     Style,
     Message,
-    Nbt,
+    NbtCompound,
     NbtTag,
     NbtPath,
     Objective,

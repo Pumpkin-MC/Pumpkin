@@ -250,7 +250,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
         }
         let i = self.reader.cursor();
-        let char = self.reader.read().unwrap();
+        let char = self.reader.read().expect("can_read_char is true");
         let mut add_alive_predicate = false;
         match char {
             'a' => {

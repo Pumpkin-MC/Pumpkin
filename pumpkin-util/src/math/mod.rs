@@ -416,11 +416,14 @@ macro_rules! vector_codec_impl {
 
         impl<T> FlatTryFrom<Vec<T>> for $vector {
             fn flat_try_from(value: Vec<T>) -> DataResult<Self> {
-                validate_fixed_size(value, 2)
-                    .map(|v| {
-                        let [ $( $components, )+ ]: [T; $number] = v.try_into().unwrap_or_else(|_| unreachable!());
-                        Self { $( $components, )+ }
-                    })
+                validate_fixed_size(value, $number).flat_map(|v| {
+                    if let Ok(arr) = v.try_into() {
+                        let [ $( $components, )+ ]: [T; $number] = arr;
+                        DataResult::new_success(Self { $( $components, )+ })
+                    } else {
+                        DataResult::new_error(format!("Expected {} elements", $number))
+                    }
+                })
             }
         }
 

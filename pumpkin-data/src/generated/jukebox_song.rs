@@ -25,7 +25,8 @@ pub enum JukeboxSong {
     Ward,
 }
 impl JukeboxSong {
-    #[doc = r" Returns the JukeboxSong from the string name (e.g., 'pigstep')."]
+    #[doc = r" Returns the `JukeboxSong` from the string name (e.g., 'pigstep')."]
+    #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "11" => Some(Self::Id11),
@@ -53,6 +54,7 @@ impl JukeboxSong {
         }
     }
     #[doc = r" Returns the string name of the song."]
+    #[must_use]
     pub const fn to_name(&self) -> &'static str {
         match self {
             Self::Id11 => "11",
@@ -79,6 +81,7 @@ impl JukeboxSong {
         }
     }
     #[doc = r" Returns the numeric ID associated with the song."]
+    #[must_use]
     pub const fn get_id(&self) -> u32 {
         match self {
             Self::Id11 => 0u32,
@@ -105,7 +108,9 @@ impl JukeboxSong {
         }
     }
     #[doc = r" Returns the comparator output value (0-15) for this song."]
+    #[must_use]
     pub const fn comparator_output(&self) -> u8 {
+        #[allow(clippy::match_same_arms)]
         match self {
             Self::Id11 => 11u8,
             Self::Id13 => 1u8,
@@ -131,7 +136,9 @@ impl JukeboxSong {
         }
     }
     #[doc = r" Returns the song length in seconds."]
+    #[must_use]
     pub const fn length_in_seconds(&self) -> u32 {
+        #[allow(clippy::match_same_arms)]
         match self {
             Self::Id11 => 71u32,
             Self::Id13 => 178u32,
@@ -157,6 +164,7 @@ impl JukeboxSong {
         }
     }
     #[doc = r" Returns the song length in ticks (20 ticks per second)."]
+    #[must_use]
     pub const fn length_in_ticks(&self) -> u64 {
         self.length_in_seconds() as u64 * 20
     }

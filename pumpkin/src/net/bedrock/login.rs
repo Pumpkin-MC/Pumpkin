@@ -1,5 +1,7 @@
 use crate::{
-    net::{ClientPlatform, DisconnectReason, GameProfile, PlayerConfig, bedrock::BedrockClient},
+    net::{
+        DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig, bedrock::BedrockClient,
+    },
     server::Server,
 };
 use arc_swap::ArcSwap;
@@ -23,7 +25,7 @@ use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, warn};
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -117,27 +119,19 @@ impl BedrockClient {
         self.set_compression(compression).await;
     }
 
-    pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
-        match self.try_handle_login(packet, server).await {
-            Ok(()) => Some(()),
-            Err(error) => {
-                warn!("Bedrock login failed: {error}");
-                let message = match error {
-                    LoginError::InvalidUsername => "Your username is invalid.".to_string(),
-                    _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
-                };
-                self.kick(DisconnectReason::LoginPacketNoRequest, message)
-                    .await;
-                None
-            }
-        }
+    pub async fn handle_login(
+        self: &Arc<Self>,
+        packet: SLogin,
+        server: &Server,
+    ) -> Result<PacketHandlerResult, LoginError> {
+        self.try_handle_login(packet, server).await
     }
 
     pub async fn try_handle_login(
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<(), LoginError> {
+    ) -> Result<PacketHandlerResult, LoginError> {
         let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
         let player_data = if server.basic_config.online_mode {
             match auth_payload.authentication_type {
@@ -222,26 +216,15 @@ impl BedrockClient {
 
         self.send_frame_set(frame_set, 0x84).await;
 
-        if let Some((player, _world)) = server
-            .add_player(ClientPlatform::Bedrock(self.clone()), profile, None)
-            .await
-        {
-            // TODO: kinda sad we don't use more of client_data, we should store it somewhere, at least for plugin devs
-            let new_config = PlayerConfig {
-                locale: client_data.language_code.clone(),
-                ..Default::default()
-            };
+        let new_config = PlayerConfig {
+            locale: client_data.language_code.clone(),
+            ..Default::default()
+        };
 
-            player.config.store(std::sync::Arc::new(new_config));
+        self.client_data
+            .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
-            self.client_data
-                .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
-
-            // player spawn happens after resource packs are resolved
-            *self.player.lock().await = Some(player);
-        }
-
-        Ok(())
+        Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
     }
 
     pub async fn handle_resource_pack_response(

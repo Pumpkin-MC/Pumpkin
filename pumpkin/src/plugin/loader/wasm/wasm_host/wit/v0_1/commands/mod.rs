@@ -345,15 +345,9 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         &mut self,
         _res: Resource<CommandSender>,
     ) -> wasmtime::Result<CommandSenderType> {
-        // let sender = &self.get_sender_res(&res)?.provider;
-        // Ok(match sender {
-        //     crate::command::CommandSender::Player(_) => CommandSenderType::Player,
-        //     crate::command::CommandSender::Console => CommandSenderType::Console,
-        //     crate::command::CommandSender::Rcon(_) => CommandSenderType::Rcon,
-        //     crate::command::CommandSender::CommandBlock(.._) => CommandSenderType::CommandBlock,
-        //     crate::command::CommandSender::Dummy => CommandSenderType::Dummy,
-        // })
-        todo!()
+        Err(wasmtime::Error::msg(
+            "get_command_sender_type not implemented",
+        ))
     }
 
     async fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
@@ -604,7 +598,11 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             ArgumentType::Gamemode => argument(name, GamemodeArgumentConsumer),
             ArgumentType::Difficulty => argument(name, DifficultyArgumentConsumer),
             ArgumentType::Time(_) => argument(name, TimeArgumentConsumer),
-            _ => todo!("Unimplemented argument type: {:?}", arg_type),
+            _ => {
+                return Err(wasmtime::Error::msg(format!(
+                    "Unimplemented argument type: {arg_type:?}"
+                )));
+            }
         };
         self.add_command_node(node)
             .map_err(|_| wasmtime::Error::msg("Failed to add argument node"))
@@ -653,7 +651,9 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
         _node: Resource<CommandNode>,
         _handler_id: u32,
     ) -> wasmtime::Result<()> {
-        todo!("Implement require_with_handler_id")
+        Err(wasmtime::Error::msg(
+            "require_with_handler_id not implemented",
+        ))
     }
 
     async fn drop(&mut self, rep: Resource<CommandNode>) -> wasmtime::Result<()> {

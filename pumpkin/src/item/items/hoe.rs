@@ -19,7 +19,7 @@ pub struct HoeItem;
 
 impl ItemMetadata for HoeItem {
     fn ids() -> Box<[u16]> {
-        tag::Item::MINECRAFT_HOES.1.to_vec().into_boxed_slice()
+        tag::Item::MINECRAFT_HOES.1.into()
     }
 }
 

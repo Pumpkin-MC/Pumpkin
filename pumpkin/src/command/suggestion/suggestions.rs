@@ -335,7 +335,7 @@ impl Suggestions {
             .iter()
             .map(|s| s.borrow().range)
             .reduce(StringRange::encompass)
-            .unwrap();
+            .expect("Suggestions list is not empty, so range should exist");
 
         let mut texts = Vec::new();
         for suggestion in &suggestions {
@@ -400,7 +400,10 @@ impl Suggestions {
                 (Some(text), Some(integer)) => match text.0.cmp(&integer.0) {
                     Ordering::Less => PushSide::Text,
                     Ordering::Greater => PushSide::Integer,
-                    Ordering::Equal => unreachable!(),
+                    Ordering::Equal => {
+                        tracing::error!("Duplicate suggestion found during merge");
+                        PushSide::Text
+                    }
                 },
                 (Some(_), None) => PushSide::Text,
                 (None, Some(_)) => PushSide::Integer,
@@ -409,7 +412,9 @@ impl Suggestions {
 
             match side {
                 PushSide::Text => {
-                    let text = text_iter.next().unwrap();
+                    let text = text_iter.next().expect(
+                        "text_iter should have a next value because side is PushSide::Text",
+                    );
                     suggestions.push(Suggestion {
                         text: SuggestionText::Text(text.0),
                         tooltip: text.1,
@@ -417,7 +422,9 @@ impl Suggestions {
                     });
                 }
                 PushSide::Integer => {
-                    let text = integer_iter.next().unwrap();
+                    let text = integer_iter.next().expect(
+                        "integer_iter should have a next value because side is PushSide::Integer",
+                    );
                     suggestions.push(Suggestion {
                         text: SuggestionText::Integer {
                             cached_text: text.0,

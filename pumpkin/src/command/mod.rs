@@ -99,7 +99,9 @@ impl CommandSender {
 
                 let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
-                let timestamp = now.format(&format).unwrap();
+                let timestamp = now
+                    .format(&format)
+                    .expect("Failed to format timestamp for command block output");
 
                 *last_output = format!("[{}] {}", timestamp, text.get_text());
             }

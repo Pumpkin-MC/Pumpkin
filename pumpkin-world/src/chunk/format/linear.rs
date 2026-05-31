@@ -333,7 +333,7 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
     }
 
     /// Number of chunks in each bucket.
-    fn chunks_per_bucket(grid_size: u8) -> usize {
+    const fn chunks_per_bucket(grid_size: u8) -> usize {
         CHUNK_COUNT / Self::bucket_count(grid_size)
     }
 

@@ -19,7 +19,7 @@ impl RandomBooleanFeature {
         block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
-        feature_name: &str, // This placed feature
+        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

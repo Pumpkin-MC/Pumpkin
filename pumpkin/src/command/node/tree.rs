@@ -17,7 +17,7 @@ use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
 /// The constant local ID occupied by the root node.
-pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
+pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).expect("1 is non-zero"));
 
 /// A consumer which takes ambiguity of input (when two or more nodes are satisfied)
 pub trait AmbiguityConsumer {

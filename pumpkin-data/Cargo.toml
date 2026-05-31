@@ -43,6 +43,9 @@ default = [
     "chunk_gen_settings",
     "carver",
     "villager",
+    "placed_feature",
+    "configured_feature",
+    "slot_ranges"
 ]
 
 item = []
@@ -80,6 +83,7 @@ recipe_remainder = []
 chunk_gen_settings = []
 carver = []
 villager = ["item", "sound"]
+slot_ranges = []
 
 noise_parameter = []
 biome = []
@@ -90,6 +94,8 @@ entity_type = ["sound"]
 spawn_egg = []
 world_event = []
 message_type = []
+placed_feature = []
+configured_feature = []
 block = []
 item_id_remap = []
 entity_id_remap = []

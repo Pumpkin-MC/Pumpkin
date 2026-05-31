@@ -868,7 +868,10 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
-        _ => todo!("{} not yet implemented", id.to_name()),
+        _ => Err(serde::ser::Error::custom(format!(
+            "{} not yet implemented",
+            id.to_name()
+        ))),
     }
 }
 

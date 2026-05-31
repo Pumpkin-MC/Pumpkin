@@ -88,7 +88,9 @@ fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Varia
                         syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
                         syn::Type::Reference(r) => match &*r.elem {
                             syn::Type::Slice(s) => match &*s.elem {
-                                syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
+                                syn::Type::Path(p) => {
+                                    p.path.segments.last().unwrap().ident.to_string()
+                                }
                                 _ => String::new(),
                             },
                             syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
