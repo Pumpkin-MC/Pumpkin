@@ -6,13 +6,66 @@ use pumpkin_data::noise_router::{
 };
 
 use super::noise::router::proto_noise_router::ProtoNoiseRouters;
+use crate::generation::generator::flat::FlatGenerator;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
 
+pub mod flat;
 pub mod structure_finder;
 
 pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
+}
+
+/// Dispatch over the available world generators.
+///
+/// An enum is used instead of a trait object so the performance-critical
+/// `step_to_*` methods on [`crate::generation::proto_chunk::ProtoChunk`] can
+/// keep their concrete generator parameters; the matching arm simply forwards
+/// the inner generator.
+pub enum WorldGenerator {
+    /// The default vanilla noise-based generator.
+    Vanilla(Box<VanillaGenerator>),
+    /// The superflat generator.
+    Flat(Box<FlatGenerator>),
+}
+
+impl WorldGenerator {
+    /// The dimension this generator produces chunks for.
+    #[must_use]
+    pub fn dimension(&self) -> &Dimension {
+        match self {
+            Self::Vanilla(g) => &g.dimension,
+            Self::Flat(g) => &g.dimension,
+        }
+    }
+
+    /// The shared random configuration used by the generation pipeline.
+    #[must_use]
+    pub fn random_config(&self) -> &GlobalRandomConfig {
+        match self {
+            Self::Vanilla(g) => &g.random_config,
+            Self::Flat(g) => &g.random_config,
+        }
+    }
+
+    /// The default block used when constructing proto chunks.
+    #[must_use]
+    pub fn default_block(&self) -> &'static BlockState {
+        match self {
+            Self::Vanilla(g) => g.default_block,
+            Self::Flat(g) => g.default_block,
+        }
+    }
+
+    /// The biome mixer seed used when constructing proto chunks.
+    #[must_use]
+    pub fn biome_mixer_seed(&self) -> i64 {
+        match self {
+            Self::Vanilla(g) => g.biome_mixer_seed,
+            Self::Flat(g) => g.biome_mixer_seed,
+        }
+    }
 }
 
 use pumpkin_data::structures::{StructurePlacementCalculator, StructureSet};

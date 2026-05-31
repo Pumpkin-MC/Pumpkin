@@ -208,8 +208,8 @@ impl TerrainCache {
 
 impl ProtoChunk {
     #[must_use]
-    pub fn new(x: i32, z: i32, generator: &super::generator::VanillaGenerator) -> Self {
-        let dimension = &generator.dimension;
+    pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
+        let dimension = generator.dimension();
         let height = dimension.logical_height as u16;
         let section_count = (height as usize) / 16;
 
@@ -217,8 +217,8 @@ impl ProtoChunk {
         Self {
             x,
             z,
-            default_block: generator.default_block,
-            biome_mixer_seed: generator.biome_mixer_seed,
+            default_block: generator.default_block(),
+            biome_mixer_seed: generator.biome_mixer_seed(),
             flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
@@ -263,7 +263,7 @@ impl ProtoChunk {
     #[must_use]
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
-        generator: &super::generator::VanillaGenerator,
+        generator: &super::generator::WorldGenerator,
     ) -> Self {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
@@ -564,6 +564,39 @@ impl ProtoChunk {
             MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
         self.populate_biomes(generator, &mut multi_noise_sampler);
         self.stage = StagedChunkEnum::Biomes;
+    }
+
+    /// Biome stage for the flat generator: fills the whole chunk with the
+    /// single configured biome.
+    pub fn step_to_flat_biomes(&mut self, generator: &super::generator::flat::FlatGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::Empty);
+        self.flat_biome_map.fill(generator.settings.biome.id);
+        self.stage = StagedChunkEnum::Biomes;
+    }
+
+    /// Terrain stage for the flat generator: stacks the configured layers
+    /// bottom-up from the dimension floor, leaving everything above as air.
+    pub fn step_to_flat(&mut self, generator: &super::generator::flat::FlatGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
+        let start_x = start_block_x(self.x);
+        let start_z = start_block_z(self.z);
+        let bottom_y = self.bottom_y() as i32;
+
+        for local_x in 0..CHUNK_DIM as i32 {
+            for local_z in 0..CHUNK_DIM as i32 {
+                let world_x = start_x + local_x;
+                let world_z = start_z + local_z;
+                let mut y = bottom_y;
+                for (state, height) in &generator.settings.layers {
+                    for _ in 0..*height {
+                        self.set_block_state(world_x, y, world_z, state);
+                        y += 1;
+                    }
+                }
+            }
+        }
+
+        self.stage = StagedChunkEnum::Noise;
     }
 
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {

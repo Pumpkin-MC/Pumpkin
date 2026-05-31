@@ -17,17 +17,47 @@ pub mod rule;
 pub mod structure;
 mod surface;
 
-use generator::{GeneratorInit, VanillaGenerator};
+use generator::flat::FlatGenerator;
+use generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{
     random::xoroshiro128::{Xoroshiro, XoroshiroSplitter},
     world_seed::Seed,
 };
 
+/// Builds the configured world generator for `dimension`.
+///
+/// `level_type` mirrors the vanilla `level-type` from `server.properties`
+/// (the `minecraft:` prefix is optional); `minecraft:flat` selects the flat
+/// generator and any other value falls back to vanilla noise generation.
+/// `generator_settings` is the matching `generator-settings` value, consulted
+/// only by the flat generator.
 #[must_use]
-pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> {
-    // TODO decide which WorldGenerator to pick based on config.
-    Box::new(VanillaGenerator::new(seed, dimension))
+pub fn get_world_gen(
+    seed: Seed,
+    dimension: Dimension,
+    level_type: &str,
+    generator_settings: &str,
+) -> WorldGenerator {
+    let level_type = level_type
+        .trim()
+        .strip_prefix("minecraft:")
+        .unwrap_or_else(|| level_type.trim());
+
+    match level_type {
+        "flat" => WorldGenerator::Flat(Box::new(FlatGenerator::new(
+            seed,
+            dimension,
+            generator_settings,
+        ))),
+        "normal" | "large_biomes" | "amplified" => {
+            WorldGenerator::Vanilla(Box::new(VanillaGenerator::new(seed, dimension)))
+        }
+        other => {
+            tracing::warn!("Unknown level-type `{other}`, falling back to normal generation");
+            WorldGenerator::Vanilla(Box::new(VanillaGenerator::new(seed, dimension)))
+        }
+    }
 }
 
 pub struct GlobalRandomConfig {

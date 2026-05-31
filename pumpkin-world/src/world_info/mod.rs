@@ -220,8 +220,17 @@ pub struct DataPacks {
 
 impl WorldGenSettings {
     #[must_use]
-    pub fn new(seed: Seed) -> Self {
+    pub fn new(seed: Seed, level_type: &str) -> Self {
         // TODO: Adjust according to enabled worlds
+        let normalized = level_type
+            .trim()
+            .strip_prefix("minecraft:")
+            .unwrap_or_else(|| level_type.trim());
+        let overworld_generator_type = if normalized == "flat" {
+            "minecraft:flat"
+        } else {
+            "minecraft:noise"
+        };
         let mut dimensions = Dimensions::new();
         dimensions.insert(
             "minecraft:overworld".to_string(),
@@ -232,7 +241,7 @@ impl WorldGenSettings {
                         preset: "minecraft:overworld".to_string(),
                         biome_type: "minecraft:multi_noise".to_string(),
                     }),
-                    generator_type: "minecraft:noise".to_string(),
+                    generator_type: overworld_generator_type.to_string(),
                 },
                 dimension_type: "minecraft:overworld".to_string(),
             },
@@ -298,7 +307,7 @@ impl Default for WorldVersion {
 
 impl LevelData {
     #[must_use]
-    pub fn default(seed: Seed) -> Self {
+    pub fn default(seed: Seed, level_type: &str) -> Self {
         Self {
             allow_commands: true,
             border_center_x: 0.0,
@@ -317,7 +326,7 @@ impl LevelData {
             difficulty: DEFAULT_DIFFICULTY,
             difficulty_locked: false,
             game_rules: GameRuleRegistry::default(),
-            world_gen_settings: WorldGenSettings::new(seed),
+            world_gen_settings: WorldGenSettings::new(seed, level_type),
             last_played: -1,
             level_name: DEFAULT_LEVEL_NAME.to_string(),
             spawn_x: 0,

@@ -151,5 +151,6 @@ help.yml
 permissions.yml
 spigot.yml
 version_history.json
+world/
 world_nether/
 world_the_end/

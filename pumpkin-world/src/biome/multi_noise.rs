@@ -59,9 +59,14 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+        let world_gen = crate::generation::generator::WorldGenerator::Vanilla(Box::new(
+            VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD),
+        ));
 
-        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
+        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+        let crate::generation::generator::WorldGenerator::Vanilla(generator) = &world_gen else {
+            panic!("expected vanilla generator")
+        };
 
         let start_x = chunk_pos::start_block_x(chunk_x);
         let start_z = chunk_pos::start_block_z(chunk_z);

@@ -102,7 +102,10 @@ mod test {
             let chunk_x = data.x;
             let chunk_z = data.z;
 
-            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
+            let world_gen = crate::generation::generator::WorldGenerator::Vanilla(Box::new(
+                VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD),
+            ));
+            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
 
             // Create MultiNoiseSampler for populate_biomes
 

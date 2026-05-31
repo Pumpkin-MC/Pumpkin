@@ -179,7 +179,8 @@ impl Server {
         }
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
-            let default_data = LevelData::default(basic_config.seed);
+            let default_data =
+                LevelData::default(basic_config.seed, &advanced_config.world.level_type);
             if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
                 error!("Failed to save level.dat: {err}");
             }

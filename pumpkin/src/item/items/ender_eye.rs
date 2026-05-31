@@ -16,6 +16,7 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::generation::generator::WorldGenerator;
 use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
 use pumpkin_world::world::BlockFlags;
 
@@ -137,7 +138,10 @@ impl ItemBehaviour for EnderEyeItem {
 
 fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
     let level = &world.level;
-    let generator = &level.world_gen;
+    // Strongholds only exist in the vanilla generator; flat worlds have none.
+    let WorldGenerator::Vanilla(generator) = level.world_gen.as_ref() else {
+        return None;
+    };
     let seed = level.seed.0;
 
     find_nearest_structure(

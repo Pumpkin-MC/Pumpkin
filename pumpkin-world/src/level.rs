@@ -1,7 +1,7 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
-use crate::generation::generator::VanillaGenerator;
+use crate::generation::generator::WorldGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
     BlockStateId,
@@ -79,7 +79,7 @@ pub struct Level {
     pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
     entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
-    pub world_gen: Arc<VanillaGenerator>,
+    pub world_gen: Arc<WorldGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -145,7 +145,13 @@ impl Level {
         });
 
         let seed = Seed(seed as u64);
-        let world_gen = get_world_gen(seed, dimension).into();
+        let world_gen = get_world_gen(
+            seed,
+            dimension,
+            &level_config.level_type,
+            &level_config.generator_settings,
+        )
+        .into();
 
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(())),

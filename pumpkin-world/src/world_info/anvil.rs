@@ -158,7 +158,7 @@ mod test {
     fn preserve_level_dat_seed() {
         let seed = 1337;
 
-        let data = LevelData::default(Seed(1337));
+        let data = LevelData::default(Seed(1337), "minecraft:normal");
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -226,7 +226,7 @@ mod test {
                 water_source_conversion: true,
                 ..Default::default()
             },
-            world_gen_settings: WorldGenSettings::new(Seed(1)),
+            world_gen_settings: WorldGenSettings::new(Seed(1), "minecraft:normal"),
             last_played: 1733847709327,
             level_name: "New World".to_string(),
             spawn_x: 160,
