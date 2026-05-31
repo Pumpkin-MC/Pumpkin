@@ -143,7 +143,8 @@ impl BlockDirection {
             _ => Self::West,
         }
     }
-    pub fn as_index(&self) -> u8 {
+    #[must_use]
+    pub const fn as_index(&self) -> u8 {
         match self {
             Self::North => 0,
             Self::East => 1,
@@ -153,7 +154,8 @@ impl BlockDirection {
             Self::Up => 5,
         }
     }
-    pub fn from_index(value: u8) -> Self {
+    #[must_use]
+    pub const fn from_index(value: u8) -> Self {
         match value {
             0 => Self::North,
             1 => Self::East,

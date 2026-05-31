@@ -7,8 +7,6 @@
 use pumpkin_data::{Block, BlockState};
 use tracing::warn;
 
-use crate::world::WorldPortalExt;
-
 use super::{BlockMirror, BlockRotation, PaletteEntry};
 
 /// Resolves template palette entries to block state IDs.
@@ -54,37 +52,6 @@ impl BlockStateResolver {
             .map(|(key, value)| {
                 let new_value = Self::transform_property(key, value, rotation, mirror);
                 (key.as_str(), new_value)
-            })
-            .collect();
-
-        // Convert to the format expected by from_properties
-        let props_slice: Vec<(&str, &str)> = transformed_props;
-
-        // Get the state ID from properties
-        let props_box = block.from_properties(&props_slice);
-        let state_id = props_box.to_state_id(block);
-
-        Some(BlockState::from_id(state_id))
-    }
-    #[must_use]
-    pub fn resolve_from_block_state(
-        block_state: &BlockState,
-        rotation: BlockRotation,
-        mirror: BlockMirror,
-    ) -> Option<&'static BlockState> {
-        // Find the block
-        let block = Block::from_state_id(block_state.id);
-
-        let props = match block.properties(block_state.id) {
-            Some(value) => value.to_props(),
-            None => return None,
-        };
-        // Transform properties for rotation/mirror
-        let transformed_props: Vec<(&str, &str)> = props
-            .iter()
-            .map(|&(key, value)| {
-                let new_value = Self::transform_property(key, value, rotation, mirror);
-                (key, new_value)
             })
             .collect();
 

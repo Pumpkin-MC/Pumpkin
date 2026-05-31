@@ -13,8 +13,6 @@ use tracing::debug;
 use crate::generation::structure::structures::stronghold::StrongholdPieceType;
 use crate::generation::structure::template::BlockMirror;
 use crate::generation::structure::template::BlockRotation;
-use crate::generation::structure::template::BlockStateResolver;
-use crate::world::BlockAccessor;
 use crate::{
     ProtoChunk,
     generation::{
