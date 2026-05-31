@@ -6,11 +6,14 @@ use pumpkin_util::text::TextContent::Translate;
 use quote::{ToTokens, format_ident, quote};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::BTreeMap, fs};
+use std::cell::RefCell;
 use std::cmp::PartialEq;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
+use pumpkin_util::identifier::Identifier;
 
 const fn r#true() -> bool {
     true
@@ -137,7 +140,7 @@ impl ToTokens for AdvancementRewards {
 pub struct AdvancementNode {
     pub children: RwLock<HashSet<Arc<Self>>>,
     pub parent: Option<Arc<Self>>,
-    pub value: &AdvancementStruct,
+    pub value: AdvancementHolder,
 }
 
 impl AdvancementNode {
@@ -146,7 +149,7 @@ impl AdvancementNode {
     }
 
     #[must_use]
-    pub fn new(value:&AdvancementStruct, parent: Option<Arc<Self>>) -> Self {
+    pub fn new(value:AdvancementHolder, parent: Option<Arc<Self>>) -> Self {
         Self {
             value,
             parent,
@@ -157,18 +160,12 @@ impl AdvancementNode {
     #[inline]
     #[must_use]
     pub const fn has_display(&self) -> bool {
-        self.value.display.is_some()
+        self.value.1.display.is_some()
     }
 
     #[inline]
     pub const fn set_location(&self,x:f32,y:f32) {
-        self.value.display.inspect(|mut val| val.set_location(x, y));
-    }
-}
-
-impl PartialEq for &AdvancementStruct {
-    fn eq(&self, other: &Self) -> bool {
-        self
+        self.value.1.display.inspect(|mut val| val.set_location(x, y));
     }
 }
 
@@ -182,12 +179,11 @@ impl Eq for AdvancementNode {}
 
 impl Display for AdvancementNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value.id)
+        write!(f, "{}", self.value.0)
     }
 }
-
 impl Hash for AdvancementNode {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.value.hash(state);
     }
 }
@@ -253,7 +249,7 @@ impl TreePositioner {
     fn add_child<'a>(
         nodes: &mut Vec<LayoutNode<'a>>,
         parent_idx: usize,
-        adv_node: &'a AdvancementNode,
+        adv_node: &'a AdvancementNode<'a>,
         mut previous_idx: Option<usize>,
     ) -> Option<usize> {
         if adv_node.has_display() {
@@ -477,7 +473,7 @@ impl TreePositioner {
 
 #[derive(Deserialize, Default)]
 pub struct AdvancementStruct {
-    pub parent: Option<ResourceLocation>,
+    pub parent: Option<Identifier>,
     #[serde(default)]
     pub display: Option<AdvancementDisplay>,
     //pub criteria : Vec<Criterion>,
@@ -486,7 +482,7 @@ pub struct AdvancementStruct {
     #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
 }
-pub struct AdvancementHolder(String,AdvancementStruct);
+pub struct AdvancementHolder(Identifier,AdvancementStruct);
 
 impl PartialEq for AdvancementHolder {
     fn eq(&self, other: &Self) -> bool {
@@ -512,6 +508,55 @@ where
 {
     let icon = DisplayIcon::deserialize(deserializer)?;
     Ok(icon.id)
+}
+
+#[derive(Default)]
+pub struct AdvancementTree {
+    pub nodes: HashMap<Identifier, Rc<RefCell<AdvancementNode>>,
+    pub roots: HashSet<&'_ AdvancementNode<'_>>,
+    pub tasks: HashSet<&'_ AdvancementNode<'_>>,
+}
+
+impl AdvancementTree {
+    pub fn add_all(&mut self, advancements: impl IntoIterator<Item = AdvancementHolder>) {
+        let mut advancements_to_add : Vec<AdvancementHolder> = advancements
+            .into_iter()
+            .collect();
+
+        while !advancements_to_add.is_empty() {
+            let len_before = advancements_to_add.len();
+            advancements_to_add.retain(|&val| !self.try_insert(val));
+            if len_before == advancements_to_add.len() {
+                eprintln!("Couldn't load advancements: {:?}",
+                    advancements_to_add.iter().map(|a| &a.0).collect::<Vec<_>>()
+                );
+                break;
+            }
+        }
+    }
+
+    pub fn try_insert(&mut self, advancement: AdvancementHolder) -> bool {
+        let parent_id = &advancement.1.parent;
+
+        let parent_node = match parent_id {
+            Some(id) => match self.nodes.get_mut(id) {
+                Some(node) => Some(Rc::clone(node)),
+                None => return false,
+            },
+            None => None,
+        };
+        let id = advancement.0.clone();
+        let node = Arc::new(AdvancementNode::new(advancement, parent_node.clone()));
+        self.nodes.insert(id, Rc::clone(&node));
+
+        if let Some(parent) = parent_node {
+            parent.add_child(Arc::clone(&node));
+            self.tasks.insert(node);
+        } else {
+            self.roots.insert(node);
+        }
+        true
+    }
 }
 
 pub(crate) fn build() -> TokenStream {
