@@ -2,7 +2,7 @@ use pumpkin_macros::packet;
 use serde::Deserialize;
 use std::io::{Error, ErrorKind, Read};
 
-use crate::{codec::var_uint::VarUInt, serial::PacketRead};
+use crate::{MAX_PACKET_DATA_SIZE, codec::var_uint::VarUInt, serial::PacketRead};
 
 #[packet(1)]
 pub struct SLogin {
@@ -16,28 +16,35 @@ pub struct SLogin {
 
 impl PacketRead for SLogin {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        const MAX_TOKEN_SIZE: usize = 2000 * 1024; // 2MB limit
         let protocol_version = i32::read_be(reader)?;
-        let _len = VarUInt::read(reader)?;
-
-        let jwt_len = u32::read(reader)?;
-        if jwt_len as usize > MAX_TOKEN_SIZE {
+        let connection_request_len = VarUInt::read(reader)?.0 as usize;
+        if connection_request_len > MAX_PACKET_DATA_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                "JWT length exceeds limit",
+                format!(
+                    "Connection request length {connection_request_len} exceeds limit {MAX_PACKET_DATA_SIZE}"
+                ),
             ));
         }
-        let mut jwt = vec![0; jwt_len as _];
+
+        let jwt_len = u32::read(reader)? as usize;
+        if jwt_len > MAX_PACKET_DATA_SIZE {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("JWT length {jwt_len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
+            ));
+        }
+        let mut jwt = vec![0; jwt_len];
         reader.read_exact(&mut jwt)?;
 
-        let raw_token_len = u32::read(reader)?;
-        if raw_token_len as usize > MAX_TOKEN_SIZE {
+        let raw_token_len = u32::read(reader)? as usize;
+        if raw_token_len > MAX_PACKET_DATA_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                "Raw token length exceeds limit",
+                format!("Raw token length {raw_token_len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
             ));
         }
-        let mut raw_token = vec![0; raw_token_len as _];
+        let mut raw_token = vec![0; raw_token_len];
         reader.read_exact(&mut raw_token)?;
 
         Ok(Self {
@@ -48,6 +55,43 @@ impl PacketRead for SLogin {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use crate::serial::{PacketRead, PacketWrite};
+
+    use super::*;
+
+    #[test]
+    fn reads_raw_token_larger_than_two_mib() {
+        const RAW_TOKEN_LEN: usize = 2 * 1024 * 1024 + 1;
+        let jwt = b"{}";
+        let client_token = vec![0x41; RAW_TOKEN_LEN];
+        let connection_request_len = 4 + jwt.len() + 4 + client_token.len();
+        let mut input = Vec::new();
+
+        975i32.write_be(&mut input).expect("write protocol version");
+        VarUInt(connection_request_len as u32)
+            .write(&mut input)
+            .expect("write connection request length");
+        (jwt.len() as u32)
+            .write(&mut input)
+            .expect("write JWT length");
+        input.extend_from_slice(jwt);
+        (client_token.len() as u32)
+            .write(&mut input)
+            .expect("write raw token length");
+        input.extend_from_slice(&client_token);
+
+        let packet = SLogin::read(&mut Cursor::new(input)).expect("read login packet");
+
+        assert_eq!(packet.protocol_version, 975);
+        assert_eq!(packet.jwt, jwt);
+        assert_eq!(packet.raw_token.len(), RAW_TOKEN_LEN);
+        assert_eq!(packet.raw_token, client_token);
+    }
+}
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct SkinAnimation {

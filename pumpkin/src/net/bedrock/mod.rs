@@ -849,7 +849,9 @@ impl BedrockClient {
                         Ok(p) => p,
                         Err(err) => {
                             error!("Failed to read SLogin: {err}");
-                            continue;
+                            self.kick(DisconnectReason::BadPacket, err.to_string())
+                                .await;
+                            return PacketHandlerResult::Stop;
                         }
                     };
                     match self.handle_login(packet, server).await {
