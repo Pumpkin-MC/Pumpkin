@@ -512,11 +512,9 @@ impl StatusEffect {
     }
 }
 impl IDSetContent for StatusEffect {
-    
     fn registry_id(&self) -> u16 {
         self.id as u16
     }
-    
     fn from_id(id: u16) -> Option<&'static Self> {
         match id {
             21u16 => Some(&Self::ABSORPTION),
@@ -562,11 +560,9 @@ impl IDSetContent for StatusEffect {
             _ => None,
         }
     }
-    
     fn from_str(name: &str) -> Option<&'static Self> {
         Self::from_minecraft_name(name)
     }
-    
     fn to_string(&self) -> String {
         self.minecraft_name.to_string()
     }

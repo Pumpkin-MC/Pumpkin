@@ -595,7 +595,6 @@ pub fn build() -> TokenStream {
         }
 
         impl From<&CookingRecipeType> for CookingRecipeKind {
-            #[must_use]
             fn from(recipe_type: &CookingRecipeType) -> Self {
                 match recipe_type {
                     CookingRecipeType::Blasting(_) => Self::Blasting,
@@ -607,7 +606,6 @@ pub fn build() -> TokenStream {
         }
 
         impl From<CookingRecipeType> for CookingRecipeKind {
-            #[must_use]
             fn from(recipe_type: CookingRecipeType) -> Self {
                 match recipe_type {
                     CookingRecipeType::Blasting(_) => Self::Blasting,

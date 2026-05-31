@@ -67,7 +67,7 @@ pub mod recipe_helper;
 pub mod status;
 
 use crate::entity::player::Player;
-use crate::net::{GameProfile, PlayerConfig};
+use crate::net::{GameProfile, PacketHandlerResult, PlayerConfig};
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
@@ -112,10 +112,9 @@ pub struct JavaClient {
     pub last_keep_alive_time: AtomicCell<Instant>,
 }
 
-pub enum PacketHandlerResult {
-    Stop,
-    // Signal to spawn the player
-    ReadyToPlay(GameProfile, PlayerConfig),
+pub enum OutgoingPacketType {
+    Normal,
+    HighPriority,
 }
 
 struct OutgoingPacket {

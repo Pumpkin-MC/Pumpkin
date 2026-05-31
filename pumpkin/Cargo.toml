@@ -109,6 +109,7 @@ postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
 
 bitflags = { workspace = true }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [dev-dependencies]
 tempfile.workspace = true
