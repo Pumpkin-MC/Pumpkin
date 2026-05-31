@@ -1,8 +1,9 @@
 use std::io::{Cursor, Write};
 
 use pumpkin_data::{
-    block_state_remap::remap_block_state_for_version, meta_data_type::MetaDataType,
-    packet::clientbound::PLAY_SET_ENTITY_DATA, tracked_data::TrackedId,
+    block_state_remap::remap_block_state_for_version, item_id_remap::remap_item_id_for_version,
+    meta_data_type::MetaDataType, packet::clientbound::PLAY_SET_ENTITY_DATA,
+    tracked_data::TrackedId,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -109,6 +110,38 @@ impl<T> Metadata<T> {
                 VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
             });
             writer.write_var_int(&remapped_state)?;
+            return Ok(());
+        }
+
+        if self.r#type == MetaDataType::ITEM_STACK {
+            let mut serialized_value = Vec::new();
+            {
+                let mut serializer = serializer::Serializer::new(&mut serialized_value);
+                self.value
+                    .serialize(&mut serializer)
+                    .map_err(|e| WritingError::Serde(e.to_string()))?;
+            };
+
+            let mut cursor = Cursor::new(serialized_value);
+            let item_count = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
+            })?;
+
+            if item_count.0 <= 0 {
+                writer.write_var_int(&item_count)?;
+            } else {
+                let item_id = VarInt::decode(&mut cursor)
+                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
+                let remapped_id = u16::try_from(item_id.0)
+                    .map_or(0, |id| remap_item_id_for_version(id, *version));
+                writer.write_var_int(&item_count)?;
+                writer.write_var_int(&VarInt(i32::from(remapped_id)))?;
+                let remainder_start = cursor.position() as usize;
+                let inner = cursor.into_inner();
+                writer.write_all(&inner[remainder_start..]).map_err(|e| {
+                    WritingError::Message(format!("Failed to write item stack remainder: {e}"))
+                })?;
+            }
             return Ok(());
         }
 
