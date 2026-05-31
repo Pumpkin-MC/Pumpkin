@@ -14,6 +14,7 @@ use crate::generation::structure::structures::stronghold::StrongholdPieceType;
 use crate::generation::structure::template::BlockMirror;
 use crate::generation::structure::template::BlockRotation;
 use crate::generation::structure::template::BlockStateResolver;
+use crate::world::BlockAccessor;
 use crate::{
     ProtoChunk,
     generation::{
@@ -414,14 +415,18 @@ impl StructurePiece {
             debug!("Structure out of bounds");
             return;
         }
-        let block_state =
-            match BlockStateResolver::resolve_from_block_state(block, self.rotation, self.mirror) {
-                Some(value) => value,
-                None => block,
-            };
+
+        //Apply mirror and rotation
+        if self.mirror != BlockMirror::None {
+            block = block.mirror(self.mirror);
+        }
+
+        if self.rotation != BlockRotation::None {
+            block = block.rotate(self.rotation);
+        }
 
         // World interaction
-        world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block_state);
+        world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
 
         // let fluid_state = world.get_fluid_state(&block_pos);
         // if !fluid_state.is_empty() {

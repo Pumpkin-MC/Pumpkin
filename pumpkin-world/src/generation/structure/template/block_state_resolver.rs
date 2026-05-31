@@ -7,6 +7,8 @@
 use pumpkin_data::{Block, BlockState};
 use tracing::warn;
 
+use crate::world::WorldPortalExt;
+
 use super::{BlockMirror, BlockRotation, PaletteEntry};
 
 /// Resolves template palette entries to block state IDs.
