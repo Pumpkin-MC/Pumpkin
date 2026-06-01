@@ -118,8 +118,9 @@ impl CaveCarver {
         floor_level: f64,
         is_nether: bool,
     ) {
-        let horizontal_radius = 1.5 + (PI / 2.0).sin() * thickness;
-        let vertical_radius = horizontal_radius as f64 * y_scale;
+        let horizontal_radius: f64 = 1.5
+            + pumpkin_util::math::mth::sin(std::f64::consts::FRAC_PI_2) as f64 * thickness as f64;
+        let vertical_radius = horizontal_radius * y_scale;
         Self::carve_ellipsoid(
             chunk,
             config,
@@ -168,13 +169,14 @@ impl CaveCarver {
         let mut x_rota = 0.0f32;
 
         for current_step in step..dist {
-            let horizontal_radius =
-                1.5 + (PI * current_step as f32 / dist as f32).sin() * thickness;
-            let vertical_radius = horizontal_radius as f64 * y_scale;
-            let cos_x = vertical_rotation.cos();
-            x += (horizontal_rotation.cos() * cos_x) as f64;
-            y += vertical_rotation.sin() as f64;
-            z += (horizontal_rotation.sin() * cos_x) as f64;
+            let progress_arg = std::f64::consts::PI * current_step as f64 / dist as f64;
+            let horizontal_radius: f64 =
+                1.5 + pumpkin_util::math::mth::sin(progress_arg) as f64 * thickness as f64;
+            let vertical_radius = horizontal_radius * y_scale;
+            let cos_x = pumpkin_util::math::mth::cos(vertical_rotation as f64);
+            x += (pumpkin_util::math::mth::cos(horizontal_rotation as f64) * cos_x) as f64;
+            y += pumpkin_util::math::mth::sin(vertical_rotation as f64) as f64;
+            z += (pumpkin_util::math::mth::sin(horizontal_rotation as f64) * cos_x) as f64;
 
             vertical_rotation *= if is_steep { 0.92 } else { 0.7 };
             vertical_rotation += x_rota * 0.1;
@@ -384,6 +386,8 @@ impl CaveCarver {
                     || block.id == pumpkin_data::Block::LAVA.id
                 {
                     None
+                } else if is_nether {
+                    Some(pumpkin_data::Block::CAVE_AIR.default_state)
                 } else {
                     Some(pumpkin_data::Block::AIR.default_state)
                 }

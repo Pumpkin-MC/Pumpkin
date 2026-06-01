@@ -94,8 +94,9 @@ impl CanyonCarver {
         };
 
         for current_step in step..distance {
-            let mut horizontal_radius =
-                (1.5 + (current_step as f32 * PI / distance as f32).sin() * thickness) as f64;
+            let progress = current_step as f64 * std::f64::consts::PI / distance as f64;
+            let mut horizontal_radius: f64 =
+                1.5 + pumpkin_util::math::mth::sin(progress) as f64 * thickness as f64;
             let mut vertical_radius = horizontal_radius * y_scale;
             horizontal_radius *= canyon_config
                 .shape
@@ -109,11 +110,11 @@ impl CanyonCarver {
                 current_step as f32,
             );
 
-            let xc = vertical_rotation.cos();
-            let xs = vertical_rotation.sin();
-            x += (horizontal_rotation.cos() * xc) as f64;
+            let xc = pumpkin_util::math::mth::cos(vertical_rotation as f64);
+            let xs = pumpkin_util::math::mth::sin(vertical_rotation as f64);
+            x += (pumpkin_util::math::mth::cos(horizontal_rotation as f64) * xc) as f64;
             y += xs as f64;
-            z += (horizontal_rotation.sin() * xc) as f64;
+            z += (pumpkin_util::math::mth::sin(horizontal_rotation as f64) * xc) as f64;
 
             vertical_rotation *= 0.7;
             vertical_rotation += x_rota * 0.05;
