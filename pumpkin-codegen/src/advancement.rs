@@ -72,7 +72,6 @@ impl ToTokens for AdvancementDisplay {
         let description = as_translate(&self.description);
         let x = self.x;
         let y = self.y;
-
         tokens.extend(quote! {
             AdvancementDisplay::new(#title,
                 #description,
@@ -83,7 +82,7 @@ impl ToTokens for AdvancementDisplay {
                 #hidden,
                 #announce_to_chat,
                 #x,
-                #y
+                #y,
             )
         });
     }
@@ -218,7 +217,6 @@ impl TreePositioner {
             panic!("Can't position children of an invisible root!");
         }
         let mut nodes: Vec<LayoutNode> = Vec::with_capacity(32);
-
         let root_idx = nodes.len();
         nodes.push(LayoutNode {
             node: root_index,
@@ -551,7 +549,7 @@ impl AdvancementTree {
 
     pub fn try_insert(&mut self, advancement: AdvancementHolder) -> Option<AdvancementHolder> {
         let parent_id = &advancement.1.parent;
-        let parent_node : Option<usize> = match parent_id {
+        let parent_idx: Option<usize> = match parent_id {
             Some(id) => match self.nodes.get(id) {
                 Some(node) => Some(*node),
                 None => return Some(advancement),
@@ -562,8 +560,9 @@ impl AdvancementTree {
         let node = AdvancementNode::new(advancement);
         let node_idx = self.nodes_vector.len();
         self.nodes.insert(id, node_idx);
-        if let Some(parent)  = self.nodes_vector.get_mut(parent_node.unwrap()) {
-            parent.add_child(node_idx);
+        if let Some(parent)  = parent_idx {
+            let parent_node = self.nodes_vector.get_mut(parent).unwrap();
+            parent_node.add_child(node_idx);
             self.tasks.push(node_idx);
         } else {
             self.roots.push(node_idx);
@@ -587,7 +586,9 @@ pub(crate) fn build() -> TokenStream {
     tree.add_all(advancements.into_iter().map(
         |(key,value)| AdvancementHolder(Identifier::parse(&key).unwrap(),value)).collect());
     for index in tree.roots.clone() {
-        TreePositioner::run(&mut tree,index);
+        if tree.nodes_vector.get(index).unwrap().has_display() {
+            TreePositioner::run(&mut tree,index);
+        }
     }
     let advancements_holder: Vec<AdvancementHolder> = tree.nodes_vector.into_iter().map(|node| node.value).collect();
     for AdvancementHolder(identifier, advancement) in advancements_holder {
@@ -595,7 +596,7 @@ pub(crate) fn build() -> TokenStream {
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
 
         let parent = if let Some(parent) = &advancement.parent {
-            quote!{Some(Identifier::parse_static(#parent))}
+            quote!{Some(#parent)}
         } else {
             quote!{ None }
         };

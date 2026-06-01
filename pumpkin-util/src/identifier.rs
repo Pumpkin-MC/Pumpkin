@@ -386,8 +386,10 @@ impl<'de> Deserialize<'de> for Identifier {
 
 impl ToTokens for Identifier {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let namespace = self.namespace();
+        let path = self.path();
         tokens.extend(quote! {
-            Identifier::new(#self.namespace, #self.path)
+            Identifier::from_static(#namespace, #path)
         })
     }
 }

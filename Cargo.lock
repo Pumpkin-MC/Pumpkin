@@ -2677,6 +2677,7 @@ dependencies = [
  "hmac 0.13.0",
  "hyper",
  "image",
+ "indexmap",
  "libloading",
  "notify",
  "num-bigint",
