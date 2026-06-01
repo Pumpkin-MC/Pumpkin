@@ -86,7 +86,11 @@ impl ToTokens for ItemComponents {
 
         if let Some(use_cooldown) = &self.use_cooldown {
             let seconds = LitFloat::new(&format!("{:.1}", use_cooldown.seconds), Span::call_site());
-            let cooldown_group = &use_cooldown.cooldown_group;
+            let cooldown_group = if let Some(cd_group) = &use_cooldown.cooldown_group {
+                quote! { Some(#cd_group) }
+            } else {
+                quote! { None }
+            };
 
             tokens.extend(quote! {
                 (UseCooldown, &UseCooldownImpl {
