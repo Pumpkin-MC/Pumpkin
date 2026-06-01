@@ -1,19 +1,16 @@
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::Translate;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{collections::BTreeMap, fs};
-use std::cell::RefCell;
 use std::cmp::PartialEq;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
-use std::sync::{Arc, RwLock};
-use pumpkin_util::identifier::Identifier;
+use std::{collections::BTreeMap, fs};
 
 const fn r#true() -> bool {
     true
@@ -74,6 +71,8 @@ impl ToTokens for AdvancementDisplay {
         let background_texture = token_option(&self.background_texture);
         let title = as_translate(&self.title);
         let description = as_translate(&self.description);
+        let x = self.x;
+        let y = self.y;
 
         tokens.extend(quote! {
             AdvancementDisplay::new(#title,
@@ -84,6 +83,8 @@ impl ToTokens for AdvancementDisplay {
                 #show_toast,
                 #hidden,
                 #announce_to_chat,
+                #x,
+                #y
             )
         });
     }
@@ -138,22 +139,22 @@ impl ToTokens for AdvancementRewards {
 }
 
 pub struct AdvancementNode {
-    pub children: RwLock<HashSet<Arc<Self>>>,
-    pub parent: Option<Arc<Self>>,
+    pub children: Vec<usize>,
+    pub parent: Option<usize>,
     pub value: AdvancementHolder,
 }
 
 impl AdvancementNode {
-    pub fn add_child(&self, child: Arc<Self>) {
-        self.children.write().unwrap().insert(child);
+    pub fn add_child(&mut self, child: usize) {
+        self.children.push(child);
     }
 
     #[must_use]
-    pub fn new(value:AdvancementHolder, parent: Option<Arc<Self>>) -> Self {
+    pub fn new(value:AdvancementHolder, parent: Option<usize>) -> Self {
         Self {
             value,
             parent,
-            children: RwLock::new(HashSet::new()),
+            children: Vec::new(),
         }
     }
 
@@ -164,8 +165,11 @@ impl AdvancementNode {
     }
 
     #[inline]
-    pub const fn set_location(&self,x:f32,y:f32) {
-        self.value.1.display.inspect(|mut val| val.set_location(x, y));
+    pub const fn set_location(&mut self,x:f32,y:f32) {
+        if let Some(val) = self.value.1.display.as_mut() {
+            val.x=x;
+            val.y=y;
+        };
     }
 }
 
@@ -188,8 +192,8 @@ impl Hash for AdvancementNode {
     }
 }
 
-struct LayoutNode<'a> {
-    node: &'a AdvancementNode,
+struct LayoutNode {
+    node: usize,
     parent: Option<usize>,
     previous_sibling: Option<usize>,
     child_index: usize,
@@ -206,7 +210,8 @@ struct LayoutNode<'a> {
 pub struct TreePositioner;
 
 impl TreePositioner {
-    pub fn run(root_node: &AdvancementNode) {
+    pub fn run(tree:&mut AdvancementTree ,root_index: usize) {
+        let root_node = tree.nodes_vector[root_index];
         if !root_node.has_display() {
             panic!("Can't position children of an invisible root!");
         }
@@ -214,7 +219,7 @@ impl TreePositioner {
 
         let root_idx = nodes.len();
         nodes.push(LayoutNode {
-            node: root_node,
+            node: root_index,
             parent: None,
             previous_sibling: None,
             child_index: 1,
@@ -229,8 +234,8 @@ impl TreePositioner {
         });
 
         let mut previous_idx = None;
-        for child in root_node.children() {
-            previous_idx = Self::add_child(&mut nodes, root_idx, child, previous_idx);
+        for child in root_node.children {
+            previous_idx = Self::add_child(&mut nodes,tree, root_idx, child, previous_idx);
         }
 
         Self::first_walk(&mut nodes, root_idx);
@@ -242,23 +247,24 @@ impl TreePositioner {
             Self::third_walk(&mut nodes, root_idx, -min);
         }
 
-        // Application finale des positions
-        Self::finalize_position(&nodes, root_idx);
+        Self::finalize_position(tree,&nodes, root_idx);
     }
 
-    fn add_child<'a>(
-        nodes: &mut Vec<LayoutNode<'a>>,
+    fn add_child(
+        nodes: &mut Vec<LayoutNode>,
+        tree: &mut AdvancementTree,
         parent_idx: usize,
-        adv_node: &'a AdvancementNode<'a>,
+        adv_node_idx: usize,
         mut previous_idx: Option<usize>,
     ) -> Option<usize> {
+        let adv_node = tree.nodes_vector[adv_node_idx];
         if adv_node.has_display() {
             let child_idx = nodes.len();
             let next_child_index = nodes[parent_idx].children.len() + 1;
             let depth = nodes[parent_idx].x + 1;
 
             nodes.push(LayoutNode {
-                node: adv_node,
+                node: adv_node_idx,
                 parent: Some(parent_idx),
                 previous_sibling: previous_idx,
                 child_index: next_child_index,
@@ -275,14 +281,14 @@ impl TreePositioner {
             nodes[parent_idx].children.push(child_idx);
 
             let mut child_prev = None;
-            for child in adv_node.children() {
-                child_prev = Self::add_child(nodes, child_idx, child, child_prev);
+            for child in adv_node.children {
+                child_prev = Self::add_child(nodes,tree, child_idx, child, child_prev);
             }
 
             Some(child_idx)
         } else {
-            for grandchild in adv_node.children() {
-                previous_idx = Self::add_child(nodes, parent_idx, grandchild, previous_idx);
+            for grandchild in adv_node.children {
+                previous_idx = Self::add_child(nodes,tree, parent_idx, grandchild, previous_idx);
             }
             previous_idx
         }
@@ -463,10 +469,10 @@ impl TreePositioner {
         }
     }
 
-    fn finalize_position(nodes: &[LayoutNode], idx: usize) {
-        nodes[idx].node.set_location(nodes[idx].x as f32, nodes[idx].y);
+    fn finalize_position(tree:&mut AdvancementTree, nodes: &[LayoutNode], idx: usize) {
+        tree.nodes_vector[nodes[idx].node].set_location(nodes[idx].x as f32, nodes[idx].y);
         for &child_idx in &nodes[idx].children {
-            Self::finalize_position(nodes, child_idx);
+            Self::finalize_position(tree,nodes, child_idx);
         }
     }
 }
@@ -512,9 +518,10 @@ where
 
 #[derive(Default)]
 pub struct AdvancementTree {
-    pub nodes: HashMap<Identifier, Rc<RefCell<AdvancementNode>>,
-    pub roots: HashSet<&'_ AdvancementNode<'_>>,
-    pub tasks: HashSet<&'_ AdvancementNode<'_>>,
+    pub nodes: HashMap<Identifier, usize>,
+    pub nodes_vector: Vec<AdvancementNode>,
+    pub roots: Vec<usize>,
+    pub tasks: Vec<usize>
 }
 
 impl AdvancementTree {
@@ -537,24 +544,24 @@ impl AdvancementTree {
 
     pub fn try_insert(&mut self, advancement: AdvancementHolder) -> bool {
         let parent_id = &advancement.1.parent;
-
-        let parent_node = match parent_id {
-            Some(id) => match self.nodes.get_mut(id) {
-                Some(node) => Some(Rc::clone(node)),
+        let parent_node : Option<usize> = match parent_id {
+            Some(id) => match self.nodes.get(id) {
+                Some(node) => Some(*node),
                 None => return false,
             },
             None => None,
         };
         let id = advancement.0.clone();
-        let node = Arc::new(AdvancementNode::new(advancement, parent_node.clone()));
-        self.nodes.insert(id, Rc::clone(&node));
-
-        if let Some(parent) = parent_node {
-            parent.add_child(Arc::clone(&node));
-            self.tasks.insert(node);
+        let node = AdvancementNode::new(advancement, parent_node.clone());
+        let node_idx = self.nodes_vector.len();
+        self.nodes.insert(id, node_idx);
+        if let Some(parent)  = self.nodes_vector.get_mut(parent_node.unwrap()) {
+            parent.add_child(node_idx);
+            self.tasks.push(node_idx);
         } else {
-            self.roots.insert(node);
+            self.roots.push(node_idx);
         }
+        self.nodes_vector.push(node);
         true
     }
 }

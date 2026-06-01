@@ -45,6 +45,8 @@ impl AdvancementDisplay {
         show_toast: bool,
         hidden: bool,
         announce_to_chat: bool,
+        x: f32,
+        y: f32,
     ) -> Self {
         Self {
             title,
@@ -55,14 +57,9 @@ impl AdvancementDisplay {
             show_toast,
             hidden,
             announce_to_chat,
-            x: 0f32,
-            y: 0f32,
+            x,
+            y
         }
-    }
-
-    pub fn set_location(&mut self, x: f32, y: f32) {
-        self.x = x;
-        self.y = y;
     }
 }
 
