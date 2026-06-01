@@ -124,7 +124,7 @@ async fn try_pickup_bucket_item(
     block_pos: BlockPos,
     direction: BlockDirection,
 ) -> Option<&'static Item> {
-    let (block, state) = world.get_block_and_state_id(&block_pos).await;
+    let (block, state) = world.get_block_and_state_id(&block_pos);
 
     if block == &Block::POWDER_SNOW {
         world
@@ -142,9 +142,7 @@ async fn try_pickup_bucket_item(
         world
             .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
@@ -167,15 +165,13 @@ async fn try_pickup_bucket_item(
     }
 
     let target_pos = block_pos.offset(direction.to_offset());
-    let (block, state) = world.get_block_and_state_id(&target_pos).await;
+    let (block, state) = world.get_block_and_state_id(&target_pos);
     if waterlogged_check(block, state).is_some() {
         let state_id = set_waterlogged(block, state, false);
         world
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
@@ -188,16 +184,14 @@ fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
         && world.dimension == Dimension::THE_NETHER
 }
 
-async fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
-    world
-        .play_sound_raw(
-            Sound::BlockFireExtinguish as u16,
-            SoundCategory::Blocks,
-            &player.position(),
-            0.5,
-            (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
-        )
-        .await;
+fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
+    world.play_sound_raw(
+        Sound::BlockFireExtinguish as u16,
+        SoundCategory::Blocks,
+        &player.position(),
+        0.5,
+        (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
+    );
 }
 
 async fn try_place_powder_snow(
@@ -205,13 +199,13 @@ async fn try_place_powder_snow(
     pos: BlockPos,
     direction: BlockDirection,
 ) -> bool {
-    let state = world.get_block_state(&pos).await;
+    let state = world.get_block_state(&pos);
     let target_pos = if state.replaceable() {
         pos
     } else {
         pos.offset(direction.to_offset())
     };
-    let target_state = world.get_block_state(&target_pos).await;
+    let target_state = world.get_block_state(&target_pos);
     if !target_state.is_air() && !target_state.is_liquid() && !target_state.replaceable() {
         return false;
     }
@@ -231,7 +225,7 @@ async fn try_place_filled_bucket(
     pos: BlockPos,
     direction: BlockDirection,
 ) -> bool {
-    let (block, state) = world.get_block_and_state(&pos).await;
+    let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
         return try_place_powder_snow(world, pos, direction).await;
     }
@@ -241,14 +235,12 @@ async fn try_place_filled_bucket(
         world
             .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
         return true;
     }
 
     let target_pos = pos.offset(direction.to_offset());
-    let (block, state) = world.get_block_and_state(&target_pos).await;
+    let (block, state) = world.get_block_and_state(&target_pos);
 
     if waterlogged_check(block, state.id).is_some() {
         if item.id == Item::LAVA_BUCKET.id {
@@ -258,9 +250,7 @@ async fn try_place_filled_bucket(
         world
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return true;
     }
 
@@ -293,7 +283,7 @@ impl ItemBehaviour for EmptyBucketItem {
             let (start_pos, end_pos) = get_start_and_end_pos(player);
 
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
-                let state_id = world_inner.get_block_state_id(pos).await;
+                let state_id = world_inner.get_block_state_id(pos);
 
                 let block = Block::from_state_id(state_id);
 
@@ -334,7 +324,7 @@ impl ItemBehaviour for FilledBucketItem {
             let world = player.world();
             let (start_pos, end_pos) = get_start_and_end_pos(player);
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
-                let state_id = world_inner.get_block_state_id(pos).await;
+                let state_id = world_inner.get_block_state_id(pos);
                 if Fluid::from_state_id(state_id).is_some() {
                     return false;
                 }
@@ -346,7 +336,7 @@ impl ItemBehaviour for FilledBucketItem {
             };
 
             if should_evaporate_in_nether(item, &world) {
-                play_bucket_evaporation(&world, player).await;
+                play_bucket_evaporation(&world, player);
                 return;
             }
             if !try_place_filled_bucket(&world, item, pos, direction).await {

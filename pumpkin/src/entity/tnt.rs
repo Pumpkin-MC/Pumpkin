@@ -36,7 +36,7 @@ impl NBTStorage for TNTEntity {}
 impl EntityBase for TNTEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -46,8 +46,8 @@ impl EntityBase for TNTEntity {
             let mut velo = original_velo;
             velo.y -= self.get_gravity();
 
-            entity.move_entity(caller.clone(), velo).await;
-            entity.tick_block_collisions(&caller, server).await;
+            entity.move_entity(caller, velo).await;
+            entity.tick_block_collisions(caller, server).await;
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
 
             if entity.on_ground.load(Ordering::Relaxed) {
@@ -55,8 +55,8 @@ impl EntityBase for TNTEntity {
             }
 
             if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-                entity.send_pos_rot().await;
-                entity.send_velocity().await;
+                entity.send_pos_rot();
+                entity.send_velocity();
             }
 
             // FIX: Prevent fuse underflow (vanilla parity)
@@ -73,7 +73,7 @@ impl EntityBase for TNTEntity {
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);
-                entity.update_fluid_state(&caller).await;
+                entity.update_fluid_state(caller).await;
             }
         })
     }
@@ -83,23 +83,20 @@ impl EntityBase for TNTEntity {
             let pos: f64 = rand::random::<f64>() * TAU;
 
             self.entity
-                .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02))
-                .await;
+                .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02));
 
-            self.entity
-                .send_meta_data(&[
-                    Metadata::new(
-                        TrackedData::FUSE_ID,
-                        MetaDataType::INTEGER,
-                        VarInt(self.fuse.load(Relaxed) as i32),
-                    ),
-                    Metadata::new(
-                        TrackedData::BLOCK_STATE_ID,
-                        MetaDataType::BLOCK_STATE,
-                        VarInt(i32::from(Block::TNT.default_state.id)),
-                    ),
-                ])
-                .await;
+            self.entity.send_meta_data(&[
+                Metadata::new(
+                    TrackedData::FUSE_ID,
+                    MetaDataType::INTEGER,
+                    VarInt(self.fuse.load(Relaxed) as i32),
+                ),
+                Metadata::new(
+                    TrackedData::BLOCK_STATE_ID,
+                    MetaDataType::BLOCK_STATE,
+                    VarInt(i32::from(Block::TNT.default_state.id)),
+                ),
+            ]);
         })
     }
 
@@ -116,6 +113,10 @@ impl EntityBase for TNTEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 

@@ -70,12 +70,12 @@ impl NBTStorage for ExperienceOrbEntity {}
 impl EntityBase for ExperienceOrbEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            entity.tick(caller.clone(), server).await;
+            entity.tick(caller, server).await;
             let bounding_box = entity.bounding_box.load();
 
             let original_velo = entity.velocity.load();
@@ -86,8 +86,7 @@ impl EntityBase for ExperienceOrbEntity {
                 .entity
                 .world
                 .load()
-                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-                .await;
+                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7));
             // TODO: isSubmergedIn
             if !no_clip {
                 velo.y -= self.get_gravity();
@@ -95,9 +94,9 @@ impl EntityBase for ExperienceOrbEntity {
 
             entity.velocity.store(velo);
 
-            entity.move_entity(caller.clone(), velo).await;
+            entity.move_entity(caller, velo).await;
 
-            entity.tick_block_collisions(&caller, server).await;
+            entity.tick_block_collisions(caller, server).await;
 
             let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
             if age >= 6000 {
@@ -116,7 +115,7 @@ impl EntityBase for ExperienceOrbEntity {
                 let mut delay = player.experience_pick_up_delay.lock().await;
                 if *delay == 0 {
                     *delay = 2;
-                    player.living_entity.pickup(&self.entity, 1).await;
+                    player.living_entity.pickup(&self.entity, 1);
                     let remaining = player.apply_mending_from_xp(self.amount as i32).await;
                     if remaining > 0 {
                         player.add_experience_points(remaining).await;
@@ -138,5 +137,9 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn get_gravity(&self) -> f64 {
         0.03
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

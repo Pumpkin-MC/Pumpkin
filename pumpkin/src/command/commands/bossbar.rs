@@ -17,7 +17,6 @@ use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use std::fmt::Write as _;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];
@@ -69,7 +68,8 @@ impl CommandExecutor for AddExecutor {
             let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
 
             if server.bossbars.lock().await.has_bossbar(&namespace) {
-                return Result::Err(CommandError::CommandFailed(TextComponent::translate(
+                return Result::Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.bossbar.create.failed",
                     "commands.bossbar.create.failed",
                     [TextComponent::text(namespace.clone())],
                 )));
@@ -83,7 +83,8 @@ impl CommandExecutor for AddExecutor {
             drop(bossbars);
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
+                    "commands.bossbar.create.success",
                     "commands.bossbar.create.success",
                     [bossbar_prefix(bossbar.title.clone(), namespace.clone())],
                 ))
@@ -117,7 +118,8 @@ impl CommandExecutor for GetExecutor {
             match self.0 {
                 CommandValueGet::Max => {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.get.max",
                             "commands.bossbar.get.max",
                             [
                                 bossbar_prefix(
@@ -133,7 +135,8 @@ impl CommandExecutor for GetExecutor {
                 CommandValueGet::Players => Ok(bossbar.players.len() as i32),
                 CommandValueGet::Value => {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.get.value",
                             "commands.bossbar.get.value",
                             [
                                 bossbar_prefix(
@@ -153,7 +156,8 @@ impl CommandExecutor for GetExecutor {
                         "commands.bossbar.get.visible.hidden"
                     };
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            state,
                             state,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -182,7 +186,8 @@ impl CommandExecutor for ListExecutor {
 
             if bossbars.is_empty() {
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.bossbar.list.bars.none",
                         "commands.bossbar.list.bars.none",
                         [],
                     ))
@@ -208,7 +213,8 @@ impl CommandExecutor for ListExecutor {
             }
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
+                    "commands.bossbar.list.bars.some",
                     "commands.bossbar.list.bars.some",
                     [
                         TextComponent::text(bossbars.len().to_string()),
@@ -243,7 +249,8 @@ impl CommandExecutor for RemoveExecutor {
             };
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
+                    "commands.bossbar.remove.success",
                     "commands.bossbar.remove.success",
                     [bossbar_prefix(
                         bossbar.bossbar_data.title.clone(),
@@ -297,7 +304,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_color(server, namespace.to_string(), color.clone())
+                        .update_color(server, namespace.to_string(), *color)
                         .await
                     {
                         Ok(()) => {}
@@ -307,7 +314,8 @@ impl CommandExecutor for SetExecutor {
                     }
 
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.set.color.success",
                             "commands.bossbar.set.color.success",
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -320,7 +328,8 @@ impl CommandExecutor for SetExecutor {
                 }
                 CommandValueSet::Max => {
                     let Ok(max_value) = max_value_consumer().find_arg_default_name(args)? else {
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            "parsing.int.invalid",
                             "parsing.int.invalid",
                             [TextComponent::text(i32::MAX.to_string())],
                         )));
@@ -340,7 +349,8 @@ impl CommandExecutor for SetExecutor {
                     }
 
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.set.max.success",
                             "commands.bossbar.set.max.success",
                             [
                                 bossbar_prefix(
@@ -370,7 +380,8 @@ impl CommandExecutor for SetExecutor {
                     }
 
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.set.name.success",
                             "commands.bossbar.set.name.success",
                             [bossbar_prefix(text_component, namespace.to_string())],
                         ))
@@ -393,7 +404,8 @@ impl CommandExecutor for SetExecutor {
                             }
                         }
                         sender
-                            .send_message(TextComponent::translate(
+                            .send_message(TextComponent::translate_cross(
+                                "commands.bossbar.set.players.success.none",
                                 "commands.bossbar.set.players.success.none",
                                 [bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
@@ -430,7 +442,8 @@ impl CommandExecutor for SetExecutor {
                         .join(", ");
 
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.set.players.success.some",
                             "commands.bossbar.set.players.success.some",
                             [
                                 bossbar_prefix(
@@ -451,7 +464,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_division(server, namespace.to_string(), style.clone())
+                        .update_division(server, namespace.to_string(), *style)
                         .await
                     {
                         Ok(()) => {}
@@ -460,7 +473,8 @@ impl CommandExecutor for SetExecutor {
                         }
                     }
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.set.style.success",
                             "commands.bossbar.set.style.success",
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -472,7 +486,8 @@ impl CommandExecutor for SetExecutor {
                 }
                 CommandValueSet::Value => {
                     let Ok(value) = value_consumer().find_arg_default_name(args)? else {
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            "parsing.int.invalid",
                             "parsing.int.invalid",
                             [TextComponent::text(i32::MAX.to_string())],
                         )));
@@ -492,7 +507,8 @@ impl CommandExecutor for SetExecutor {
                     }
 
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.bossbar.set.value.success",
                             "commands.bossbar.set.value.success",
                             [
                                 bossbar_prefix(
@@ -529,7 +545,8 @@ impl CommandExecutor for SetExecutor {
                     };
 
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            state,
                             state,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -636,20 +653,19 @@ fn bossbar_prefix(title: TextComponent, namespace: String) -> TextComponent {
 fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {
     match error {
         BossbarUpdateError::InvalidResourceLocation(location) => {
-            CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_BOSSBAR_UNKNOWN,
+            CommandError::CommandFailed(TextComponent::translate_cross(
+                translation::java::COMMANDS_BOSSBAR_UNKNOWN,
+                translation::java::COMMANDS_BOSSBAR_UNKNOWN,
                 [TextComponent::text(location)],
             ))
         }
         BossbarUpdateError::NoChanges(value, variation) => {
-            let mut key = "commands.bossbar.set.".to_string();
-            key.push_str(value);
-            key.push_str(".unchanged");
-            if let Some(variation) = variation {
-                write!(key, ".{variation}").unwrap();
-            }
+            let key = variation.map_or_else(
+                || format!("commands.bossbar.set.{value}.unchanged"),
+                |var| format!("commands.bossbar.set.{value}.unchanged.{var}"),
+            );
 
-            CommandError::CommandFailed(TextComponent::translate(key, []))
+            CommandError::CommandFailed(TextComponent::translate_cross(key.clone(), key, []))
         }
     }
 }

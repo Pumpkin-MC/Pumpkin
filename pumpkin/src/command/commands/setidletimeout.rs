@@ -33,12 +33,17 @@ impl CommandExecutor for SetIdleTimeoutExecutor {
             {
                 if minutes == 0 {
                     context.source.send_feedback(
-                        TextComponent::translate("commands.setidletimeout.success.disabled", []),
+                        TextComponent::translate_cross(
+                            "commands.setidletimeout.success.disabled",
+                            "commands.setidletimeout.success.disabled",
+                            [],
+                        ),
                         true,
                     )
                 } else {
                     context.source.send_feedback(
-                        TextComponent::translate(
+                        TextComponent::translate_cross(
+                            "commands.setidletimeout.success",
                             "commands.setidletimeout.success",
                             [TextComponent::text(minutes.to_string())],
                         ),

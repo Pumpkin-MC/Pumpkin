@@ -1,11 +1,12 @@
 use proc_macro2::TokenStream;
 use pumpkin_nbt::compound::NbtCompound;
 
-use crate::version::MinecraftVersion;
+use crate::version::JavaMinecraftVersion;
 
 mod block_state;
 mod entity_id;
 mod item_id;
+mod sound_id;
 
 /// Returns the list of remap builder functions paired with their output file names.
 #[allow(clippy::type_complexity)]
@@ -14,6 +15,7 @@ pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
         (block_state::build, "block_state_remap.rs"),
         (entity_id::build, "entity_id_remap.rs"),
         (item_id::build, "item_id_remap.rs"),
+        (sound_id::build, "sound_id_remap.rs"),
     ]
 }
 
@@ -21,7 +23,7 @@ pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
 /// between consecutive Minecraft versions.
 pub struct MappingNode<'a, P> {
     /// The Minecraft version this node represents.
-    pub version: MinecraftVersion,
+    pub version: JavaMinecraftVersion,
     /// The path to (or data of) the ViaVersion NBT mapping file for this version hop.
     pub value: P,
     /// The previous version node in the chain, or `None` if this is the oldest supported version.
@@ -32,7 +34,7 @@ pub struct MappingNode<'a, P> {
 /// into per-version translation tables.
 pub struct Remapper<P, R> {
     /// The target (latest) version that all older mappings are translated toward.
-    pub version: MinecraftVersion,
+    pub version: JavaMinecraftVersion,
     /// Combines the current-version mapping with a child mapping into a composed mapping.
     pub remapper: fn(&R, &R) -> R,
     /// Converts the raw path/data `P` stored in a [`MappingNode`] into the mapping type `R`.
@@ -43,9 +45,9 @@ impl<P, R> Remapper<P, R> {
     /// Recursively processes the [`MappingNode`] chain and returns a list of `(version, mapping)` pairs.
     ///
     /// # Returns
-    /// A `Vec` where each entry contains a [`MinecraftVersion`] and its composed mapping relative
+    /// A `Vec` where each entry contains a [`JavaMinecraftVersion`] and its composed mapping relative
     /// to `self.version`.
-    pub fn process(&self, mappings: &MappingNode<'_, P>) -> Vec<(MinecraftVersion, R)> {
+    pub fn process(&self, mappings: &MappingNode<'_, P>) -> Vec<(JavaMinecraftVersion, R)> {
         let current_mapping = (self.serializer)(&mappings.value);
         let mut remap = if let Some(child) = mappings.child {
             let mut res = self.process(child);
@@ -81,12 +83,12 @@ impl ParsedMappings {
     /// `Some(ParsedMappings)` if the section exists, or `None` if the section is absent.
     pub fn parse_mapping_file(path: &str, section: &str) -> Option<Self> {
         use pumpkin_nbt::Nbt;
-        use pumpkin_nbt::deserializer::NbtReadHelper;
+        use pumpkin_nbt::deserializer::NbtReadHelperJava;
         use std::fs;
         use std::io::Cursor;
 
         let bytes = fs::read(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
-        let mut reader = NbtReadHelper::new(Cursor::new(bytes));
+        let mut reader = NbtReadHelperJava::new(Cursor::new(bytes));
         let nbt =
             Nbt::read(&mut reader).unwrap_or_else(|_| panic!("Failed to parse NBT at {path}"));
 
@@ -143,10 +145,8 @@ impl ParsedMappings {
                     } else {
                         shifts_at[index + 1]
                     };
-                    let mut mapped_id = shifts_to[index];
-                    for id in *from..to {
+                    for (mapped_id, id) in (shifts_to[index]..).zip(*from..to) {
                         result[id as usize] = mapped_id;
-                        mapped_id += 1;
                     }
                 }
 
@@ -210,7 +210,7 @@ impl ParsedMappings {
     ///
     /// # Returns
     /// A `Vec<u16>` of length `self.mapped_size` mapping new IDs back to old IDs.
-    pub fn invert_with_default_to_u16(&self, name: &str) -> Vec<u16> {
+    pub fn _invert_with_default_to_u16(&self, name: &str) -> Vec<u16> {
         let mut inverse = vec![0u16; self.mapped_size];
         let mut seen = vec![false; self.mapped_size];
 
@@ -236,5 +236,21 @@ impl ParsedMappings {
         }
 
         inverse
+    }
+
+    /// Converts the forward mapping directly to a u16 table.
+    /// Used with ViaBackwards mappings which are already in new→old direction.
+    pub fn to_u16(&self, name: &str) -> Vec<u16> {
+        self.forward
+            .iter()
+            .map(|&id| {
+                if id < 0 {
+                    0 // unmapped → air
+                } else {
+                    u16::try_from(id)
+                        .unwrap_or_else(|_| panic!("{name}: id {id} does not fit in u16"))
+                }
+            })
+            .collect()
     }
 }

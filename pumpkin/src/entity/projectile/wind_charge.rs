@@ -17,6 +17,7 @@ use crate::{
 
 const EXPLOSION_POWER: f32 = 1.2;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
+pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
 
 pub struct WindChargeEntity {
     deflect_cooldown: AtomicU8,
@@ -75,7 +76,7 @@ impl NBTStorage for WindChargeEntity {}
 impl EntityBase for WindChargeEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -96,6 +97,10 @@ impl EntityBase for WindChargeEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

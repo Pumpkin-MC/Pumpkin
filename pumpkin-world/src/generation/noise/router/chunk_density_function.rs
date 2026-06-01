@@ -472,7 +472,6 @@ impl FlatCache {
     }
 }
 
-#[derive(Clone)]
 pub struct Cache2D {
     pub(crate) input_index: usize,
     last_sample_column: u64,

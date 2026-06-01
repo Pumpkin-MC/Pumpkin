@@ -46,8 +46,8 @@ impl StructureGenerator for NetherFortressGenerator {
         let start_z = section_coords::section_to_block(context.chunk_z) + 2;
 
         let start_piece = BridgeCrossingPiece::new_start(&mut random, start_x, start_z);
-        let start_box: Box<dyn crate::generation::structure::structures::StructurePieceBase> =
-            Box::new(start_piece.clone());
+
+        let base_piece = start_piece.piece.piece.clone();
 
         let mut pieces_to_process: Vec<
             Box<dyn crate::generation::structure::structures::StructurePieceBase>,
@@ -56,10 +56,8 @@ impl StructureGenerator for NetherFortressGenerator {
         let mut bridge_pieces = get_bridge_piece_weights();
         let mut corridor_pieces = get_corridor_piece_weights();
 
-        collector.add_piece(start_box);
-
         start_piece.fill_openings(
-            &start_piece.piece.piece,
+            &base_piece,
             &mut random,
             &mut bridge_pieces,
             &mut corridor_pieces,
@@ -67,17 +65,22 @@ impl StructureGenerator for NetherFortressGenerator {
             &mut pieces_to_process,
         );
 
+        collector.add_piece(Box::new(start_piece));
+
         while !pieces_to_process.is_empty() {
             let idx = random.next_bounded_i32(pieces_to_process.len() as i32) as usize;
             let piece = pieces_to_process.remove(idx);
+
             piece.fill_openings_nether(
-                &start_piece.piece.piece,
+                &base_piece,
                 &mut random,
                 &mut bridge_pieces,
                 &mut corridor_pieces,
                 &mut collector,
                 &mut pieces_to_process,
             );
+
+            collector.add_piece(piece);
         }
 
         Some(StructurePosition {
@@ -117,6 +120,7 @@ impl PieceWeight {
         }
     }
 
+    #[must_use]
     pub const fn can_generate(&self) -> bool {
         self.limit == 0 || self.generated_count < self.limit
     }
@@ -141,6 +145,7 @@ pub enum NetherFortressPieceType {
     CorridorNetherWartsRoom,
 }
 
+#[must_use]
 pub fn get_bridge_piece_weights() -> Vec<PieceWeight> {
     vec![
         PieceWeight::new(NetherFortressPieceType::Bridge, 30, 0, true),
@@ -152,6 +157,7 @@ pub fn get_bridge_piece_weights() -> Vec<PieceWeight> {
     ]
 }
 
+#[must_use]
 pub fn get_corridor_piece_weights() -> Vec<PieceWeight> {
     vec![
         PieceWeight::new(NetherFortressPieceType::SmallCorridor, 25, 0, true),
@@ -187,6 +193,7 @@ impl NetherFortressPiece {
         }
     }
 
+    #[must_use]
     pub const fn is_in_bounds(bb: &BlockBox) -> bool {
         bb.min.y > 10
     }
@@ -406,8 +413,6 @@ impl NetherFortressPiece {
         }
     }
 
-    // ---- opening helpers --------------------------------------------------
-
     #[allow(clippy::too_many_arguments)]
     pub fn fill_forward_opening(
         &self,
@@ -595,7 +600,7 @@ impl NetherFortressPiece {
                 orientation,
                 self.piece.chain_length,
             ) {
-                collector.add_piece(p)
+                collector.add_piece(p);
             }
             return;
         }
@@ -617,7 +622,6 @@ impl NetherFortressPiece {
             orientation,
             self.piece.chain_length + 1,
         ) {
-            collector.add_piece(p.clone_box());
             pieces_to_process.push(p);
         }
     }

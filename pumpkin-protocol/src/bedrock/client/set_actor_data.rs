@@ -5,6 +5,7 @@ use crate::{
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::io::Error;
 
 #[derive(PacketWrite)]
@@ -44,21 +45,29 @@ impl EntityMetadata {
         self.0.insert(key, value);
     }
 
-    pub fn set_flag(&mut self, key: u32, index: u8) {
+    pub fn set_flag(&mut self, key: u32, index: u8, value: bool) {
         if key == entity_data_key::PLAYER_FLAGS {
             let current_value = match self.0.get(&key) {
                 Some(MetadataValue::Byte(v)) => *v,
                 _ => 0,
             };
-            self.0
-                .insert(key, MetadataValue::Byte(current_value | (1i8 << index)));
+            let new_value = if value {
+                current_value | (1i8 << index)
+            } else {
+                current_value & !(1i8 << index)
+            };
+            self.0.insert(key, MetadataValue::Byte(new_value));
         } else {
             let current_value = match self.0.get(&key) {
                 Some(MetadataValue::Long(v)) => *v,
                 _ => 0,
             };
-            self.0
-                .insert(key, MetadataValue::Long(current_value | (1i64 << index)));
+            let new_value = if value {
+                current_value | (1i64 << index)
+            } else {
+                current_value & !(1i64 << index)
+            };
+            self.0.insert(key, MetadataValue::Long(new_value));
         }
     }
 }
@@ -83,9 +92,9 @@ pub enum MetadataValue {
     Float(f32),
     String(String),
     CompoundTag,
-    BlockPos,
+    BlockPos(BlockPos),
     Long(i64),
-    Vec3,
+    Vec3(Vector3<f32>),
 }
 
 impl MetadataValue {
@@ -98,9 +107,9 @@ impl MetadataValue {
             Self::Float(_) => 3,
             Self::String(_) => 4,
             Self::CompoundTag => 5,
-            Self::BlockPos => 6,
+            Self::BlockPos(_) => 6,
             Self::Long(_) => 7,
-            Self::Vec3 => 8,
+            Self::Vec3(_) => 8,
         }
     }
 
@@ -108,16 +117,17 @@ impl MetadataValue {
         match self {
             Self::Byte(v) => v.write(writer),
             Self::Short(v) => v.write(writer),
-            // Type 2: Signed VarInt
             Self::Int(v) => VarInt(*v).write(writer),
-            // Type 3: LE Float (4 bytes)
             Self::Float(v) => writer.write_all(&v.to_le_bytes()),
-            // Type 4: VarInt length + UTF8 String
             Self::String(v) => v.write(writer),
-            Self::CompoundTag => todo!(),
-            Self::BlockPos => todo!(),
+            Self::CompoundTag => Err(Error::other("CompoundTag not implemented")),
+            Self::BlockPos(v) => v.write(writer),
             Self::Long(v) => VarLong(*v).write(writer),
-            Self::Vec3 => todo!(),
+            Self::Vec3(v) => {
+                writer.write_all(&v.x.to_le_bytes())?;
+                writer.write_all(&v.y.to_le_bytes())?;
+                writer.write_all(&v.z.to_le_bytes())
+            }
         }
     }
 }

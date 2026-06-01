@@ -1,4 +1,7 @@
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState,
+    tag::{self, Taggable},
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
@@ -10,10 +13,8 @@ use crate::block::{
 #[pumpkin_block("minecraft:seagrass")]
 pub struct SeaGrassBlock;
 impl BlockBehaviour for SeaGrassBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -33,13 +34,13 @@ impl BlockBehaviour for SeaGrassBlock {
 }
 
 impl PlantBlockBase for SeaGrassBlock {
-    async fn can_plant_on_top(
+    fn can_plant_on_top(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let (support_block, support_block_state) = block_accessor.get_block_and_state(pos).await;
-        let replacing_block = block_accessor.get_block(&pos.up()).await;
+        let (support_block, support_block_state) = block_accessor.get_block_and_state(pos);
+        let replacing_block = block_accessor.get_block(&pos.up());
         if replacing_block != &Block::WATER && replacing_block != &Block::SEAGRASS {
             return false;
         }
@@ -54,7 +55,7 @@ impl PlantBlockBase for SeaGrassBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             return Block::WATER.default_state.id;
         }
         block_state
@@ -62,5 +63,6 @@ impl PlantBlockBase for SeaGrassBlock {
 }
 #[must_use]
 pub fn supports_seagrass(support_block: &Block, support_block_state: &BlockState) -> bool {
-    support_block_state.is_side_solid(BlockDirection::Up) && support_block != &Block::MAGMA_BLOCK
+    support_block_state.is_side_solid(BlockDirection::Up)
+        && !support_block.has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SEAGRASS)
 }

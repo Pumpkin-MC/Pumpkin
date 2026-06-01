@@ -19,7 +19,10 @@ impl BlockBehaviour for CraftingTableBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
-                .open_handled_screen(&CraftingTableScreenFactory, Some(*args.position))
+                .open_handled_screen(
+                    &CraftingTableScreenFactory(args.server.recipe_manager.clone()),
+                    Some(*args.position),
+                )
                 .await;
 
             BlockActionResult::Success
@@ -27,7 +30,7 @@ impl BlockBehaviour for CraftingTableBlock {
     }
 }
 
-struct CraftingTableScreenFactory;
+struct CraftingTableScreenFactory(Arc<crate::server::RecipeManager>);
 
 impl ScreenHandlerFactory for CraftingTableScreenFactory {
     fn create_screen_handler<'a>(
@@ -37,7 +40,9 @@ impl ScreenHandlerFactory for CraftingTableScreenFactory {
         _player: &'a dyn InventoryPlayer,
     ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
         Box::pin(async move {
-            let handler = CraftingTableScreenHandler::new(sync_id, player_inventory).await;
+            let handler =
+                CraftingTableScreenHandler::new(sync_id, player_inventory, Some(self.0.clone()))
+                    .await;
             let concrete_arc = Arc::new(Mutex::new(handler));
 
             Some(concrete_arc as SharedScreenHandler)
@@ -45,6 +50,10 @@ impl ScreenHandlerFactory for CraftingTableScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_CRAFTING, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_CRAFTING,
+            translation::bedrock::CONTAINER_CRAFTING,
+            &[],
+        )
     }
 }

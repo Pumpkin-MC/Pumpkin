@@ -26,14 +26,12 @@ impl BlockBehaviour for BarrierBlock {
         Box::pin(async move {
             let props = BarrierLikeProperties::from_state_id(args.state_id, args.block);
             if props.waterlogged {
-                args.world
-                    .schedule_fluid_tick(
-                        &Fluid::WATER,
-                        *args.position,
-                        Fluid::WATER.flow_speed as u8,
-                        TickPriority::Normal,
-                    )
-                    .await;
+                args.world.schedule_fluid_tick(
+                    &Fluid::WATER,
+                    *args.position,
+                    Fluid::WATER.flow_speed as u8,
+                    TickPriority::Normal,
+                );
             }
             props.to_state_id(args.block)
         })

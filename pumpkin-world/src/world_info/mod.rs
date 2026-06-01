@@ -11,7 +11,7 @@ pub mod anvil;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
-pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4786; // 26.1
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4790; // 26.1.2
 
 pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.9
 pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.9
@@ -80,6 +80,8 @@ pub struct LevelData {
     pub world_version: WorldVersion,
     #[serde(rename = "version", default = "default_level_version")]
     pub level_version: i32,
+    #[serde(rename = "map_id", default)]
+    pub map_id: i32,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -325,6 +327,7 @@ impl LevelData {
             spawn_pitch: 0.0,
             world_version: WorldVersion::default(),
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
+            map_id: 0,
         }
     }
 

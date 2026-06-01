@@ -8,10 +8,14 @@ use pumpkin_data::translation;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
 
+pub mod block_pos;
+pub mod rotation;
 pub mod vec3;
 
-pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_MIXED);
+pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_MIXED,
+    translation::java::ARGUMENT_POS_MIXED,
+);
 
 /// Represents a single world coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -184,8 +188,27 @@ impl Coordinates {
                 )
             }
             Self::Local { left, up, forward } => {
-                convert_local_coordinates(*left, *up, *forward, source.rotation)
+                let start = source.entity_anchor.position_at_source(source);
+                convert_local_coordinates(*left, *up, *forward, source.rotation).add(&start)
             }
+        }
+    }
+
+    /// Returns the rotation, as a [`Vector2`], that these [`Coordinates`] represent.
+    ///
+    /// - The returned *x*-component of the vector is the **pitch**.
+    /// - The returned *y*-component of the vector is the **yaw**.
+    #[must_use]
+    pub const fn rotation(&self, source: &CommandSource) -> Vector2<f32> {
+        match self {
+            Self::World(coords) => {
+                let rotation = source.rotation;
+                Vector2::new(
+                    coords.x.resolve(rotation.x as f64) as f32,
+                    coords.y.resolve(rotation.y as f64) as f32,
+                )
+            }
+            Self::Local { .. } => Vector2::new(0.0, 0.0),
         }
     }
 
@@ -315,13 +338,16 @@ fn convert_local_coordinates(
     forward: f64,
     rotation: Vector2<f32>,
 ) -> Vector3<f64> {
-    let y = (rotation.y + 90.0).to_radians() as f64;
+    let pitch = rotation.x;
+    let yaw = rotation.y;
+
+    let y = (yaw + 90.0).to_radians() as f64;
     let y_cos = y.cos();
     let y_sin = y.sin();
-    let x = (-rotation.x).to_radians() as f64;
+    let x = (-pitch).to_radians() as f64;
     let x_cos = x.cos();
     let x_sin = x.sin();
-    let x_up = (-rotation.x + 90.0).to_radians() as f64;
+    let x_up = (-pitch + 90.0).to_radians() as f64;
     let x_up_cos = x_up.cos();
     let x_up_sin = x_up.sin();
 

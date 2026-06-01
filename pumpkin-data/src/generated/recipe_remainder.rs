@@ -1,5 +1,6 @@
 /* This file is generated. Do not edit manually. */
 #[must_use]
+#[allow(clippy::match_same_arms)]
 pub const fn get_recipe_remainder_id(item_id: u16) -> Option<u16> {
     match item_id {
         948 => Some(893),

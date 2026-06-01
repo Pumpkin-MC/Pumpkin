@@ -178,16 +178,14 @@ impl EntityBase for AreaEffectCloudEntity {
                     pumpkin_data::tracked_data::TrackedData::PARTICLE,
                     pumpkin_data::meta_data_type::MetaDataType::PARTICLE,
                     &meta,
-                )])
-                .await;
+                )]);
 
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::RADIUS,
                     pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                     radius,
-                )])
-                .await;
+                )]);
 
             // Initial waiting flag
             let wait_time = *self.wait_time.lock().await;
@@ -197,8 +195,7 @@ impl EntityBase for AreaEffectCloudEntity {
                     pumpkin_data::tracked_data::TrackedData::WAITING,
                     pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                     is_waiting,
-                )])
-                .await;
+                )]);
         })
     }
 
@@ -206,7 +203,7 @@ impl EntityBase for AreaEffectCloudEntity {
     #[allow(clippy::semicolon_outside_block)]
     fn tick<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -233,8 +230,7 @@ impl EntityBase for AreaEffectCloudEntity {
                         pumpkin_data::tracked_data::TrackedData::WAITING,
                         pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                         false,
-                    )])
-                    .await;
+                    )]);
             }
 
             if age < wait_time {
@@ -260,8 +256,7 @@ impl EntityBase for AreaEffectCloudEntity {
                         pumpkin_data::tracked_data::TrackedData::RADIUS,
                         pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                         current_radius,
-                    )])
-                    .await;
+                    )]);
             }
 
             // Tick down reapplication map
@@ -385,13 +380,13 @@ impl EntityBase for AreaEffectCloudEntity {
                     drop(radius_lock);
 
                     // Send updated radius to clients
-                    self.entity
-                        .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                    self.entity.send_meta_data(&[
+                        pumpkin_protocol::java::client::play::Metadata::new(
                             pumpkin_data::tracked_data::TrackedData::RADIUS,
                             pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                             current_radius,
-                        )])
-                        .await;
+                        ),
+                    ]);
                 }
 
                 // Apply duration-on-use (shorten lifespan)
@@ -417,5 +412,9 @@ impl EntityBase for AreaEffectCloudEntity {
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

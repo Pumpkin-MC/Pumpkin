@@ -1,5 +1,4 @@
 use std::{
-    io::Cursor,
     path::PathBuf,
     pin::Pin,
     sync::{
@@ -9,16 +8,14 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
-use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
 use tracing::debug;
 use uuid::Uuid;
 
 use crate::{
-    block::entities::block_entity_from_nbt,
     chunk::{
         ChunkEntityData, ChunkReadingError, ChunkSerializingError,
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
@@ -28,6 +25,7 @@ use crate::{
     level::LevelFolder,
     tick::{ScheduledTick, scheduler::ChunkTickScheduler},
 };
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 
@@ -35,10 +33,9 @@ use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
 };
-use crate::block::BlockStateCodec;
-
 pub mod anvil;
 pub mod linear;
+pub mod pump;
 
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
@@ -70,36 +67,11 @@ impl Dirtiable for ChunkData {
     #[inline]
     fn mark_dirty(&self, flag: bool) {
         self.dirty.store(flag, Ordering::Relaxed);
-
-        if flag {
-            return;
-        }
-
-        // When marking chunk as clean, also clear all block entity dirty flags
-        if let Ok(block_entities) = self.block_entities.lock() {
-            for block_entity in block_entities.values() {
-                block_entity.clear_dirty();
-            }
-        }
     }
 
     #[inline]
     fn is_dirty(&self) -> bool {
-        // Check if chunk itself is dirty
-        if self.dirty.load(Ordering::Relaxed) {
-            return true;
-        }
-
-        // Also check if any block entities are dirty (e.g., inventory changes)
-        if let Ok(block_entities) = self.block_entities.lock() {
-            for block_entity in block_entities.values() {
-                if block_entity.is_dirty() {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.dirty.load(Ordering::Relaxed)
     }
 }
 
@@ -108,8 +80,9 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+        let chunk_data =
+            pumpkin_nbt::from_bytes_unnamed::<ChunkNbt>(std::io::Cursor::new(chunk_data))
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
@@ -117,40 +90,44 @@ impl ChunkData {
                 position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
-        let (block_lights, sky_lights, block_palettes, biome_palettes) = chunk_data
+        let min_y_section = chunk_data.min_y_section;
+        let max_y_section = chunk_data
             .sections
-            .into_iter()
-            .map(|section| {
-                // When loading light data, missing data should default to 0 (no light)
-                let block_light = section
-                    .block_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full);
-                let sky_light = section
-                    .sky_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full);
+            .iter()
+            .map(|s| s.y)
+            .max()
+            .unwrap_or(min_y_section as i8);
 
-                // Convert NBT to Palettes
-                let block_palette = section
-                    .block_states
-                    .map(BlockPalette::from_disk_nbt)
-                    .unwrap_or_default();
-                let biome_palette = section
-                    .biomes
-                    .map(BiomePalette::from_disk_nbt)
-                    .unwrap_or_default();
+        let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
+        let mut block_lights = vec![LightContainer::Empty(0); section_count];
+        let mut sky_lights = vec![LightContainer::Empty(0); section_count];
+        let mut block_palettes = vec![BlockPalette::default(); section_count];
+        let mut biome_palettes = vec![BiomePalette::default(); section_count];
 
-                (block_light, sky_light, block_palette, biome_palette)
-            })
-            .fold(
-                (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
-                |(mut bl, mut sl, mut bp, mut bip), (b_l, s_l, b_p, bi_p)| {
-                    bl.push(b_l);
-                    sl.push(s_l);
-                    bp.push(b_p);
-                    bip.push(bi_p);
-                    (bl, sl, bp, bip)
-                },
-            );
+        for section in chunk_data.sections {
+            let index = (section.y as i32 - min_y_section) as usize;
+            if index >= section_count {
+                continue;
+            }
+
+            // When loading light data, missing data should default to 0 (no light)
+            block_lights[index] = section
+                .block_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+            sky_lights[index] = section
+                .sky_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+
+            // Convert NBT to Palettes
+            block_palettes[index] = section
+                .block_states
+                .map(BlockPalette::from_disk_nbt)
+                .unwrap_or_default();
+            biome_palettes[index] = section
+                .biomes
+                .map(BiomePalette::from_disk_nbt)
+                .unwrap_or_default();
+        }
 
         // Assemble the LightEngine
         let light_engine = ChunkLight {
@@ -160,11 +137,13 @@ impl ChunkData {
 
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
-        let random_tick_sections = ChunkSections::build_random_tick_sections_cache(&block_palettes);
+        let (random_tick_sections, randomly_ticking_mask) =
+            ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
             count: block_palettes.len(),
             block_sections: RwLock::new(block_palettes.into_boxed_slice()),
             random_tick_sections: RwLock::new(random_tick_sections),
+            randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
             min_y,
         };
@@ -177,12 +156,14 @@ impl ChunkData {
             dirty: AtomicBool::new(false),
             block_ticks: ChunkTickScheduler::from_iter(chunk_data.block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(chunk_data.fluid_ticks),
-            block_entities: {
+            pending_block_entities: {
                 let mut block_entities = FxHashMap::default();
                 for nbt in chunk_data.block_entities {
-                    let block_entity = block_entity_from_nbt(&nbt);
-                    if let Some(block_entity) = block_entity {
-                        block_entities.insert(block_entity.get_position(), block_entity);
+                    if let Some(x) = nbt.get_int("x")
+                        && let Some(y) = nbt.get_int("y")
+                        && let Some(z) = nbt.get_int("z")
+                    {
+                        block_entities.insert(BlockPos::new(x, y, z), nbt);
                     }
                 }
                 std::sync::Mutex::new(block_entities)
@@ -190,6 +171,7 @@ impl ChunkData {
             light_engine: std::sync::Mutex::new(light_engine),
             light_populated: AtomicBool::new(chunk_data.light_correct),
             status: chunk_data.status,
+            blending_data: None,
         })
     }
 
@@ -198,76 +180,53 @@ impl ChunkData {
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        let sections = {
-            let light_lock = self.light_engine.lock().unwrap();
-            let block_lock = self.section.block_sections.read().unwrap();
-            let biome_lock = self.section.biome_sections.read().unwrap();
-            let min_section_y = (self.section.min_y >> 4) as i8;
-
-            (0..self.section.count)
-                .map(|i| ChunkSectionNBT {
-                    y: i as i8 + min_section_y,
-                    block_states: Some(block_lock[i].to_disk_nbt()),
-                    biomes: Some(biome_lock[i].to_disk_nbt()),
-
-                    block_light: match light_lock.block_light.get(i) {
-                        Some(LightContainer::Empty(default)) if *default == 0 => None,
-                        Some(LightContainer::Empty(default)) => {
-                            let value = (*default << 4) | *default;
-                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
-                        }
-                        Some(LightContainer::Full(data)) => Some(data.clone()),
-                        None => None,
-                    },
-                    sky_light: match light_lock.sky_light.get(i) {
-                        Some(LightContainer::Empty(default)) if *default == 0 => None,
-                        Some(LightContainer::Empty(default)) => {
-                            let value = (*default << 4) | *default;
-                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
-                        }
-                        Some(LightContainer::Full(data)) => Some(data.clone()),
-                        None => None,
-                    },
-                })
-                .collect::<Vec<_>>()
-        };
-
-        // Lock and clone heightmaps
-        let heightmaps = self.heightmap.lock().unwrap().clone();
-
-        // Lock and clone entities
-        let entities_to_serialize = {
-            let entities_guard = self.block_entities.lock().unwrap();
+        let block_entities_nbt = {
+            let entities_guard = self.pending_block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
 
-        let block_entities_nbt = join_all(entities_to_serialize.into_iter().map(
-            |block_entity| async move {
-                let mut nbt = NbtCompound::new();
-                block_entity.write_internal(&mut nbt).await;
-                nbt
-            },
-        ))
-        .await;
+        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+            match light {
+                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                _ => None,
+            }
+        }
 
-        // Build the final NBT
-        let nbt = ChunkNbt {
+        let light_lock = self.light_engine.lock().unwrap();
+        let heightmap_lock = self.heightmap.lock().unwrap();
+        let block_lock = self.section.block_sections.read().unwrap();
+        let biome_lock = self.section.biome_sections.read().unwrap();
+
+        let min_section_y = (self.section.min_y >> 4) as i8;
+
+        let sections = (0..self.section.count)
+            .map(|i| ChunkSectionNbtRef {
+                y: i as i8 + min_section_y,
+                block_states: Some(block_lock[i].to_disk_nbt()),
+                biomes: Some(biome_lock[i].to_disk_nbt()),
+                block_light: extract_light_ref(light_lock.block_light.get(i)),
+                sky_light: extract_light_ref(light_lock.sky_light.get(i)),
+            })
+            .collect::<Vec<_>>();
+
+        let nbt_ref = ChunkNbtRef {
             data_version: WORLD_DATA_VERSION,
             x_pos: self.x,
             z_pos: self.z,
             min_y_section: section_coords::block_to_section(self.section.min_y),
-            status: self.status,
-            heightmaps,
+            status: &self.status,
+            heightmaps: &heightmap_lock,
             sections,
-            block_ticks: self.block_ticks.to_vec(),
-            fluid_ticks: self.fluid_ticks.to_vec(),
-            block_entities: block_entities_nbt,
+            block_ticks: &self.block_ticks.to_vec(),
+            fluid_ticks: &self.fluid_ticks.to_vec(),
+            block_entities: &block_entities_nbt,
             light_correct: is_light_correct,
         };
 
         let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
+        pumpkin_nbt::to_bytes_unnamed(&nbt_ref, &mut result)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+
         Ok(result.into())
     }
 }
@@ -315,8 +274,9 @@ impl ChunkEntityData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_entity_data = pumpkin_nbt::from_bytes::<EntityNbt>(Cursor::new(chunk_data))
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+        let chunk_entity_data =
+            pumpkin_nbt::from_bytes_unnamed::<EntityNbt>(std::io::Cursor::new(chunk_data))
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x
             || chunk_entity_data.position[1] != position.y
@@ -375,7 +335,7 @@ impl ChunkEntityData {
         };
 
         let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
+        pumpkin_nbt::to_bytes_unnamed(&nbt, &mut result)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
         Ok(result.into())
     }
@@ -395,6 +355,20 @@ struct ChunkSectionNBT {
     y: i8,
 }
 
+#[derive(Serialize)]
+struct ChunkSectionNbtRef<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_states: Option<ChunkSectionBlockStates>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    biomes: Option<ChunkSectionBiomes>,
+    #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
+    block_light: Option<&'a [u8]>,
+    #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
+    sky_light: Option<&'a [u8]>,
+    #[serde(rename = "Y")]
+    y: i8,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChunkSectionBiomes {
     #[serde(
@@ -402,15 +376,7 @@ pub struct ChunkSectionBiomes {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBiomeEntry>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-// NOTE: Change not documented in the wiki; biome palettes are directly just the name now
-#[serde(rename_all = "PascalCase", transparent)]
-pub struct PaletteBiomeEntry {
-    /// Biome name
-    pub name: String,
+    pub(crate) palette: Box<[u8]>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -420,7 +386,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<BlockStateCodec>,
+    pub(crate) palette: Box<[u16]>,
 }
 
 #[derive(Debug, Clone)]
@@ -524,6 +490,30 @@ struct ChunkNbt {
     fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
     #[serde(rename = "block_entities")]
     block_entities: Vec<NbtCompound>,
+    #[serde(rename = "isLightOn", default)]
+    light_correct: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ChunkNbtRef<'a> {
+    data_version: i32,
+    #[serde(rename = "xPos")]
+    x_pos: i32,
+    #[serde(rename = "zPos")]
+    z_pos: i32,
+    #[serde(rename = "yPos")]
+    min_y_section: i32,
+    status: &'a ChunkStatus,
+    #[serde(rename = "sections")]
+    sections: Vec<ChunkSectionNbtRef<'a>>,
+    heightmaps: &'a ChunkHeightmaps,
+    #[serde(rename = "block_ticks")]
+    block_ticks: &'a [ScheduledTick<&'static Block>],
+    #[serde(rename = "fluid_ticks")]
+    fluid_ticks: &'a [ScheduledTick<&'static Fluid>],
+    #[serde(rename = "block_entities")]
+    block_entities: &'a [NbtCompound],
     #[serde(rename = "isLightOn", default)]
     light_correct: bool,
 }

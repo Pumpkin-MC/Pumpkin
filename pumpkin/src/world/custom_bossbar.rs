@@ -292,8 +292,9 @@ impl CustomBossbars {
                 player
                     .update_bossbar_style(
                         &bossbar.bossbar_data.uuid,
-                        bossbar.bossbar_data.color.clone(),
-                        bossbar.bossbar_data.division.clone(),
+                        bossbar.bossbar_data.color,
+                        bossbar.bossbar_data.division,
+                        bossbar.bossbar_data.flags,
                     )
                     .await;
             }
@@ -331,8 +332,9 @@ impl CustomBossbars {
                 player
                     .update_bossbar_style(
                         &bossbar.bossbar_data.uuid,
-                        bossbar.bossbar_data.color.clone(),
-                        bossbar.bossbar_data.division.clone(),
+                        bossbar.bossbar_data.color,
+                        bossbar.bossbar_data.division,
+                        bossbar.bossbar_data.flags,
                     )
                     .await;
             }

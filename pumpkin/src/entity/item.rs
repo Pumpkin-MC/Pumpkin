@@ -36,14 +36,12 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
-    pub async fn new(entity: Entity, item_stack: ItemStack) -> Self {
-        entity
-            .set_velocity(Vector3::new(
-                rand::random::<f64>().mul_add(0.2, -0.1),
-                0.2,
-                rand::random::<f64>().mul_add(0.2, -0.1),
-            ))
-            .await;
+    pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
+        entity.velocity.store(Vector3::new(
+            rand::random::<f64>().mul_add(0.2, -0.1),
+            0.2,
+            rand::random::<f64>().mul_add(0.2, -0.1),
+        ));
         entity.yaw.store(rand::random::<f32>() * 360.0);
 
         // Set fire immunity for certain items
@@ -64,13 +62,13 @@ impl ItemEntity {
         }
     }
 
-    pub async fn new_with_velocity(
+    pub fn new_with_velocity(
         entity: Entity,
         item_stack: ItemStack,
         velocity: Vector3<f64>,
         pickup_delay: u8,
     ) -> Self {
-        entity.set_velocity(velocity).await;
+        entity.velocity.store(velocity);
         entity.yaw.store(rand::random::<f32>() * 360.0);
 
         // Set fire immunity for certain items
@@ -127,9 +125,22 @@ impl ItemEntity {
     }
 
     async fn try_merge_with(&self, other: &Self) {
-        let self_stack = self.item_stack.lock().await;
+        // Always lock in entity_id order to prevent deadlock when two
+        // items try to merge with each other concurrently.
+        let (low, high) = if self.entity.entity_id < other.entity.entity_id {
+            (self, other)
+        } else {
+            (other, self)
+        };
 
-        let other_stack = other.item_stack.lock().await;
+        let low_stack = low.item_stack.lock().await;
+        let high_stack = high.item_stack.lock().await;
+
+        let (self_stack, other_stack) = if self.entity.entity_id < other.entity.entity_id {
+            (low_stack, high_stack)
+        } else {
+            (high_stack, low_stack)
+        };
 
         if !self_stack.are_equal(&other_stack)
             || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
@@ -229,7 +240,7 @@ impl ItemEntity {
         velo
     }
 
-    async fn update_no_clip_and_push_out(&self) {
+    fn update_no_clip_and_push_out(&self) {
         let entity = &self.entity;
         let pos = entity.pos.load();
         let bounding_box = entity.bounding_box.load();
@@ -237,19 +248,16 @@ impl ItemEntity {
         let no_clip = !entity
             .world
             .load()
-            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-            .await;
+            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7));
 
         entity.no_clip.store(no_clip, Ordering::Relaxed);
 
         if no_clip {
-            entity
-                .push_out_of_blocks(Vector3::new(
-                    pos.x,
-                    f64::midpoint(bounding_box.min.y, bounding_box.max.y),
-                    pos.z,
-                ))
-                .await;
+            entity.push_out_of_blocks(Vector3::new(
+                pos.x,
+                f64::midpoint(bounding_box.min.y, bounding_box.max.y),
+                pos.z,
+            ));
         }
     }
 
@@ -271,15 +279,15 @@ impl ItemEntity {
         Some(tick_move)
     }
 
-    async fn move_and_apply_friction(
-        &self,
-        caller: &Arc<dyn EntityBase>,
-        server: &Server,
+    async fn move_and_apply_friction<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
+        server: &'a Server,
         move_velo: Vector3<f64>,
     ) {
         let entity = &self.entity;
 
-        entity.move_entity(caller.clone(), move_velo).await;
+        entity.move_entity(caller, move_velo).await;
         entity.tick_block_collisions(caller, server).await;
 
         let mut friction = 0.98;
@@ -287,7 +295,7 @@ impl ItemEntity {
 
         let mut velo = entity.velocity.load();
         if on_ground {
-            let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
+            let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).1;
             friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
         }
 
@@ -332,9 +340,9 @@ impl ItemEntity {
         true
     }
 
-    async fn sync_motion_if_dirty(
-        &self,
-        caller: &Arc<dyn EntityBase>,
+    async fn sync_motion_if_dirty<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
         original_velo: Vector3<f64>,
     ) {
         let entity = &self.entity;
@@ -347,8 +355,8 @@ impl ItemEntity {
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
 
         if velocity_dirty {
-            entity.send_pos_rot().await;
-            entity.send_velocity().await;
+            entity.send_pos_rot();
+            entity.send_velocity();
         }
     }
 }
@@ -358,7 +366,7 @@ impl NBTStorage for ItemEntity {}
 impl EntityBase for ItemEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -370,7 +378,7 @@ impl EntityBase for ItemEntity {
                 .velocity
                 .store(self.apply_fluid_drag_or_gravity(original_velo));
 
-            self.update_no_clip_and_push_out().await;
+            self.update_no_clip_and_push_out();
 
             let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
@@ -379,25 +387,23 @@ impl EntityBase for ItemEntity {
             };
 
             if tick_move {
-                self.move_and_apply_friction(&caller, server, move_velo)
+                self.move_and_apply_friction(caller, server, move_velo)
                     .await;
             }
 
             if self.process_age_and_merge().await {
-                self.sync_motion_if_dirty(&caller, original_velo).await;
+                self.sync_motion_if_dirty(caller, original_velo).await;
             }
         })
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
-            self.entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
-                    &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-                )])
-                .await;
+            self.entity.send_meta_data(&[Metadata::new(
+                TrackedData::ITEM,
+                MetaDataType::ITEM_STACK,
+                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            )]);
         })
     }
 
@@ -419,7 +425,6 @@ impl EntityBase for ItemEntity {
                 return false;
             }
 
-            // Thread safe damage application
             loop {
                 let current = self.health.load(Relaxed);
                 let new = current - amount;
@@ -446,20 +451,26 @@ impl EntityBase for ItemEntity {
                 return;
             }
 
-            if player
-                .inventory
-                .insert_stack_anywhere(&mut *self.item_stack.lock().await)
-                .await
-                || player.is_creative()
-            {
+            let inserted = {
+                let mut stack = self.item_stack.lock().await;
+                player.inventory.insert_stack_anywhere(&mut stack).await
+            };
+
+            if inserted || player.is_creative() {
+                let (item_count, is_empty) = {
+                    let stack = self.item_stack.lock().await;
+                    (stack.item_count, stack.is_empty())
+                };
+
                 player
                     .client
                     .enqueue_packet(&CTakeItemEntity::new(
                         self.entity.entity_id.into(),
                         player.entity_id().into(),
-                        self.item_stack.lock().await.item_count.into(),
+                        item_count.into(),
                     ))
                     .await;
+
                 player
                     .current_screen_handler
                     .lock()
@@ -468,10 +479,10 @@ impl EntityBase for ItemEntity {
                     .await
                     .send_content_updates()
                     .await;
-                if self.item_stack.lock().await.is_empty() {
+
+                if is_empty {
                     self.entity.remove().await;
                 } else {
-                    // Update entity
                     self.init_data_tracker().await;
                 }
             }
@@ -495,6 +506,10 @@ impl EntityBase for ItemEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

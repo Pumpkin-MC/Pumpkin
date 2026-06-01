@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use crate::entity::mob::SunSensitive;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, NBTStorage,
     mob::{Mob, MobEntity},
 };
 
@@ -12,13 +11,13 @@ pub struct DrownedEntity {
 }
 
 impl DrownedEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = ZombieEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = ZombieEntityBase::new(entity);
         let zombie = Self { entity };
         let mob_arc = Arc::new(zombie);
         // Fix duplicated since already in ZombieEntity::new()
         {
-            //let mut target_selector = mob_arc.entity.mob_entity.target_selector.lock().await;
+            //let mut target_selector = mob_arc.entity.mob_entity.target_selector.lock().unwrap();
 
             // TODO
             // target_selector.add_goal(
@@ -41,10 +40,4 @@ impl Mob for DrownedEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }
-
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        self.sun_sensitive_tick()
-    }
 }
-
-impl SunSensitive for DrownedEntity {}

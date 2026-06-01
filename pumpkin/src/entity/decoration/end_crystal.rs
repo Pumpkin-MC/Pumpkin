@@ -21,14 +21,12 @@ impl EndCrystalEntity {
 }
 
 impl EndCrystalEntity {
-    pub async fn set_show_bottom(&self, show_bottom: bool) {
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::SHOW_BOTTOM,
-                MetaDataType::BOOLEAN,
-                show_bottom,
-            )])
-            .await;
+    pub fn set_show_bottom(&self, show_bottom: bool) {
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::SHOW_BOTTOM,
+            MetaDataType::BOOLEAN,
+            show_bottom,
+        )]);
     }
 }
 
@@ -68,6 +66,10 @@ impl EntityBase for EndCrystalEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

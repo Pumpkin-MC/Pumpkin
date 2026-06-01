@@ -5,8 +5,8 @@ use crate::crash::CrashReport;
 use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClient;
-use crate::net::java::{JavaClient, PacketHandlerResult};
-use crate::net::{ClientPlatform, DisconnectReason};
+use crate::net::java::JavaClient;
+use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
@@ -220,28 +220,13 @@ impl PumpkinServer {
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        if server.advanced_config.commands.use_console
-            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
-        {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
-            } else {
-                if server.advanced_config.commands.use_tty {
-                    warn!(
-                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
-                    );
-                }
-                setup_stdin_console(server.clone());
-            }
-        }
-
         if rcon.enabled {
             warn!(
                 "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
             );
             let rcon_server = server.clone();
             server.spawn_task(async move {
-                RCONServer::run(&rcon, rcon_server).await.unwrap();
+                RCONServer::run(&rcon, rcon_server).await;
             });
         }
 
@@ -324,7 +309,7 @@ impl PumpkinServer {
         }
     }
 
-    pub async fn init_plugins(&self) {
+    pub async fn init_plugins(&self) -> std::time::Duration {
         self.server
             .plugin_manager
             .set_self_ref(self.server.plugin_manager.clone())
@@ -333,8 +318,12 @@ impl PumpkinServer {
             .plugin_manager
             .set_server(self.server.clone())
             .await;
-        if let Err(err) = self.server.plugin_manager.load_plugins().await {
-            error!("{err}");
+        match self.server.plugin_manager.load_plugins().await {
+            Ok(duration) => duration,
+            Err(err) => {
+                error!("{err}");
+                std::time::Duration::ZERO
+            }
         }
     }
 
@@ -347,6 +336,21 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
+        if self.server.advanced_config.commands.use_console
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+        {
+            if let Some(rl) = wrapper.take_readline() {
+                setup_console(rl, self.server.clone());
+            } else {
+                if self.server.advanced_config.commands.use_tty {
+                    warn!(
+                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                    );
+                }
+                setup_stdin_console(self.server.clone());
+            }
+        }
+
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
@@ -414,7 +418,7 @@ impl PumpkinServer {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     pub async fn unified_listener_task(
         &self,
         master_client_id_counter: &mut u64,
@@ -490,9 +494,7 @@ impl PumpkinServer {
             udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
                 match udp_result {
                     Ok((len, client_addr)) => {
-                        if len == 0 {
-                            warn!("Received empty UDP packet from {client_addr}");
-                        } else {
+                        if len > 0 {
                             let id = udp_buf[0];
                             let is_online = id & 128 != 0;
 
@@ -500,39 +502,72 @@ impl PumpkinServer {
                                 let be_clients = bedrock_clients.clone();
                                 let mut clients_guard = bedrock_clients.lock().await;
 
-                                if let Some(client) = clients_guard.get(&client_addr) {
-                                    let client = client.clone();
-                                    let reader = Cursor::new(udp_buf[..len].to_vec());
-                                    let server = self.server.clone();
-
-                                    tasks.spawn(async move {
-                                        client.process_packet(&server, reader).await;
-                                    });
-                                } else if let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
+                                let mut is_new = false;
+                                let client = clients_guard.entry(client_addr).or_insert_with(|| {
+                                    is_new = true;
                                     *master_client_id_counter += 1;
 
-                                    let mut platform = BedrockClient::new(self.udp_socket.clone().unwrap(), client_addr, be_clients);
-                                    platform.handle_connection_request(packet).await;
-                                    platform.start_outgoing_packet_task();
-
-                                    clients_guard.insert(client_addr,
-                                    Arc::new(
-                                        platform
+                                    let new_client = Arc::new(BedrockClient::new(
+                                        self.udp_socket.as_ref().unwrap().clone(),
+                                        client_addr,
+                                        be_clients
                                     ));
-                                }
-                            } else {
-                                // Please keep the function as simple as possible!
-                                // We dont care about the result, the client just resends the packet
-                                // Since offline packets are very small we dont need to move and clone the data
-                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, self.udp_socket.as_ref().unwrap()).await;
-                            }
 
+                                    new_client.start_outgoing_packet_task();
+                                    new_client
+                                }).clone();
+
+                                if is_new {
+                                    let server_clone = self.server.clone();
+                                    let client_clone = client.clone();
+                                    tasks.spawn(async move {
+                                        let login_result = client_clone.handle_login_sequence(&server_clone).await;
+
+                                        match login_result {
+                                            PacketHandlerResult::Stop => {
+                                                client_clone.close().await;
+                                            }
+                                            PacketHandlerResult::ReadyToPlay(profile, config) => {
+                                                if let Some((player, _world)) = server_clone
+                                                    .add_player(ClientPlatform::Bedrock(client_clone.clone()), profile, Some(config))
+                                                    .await
+                                                {
+                                                    *client_clone.player.lock().await = Some(player.clone());
+
+                                                    client_clone.progress_player_packets(&player, &server_clone).await;
+
+                                                    client_clone.close().await;
+                                                    player.remove().await;
+                                                    server_clone.remove_player(&player).await;
+                                                    if let Err(e) = server_clone.player_data_storage
+                                                        .handle_player_leave(&player)
+                                                        .await {
+                                                            error!("Failed to save player data on disconnect: {e}");
+                                                        }
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+
+                                let packet_bytes = udp_buf[..len].to_vec();
+                                let server = self.server.clone();
+
+                                tasks.spawn(async move {
+                                    client.process_packet(&server, packet_bytes.into()).await;
+                                });
+                            } else if let Some(sock) = self.udp_socket.as_ref() {
+                                let _ = BedrockClient::handle_offline_packet(
+                                    &self.server,
+                                    id,
+                                    &mut Cursor::new(&udp_buf[1..len]),
+                                    client_addr,
+                                    sock
+                                ).await;
+                            }
                         }
                     }
-                    // Since all packets go over this match statement, there should be not waiting
-                    Err(e) => {
-                        error!("{e}");
-                    }
+                    Err(e) => error!("UDP socket error: {e}"),
                 }
             },
 

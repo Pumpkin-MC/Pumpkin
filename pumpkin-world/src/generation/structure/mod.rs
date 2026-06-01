@@ -13,8 +13,9 @@ use crate::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
             desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
-            nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
-            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            jungle_temple::JungleTempleGenerator, nether_fortress::NetherFortressGenerator,
+            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
+            swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -60,6 +61,7 @@ pub fn try_generate_structure(
         }
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
+        StructureKeys::JunglePyramid => JungleTempleGenerator.get_structure_position(context),
         // TODO: Implement other structure types
         _ => None,
     };
@@ -124,6 +126,7 @@ pub fn lazily_generate_structure(
         }
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
+        StructureKeys::JunglePyramid => JungleTempleGenerator.get_structure_position(context),
         // TODO: Implement other structure types
         _ => None,
     };

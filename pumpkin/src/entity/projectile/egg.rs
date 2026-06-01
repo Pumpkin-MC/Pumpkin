@@ -21,6 +21,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 const MAX_EGG_HATCH_EVENT_SPAWNS: usize = 16;
+const GRAVITY: f64 = 0.03;
 
 pub struct EggEntity {
     pub thrown: ThrownItemEntity,
@@ -28,14 +29,15 @@ pub struct EggEntity {
 }
 
 impl EggEntity {
-    pub async fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
         // Default velocity slightly upward for thrown egg
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
+        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
             owner_id: None,
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity: GRAVITY,
         };
 
         Self {
@@ -44,13 +46,10 @@ impl EggEntity {
         }
     }
 
-    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
+    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
         // Default slight upward velocity
-        thrown
-            .entity
-            .set_velocity(Vector3::new(0.0, 0.1, 0.0))
-            .await;
+        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
         Self {
             thrown,
@@ -74,19 +73,17 @@ impl EntityBase for EggEntity {
             let stack = self.item_stack.read().await;
 
             // Sync the item stack so the client renders the correct color/variant
-            entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::ITEM_STACK,
-                    MetaDataType::ITEM_STACK,
-                    &ItemStackSerializer::from(stack.clone()),
-                )])
-                .await;
+            entity.send_meta_data(&[Metadata::new(
+                TrackedData::ITEM_STACK,
+                MetaDataType::ITEM_STACK,
+                &ItemStackSerializer::from(stack.clone()),
+            )]);
         })
     }
 
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move { self.thrown.process_tick(caller, server).await })
@@ -114,9 +111,7 @@ impl EntityBase for EggEntity {
             let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));
 
             // Play egg break particles
-            world
-                .send_entity_status(self.get_entity(), EntityStatus::Death)
-                .await;
+            world.send_entity_status(self.get_entity(), EntityStatus::Death);
 
             // Decide spawn count per probabilities:
             // r == 0 -> spawn 4 (1/256)
@@ -154,7 +149,7 @@ impl EntityBase for EggEntity {
                 let spawn_pos_clone = spawn_pos;
 
                 // Read the stack stored in set_item_stack
-                //let stack = self.item_stack.lock().await;
+                //let stack = self.item_stack.lock().unwrap();
 
                 // TODO: Map the item ID to the chicken variant
                 // let variant = match stack.item.id {
@@ -166,8 +161,7 @@ impl EntityBase for EggEntity {
                 tokio::spawn(async move {
                     for _ in 0..to_spawn {
                         let mob =
-                            from_type(hatching_type, spawn_pos_clone, &world_clone, Uuid::new_v4())
-                                .await;
+                            from_type(hatching_type, spawn_pos_clone, &world_clone, Uuid::new_v4());
 
                         let yaw = rand::random::<f32>() * 360.0;
                         let new_entity = mob.get_entity();
@@ -180,5 +174,9 @@ impl EntityBase for EggEntity {
                 });
             }
         })
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

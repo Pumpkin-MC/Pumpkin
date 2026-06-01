@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_SET_PLAYER_TEAM;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
 use crate::{
     ClientPacket,
@@ -35,14 +35,14 @@ pub struct CSetPlayerTeam<'a> {
     pub team_name: String,
     pub method: TeamMethod,
     pub parameters: Option<TeamParameters<'a>>,
-    pub players: Vec<String>,
+    pub players: Box<[String]>,
 }
 
 impl ClientPacket for CSetPlayerTeam<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_string(&self.team_name)?;
         write.write_i8(self.method as i8)?;

@@ -11,7 +11,7 @@ use std::str::FromStr;
 /// It internally uses a cursor to read them, which is
 /// very important to determine the location of the cause
 /// of a syntax error arising from this parser.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct StringReader<'a> {
     string: Cow<'a, str>,
     byte_cursor: usize,
@@ -251,7 +251,7 @@ impl<'a> StringReader<'a> {
     }
 
     /// Reads an unquoted string (not enclosed in quotes)
-    pub fn read_unquoted_string(&mut self) -> Result<String, CommandSyntaxError> {
+    pub fn read_unquoted_string(&mut self) -> String {
         let start = self.byte_cursor;
         while let Some(c) = self.peek() {
             if Self::is_allowed_in_unquoted_string(c) {
@@ -260,7 +260,7 @@ impl<'a> StringReader<'a> {
                 break;
             }
         }
-        Ok(self.string[start..self.byte_cursor].to_string())
+        self.string[start..self.byte_cursor].to_string()
     }
 
     /// Reads any string, whether it be quoted or unquoted.
@@ -272,7 +272,7 @@ impl<'a> StringReader<'a> {
             self.skip();
             self.read_string_until(next)
         } else {
-            self.read_unquoted_string()
+            Ok(self.read_unquoted_string())
         }
     }
 
@@ -328,6 +328,13 @@ impl<'a> StringReader<'a> {
         }
     }
 
+    /// Keeps skipping characters in the reader until a space or the end of the string is encountered.
+    pub fn read_until_space(&mut self) {
+        while !matches!(self.peek(), None | Some(' ')) {
+            self.skip();
+        }
+    }
+
     /// Converts this reader into a `'static` form, which
     /// is useful for snapshotting the reader.
     #[must_use]
@@ -374,9 +381,9 @@ mod test {
         assert!(reader.can_read_chars(7));
         assert!(!reader.can_read_chars(8));
 
-        reader.expect('l').unwrap();
+        reader.expect('l').expect("Expected 'l'");
         reader.skip();
-        reader.expect('o').unwrap();
+        reader.expect('o').expect("Expected 'o'");
 
         // Note: 🎃 carries 4 bytes in UTF-8
         assert!(reader.can_read_bytes(6));
@@ -415,10 +422,10 @@ mod test {
         assert_eq!(reader.read_long(), Ok(7890123456));
         reader.skip_whitespace();
 
-        assert!((reader.read_float().unwrap() - 1.233f32).abs() < 1e-07);
+        assert!((reader.read_float().expect("Expected float") - 1.233f32).abs() < 1e-07);
         reader.skip_whitespace();
 
-        assert!((reader.read_double().unwrap() - 1.592394582f64).abs() < 1e-15);
+        assert!((reader.read_double().expect("Expected double") - 1.592394582f64).abs() < 1e-15);
         reader.skip_whitespace();
 
         assert_eq!(reader.read_bool(), Ok(false));
@@ -433,7 +440,7 @@ mod test {
 
         assert_eq!(reader.read_quoted_string(), Ok("apple".to_string()));
         reader.skip_whitespace();
-        assert_eq!(reader.read_unquoted_string(), Ok("banana".to_string()));
+        assert_eq!(reader.read_unquoted_string(), "banana".to_string());
         reader.skip_whitespace();
 
         assert_eq!(reader.read_string(), Ok("orange".to_string()));

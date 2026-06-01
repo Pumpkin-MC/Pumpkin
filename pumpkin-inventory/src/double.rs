@@ -1,15 +1,40 @@
+//! Double inventory implementation.
+//!
+//! This module provides a composite inventory that combines two inventories
+//! into one. This is used for large containers like double chests, which
+//! consist of two single chest inventories viewed as a single 54-slot inventory.
+//!
+//! The first inventory's slots come first, followed by the second inventory's
+//! slots. Operations are delegated to the appropriate underlying inventory
+//! based on the slot index.
+
 use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 use tokio::sync::Mutex;
 
+/// A composite inventory combining two inventories.
+///
+/// Used for double chests and other large containers that span
+/// multiple block entities. The combined inventory size is the sum
+/// of both inventories' sizes.
 pub struct DoubleInventory {
+    /// The first inventory (lower slot indices, 0 to first.size()-1).
     first: Arc<dyn Inventory>,
+    /// The second inventory (higher slot indices, `first.size()` to total-1).
     second: Arc<dyn Inventory>,
 }
 
 impl DoubleInventory {
+    /// Creates a new double inventory.
+    ///
+    /// # Arguments
+    /// - `first` - The first inventory (lower slot indices)
+    /// - `second` - The second inventory (higher slot indices)
+    ///
+    /// # Returns
+    /// A shared reference to the new double inventory.
     pub fn new(first: Arc<dyn Inventory>, second: Arc<dyn Inventory>) -> Arc<Self> {
         Arc::new(Self { first, second })
     }
@@ -56,10 +81,6 @@ impl Inventory for DoubleInventory {
         })
     }
 
-    fn get_max_count_per_stack(&self) -> u8 {
-        self.first.get_max_count_per_stack()
-    }
-
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             if slot >= self.first.size() {
@@ -68,11 +89,6 @@ impl Inventory for DoubleInventory {
                 self.first.set_stack(slot, stack).await;
             }
         })
-    }
-
-    fn mark_dirty(&self) {
-        self.first.mark_dirty();
-        self.second.mark_dirty();
     }
 
     fn on_open(&self) -> InventoryFuture<'_, ()> {
@@ -87,6 +103,15 @@ impl Inventory for DoubleInventory {
             self.first.on_close().await;
             self.second.on_close().await;
         })
+    }
+
+    fn get_max_count_per_stack(&self) -> u8 {
+        self.first.get_max_count_per_stack()
+    }
+
+    fn mark_dirty(&self) {
+        self.first.mark_dirty();
+        self.second.mark_dirty();
     }
 
     fn is_valid_slot_for(&self, slot: usize, stack: &ItemStack) -> bool {

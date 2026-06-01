@@ -394,17 +394,15 @@ impl PoiStorage {
     }
 
     fn get_or_load_region(&mut self, rx: i32, rz: i32) -> &mut PoiRegion {
-        if !self.regions.contains_key(&(rx, rz)) {
-            let path = self.region_path(rx, rz);
-            let region = PoiRegion::load(&path).unwrap_or_else(|e| {
+        let path = self.region_path(rx, rz);
+        self.regions.entry((rx, rz)).or_insert_with(|| {
+            PoiRegion::load(&path).unwrap_or_else(|e| {
                 if path.exists() {
                     warn!("Failed to load POI region {}: {}", path.display(), e);
                 }
                 PoiRegion::new()
-            });
-            self.regions.insert((rx, rz), region);
-        }
-        self.regions.get_mut(&(rx, rz)).unwrap()
+            })
+        })
     }
 
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) {

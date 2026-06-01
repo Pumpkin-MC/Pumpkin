@@ -34,6 +34,7 @@ crossbeam.workspace = true
 
 sha2.workspace = true
 bitflags.workspace = true
+arc-swap.workspace = true
 
 dashmap.workspace = true
 
@@ -41,16 +42,17 @@ dashmap.workspace = true
 flate2.workspace = true
 lz4-java-wrc.workspace = true
 ruzstd.workspace = true
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 itertools.workspace = true
 enum_dispatch.workspace = true
+rayon.workspace = true
 
 # thread_local.workspace = true
 # lru.workspace = true
 
 tokio-util = { workspace = true, features = ["rt"] }
 rand.workspace = true
-num_cpus.workspace = true
 rustc-hash.workspace = true
 slotmap.workspace = true
 crossfire.workspace = true
@@ -77,8 +79,6 @@ harness = false
 name = "noise_router"
 harness = false
 
-[features]
-tokio_taskdump = []
 
 # [lints]
 # workspace = true

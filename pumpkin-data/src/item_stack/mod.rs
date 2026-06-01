@@ -2,7 +2,8 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
-    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
+    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut,
+    read_data,
 };
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
@@ -92,16 +93,54 @@ impl ItemStack {
         }
         None
     }
+    #[must_use]
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
-        let to_get_id = &T::get_enum();
-        for (id, component) in &mut self.patch {
-            if id == to_get_id {
-                return component
-                    .as_mut()
-                    .map(|component| get_mut::<T>(component.as_mut()));
+        let to_get_id = T::get_enum();
+        if let Some(index) = self.patch.iter().position(|(id, _)| *id == to_get_id) {
+            return self.patch[index]
+                .1
+                .as_mut()
+                .map(|component| get_mut::<T>(component.as_mut()));
+        }
+
+        // If not in patch, clone from item to patch and return mut
+        let mut cloned = None;
+        for (id, component) in self.item.components {
+            if *id == to_get_id {
+                cloned = Some((*id, Some(component.clone_dyn())));
+                break;
             }
         }
+        if let Some((id, component)) = cloned {
+            self.patch.push((id, component));
+            return self
+                .patch
+                .last_mut()
+                .unwrap()
+                .1
+                .as_mut()
+                .map(|c| get_mut::<T>(c.as_mut()));
+        }
         None
+    }
+
+    pub fn has_enchantments(&self) -> bool {
+        self.get_data_component::<EnchantmentsImpl>()
+            .is_some_and(|e| !e.enchantment.is_empty())
+    }
+
+    pub fn add_enchantment(&mut self, enchantment: &'static Enchantment, level: u16) {
+        if let Some(enchantments) = self.get_data_component_mut::<EnchantmentsImpl>() {
+            let mut new_vec = enchantments.enchantment.to_vec();
+            new_vec.push((enchantment, level as i32));
+            enchantments.enchantment = Cow::Owned(new_vec);
+        } else {
+            let enchantments = EnchantmentsImpl {
+                enchantment: Cow::Owned(vec![(enchantment, level as i32)]),
+            };
+            self.patch
+                .push((DataComponent::Enchantments, Some(Box::new(enchantments))));
+        }
     }
 
     pub const EMPTY: &'static Self = &Self {
@@ -110,6 +149,7 @@ impl ItemStack {
         patch: Vec::new(),
     };
 
+    #[must_use]
     pub fn split_off(&mut self, amount: u8) -> Self {
         let count = amount.min(self.item_count);
         let result = self.copy_with_count(count);
@@ -127,6 +167,11 @@ impl ItemStack {
     pub fn get_max_damage(&self) -> Option<i32> {
         self.get_data_component::<MaxDamageImpl>()
             .map(|value| value.max_damage)
+    }
+
+    #[must_use]
+    pub fn get_use_cooldown(&self) -> Option<&UseCooldownImpl> {
+        self.get_data_component::<UseCooldownImpl>()
     }
 
     #[must_use]
@@ -192,7 +237,7 @@ impl ItemStack {
     /// Core logic: apply Unbreaking chance with precomputed armor category and level.
     /// Extracted for use in damage_item where these values are hoisted outside the loop.
     /// Private to prevent incorrect usage; only call through damage_item.
-    fn should_apply_durability_damage_with(&self, is_armor: bool, unbreaking_level: i32) -> bool {
+    fn should_apply_durability_damage_with(is_armor: bool, unbreaking_level: i32) -> bool {
         if unbreaking_level <= 0 {
             return true;
         }
@@ -208,8 +253,8 @@ impl ItemStack {
 
     /// Apply durability damage to this item and return the outcome.
     /// Callers must check the return value to handle break broadcasts and item stack updates.
-    /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
-    /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
+    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
+    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
     /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
     #[must_use]
     pub fn damage_item(&mut self, amount: i32) -> DamageResult {
@@ -229,7 +274,7 @@ impl ItemStack {
         // TODO: Short-circuit once applied >= (max_damage - current_damage) to avoid
         // iterating the full amount for high-damage hits on high-durability items.
         for _ in 0..amount {
-            if self.should_apply_durability_damage_with(is_armor, unbreaking_level) {
+            if Self::should_apply_durability_damage_with(is_armor, unbreaking_level) {
                 applied += 1;
             }
         }
@@ -284,6 +329,20 @@ impl ItemStack {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.item_count == 0 || self.item.id == Item::AIR.id
+    }
+
+    pub fn set_custom_name(&mut self, name: String) {
+        use crate::data_component_impl::CustomNameImpl;
+        let component = Some(CustomNameImpl { name }.to_dyn());
+        if let Some(pos) = self
+            .patch
+            .iter()
+            .position(|(id, _)| *id == DataComponent::CustomName)
+        {
+            self.patch[pos].1 = component;
+        } else {
+            self.patch.push((DataComponent::CustomName, component));
+        }
     }
 
     #[must_use]

@@ -5,6 +5,7 @@ use pumpkin_util::{
     math::position::BlockPos,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
+use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod scheduler;
@@ -134,23 +135,36 @@ where
     where
         D: Deserializer<'de>,
     {
-        NbtCompound::deserialize(deserializer).map(|nbt| {
-            let x = nbt.get_int("x").unwrap();
-            let y = nbt.get_int("y").unwrap();
-            let z = nbt.get_int("z").unwrap();
-            let delay = nbt.get_int("t").unwrap() as u8;
-            let priority = TickPriority::try_from(nbt.get_int("p").unwrap()).unwrap();
-            let value = T::from_resource_location(
-                &ResourceLocation::from_str(nbt.get_string("i").unwrap()).unwrap(),
-            )
-            .unwrap();
+        let nbt = NbtCompound::deserialize(deserializer)?;
 
-            Self {
-                delay,
-                priority,
-                position: BlockPos::new(x, y, z),
-                value,
-            }
+        let get_int = |key| nbt.get_int(key).ok_or_else(|| D::Error::missing_field(key));
+        let get_str = |key| {
+            nbt.get_string(key)
+                .ok_or_else(|| D::Error::missing_field(key))
+        };
+
+        let x = get_int("x")?;
+        let y = get_int("y")?;
+        let z = get_int("z")?;
+
+        let delay = get_int("t")? as u8;
+
+        let priority = TickPriority::try_from(get_int("p")?)
+            .map_err(|_| D::Error::custom("Invalid tick priority"))?;
+
+        let res_loc_str = get_str("i")?;
+        let res_loc = ResourceLocation::from_str(res_loc_str).map_err(|e| {
+            D::Error::custom(format!("Invalid ResourceLocation '{res_loc_str}': {e}"))
+        })?;
+
+        let value = T::from_resource_location(&res_loc)
+            .ok_or_else(|| D::Error::custom(format!("Unknown tick type: {res_loc_str}")))?;
+
+        Ok(Self {
+            delay,
+            priority,
+            position: BlockPos::new(x, y, z),
+            value,
         })
     }
 }

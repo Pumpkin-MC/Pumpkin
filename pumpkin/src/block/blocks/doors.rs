@@ -37,7 +37,7 @@ use pumpkin_util::GameMode;
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
 async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, block_state) = world.get_block_and_state_id(block_pos).await;
+    let (block, block_state) = world.get_block_and_state_id(block_pos);
     let mut door_props = DoorProperties::from_state_id(block_state, block);
     door_props.open = !door_props.open;
 
@@ -47,18 +47,16 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
     };
     let other_pos = block_pos.offset(other_half.to_offset());
 
-    let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos).await;
+    let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
     let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
     other_door_props.open = door_props.open;
 
-    world
-        .play_block_sound_expect(
-            player,
-            get_sound(block, door_props.open),
-            SoundCategory::Blocks,
-            *block_pos,
-        )
-        .await;
+    world.play_block_sound_expect(
+        player,
+        get_sound(block, door_props.open),
+        SoundCategory::Blocks,
+        *block_pos,
+    );
 
     world
         .set_block_state(
@@ -114,24 +112,22 @@ async fn get_hinge(
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
-    let (left_block, left_state) = world.get_block_and_state(&left_pos).await;
+    let (left_block, left_state) = world.get_block_and_state(&left_pos);
     let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
-    let top_state = world.get_block_state(&top_facing).await;
+    let top_state = world.get_block_state(&top_facing);
     let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
-    let (right_block, right_state) = world.get_block_and_state(&right_pos).await;
+    let (right_block, right_state) = world.get_block_and_state(&right_pos);
     let top_right = top_pos.offset(facing.to_block_direction().to_offset());
-    let top_right_state = world.get_block_state(&top_right).await;
+    let top_right_state = world.get_block_state(&top_right);
 
     let has_left_door = world
         .get_block(&left_pos)
-        .await
         .has_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(left_state.id, left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
-        .await
         .has_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(right_state.id, right_block).half
             == DoubleBlockHalf::Lower;
@@ -184,8 +180,8 @@ impl BlockBehaviour for DoorBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -223,7 +219,7 @@ impl BlockBehaviour for DoorBlock {
                 DoubleBlockHalf::Lower => args.position.up(),
             };
 
-            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos).await;
+            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos);
             if neighbor_block_id != args.block.id {
                 args.world.update_neighbors(&other_half_pos, None).await;
                 return; // Neighbor is already gone or is a different block
@@ -244,7 +240,7 @@ impl BlockBehaviour for DoorBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let block_state = args.world.get_block_state(args.position).await;
+            let block_state = args.world.get_block_state(args.position);
             let mut door_props = DoorProperties::from_state_id(block_state.id, args.block);
 
             let other_half = match door_props.half {
@@ -252,7 +248,7 @@ impl BlockBehaviour for DoorBlock {
                 DoubleBlockHalf::Lower => BlockDirection::Up,
             };
             let other_pos = args.position.offset(other_half.to_offset());
-            let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
+            let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos);
 
             if other_block.id != args.block.id {
                 return;
@@ -271,13 +267,11 @@ impl BlockBehaviour for DoorBlock {
                     door_props.open = door_props.powered;
                     other_door_props.open = other_door_props.powered;
 
-                    args.world
-                        .play_block_sound(
-                            get_sound(args.block, powered),
-                            SoundCategory::Blocks,
-                            *args.position,
-                        )
-                        .await;
+                    args.world.play_block_sound(
+                        get_sound(args.block, powered),
+                        SoundCategory::Blocks,
+                        *args.position,
+                    );
                 }
 
                 args.world
@@ -309,7 +303,7 @@ impl BlockBehaviour for DoorBlock {
             {
                 if lv == DoubleBlockHalf::Lower
                     && args.direction == BlockDirection::Down
-                    && !can_place_at(args.world, args.position).await
+                    && !can_place_at(args.world, args.position)
                 {
                     return 0;
                 }
@@ -333,7 +327,7 @@ impl BlockBehaviour for DoorBlock {
                 return;
             }
 
-            let new_state_id = args.world.get_block_state_id(args.position).await;
+            let new_state_id = args.world.get_block_state_id(args.position);
             let new_block = Block::from_state_id(new_state_id);
             if new_block == &Block::AIR {
                 return;
@@ -356,10 +350,9 @@ impl BlockBehaviour for DoorBlock {
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    world.get_block_state(&block_pos.up()).await.replaceable()
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    world.get_block_state(&block_pos.up()).replaceable()
         && world
             .get_block_state(&block_pos.down())
-            .await
             .is_side_solid(BlockDirection::Up)
 }

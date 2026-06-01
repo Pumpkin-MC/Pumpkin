@@ -44,20 +44,24 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn handle_player_leave(&self, player: &Player) -> Result<(), PlayerDataError> {
+    pub async fn handle_player_leave(&self, player: &Arc<Player>) -> Result<(), PlayerDataError> {
         player
             .player_screen_handler
             .lock()
             .await
-            .on_closed(player)
+            .on_closed(player.as_ref())
             .await;
         player.on_handled_screen_closed().await;
 
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
 
+        let storage = self.storage.clone();
+        let uuid = player.gameprofile.id;
         // Save to disk
-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
+        tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
+            .await
+            .expect("Player data save panicked")?;
 
         Ok(())
     }
@@ -81,8 +85,14 @@ impl ServerPlayerData {
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt).await;
 
+                    let storage = self.storage.clone();
+                    let uuid = player.gameprofile.id;
                     // Save to disk periodically to prevent data loss on server crash
-                    if let Err(e) = self.storage.save_player_data(&player.gameprofile.id, nbt) {
+                    if let Err(e) =
+                        tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
+                            .await
+                            .expect("Player data periodic save panicked")
+                    {
                         error!(
                             "Failed to save player data for {}: {e}",
                             player.gameprofile.id,
@@ -128,8 +138,17 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub fn load_data(&self, uuid: &uuid::Uuid) -> Result<Option<NbtCompound>, PlayerDataError> {
-        match self.storage.load_player_data(uuid) {
+    pub async fn load_data(
+        &self,
+        uuid: &uuid::Uuid,
+    ) -> Result<Option<NbtCompound>, PlayerDataError> {
+        let storage = self.storage.clone();
+        let uuid = *uuid;
+        let result = tokio::task::spawn_blocking(move || storage.load_player_data(&uuid))
+            .await
+            .expect("Player data load panicked");
+
+        match result {
             Ok((should_load, data)) => {
                 if !should_load {
                     // No data to load, continue with default data
@@ -170,10 +189,16 @@ impl ServerPlayerData {
             return Ok(());
         }
 
-        let uuid = &player.gameprofile.id;
+        let uuid = player.gameprofile.id;
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
-        self.storage.save_player_data(uuid, nbt)
+
+        let storage = self.storage.clone();
+        tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
+            .await
+            .expect("Player data extract and save panicked")?;
+
+        Ok(())
     }
 }
 

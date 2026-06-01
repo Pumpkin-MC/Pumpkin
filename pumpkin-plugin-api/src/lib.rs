@@ -7,7 +7,7 @@
 //! # Quick start
 //!
 //! ```rust,ignore
-//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin};
+//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin, permissions::permissions};
 //!
 //! struct MyPlugin;
 //!
@@ -19,6 +19,8 @@
 //!             version: "0.1.0".into(),
 //!             authors: vec!["you".into()],
 //!             description: "An example plugin.".into(),
+//!             dependencies: vec![],
+//!             permissions: vec![permissions::NETWORK_DNS.into()],
 //!         }
 //!     }
 //! }
@@ -27,11 +29,18 @@
 //! ```
 
 use crate::{
-    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber, text::TextComponent,
+    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
+    scheduler::TASK_HANDLERS, text::TextComponent,
 };
 
 pub mod commands;
 pub mod events;
+pub mod forms;
+/// Constants for plugin permissions.
+///
+/// Use these in your `PluginMetadata` to request access to specific host features.
+pub mod permissions;
+pub mod scheduler;
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
@@ -40,10 +49,17 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
-    command as command_wit, common,
+    bedrock_packets, block_entity, boss_bar, command as command_wit, common,
     context::{Context, Server},
-    gui, permission, scoreboard, server, text, world,
+    entity,
+    entity_types::EntityType,
+    gui, i18n, java_dialogs, java_packets, particles, permission, player, scoreboard, server, text,
+    world,
 };
+
+pub mod java_dialog {
+    pub use crate::wit::pumpkin::plugin::java_dialogs::{ActionButton, DialogBody, DialogType};
+}
 
 pub mod logging;
 
@@ -51,18 +67,14 @@ pub mod logging;
 mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
-        path: "../pumpkin-plugin-wit/v0.1.0",
+        path: "../pumpkin-plugin-wit/v0.1",
         world: "plugin",
+        enable_method_chaining: true
     });
 
     use super::Component;
     export!(Component);
 }
-
-#[cfg(target_arch = "wasm32")]
-#[unsafe(link_section = "pumpkin:api-version")]
-#[used]
-static API_VERSION: [u8; 5] = *b"0.1.0";
 
 struct Component;
 
@@ -76,6 +88,10 @@ pub struct PluginMetadata {
     pub authors: Vec<String>,
     /// A short description of what the plugin does.
     pub description: String,
+    /// The list of plugin dependencies.
+    pub dependencies: Vec<String>,
+    /// The list of permissions requested by the plugin.
+    pub permissions: Vec<String>,
 }
 
 impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
@@ -87,6 +103,8 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
             version: metadata.version,
             authors: metadata.authors,
             description: metadata.description,
+            dependencies: metadata.dependencies,
+            permissions: metadata.permissions,
         }
     }
 }
@@ -124,13 +142,20 @@ impl wit::Guest for Component {
         args: command::ConsumedArgs,
     ) -> Result<i32, command::CommandError> {
         let handlers = COMMAND_HANDLERS.lock().unwrap();
-        if let Some(handler) = handlers.get(&command_id) {
-            handler.handle(sender, server, args)
-        } else {
-            Err(command::CommandError::CommandFailed(TextComponent::text(
-                &format!("no handler registered for command id {command_id}"),
-            )))
-        }
+        handlers.get(&command_id).map_or_else(
+            || {
+                Err(command::CommandError::CommandFailed(TextComponent::text(
+                    &format!("no handler registered for command id {command_id}"),
+                )))
+            },
+            |handler| handler.handle(sender, server, args),
+        )
+    }
+
+    /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
+    fn handle_task(handler_id: u32, server: Server) {
+        let mut handlers = TASK_HANDLERS.lock().unwrap();
+        handlers.handle(handler_id, server);
     }
 }
 

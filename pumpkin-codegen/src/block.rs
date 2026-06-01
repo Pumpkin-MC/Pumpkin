@@ -1,12 +1,13 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
+use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::{Cursor, Read},
+    io::{Cursor, Read, Seek, SeekFrom},
     panic,
 };
 use syn::{Ident, LitInt, LitStr};
@@ -67,6 +68,8 @@ fn property_group_name_from_derived_name(name: &str) -> String {
 enum PropertyType {
     /// The property is a simple boolean (`true`/`false`).
     Bool,
+    /// The property is an integer with an inclusive range.
+    Int { min: u8, max: u8 },
     /// The property is an enum with a generated Rust type identified by `name`.
     Enum { name: String },
 }
@@ -211,6 +214,7 @@ impl ToTokens for BlockPropertyStruct {
             let key = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! { pub #key: bool },
+                PropertyType::Int { .. } => quote! { pub #key: u8 },
                 PropertyType::Enum { name } => {
                     let value = Ident::new(name, Span::call_site());
                     quote! { pub #key: #value }
@@ -229,6 +233,15 @@ impl ToTokens for BlockPropertyStruct {
             let field = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! { (!self.#field as u16, 2) },
+                PropertyType::Int { min, max } => {
+                    let count = (max - min + 1) as u16;
+
+                    if *min > 0 {
+                        quote! { ((self.#field - #min) as u16, #count) }
+                    } else {
+                        quote! { (self.#field as u16, #count) }
+                    }
+                }
                 PropertyType::Enum { name } => {
                     let ty = Ident::new(name, Span::call_site());
                     quote! { (self.#field.to_index(), #ty::variant_count()) }
@@ -251,6 +264,21 @@ impl ToTokens for BlockPropertyStruct {
                             value == 0
                         }
                     },
+                    PropertyType::Int { min, max } => {
+                        let count = (max - min + 1) as u16;
+                        let val = if *min > 0 {
+                            quote! { value + #min }
+                        } else {
+                            quote! {value}
+                        };
+                        quote! {
+                            #field_name: {
+                                let value = (index % #count) as u8;
+                                index /= #count;
+                                #val
+                            }
+                        }
+                    }
                     PropertyType::Enum { name } => {
                         let enum_ident = Ident::new(name, Span::call_site());
                         quote! {
@@ -272,31 +300,70 @@ impl ToTokens for BlockPropertyStruct {
                 PropertyType::Bool => quote! {
                     (#key_str, if self.#field { "true" } else { "false" })
                 },
+                PropertyType::Int { min, max } => {
+                    let mut arms = Vec::new();
+                    for i in *min..=*max {
+                        let i_str = i.to_string();
+                        arms.push(quote! { #i => #i_str });
+                    }
+                    quote! {
+                        (#key_str, match self.#field {
+                            #(#arms,)*
+                            _ => unreachable!()
+                        })
+                    }
+                }
                 PropertyType::Enum { .. } => quote! {
                     (#key_str, self.#field.to_value())
                 },
             }
         });
 
+        let from_props_keys = self
+            .data
+            .variant_mappings
+            .iter()
+            .map(|entry| &entry.original_name);
         let from_props_values = self.data.variant_mappings.iter().map(|entry| {
-            let key = &entry.original_name;
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    #key => {
-                        block_props.#field_name = matches!(*value, "true")
-                    }
+                    block_props.#field_name = matches!(*value, "true")
                 },
+                PropertyType::Int { min, max } => {
+                    let mut arms = Vec::new();
+                    for i in *min..=*max {
+                        let i_str = i.to_string();
+                        arms.push(quote! { #i_str => #i });
+                    }
+                    quote! {
+                        block_props.#field_name = match *value {
+                            #(#arms,)*
+                            _ => #min,
+                        }
+                    }
+                }
                 PropertyType::Enum { name } => {
                     let enum_ident = Ident::new(name, Span::call_site());
                     quote! {
-                        #key => {
-                            block_props.#field_name = #enum_ident::from_value(value)
-                        }
+                        block_props.#field_name = #enum_ident::from_value(value)
                     }
                 }
             }
         });
+
+        let from_props_loop_body = if self.data.variant_mappings.len() > 1 {
+            quote! {
+                match *key {
+                    #(#from_props_keys => #from_props_values),*,
+                    _ => {}, //
+                }
+            }
+        } else {
+            let key = from_props_keys.into_iter().next();
+            let val = from_props_values.into_iter().next();
+            quote! { if *key == #key { #val } }
+        };
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -327,7 +394,7 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn to_state_id(&self, block: &Block) -> u16 {
                     if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     block.states[0].id + self.to_index()
                 }
@@ -335,7 +402,7 @@ impl ToTokens for BlockPropertyStruct {
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
                     debug_assert!(
                         Self::handles_block_id(block.id),
-                        "{} is not a valid block for {}", &block.name, #struct_name
+                        "{} is not a valid block for {}", block.name, #struct_name
                     );
 
                     let min_id = block.states[0].id;
@@ -354,7 +421,7 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn default(block: &Block) -> Self {
                     if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     Self::from_state_id(block.default_state.id, block)
                 }
@@ -367,14 +434,11 @@ impl ToTokens for BlockPropertyStruct {
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     #[cfg(debug_assertions)]
                     if !matches!(block.id, #(#block_ids)|*) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match *key {
-                            #(#from_props_values),*,
-                            _ => {}, //
-                        }
+                        #from_props_loop_body
                     }
                     block_props
                 }
@@ -492,6 +556,9 @@ impl PistonBehavior {
 impl BlockState {
     /// Bit flag indicating this state is an air block.
     const IS_AIR: u16 = 1 << 0;
+
+    const IS_LIQUID: u16 = 1 << 5;
+
     /// Bit flag indicating this state receives random tick events.
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
@@ -503,6 +570,10 @@ impl BlockState {
     /// Returns `true` if this state is an air variant.
     pub const fn is_air(&self) -> bool {
         self.state_flags & Self::IS_AIR != 0
+    }
+
+    pub const fn is_liquid(&self) -> bool {
+        self.state_flags & Self::IS_LIQUID != 0
     }
 
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
@@ -569,6 +640,7 @@ pub struct Block {
     pub hardness: f32,
     /// Blast resistance against explosions.
     pub blast_resistance: f32,
+    pub map_color: u8,
     /// Numeric ID of the corresponding item, if any.
     pub item_id: u16,
     /// Flammability data, present only if the block can catch fire.
@@ -598,6 +670,8 @@ impl ToTokens for Block {
         //let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
         let blast_resistance = &self.blast_resistance;
+        let map_color = &self.map_color;
+
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
@@ -637,6 +711,7 @@ impl ToTokens for Block {
                 name: #name,
                 hardness: #hardness,
                 blast_resistance: #blast_resistance,
+                map_color: #map_color,
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
@@ -763,6 +838,7 @@ pub fn build() -> TokenStream {
 
     let mut random_tick_states = Vec::new();
     let mut air_states = Vec::new();
+    let mut liquid_states = Vec::new();
 
     let mut constants_list = Vec::new();
     let mut block_from_name_entries = Vec::new();
@@ -792,15 +868,15 @@ pub fn build() -> TokenStream {
             let property = generated_property.to_property();
             let renamed_property = property.enum_name.to_upper_camel_case();
 
-            let property_type = if property.values.len() == 2
-                && property.values.contains(&"true".to_string())
-                && property.values.contains(&"false".to_string())
-            {
-                PropertyType::Bool
-            } else {
-                PropertyType::Enum {
+            let property_type = match &generated_property.property_type {
+                GeneratedPropertyType::Boolean => PropertyType::Bool,
+                GeneratedPropertyType::Int { min, max } => PropertyType::Int {
+                    min: *min,
+                    max: *max,
+                },
+                GeneratedPropertyType::Enum { .. } => PropertyType::Enum {
                     name: renamed_property.clone(),
-                }
+                },
             };
 
             if let PropertyType::Enum { name } = &property_type {
@@ -818,13 +894,35 @@ pub fn build() -> TokenStream {
             });
         }
 
+        let mut multiplier = 1;
+        let mut property_descriptors = Vec::new();
+        for hash in block.properties.iter().rev() {
+            let gen_prop = generated_prop_map.get(hash).unwrap();
+            let variant_count = match &gen_prop.property_type {
+                GeneratedPropertyType::Boolean => 2,
+                GeneratedPropertyType::Int { min, max } => (max - min + 1) as u16,
+                GeneratedPropertyType::Enum { values } => values.len() as u16,
+            };
+            property_descriptors.push(quote! {
+                PropertyDescriptor {
+                    hash_key: #hash,
+                    multiplier: #multiplier,
+                    variant_count: #variant_count,
+                }
+            });
+            multiplier *= variant_count;
+        }
+
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let item_id = block.item_id;
 
+        // let mut block_with_descriptors = block.clone();
+        // block_with_descriptors.property_descriptors = property_descriptors;
+
         constants_list.push(quote! {
-            pub const #const_ident: Block = #block;
+            pub const #const_ident: Self = #block;
         });
 
         type_from_raw_id_array.push((block.id, quote! { &Self::#const_ident }));
@@ -858,6 +956,10 @@ pub fn build() -> TokenStream {
                 let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
                 air_states.push(state_id);
             }
+            if state.is_liquid() {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                liquid_states.push(state_id);
+            }
 
             let mut matched_be_id = 1;
 
@@ -874,6 +976,13 @@ pub fn build() -> TokenStream {
                                 mapping.original_name.clone(),
                                 if val == 0 { "true" } else { "false" }.to_string(),
                             );
+                        }
+                        PropertyType::Int { min, max } => {
+                            let count = (*max - *min + 1) as u16;
+                            let val = (temp_index % count) as u8;
+                            temp_index /= count;
+                            java_props_for_this_state
+                                .insert(mapping.original_name.clone(), (val + *min).to_string());
                         }
                         PropertyType::Enum { name } => {
                             let enum_info = property_enums.get(name).unwrap();
@@ -961,6 +1070,7 @@ pub fn build() -> TokenStream {
     let shapes = blocks_assets.shapes.iter().map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
+    let liquid_state_ids = quote! { #(#liquid_states)|* };
 
     let block_props = block_properties.iter().map(ToTokens::to_token_stream);
     let properties = property_enums.values().map(ToTokens::to_token_stream);
@@ -1009,6 +1119,7 @@ pub fn build() -> TokenStream {
     );
 
     quote! {
+        #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
         use crate::{BlockState, Block, blocks::Flammable};
@@ -1056,15 +1167,24 @@ pub fn build() -> TokenStream {
         ];
 
         #[inline(always)]
-        pub fn is_air(state_id: u16) -> bool {
+        #[must_use]
+        pub const fn is_air(state_id: u16) -> bool {
             matches!(state_id, #air_state_ids)
         }
 
+         #[inline(always)]
+         #[must_use]
+        pub const fn is_liquid(state_id: u16) -> bool {
+            matches!(state_id, #liquid_state_ids)
+        }
+
         #[inline(always)]
+        #[must_use]
         pub fn has_random_ticks(state_id: u16) -> bool {
             #mod_ident::#contains_ident(state_id)
         }
 
+        #[must_use]
         pub fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
             if block_state.is_solid() {
                 return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
@@ -1080,6 +1200,7 @@ pub fn build() -> TokenStream {
             #[doc = r" Get a block state from a state id."]
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
+            #[must_use]
             pub fn from_id(id: u16) -> &'static Self {
                 // In debug, this avoids the slow range-checking logic
                 unsafe {
@@ -1089,13 +1210,15 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
             #[inline]
+            #[must_use]
             pub fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
                 let block = Block::from_state_id(id);
                 let state: &Self = Block::STATE_FROM_STATE_ID[id as usize];
                 (block, state)
             }
 
-            pub fn to_be_network_id(id: u16) -> u16 {
+            #[must_use]
+            pub const fn to_be_network_id(id: u16) -> u16 {
                 Self::STATE_ID_TO_BEDROCK[id as usize]
             }
         }
@@ -1111,7 +1234,7 @@ pub fn build() -> TokenStream {
                 #raw_id_from_state_id
             ];
 
-            const TYPE_FROM_RAW_ID: [&'static Block; #max_type_id] = [
+            const TYPE_FROM_RAW_ID: [&'static Self; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
@@ -1121,11 +1244,13 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Try to parse a block from a resource location string."]
             #[inline]
+            #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 Self::BLOCK_FROM_NAME_MAP.get(name)
             }
 
             #[doc = r" Try to get a block from a namespace prefixed name."]
+            #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 let key = name.strip_prefix("minecraft:").unwrap_or(name);
                 Self::BLOCK_FROM_NAME_MAP.get(key)
@@ -1133,6 +1258,7 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a block from a raw block id."]
             #[inline]
+            #[must_use]
             pub const fn from_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
@@ -1143,7 +1269,8 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a raw ID from an State ID."]
             #[inline]
-           pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+            #[must_use]
+            pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
                 let index = state_id as usize;
                 if index >= Self::RAW_ID_FROM_STATE_ID.len() {
                     0
@@ -1154,6 +1281,7 @@ pub fn build() -> TokenStream {
 
             #[doc = r" Get a block from a state id."]
             #[inline]
+            #[must_use]
             pub fn from_state_id(id: u16) -> &'static Self {
                 let index = id as usize;
                 if index >= Self::RAW_ID_FROM_STATE_ID.len() {
@@ -1164,6 +1292,7 @@ pub fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a block from an item id."]
+            #[must_use]
             pub const fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {
@@ -1196,28 +1325,31 @@ pub fn build() -> TokenStream {
         #(#block_props)*
 
         impl Facing {
-            pub fn opposite(&self) -> Self {
+            #[must_use]
+            pub const fn opposite(&self) -> Self {
                 match self {
-                    Facing::North => Facing::South,
-                    Facing::South => Facing::North,
-                    Facing::East => Facing::West,
-                    Facing::West => Facing::East,
-                    Facing::Up => Facing::Down,
-                    Facing::Down => Facing::Up,
+                    Self::North => Self::South,
+                    Self::South => Self::North,
+                    Self::East => Self::West,
+                    Self::West => Self::East,
+                    Self::Up => Self::Down,
+                    Self::Down => Self::Up,
                 }
             }
         }
 
         impl HorizontalFacing {
-            pub fn all() -> [HorizontalFacing; 4] {
+            #[must_use]
+            pub fn all() -> [Self; 4] {
                 [
-                    HorizontalFacing::North,
-                    HorizontalFacing::South,
-                    HorizontalFacing::West,
-                    HorizontalFacing::East,
+                    Self::North,
+                    Self::South,
+                    Self::West,
+                    Self::East,
                 ]
             }
 
+            #[must_use]
             pub fn to_offset(&self) -> Vector3<i32> {
                 match self {
                     Self::North => (0, 0, -1),
@@ -1228,7 +1360,8 @@ pub fn build() -> TokenStream {
                 .into()
             }
 
-            pub fn opposite(&self) -> Self {
+            #[must_use]
+            pub const fn opposite(&self) -> Self {
                 match self {
                     Self::North => Self::South,
                     Self::South => Self::North,
@@ -1237,7 +1370,8 @@ pub fn build() -> TokenStream {
                 }
             }
 
-            pub fn rotate_clockwise(&self) -> Self {
+            #[must_use]
+            pub const fn rotate_clockwise(&self) -> Self {
                 match self {
                     Self::North => Self::East,
                     Self::South => Self::West,
@@ -1246,7 +1380,8 @@ pub fn build() -> TokenStream {
                 }
             }
 
-            pub fn rotate_counter_clockwise(&self) -> Self {
+            #[must_use]
+            pub const fn rotate_counter_clockwise(&self) -> Self {
                 match self {
                     Self::North => Self::West,
                     Self::South => Self::East,
@@ -1257,13 +1392,15 @@ pub fn build() -> TokenStream {
         }
 
         impl RailShape {
-            pub fn is_ascending(&self) -> bool {
+            #[must_use]
+            pub const fn is_ascending(&self) -> bool {
                 matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }
         }
 
         impl RailShapeStraight {
-            pub fn is_ascending(&self) -> bool {
+            #[must_use]
+            pub const fn is_ascending(&self) -> bool {
                 matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }
         }
@@ -1275,81 +1412,57 @@ pub fn build() -> TokenStream {
 /// # Arguments
 /// – `reader` – a readable byte source positioned at the start of the NBT data.
 #[expect(clippy::type_complexity)]
-fn get_be_data_from_nbt<R: Read>(
+fn get_be_data_from_nbt<R: Read + Seek>(
     reader: &mut R,
 ) -> BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> {
     let mut block_data: BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> = BTreeMap::new();
     let mut current_id = 0;
 
-    let read_nbt_string = |reader: &mut R| -> String {
-        let len = read_varint(reader);
-        let mut buf = vec![0; len as usize];
-        reader.read_exact(&mut buf).unwrap();
-        String::from_utf8(buf).unwrap()
-    };
+    let data_start = reader.stream_position().unwrap();
+    let data_end = reader.seek(SeekFrom::End(0)).unwrap();
+    reader.seek(SeekFrom::Start(data_start));
 
-    let read_byte_safe = |reader: &mut R| -> Option<u8> {
-        let mut buf = [0; 1];
-        reader.read_exact(&mut buf).is_ok().then(|| buf[0])
-    };
+    let nbt_reader = &mut NbtReadHelperBedrock::new(&mut *reader);
 
-    while let Some(tag_id) = read_byte_safe(reader) {
-        if tag_id != 10 {
+    loop {
+        if nbt_reader.reader().stream_position().unwrap() >= data_end {
             break;
-        } // Tag_Compound (10) required
-
-        // Read Root Name (usually empty string in palette)
-        let _root_name = read_nbt_string(reader);
-
-        let mut block_name = String::new();
-        let mut properties = BTreeMap::new();
-
-        loop {
-            let field_type = read_byte(reader);
-            if field_type == 0 {
-                break;
-            } // Tag_End (0)
-
-            let field_name = read_nbt_string(reader);
-
-            match field_name.as_str() {
-                "name" => {
-                    let raw_name = read_nbt_string(reader);
-                    block_name = raw_name
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(&raw_name)
-                        .to_string();
-                }
-                "states" => loop {
-                    let prop_type = read_byte(reader);
-                    if prop_type == 0 {
-                        break;
-                    }
-
-                    let prop_key = read_nbt_string(reader);
-
-                    let prop_val = match prop_type {
-                        1 => {
-                            let val = read_byte(reader);
-                            if val == 1 {
-                                "true".to_string()
-                            } else {
-                                "false".to_string()
-                            }
-                        }
-                        3 => read_varint(reader).to_string(),
-                        8 => read_nbt_string(reader),
-                        _ => panic!("Unknown property type {prop_type} for key {prop_key}"),
-                    };
-
-                    properties.insert(prop_key, prop_val);
-                },
-                "version" => {
-                    read_varint(reader);
-                }
-                _ => panic!("Unexpected root field: {field_name}"),
-            }
         }
+
+        let nbt = pumpkin_nbt::Nbt::read(nbt_reader).unwrap();
+
+        let block_name = {
+            let raw_name = nbt.get_string("name").unwrap();
+            raw_name
+                .strip_prefix("minecraft:")
+                .unwrap_or(raw_name)
+                .to_string()
+        };
+
+        let properties = nbt
+            .get_compound("states")
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|(key, val)| {
+                let unpacked = match val {
+                    pumpkin_nbt::tag::NbtTag::Byte(v) => {
+                        if v == 1 {
+                            "true".into()
+                        } else {
+                            "false".into()
+                        }
+                    }
+                    pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
+                    pumpkin_nbt::tag::NbtTag::String(v) => v.into(),
+                    _ => {
+                        panic!("Unexpected type for {}. Value: {val:?}", &key);
+                    }
+                };
+
+                (key.into(), unpacked)
+            })
+            .collect::<BTreeMap<_, _>>();
 
         if !block_name.is_empty() {
             block_data
@@ -1362,31 +1475,4 @@ fn get_be_data_from_nbt<R: Read>(
     }
 
     block_data
-}
-
-/// Reads a variable-length encoded 32-bit integer from the reader.
-///
-/// # Arguments
-/// – `reader` – the byte source to read from.
-fn read_varint<W: Read>(reader: &mut W) -> u32 {
-    let mut val = 0;
-    for i in 0..5u32 {
-        let byte = &mut [0];
-        reader.read_exact(byte).unwrap();
-        val |= (u32::from(byte[0]) & 0x7F) << (i * 7);
-        if byte[0] & 0x80 == 0 {
-            return val;
-        }
-    }
-    panic!()
-}
-
-/// Reads a single byte from the reader, returning `0` on failure.
-///
-/// # Arguments
-/// – `reader` – the byte source to read from.
-fn read_byte<W: Read>(reader: &mut W) -> u8 {
-    let byte = &mut [0];
-    reader.read_exact(byte).unwrap_or_default();
-    byte[0]
 }

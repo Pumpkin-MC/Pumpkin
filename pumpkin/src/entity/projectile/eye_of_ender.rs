@@ -123,7 +123,7 @@ impl NBTStorage for EyeOfEnder {}
 impl EntityBase for EyeOfEnder {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -144,12 +144,12 @@ impl EntityBase for EyeOfEnder {
             }
 
             entity.set_pos(new_pos);
-            entity.send_pos_rot().await;
+            entity.send_pos_rot();
 
             // Tick lifetime and handle expiry.
             let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
             if life > MAX_LIFE {
-                entity.play_sound(Sound::EntityEnderEyeDeath).await;
+                entity.play_sound(Sound::EntityEnderEyeDeath);
                 entity.remove().await;
 
                 if self.survive_after_death.load(Ordering::Relaxed) {
@@ -157,18 +157,14 @@ impl EntityBase for EyeOfEnder {
                     let item_stack = self.item_stack.lock().await.clone();
                     let world = entity.world.load();
                     let entity = Entity::new(world.clone(), new_pos, &EntityType::ITEM);
-                    let item_entity = Arc::new(ItemEntity::new(entity, item_stack).await);
+                    let item_entity = Arc::new(ItemEntity::new(entity, item_stack));
                     world.spawn_entity(item_entity).await;
                 } else {
-                    entity
-                        .world
-                        .load()
-                        .sync_world_event(
-                            WorldEvent::ParticlesEyeOfEnderDeath,
-                            new_pos.to_block_pos(),
-                            0,
-                        )
-                        .await;
+                    entity.world.load().sync_world_event(
+                        WorldEvent::ParticlesEyeOfEnderDeath,
+                        new_pos.to_block_pos(),
+                        0,
+                    );
                 }
             }
         })
@@ -176,13 +172,11 @@ impl EntityBase for EyeOfEnder {
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
-            self.entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
-                    &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-                )])
-                .await;
+            self.entity.send_meta_data(&[Metadata::new(
+                TrackedData::ITEM,
+                MetaDataType::ITEM_STACK,
+                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            )]);
         })
     }
 
@@ -217,6 +211,10 @@ impl EntityBase for EyeOfEnder {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

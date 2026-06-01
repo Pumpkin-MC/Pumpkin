@@ -13,7 +13,7 @@ pub(crate) struct WitSubscriber {
 
 impl WitSubscriber {
     /// Creates a new `WitSubscriber` with the span ID counter starting at `1`.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             next_id: AtomicU64::new(1),
         }
@@ -69,13 +69,13 @@ pub enum LogLevel {
 
 impl LogLevel {
     /// Converts this level to the WIT-generated `Level` type expected by the host.
-    fn to_wit(self) -> wit::pumpkin::plugin::logging::Level {
+    const fn to_wit(self) -> wit::pumpkin::plugin::logging::Level {
         match self {
-            LogLevel::Trace => wit::pumpkin::plugin::logging::Level::Trace,
-            LogLevel::Debug => wit::pumpkin::plugin::logging::Level::Debug,
-            LogLevel::Info => wit::pumpkin::plugin::logging::Level::Info,
-            LogLevel::Warn => wit::pumpkin::plugin::logging::Level::Warn,
-            LogLevel::Error => wit::pumpkin::plugin::logging::Level::Error,
+            Self::Trace => wit::pumpkin::plugin::logging::Level::Trace,
+            Self::Debug => wit::pumpkin::plugin::logging::Level::Debug,
+            Self::Info => wit::pumpkin::plugin::logging::Level::Info,
+            Self::Warn => wit::pumpkin::plugin::logging::Level::Warn,
+            Self::Error => wit::pumpkin::plugin::logging::Level::Error,
         }
     }
 }

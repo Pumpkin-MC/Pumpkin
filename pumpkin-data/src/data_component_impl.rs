@@ -3,9 +3,10 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
-    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
-    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
+    AttributeModifiers, BlocksAttacks, ChargedProjectiles, Consumable, CustomData, CustomName,
+    Damage, DamageResistant, DeathProtection, Enchantable, Enchantments, Equippable,
+    FireworkExplosion, Fireworks, Food, ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage,
+    MaxStackSize, PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -63,6 +64,12 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
+        UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
+        MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
+        DataComponent::ChargedProjectiles => {
+            Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
+        }
         _ => None,
     }
 }
@@ -186,10 +193,18 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent const
-    pub name: &'static str,
+    // TODO make TextComponent
+    pub name: String,
 }
 impl DataComponentImpl for CustomNameImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.name.clone().into())
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.name.as_str()) as i32
+    }
+
     default_impl!(CustomName);
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -213,7 +228,7 @@ impl ItemModelImpl {
 }
 impl DataComponentImpl for ItemModelImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.id.clone())
+        NbtTag::String(self.id.clone().into())
     }
 
     fn get_hash(&self) -> i32 {
@@ -226,7 +241,7 @@ impl DataComponentImpl for ItemModelImpl {
 pub struct LoreImpl;
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct RarityImpl;
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq, Default)]
 pub struct EnchantmentsImpl {
     pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
 }
@@ -235,7 +250,7 @@ impl EnchantmentsImpl {
         let data = &data.extract_compound()?.child_tags;
         let mut enc = Vec::with_capacity(data.len());
         for (name, level) in data {
-            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
+            enc.push((Enchantment::from_name(name.as_ref())?, level.extract_int()?));
         }
         Some(Self {
             enchantment: Cow::from(enc),
@@ -353,6 +368,7 @@ fn hash() {
         -1580618251i32
     );
     assert_eq!(MaxStackSizeImpl { size: 99 }.get_hash(), -1632321551i32);
+    assert_eq!(MapIdImpl { id: 10 }.get_hash(), -919192125i32);
 }
 
 impl DataComponentImpl for EnchantmentsImpl {
@@ -651,8 +667,61 @@ impl Hash for ConsumableImpl {
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseRemainderImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct UseCooldownImpl;
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UseCooldownImpl {
+    pub seconds: f32,
+    pub cooldown_group: Option<String>,
+}
+
+impl UseCooldownImpl {
+    pub fn new(seconds: f32, cooldown_group: Option<String>) -> Self {
+        Self {
+            seconds,
+            cooldown_group,
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let seconds = compound.get_float("seconds")?;
+        let cooldown_group = compound.get_string("cooldown_group").map(|s| s.to_string());
+        Some(Self {
+            seconds,
+            cooldown_group,
+        })
+    }
+}
+
+impl DataComponentImpl for UseCooldownImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("seconds", self.seconds);
+        if let Some(group) = &self.cooldown_group {
+            compound.put_string("cooldown_group", group.clone());
+        }
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_f32_hash(self.seconds).to_le_bytes());
+        if let Some(group) = &self.cooldown_group {
+            digest.update(&get_str_hash(group).to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
+
+    default_impl!(UseCooldown);
+}
+
+impl Eq for UseCooldownImpl {}
+
+impl Hash for UseCooldownImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.seconds.to_bits().hash(state);
+        self.cooldown_group.hash(state);
+    }
+}
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum DamageResistantType {
     /// Damage always dealt to ender dragons
@@ -698,7 +767,7 @@ pub enum DamageResistantType {
     NoKnockback,
     PanicCauses,
     PanicEnvironmentalCauses,
-    /// Reducese damage dealt to witches by 85%
+    /// Reduces damage dealt to witches by 85%
     WitchResistantTo,
     WitherImmuneTo,
     /// Generic fallback
@@ -918,14 +987,14 @@ impl<T: IDSetContent + 'static> IDSet<T> {
                 if tag.starts_with("#") {
                     Some(Self::Tag(Cow::Owned(tag.strip_prefix("#")?.to_string())))
                 } else {
-                    Some(Self::IDs(Cow::Owned([T::from_str(tag.as_str())?].to_vec())))
+                    Some(Self::IDs(Cow::Owned([T::from_str(tag.as_ref())?].to_vec())))
                 }
             }
             NbtTag::List(nbt_tags) => {
                 let mut ids = Vec::<&T>::new();
                 for nbt in nbt_tags {
                     if let NbtTag::String(id) = nbt
-                        && let Some(instance) = T::from_str(id.as_str())
+                        && let Some(instance) = T::from_str(id.as_ref())
                     {
                         ids.push(instance);
                     }
@@ -944,8 +1013,10 @@ impl<T: IDSetContent + 'static> IDSet<T> {
                 compound.put_string(key, tag);
             }
             Self::IDs(arr) => {
-                let id_vec: Vec<NbtTag> =
-                    arr.iter().map(|x| NbtTag::String(x.to_string())).collect();
+                let id_vec: Vec<NbtTag> = arr
+                    .iter()
+                    .map(|x| NbtTag::String(x.to_string().into()))
+                    .collect();
                 compound.put_list(key, id_vec);
             }
         }
@@ -1251,7 +1322,12 @@ impl Hash for EntityTypeOrTag {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EnchantableImpl;
+pub struct EnchantableImpl {
+    pub value: i32,
+}
+impl DataComponentImpl for EnchantableImpl {
+    default_impl!(Enchantable);
+}
 #[derive(Clone, Hash, PartialEq)]
 pub struct EquippableImpl {
     pub slot: &'static EquipmentSlot,
@@ -1382,20 +1458,107 @@ pub struct BlocksAttacksImpl;
 impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct StoredEnchantmentsImpl;
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct StoredEnchantmentsImpl {
+    pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
+}
+
+impl StoredEnchantmentsImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let data = &data.extract_compound()?.child_tags;
+        let mut enc = Vec::with_capacity(data.len());
+        for (name, level) in data {
+            enc.push((Enchantment::from_name(name.as_ref())?, level.extract_int()?));
+        }
+        Some(Self {
+            enchantment: Cow::from(enc),
+        })
+    }
+}
+impl DataComponentImpl for StoredEnchantmentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut data = NbtCompound::new();
+        for (enc, level) in self.enchantment.iter() {
+            data.put_int(enc.name, *level);
+        }
+        NbtTag::Compound(data)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        for (enc, level) in self.enchantment.iter() {
+            digest.update(&get_str_hash(enc.name).to_le_bytes());
+            digest.update(&get_i32_hash(*level).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(StoredEnchantments);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyedColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapIdImpl;
+pub struct MapIdImpl {
+    pub id: i32,
+}
+
+impl MapIdImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|id| Self { id })
+    }
+}
+
+impl DataComponentImpl for MapIdImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.id)
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.id) as i32
+    }
+
+    default_impl!(MapId);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapDecorationsImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapPostProcessingImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ChargedProjectilesImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChargedProjectilesImpl {
+    pub projectiles: Vec<NbtCompound>,
+}
+
+impl ChargedProjectilesImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let list = data.extract_list()?;
+        let mut projectiles = Vec::new();
+        for item in list {
+            projectiles.push(item.extract_compound()?.clone());
+        }
+        Some(Self { projectiles })
+    }
+}
+
+impl DataComponentImpl for ChargedProjectilesImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for item in &self.projectiles {
+            list.push(NbtTag::Compound(item.clone()));
+        }
+        NbtTag::List(list)
+    }
+
+    fn get_hash(&self) -> i32 {
+        0
+    }
+
+    default_impl!(ChargedProjectiles);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BundleContentsImpl;
 /// Status effect instance for potion contents

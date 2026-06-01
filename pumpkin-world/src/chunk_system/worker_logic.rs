@@ -7,7 +7,6 @@ use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
-use itertools::Itertools;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
@@ -55,119 +54,114 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
 }
 
 pub async fn io_read_work(
-    recv: crossfire::compat::MAsyncRx<ChunkPos>,
+    recv: crossfire::compat::MAsyncRx<Vec<ChunkPos>>,
     send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
-    use crate::biome::hash_seed;
     debug!("io read thread start");
-    let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
-    let dimension = &level.world_gen.dimension;
-    let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
     // Cleaner loop and async recv
-    while let Ok(pos) = recv.recv().await {
-        // Lock handling
-        tokio::task::block_in_place(|| {
-            let mut data = lock.0.lock().unwrap();
-            while data.contains_key(&pos) {
-                data = lock.1.wait(data).unwrap();
+    while let Ok(batch) = recv.recv().await {
+        for pos in &batch {
+            // Lock handling
+            loop {
+                let notified = lock.1.notified();
+                if !lock.0.lock().unwrap().contains_key(pos) {
+                    break;
+                }
+                notified.await;
             }
+        }
+
+        let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1000);
+
+        let level_clone = level.clone();
+        let batch_clone = batch.clone();
+
+        let fetch_task = tokio::spawn(async move {
+            level_clone
+                .chunk_saver
+                .fetch_chunks(&level_clone.level_folder, &batch_clone, t_send)
+                .await;
         });
 
-        level
-            .chunk_saver
-            .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
-            .await;
+        for _ in 0..batch.len() {
+            let data = match t_recv.recv().await {
+                Some(res) => res,
+                None => break,
+            };
 
-        let data = match t_recv.recv().await {
-            Some(res) => res,
-            None => break,
-        };
+            match data {
+                Loaded(chunk) => {
+                    let pos = ChunkPos::new(chunk.x, chunk.z);
+                    if chunk.status == ChunkStatus::Full {
+                        // Relighting check
+                        let needs_relight = needs_relighting(&chunk, &level.lighting_config);
 
-        match data {
-            Loaded(chunk) => {
-                if chunk.status == ChunkStatus::Full {
-                    // Relighting check
-                    let needs_relight = needs_relighting(&chunk, &level.lighting_config);
+                        if needs_relight {
+                            debug!(
+                                "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
+                            );
 
-                    if needs_relight {
-                        debug!(
-                            "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
-                        );
+                            // Create ProtoChunk using the async method
+                            let mut proto = ProtoChunk::from_chunk_data(&chunk, &level.world_gen);
 
-                        // Create ProtoChunk using the async method
-                        let mut proto = ProtoChunk::from_chunk_data(
-                            &chunk,
-                            dimension,
-                            level.world_gen.default_block,
-                            biome_mixer_seed,
-                        );
+                            // Clear all lighting data
+                            let section_count = proto.light.sky_light.len();
+                            proto.light.sky_light = (0..section_count)
+                                .map(|_| LightContainer::new_empty(15))
+                                .collect();
+                            proto.light.block_light = (0..section_count)
+                                .map(|_| LightContainer::new_empty(0))
+                                .collect();
 
-                        // Clear all lighting data
-                        let section_count = proto.light.sky_light.len();
-                        proto.light.sky_light = (0..section_count)
-                            .map(|_| LightContainer::new_empty(0))
-                            .collect();
-                        proto.light.block_light = (0..section_count)
-                            .map(|_| LightContainer::new_empty(0))
-                            .collect();
+                            // Set stage to Features
+                            proto.stage = StagedChunkEnum::Features;
 
-                        // Set stage to Features
-                        proto.stage = StagedChunkEnum::Features;
-
-                        if send
-                            .send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto)))))
-                            .is_err()
-                        {
-                            break;
+                            if send
+                                .send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto)))))
+                                .is_err()
+                            {
+                                break;
+                            }
+                        } else {
+                            // Send fully valid chunk
+                            if send
+                                .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
+                                .is_err()
+                            {
+                                break;
+                            }
                         }
                     } else {
-                        // Send fully valid chunk
-                        if send
-                            .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
-                            .is_err()
-                        {
+                        // Standard ProtoChunk handling for non-full chunks
+                        let val = RecvChunk::IO(Chunk::Proto(Box::new(
+                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen),
+                        )));
+                        if send.send((pos, val)).is_err() {
                             break;
                         }
                     }
-                } else {
-                    // Standard ProtoChunk handling for non-full chunks
-                    let val = RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                        &chunk,
-                        dimension,
-                        level.world_gen.default_block,
-                        biome_mixer_seed,
-                    ))));
-                    if send.send((pos, val)).is_err() {
+                }
+                LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                    if send
+                        .send((
+                            pos,
+                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
+                                pos.x,
+                                pos.y,
+                                &level.world_gen,
+                            )))),
+                        ))
+                        .is_err()
+                    {
                         break;
                     }
                 }
-                continue;
-            }
-            LoadedData::Missing(_) => {}
-            LoadedData::Error(_) => {
-                warn!("chunk data read error pos: {pos:?}. regenerating");
             }
         }
-
-        // Final send for missing/error cases (regenerate)
-        if send
-            .send((
-                pos,
-                RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
-                    pos.x,
-                    pos.y,
-                    dimension,
-                    level.world_gen.default_block,
-                    biome_mixer_seed,
-                )))),
-            ))
-            .is_err()
-        {
-            break;
-        }
+        let _ = fetch_task.await;
     }
     debug!("io read thread stop");
 }
@@ -181,7 +175,10 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
         };
         // debug!("io write thread receive chunks size {}", data.len());
         let mut vec = Vec::with_capacity(data.len());
+        let mut positions = Vec::with_capacity(data.len());
         for (pos, chunk) in data {
+            positions.push(pos);
+
             match chunk {
                 Chunk::Level(chunk) => vec.push((pos, chunk)),
                 Chunk::Proto(chunk) => {
@@ -192,7 +189,6 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 }
             }
         }
-        let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
         if let Err(e) = level
             .chunk_saver
             .save_chunks(&level.level_folder, vec)
@@ -201,7 +197,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             error!("Failed to save chunks: {:?}", e);
         }
 
-        for i in pos {
+        for i in positions {
             let mut data = lock.0.lock().unwrap();
             match data.entry(i) {
                 Entry::Occupied(mut entry) => {
@@ -209,7 +205,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     if *rc == 1 {
                         entry.remove();
                         drop(data);
-                        lock.1.notify_all();
+                        lock.1.notify_waiters();
                     } else {
                         *rc -= 1;
                     }
@@ -226,6 +222,45 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
     }
 }
 
+pub fn run_generation(
+    pos: ChunkPos,
+    mut cache: Cache,
+    stage: StagedChunkEnum,
+    level: &Level,
+    _settings: &GenerationSettings,
+) -> RecvChunk {
+    let portal = level.world_portal.load_full();
+    let portal_ref = portal.as_deref().expect("Portal should be initialized");
+    // Run generation with panic catching
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);
+        cache // Return cache on success
+    }));
+
+    match result {
+        Ok(cache) => RecvChunk::Generation(cache),
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| {
+                    payload
+                        .downcast_ref::<String>()
+                        .map(std::string::String::as_str)
+                })
+                .unwrap_or("Unknown panic payload");
+
+            error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
+
+            RecvChunk::GenerationFailure {
+                pos,
+                stage,
+                error: msg.to_string(),
+            }
+        }
+    }
+}
+
 pub fn generation_work(
     recv: crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
     send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
@@ -234,58 +269,16 @@ pub fn generation_work(
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
 
     loop {
-        let (pos, mut cache, stage) = if let Ok(data) = recv.recv() {
+        let (pos, cache, stage) = if let Ok(data) = recv.recv() {
             data
         } else {
             debug!("generation channel closed, exiting");
             break;
         };
 
-        // Run generation with panic catching
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            cache.advance(
-                stage,
-                &level.lighting_config,
-                level.block_registry.as_ref(),
-                settings,
-                &level.world_gen.random_config,
-                &level.world_gen.terrain_cache,
-                &level.world_gen.base_router,
-                level.world_gen.dimension,
-                &level.world_gen.global_structure_cache,
-            );
-            cache // Return cache on success
-        }));
-
-        match result {
-            Ok(cache) => {
-                if send.send((pos, RecvChunk::Generation(cache))).is_err() {
-                    break;
-                }
-            }
-            Err(payload) => {
-                let msg = payload
-                    .downcast_ref::<&str>()
-                    .copied()
-                    .or_else(|| {
-                        payload
-                            .downcast_ref::<String>()
-                            .map(std::string::String::as_str)
-                    })
-                    .unwrap_or("Unknown panic payload");
-
-                error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
-
-                // Send failure notification
-                let _ = send.send((
-                    pos,
-                    RecvChunk::GenerationFailure {
-                        pos,
-                        stage,
-                        error: msg.to_string(),
-                    },
-                ));
-            }
+        let result = run_generation(pos, cache, stage, &level, settings);
+        if send.send((pos, result)).is_err() {
+            break;
         }
     }
 }

@@ -4,7 +4,7 @@ use slotmap::Key;
 
 pub struct ChunkHolder {
     pub target_stage: StagedChunkEnum,
-    /// Minimum stage required by generation dependencies (e.g. StructureReferences neighbors).
+    /// Minimum stage required by generation dependencies (e.g. `StructureReferences` neighbors).
     /// May exceed `target_stage` when this chunk is needed by a neighbor's generation task
     /// but isn't in the player's view radius. Tasks up to this stage are scheduled but the
     /// chunk is not made public and is unloaded once the dependency is satisfied.
@@ -14,7 +14,7 @@ pub struct ChunkHolder {
     pub occupied: NodeKey,
     pub occupied_by: EdgeKey,
     pub public: bool,
-    pub tasks: [NodeKey; 10],
+    pub tasks: [NodeKey; StagedChunkEnum::COUNT],
 }
 
 impl Default for ChunkHolder {
@@ -27,7 +27,7 @@ impl Default for ChunkHolder {
             occupied: NodeKey::null(),
             occupied_by: EdgeKey::null(),
             public: false,
-            tasks: [NodeKey::null(); 10],
+            tasks: [NodeKey::null(); StagedChunkEnum::COUNT],
         }
     }
 }

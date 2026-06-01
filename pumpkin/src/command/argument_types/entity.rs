@@ -1,39 +1,67 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::entity_selector::EntitySelector;
-use crate::command::argument_types::entity_selector::parser::EntitySelectorParser;
+use crate::command::argument_types::entity_selector::parser::{
+    EntitySelectorParser, EntitySelectorParserSuggestions,
+};
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use pumpkin_data::translation;
+use std::pin::Pin;
 use std::sync::Arc;
 
 /// A [`CommandErrorType`] to tell that no entities could be found.
-pub const NO_ENTITIES_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_NOTFOUND_ENTITY);
+pub const NO_ENTITIES_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_ENTITY,
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_ENTITY,
+);
 
 /// A [`CommandErrorType`] to tell that no players could be found.
-pub const NO_PLAYERS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_NOTFOUND_PLAYER);
+pub const NO_PLAYERS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_PLAYER,
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_PLAYER,
+);
 
 /// A [`CommandErrorType`] to tell that only players are allowed for an entity selector.
-pub const ONLY_PLAYERS_ALLOWED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_PLAYER_ENTITIES);
+pub const ONLY_PLAYERS_ALLOWED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_PLAYER_ENTITIES,
+    translation::java::ARGUMENT_PLAYER_ENTITIES,
+);
 
 /// A [`CommandErrorType`] to tell that only 1 entity is allowed for an entity selector.
-pub const NOT_SINGLE_ENTITY_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_TOOMANY);
+pub const NOT_SINGLE_ENTITY_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_TOOMANY,
+    translation::java::ARGUMENT_ENTITY_TOOMANY,
+);
 
 /// A [`CommandErrorType`] to tell that only 1 player is allowed for an entity selector.
-pub const NOT_SINGLE_PLAYER_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_PLAYER_TOOMANY);
+pub const NOT_SINGLE_PLAYER_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_PLAYER_TOOMANY,
+    translation::java::ARGUMENT_PLAYER_TOOMANY,
+);
 
 pub const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 
-/// Represents an argument type parsing a [`TargetSelector`]. This argument type is used
-/// to target entities.
+/// Represents an argument type used to select entities.
+///
+/// The following variants of this argument type are:
+/// - [`EntityArgumentType::Entity`], for a single entity.
+/// - [`EntityArgumentType::Entities`], for any number of entities.
+/// - [`EntityArgumentType::Player`], for a single player.
+/// - [`EntityArgumentType::Players`], for any number of players.
+///
+/// Though this argument type does parse an `EntitySelector`, it should not be used directly.
+/// Instead, use one of these associated functions accepting a [`CommandContext`]
+/// and your argument's name:
+/// - [`EntityArgumentType::get_entity`]
+/// - [`EntityArgumentType::get_entities`]
+/// - [`EntityArgumentType::get_player`]
+/// - [`EntityArgumentType::get_players`]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EntityArgumentType {
     Entity,
@@ -59,6 +87,19 @@ impl ArgumentType for EntityArgumentType {
         self.parse_with_allow_selectors(reader, true)
     }
 
+    fn parse_with_source<'a>(
+        &'a self,
+        reader: &'a mut StringReader,
+        source: &'a CommandSource,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Item, CommandSyntaxError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.parse_with_allow_selectors(
+                reader,
+                source.has_permission(ENTITY_SELECTOR_PERMISSION).await,
+            )
+        })
+    }
+
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Entity {
             flags: (self.is_single() as u8 * JavaClientArgumentType::ENTITY_FLAG_ONLY_SINGLE)
@@ -76,6 +117,14 @@ impl ArgumentType for EntityArgumentType {
             "5e5677dc-bb96-4669-a4ab-60468b574e8e"
         )
     }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        EntitySelectorParserSuggestions::list_suggestions(context, builder)
+    }
 }
 
 impl EntityArgumentType {
@@ -86,7 +135,7 @@ impl EntityArgumentType {
     ) -> Result<<Self as ArgumentType>::Item, CommandSyntaxError> {
         let selector = {
             let parser = EntitySelectorParser::new(reader, allow_selectors);
-            parser.parse()?
+            parser.parse_and_consume()?
         };
         if selector.max_selected > 1 && self.is_single() {
             reader.set_cursor(0);

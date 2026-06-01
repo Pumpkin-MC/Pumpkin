@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_TELEPORT_ENTITY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
+use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, PositionFlag, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -46,7 +46,7 @@ impl ClientPacket for CTeleportEntity<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

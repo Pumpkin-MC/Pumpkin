@@ -1,7 +1,11 @@
+pub mod bedrock_form_response;
 pub mod changed_main_hand;
+pub mod custom_click_action;
 pub mod egg_throw;
 pub mod exp_change;
 pub mod fish;
+pub mod inventory_close;
+pub mod inventory_interact;
 pub mod item_held;
 pub mod player_change_world;
 pub mod player_chat;
@@ -17,6 +21,9 @@ pub mod player_login;
 pub mod player_move;
 pub mod player_permission_check;
 pub mod player_teleport;
+pub mod player_toggle_flight_event;
+pub mod player_toggle_sneak_event;
+pub mod player_toggle_sprint_event;
 
 use std::sync::Arc;
 

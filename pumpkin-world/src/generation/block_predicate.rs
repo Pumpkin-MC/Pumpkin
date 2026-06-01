@@ -6,7 +6,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::block::RawBlockState;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{block::BlockStateCodec, world::BlockRegistryExt};
+use crate::{block::BlockStateCodec, world::WorldPortalExt};
 
 pub enum BlockPredicate {
     MatchingBlocks(MatchingBlocksBlockPredicate),
@@ -28,7 +28,7 @@ pub enum BlockPredicate {
 impl BlockPredicate {
     pub fn test<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         pos: &BlockPos,
     ) -> bool {
@@ -131,7 +131,7 @@ pub struct AnyOfBlockPredicate {
 impl AnyOfBlockPredicate {
     pub fn test<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         pos: &BlockPos,
     ) -> bool {
@@ -152,7 +152,7 @@ pub struct AllOfBlockPredicate {
 impl AllOfBlockPredicate {
     pub fn test<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         pos: &BlockPos,
     ) -> bool {
@@ -173,7 +173,7 @@ pub struct NotBlockPredicate {
 impl NotBlockPredicate {
     pub fn test<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         pos: &BlockPos,
     ) -> bool {
@@ -200,7 +200,7 @@ pub struct WouldSurviveBlockPredicate {
 impl WouldSurviveBlockPredicate {
     pub fn test<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         pos: &BlockPos,
     ) -> bool {

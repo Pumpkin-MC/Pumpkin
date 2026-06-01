@@ -3,13 +3,19 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
+use std::pin::Pin;
 
-pub const INVALID_UNIT_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_TIME_INVALID_UNIT);
-pub const TICK_COUNT_TOO_LOW_ERROR_TYPE: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_TIME_TICK_COUNT_TOO_LOW);
+pub const INVALID_UNIT_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_TIME_INVALID_UNIT,
+    translation::java::ARGUMENT_TIME_INVALID_UNIT,
+);
+pub const TICK_COUNT_TOO_LOW_ERROR_TYPE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_TIME_TICK_COUNT_TOO_LOW,
+    translation::java::ARGUMENT_TIME_TICK_COUNT_TOO_LOW,
+);
 
 /// Represents an argument type parsing a time value, which can
 /// have one of these suffixes:
@@ -43,7 +49,7 @@ impl ArgumentType for TimeArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let value = reader.read_float()?;
-        let unit = reader.read_unquoted_string()?;
+        let unit = reader.read_unquoted_string();
         // Find our unit's translation to ticks.
         let ticks_per_unit = match unit.as_str() {
             "t" | "" => 1,
@@ -65,6 +71,23 @@ impl ArgumentType for TimeArgumentType {
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
         JavaClientArgumentType::Time { min: self.min }
+    }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        _context: &'a CommandContext,
+        suggestions_builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        Box::pin(async move {
+            let mut reader = StringReader::new(suggestions_builder.remaining());
+            if reader.read_float().is_err() {
+                suggestions_builder.build()
+            } else {
+                suggestions_builder
+                    .filter_and_suggest(&["t", "s", "d"])
+                    .build()
+            }
+        })
     }
 
     fn examples(&self) -> Vec<String> {

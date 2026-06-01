@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties, EnumVariants, Integer0To15},
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
@@ -80,7 +77,7 @@ impl BlockBehaviour for WeightedPressurePlateBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !Self::can_pressure_plate_place_at(args.world, args.position).await {
+            if !Self::can_pressure_plate_place_at(args.world, args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
@@ -88,17 +85,16 @@ impl BlockBehaviour for WeightedPressurePlateBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            Self::can_pressure_plate_place_at(args.world.unwrap(), args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        args.world
+            .is_some_and(|world| Self::can_pressure_plate_place_at(world, args.position))
     }
 }
 
 impl PressurePlate for WeightedPressurePlateBlock {
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8 {
         let props = PressurePlateProps::from_state_id(state, block);
-        props.power.to_index() as u8
+        props.power
     }
 
     async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
@@ -129,7 +125,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         output: u8,
     ) -> pumpkin_world::BlockStateId {
         let mut props = PressurePlateProps::from_state_id(state.id, block);
-        props.power = Integer0To15::from_index(u16::from(output));
+        props.power = output;
         props.to_state_id(block)
     }
 

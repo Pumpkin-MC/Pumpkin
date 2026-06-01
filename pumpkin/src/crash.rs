@@ -155,7 +155,7 @@ impl CrashReport {
                     eprintln!(
                         "{}\n{}",
                         RED.console_color("Backtrace:"),
-                        &self.captured_backtrace
+                        self.captured_backtrace
                     );
                 }
             }
@@ -178,6 +178,11 @@ impl CrashReport {
             "Message: {}",
             self.payload.as_deref().unwrap_or("<unknown>")
         );
+
+        if let Some(panic_location) = &self.panic_location {
+            writeln_output!(&mut output, "Panic Location: {}", panic_location);
+        }
+
         writeln_output!(&mut output);
         writeln_output!(&mut output, "--- Panicking Thread ---");
         writeln_output!(&mut output, "ID: {:?}", self.thread.id());
@@ -212,7 +217,11 @@ impl CrashReport {
                 "Operating System: {}",
                 System::long_os_version().unwrap_or("Unknown".to_string())
             );
-            writeln_output!(&mut output, "Kernel: {}", System::kernel_long_version());
+            writeln_output!(
+                &mut output,
+                "Kernel: {}",
+                System::kernel_version().unwrap_or_else(|| "Unknown".to_string())
+            );
             writeln_output!(
                 &mut output,
                 "Physical Memory: {} MiB/{} MiB used, {} MiB free",

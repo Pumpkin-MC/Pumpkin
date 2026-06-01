@@ -260,15 +260,6 @@ pub struct MapBuilder<T, O: DynamicOps<Value = T> + 'static> {
     ops: &'static O,
 }
 
-impl<T: Clone, O: DynamicOps<Value = T>> MapBuilder<T, O> {
-    pub(crate) const fn new(ops: &'static O) -> Self {
-        Self {
-            builder: DataResult::new_success_with_lifecycle(vec![], Lifecycle::Stable),
-            ops,
-        }
-    }
-}
-
 impl<T: Clone, O: DynamicOps<Value = T>> StructBuilder for MapBuilder<T, O> {
     type Value = T;
 

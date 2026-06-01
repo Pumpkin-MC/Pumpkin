@@ -156,7 +156,9 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                     let item_display = snbt_colorful_display(item, depth + 1)
                         .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
                     content = content
-                        .add_child(TextComponent::text(key.clone()).color_named(NamedColor::Aqua))
+                        .add_child(
+                            TextComponent::text(key.to_string()).color_named(NamedColor::Aqua),
+                        )
                         .add_child(TextComponent::text(": "))
                         .add_child(item_display);
 
@@ -232,8 +234,9 @@ async fn display_data(
     let display = snbt_colorful_display(&tag, 0)
         .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_DATA_ENTITY_QUERY,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_DATA_ENTITY_QUERY,
+            translation::java::COMMANDS_DATA_ENTITY_QUERY,
             [target_name, display],
         ))
         .await;
@@ -243,8 +246,9 @@ async fn display_data(
 
 fn get_i32_result(tag: &NbtTag) -> Result<i32, CommandError> {
     match tag {
-        NbtTag::End => Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_DATA_GET_UNKNOWN,
+        NbtTag::End => Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_DATA_GET_UNKNOWN,
+            translation::java::COMMANDS_DATA_GET_UNKNOWN,
             [],
         ))),
 

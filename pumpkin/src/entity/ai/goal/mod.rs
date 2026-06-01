@@ -5,6 +5,7 @@ pub mod active_target;
 pub mod ambient_stand;
 pub mod avoid_entity;
 pub mod beg;
+pub mod blaze_attack;
 pub mod breed;
 pub mod chase_player;
 pub mod creeper_ignite;
@@ -122,7 +123,8 @@ impl Controls {
                 return i;
             }
         }
-        unreachable!()
+        tracing::error!("Controls::idx called with no controls set");
+        0
     }
 }
 

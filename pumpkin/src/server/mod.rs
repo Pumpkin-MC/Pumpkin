@@ -11,8 +11,12 @@ use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
+use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{
+    command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
+    world::map::MapManager,
+};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
@@ -22,17 +26,16 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
-use pumpkin_protocol::java::client::play::CChangeDifficulty;
+use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::LevelLocker;
-use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
@@ -51,13 +54,18 @@ use tokio_util::task::TaskTracker;
 
 mod connection_cache;
 mod key_store;
+pub mod recipe;
+pub mod scheduler;
 pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-use super::command::args::entities::{
+pub use recipe::RecipeManager;
+
+use crate::command::args::entities::{
     EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
 };
+use crate::server::scheduler::TaskScheduler;
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -76,6 +84,8 @@ pub struct Server {
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
+    /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
+    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
     /// Manages server status information.
     listing: Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -92,11 +102,16 @@ pub struct Server {
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
+    pub recipe_manager: Arc<recipe::RecipeManager>,
+    /// Assigns unique IDs to maps.
+    map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
     /// Pulled from Mojang API on startup
     pub mojang_public_keys: ArcSwap<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
+    /// Manages all maps on the server
+    pub map_manager: MapManager,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
@@ -115,14 +130,13 @@ pub struct Server {
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
     pub player_idle_timeout: AtomicI32,
+    /// Manages scheduled tasks (e.g. from plugins)
+    pub task_scheduler: Arc<TaskScheduler>,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
-    // Gets unlocked when dropped
-    // TODO: Make this a trait
-    _locker: Arc<Option<AnvilLevelLocker>>,
 }
 
 impl Server {
@@ -163,19 +177,13 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-        let locker = match AnvilLevelLocker::lock(&world_path) {
-            Ok(l) => Some(l),
-            Err(err) => {
-                warn!(
-                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
-                );
-                None
-            }
-        };
-
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
-            LevelData::default(basic_config.seed)
+            let default_data = LevelData::default(basic_config.seed);
+            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
+                error!("Failed to save level.dat: {err}");
+            }
+            default_data
         });
 
         let seed = level_info.world_gen_settings.seed;
@@ -219,6 +227,8 @@ impl Server {
             ))),
             permission_registry,
             container_id: 0.into(),
+            recipe_manager: Arc::new(recipe::RecipeManager::new()),
+            map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions: vec![
                 Dimension::OVERWORLD,
@@ -229,9 +239,11 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
+            bedrock_oidc_keys: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
+            map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
             white_list,
@@ -240,14 +252,21 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            task_scheduler: Arc::new(TaskScheduler::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
-            _locker: Arc::new(locker),
         };
         let server = Arc::new(server);
+
+        let gen_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .thread_name(|i| format!("Gen-Pool-{i}"))
+                .build()
+                .expect("Failed to build generation thread pool"),
+        );
 
         let server_clone = server.clone();
         tokio::spawn(async move {
@@ -263,6 +282,7 @@ impl Server {
             let l_info = server.level_info.clone(); // Access from struct
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
+            let pool = gen_pool.clone();
 
             tokio::task::spawn_blocking(move || {
                 info!(
@@ -271,13 +291,11 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                World::load(
-                    into_level(dim, &config, path, registry.clone(), seed),
-                    l_info,
-                    dim,
-                    registry,
-                    weak,
-                )
+                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
+                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+                level.world_portal.store(Arc::new(Some(portal)));
+                world
             })
         };
 
@@ -290,9 +308,9 @@ impl Server {
         );
 
         let worlds_vec = vec![
-            Arc::new(overworld.expect("Overworld panicked")),
-            Arc::new(nether.expect("Nether panicked")),
-            Arc::new(end.expect("End panicked")),
+            overworld.expect("Overworld panicked"),
+            nether.expect("Nether panicked"),
+            end.expect("End panicked"),
         ];
         server.worlds.store(Arc::new(worlds_vec));
         if let Ok(k) = keys {
@@ -300,6 +318,23 @@ impl Server {
         }
 
         info!("All worlds loaded successfully.");
+
+        if server.basic_config.online_mode {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                server_clone
+                    .bedrock_oidc_keys
+                    .get_or_init(|| async {
+                        tokio::task::block_in_place(|| {
+                            pumpkin_util::jwt::fetch_oidc_jwks().unwrap_or_else(|e| {
+                                error!("Failed to fetch Bedrock OIDC keys: {e}");
+                                (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                            })
+                        })
+                    })
+                    .await;
+            });
+        }
         server
     }
 
@@ -326,6 +361,50 @@ impl Server {
         }
         .cloned()
         .unwrap()
+    }
+
+    pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+        {
+            let worlds = self.worlds.load();
+            if let Some(world) = worlds
+                .iter()
+                .find(|w| w.get_world_name() == name && w.dimension == dimension)
+            {
+                return world.clone();
+            }
+        }
+
+        let server = self.clone();
+        let name_clone = name.clone();
+        tokio::task::spawn_blocking(move || {
+            let world_path = server.basic_config.get_world_path().join(name_clone);
+            let registry = server.block_registry.clone();
+            let l_info = server.level_info.clone();
+            let weak = Arc::downgrade(&server);
+            let config = Arc::new(server.advanced_config.world.clone());
+            let seed = server.level_info.load().world_gen_settings.seed;
+
+            // TODO: gen_pool should be reused
+            let level = pumpkin_world::dimension::into_level(
+                dimension.clone(),
+                &config,
+                world_path,
+                seed,
+                None,
+            );
+            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+            let world = Arc::new(world);
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+            level.world_portal.store(Arc::new(Some(portal)));
+            server.worlds.rcu(|worlds| {
+                let mut new_worlds = (**worlds).clone();
+                new_worlds.push(world.clone());
+                new_worlds
+            });
+            world
+        })
+        .await
+        .expect("World creation panicked")
     }
 
     /// Adds a new player to the server.
@@ -361,13 +440,24 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = Dimension::from_name(dimension_key) {
-                    let world = self.get_world_from_dimension(dimension);
-                    (world, Some(data))
+        let (world, nbt) =
+            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
+                if let Some(dimension_key) = data.get_string("Dimension") {
+                    if let Some(dimension) = Dimension::from_name(dimension_key) {
+                        let world = self.get_world_from_dimension(dimension);
+                        (world, Some(data))
+                    } else {
+                        warn!("Invalid dimension key in player data: {dimension_key}");
+                        let default_world = self
+                            .worlds
+                            .load()
+                            .first()
+                            .expect("Default world should exist")
+                            .clone();
+                        (default_world, Some(data))
+                    }
                 } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
+                    // Player data exists but doesn't have a "Dimension" key.
                     let default_world = self
                         .worlds
                         .load()
@@ -377,25 +467,15 @@ impl Server {
                     (default_world, Some(data))
                 }
             } else {
-                // Player data exists but doesn't have a "Dimension" key.
+                // No player data found or an error occurred, default to the Overworld.
                 let default_world = self
                     .worlds
                     .load()
                     .first()
                     .expect("Default world should exist")
                     .clone();
-                (default_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            let default_world = self
-                .worlds
-                .load()
-                .first()
-                .expect("Default world should exist")
-                .clone();
-            (default_world, None)
-        };
+                (default_world, None)
+            };
 
         let mut player = Player::new(
             client,
@@ -479,9 +559,24 @@ impl Server {
     /// # Arguments
     ///
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
-    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
+    pub fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
-            world.broadcast_packet_all(packet).await;
+            world.broadcast_packet_all(packet);
+        }
+    }
+
+    pub async fn broadcast_tab_list_header_footer(
+        &self,
+        header: &TextComponent,
+        footer: &TextComponent,
+    ) {
+        let packet = CTabList::new(header, footer);
+        for world in self.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                *player.tab_list_header.lock().await = header.clone();
+                *player.tab_list_footer.lock().await = footer.clone();
+                player.client.enqueue_packet(&packet).await;
+            }
         }
     }
 
@@ -526,7 +621,7 @@ impl Server {
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
-    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
+    pub fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
         if current_info.difficulty_locked && !force_update {
             return;
@@ -548,8 +643,7 @@ impl Server {
             world.set_difficulty(difficulty);
         }
 
-        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked))
-            .await;
+        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked));
     }
 
     /// Searches for a player by their username across all worlds.
@@ -671,6 +765,17 @@ impl Server {
         self.container_id.fetch_add(1, Ordering::SeqCst)
     }
 
+    /// Generates a new map id.
+    pub fn next_map_id(&self) -> i32 {
+        let id = self.map_id.fetch_add(1, Ordering::SeqCst);
+        self.level_info.rcu(|level_info| {
+            let mut new_level_info = (**level_info).clone();
+            new_level_info.map_id = self.map_id.load(Ordering::SeqCst);
+            new_level_info
+        });
+        id
+    }
+
     pub fn get_branding(&self) -> CPluginMessage<'_> {
         self.branding.get_branding()
     }
@@ -717,20 +822,31 @@ impl Server {
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
-    pub async fn tick_players_and_network(&self) {
-        // First, flush pending block updates and synced block events to clients
-        for world in self.worlds.load().iter() {
+    pub async fn tick_players_and_network(self: &Arc<Self>) {
+        let worlds = self.worlds.load();
+
+        for world in worlds.iter() {
             world.flush_block_updates().await;
             world.flush_synced_block_events().await;
         }
 
-        let players_to_tick: Vec<_> = self.get_all_players();
-        for player in players_to_tick {
-            player.tick(self).await;
+        let mut set = JoinSet::new();
+        for world in worlds.iter() {
+            let players = world.players.load();
+            for player in players.iter() {
+                let player_clone = player.clone();
+                let server_clone = self.clone();
+                set.spawn(async move {
+                    player_clone.tick(&server_clone).await;
+                });
+            }
         }
+        set.join_all().await;
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
+        self.task_scheduler.tick(self).await;
+
         let mut set = JoinSet::new();
 
         for world in self.worlds.load().iter() {
@@ -738,7 +854,7 @@ impl Server {
             let server = self.clone();
 
             set.spawn(async move {
-                world.tick(&server).await;
+                world.tick(server).await;
             });
         }
 

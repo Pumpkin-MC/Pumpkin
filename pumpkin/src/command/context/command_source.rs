@@ -1,4 +1,5 @@
 use crate::command::CommandSender;
+use crate::command::argument_types::entity_anchor::EntityAnchor;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::entity::EntityBase;
@@ -14,10 +15,14 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub const REQUIRES_PLAYER: CommandErrorType<0> =
-    CommandErrorType::new(translation::PERMISSIONS_REQUIRES_PLAYER);
-pub const REQUIRES_ENTITY: CommandErrorType<0> =
-    CommandErrorType::new(translation::PERMISSIONS_REQUIRES_ENTITY);
+pub const REQUIRES_PLAYER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+);
+pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PERMISSIONS_REQUIRES_ENTITY,
+    translation::java::PERMISSIONS_REQUIRES_ENTITY,
+);
 
 pub trait ReturnValueCallable: Send + Sync {
     fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
@@ -326,7 +331,7 @@ impl CommandSource {
         entity: &Arc<dyn EntityBase>,
         anchor: EntityAnchor,
     ) -> Self {
-        self.with_looking_at_pos(anchor.position_at_entity(entity))
+        self.with_looking_at_pos(anchor.position_at_entity(entity.get_entity()))
     }
 
     /// Returns a new [`CommandSource`] with the rotation changed in such
@@ -406,10 +411,13 @@ impl CommandSource {
 
     /// Sends a message to all online operators.
     async fn send_to_ops(&self, message: TextComponent) {
-        let text =
-            TextComponent::translate("chat.type.admin", &[self.display_name.clone(), message])
-                .color(Color::Named(NamedColor::Gray))
-                .italic();
+        let text = TextComponent::translate_cross(
+            "chat.type.admin",
+            "chat.type.admin",
+            &[self.display_name.clone(), message],
+        )
+        .color(Color::Named(NamedColor::Gray))
+        .italic();
         let Some(server) = &self.server else {
             return;
         };
@@ -489,53 +497,6 @@ impl CommandSource {
             None => true,
             Some(permission) => self.has_permission(permission).await,
         }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum EntityAnchor {
-    Feet,
-    Eyes,
-}
-
-// TODO: Move this to the /execute command when implemented.
-impl EntityAnchor {
-    /// Gets the [`EntityAnchor`] whose identity is the ID provided.
-    #[must_use]
-    pub fn from_id(id: &str) -> Option<Self> {
-        match id {
-            "feet" => Some(Self::Feet),
-            "eyes" => Some(Self::Eyes),
-            _ => None,
-        }
-    }
-
-    /// Gets the ID of this [`EntityAnchor`]
-    #[must_use]
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Feet => "feet",
-            Self::Eyes => "eyes",
-        }
-    }
-
-    /// Gets the position of an entity with respect to this anchor.
-    pub fn position_at_entity(self, entity: &Arc<dyn EntityBase>) -> Vector3<f64> {
-        let entity = entity.get_entity();
-        let mut pos = entity.pos.load();
-        pos.y = entity.get_entity().get_eye_y();
-        pos
-    }
-
-    /// Gets the position of a source with respect to this anchor.
-    #[must_use]
-    pub fn position_at_source(self, command_source: &CommandSource) -> Vector3<f64> {
-        command_source
-            .entity
-            .as_ref()
-            .map_or(command_source.position, |entity| {
-                self.position_at_entity(entity)
-            })
     }
 }
 

@@ -16,10 +16,8 @@ impl BlockMetadata for WeepingVinesBlock {
 }
 
 impl BlockBehaviour for WeepingVinesBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
@@ -38,7 +36,7 @@ impl BlockBehaviour for WeepingVinesBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let support_pos = args.position.up();
-            let support_block = args.world.get_block(&support_pos).await;
+            let support_block = args.world.get_block(&support_pos);
             if support_block == &Block::WEEPING_VINES {
                 args.world
                     .set_block_state(
@@ -53,7 +51,7 @@ impl BlockBehaviour for WeepingVinesBlock {
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let support_pos = args.position.up();
-            let support_block = args.world.get_block(&support_pos).await;
+            let support_block = args.world.get_block(&support_pos);
             if support_block == &Block::WEEPING_VINES_PLANT {
                 args.world
                     .set_block_state(
@@ -68,15 +66,14 @@ impl BlockBehaviour for WeepingVinesBlock {
 }
 
 impl PlantBlockBase for WeepingVinesBlock {
-    async fn can_place_at(
+    fn can_place_at(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         // Determine support block
         let support_pos = pos.up();
-        let (support_block, support_block_state) =
-            block_accessor.get_block_and_state(&support_pos).await;
+        let (support_block, support_block_state) = block_accessor.get_block_and_state(&support_pos);
 
         if support_block == &Block::WEEPING_VINES || support_block == &Block::WEEPING_VINES_PLANT {
             return true;
@@ -94,7 +91,7 @@ impl PlantBlockBase for WeepingVinesBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             return Block::AIR.default_state.id;
         }
         block_state

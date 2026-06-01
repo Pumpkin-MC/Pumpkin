@@ -6,7 +6,7 @@ use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_CONTENT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PLAY_CONTAINER_SET_CONTENT)]
 pub struct CSetContainerContent<'a> {
@@ -37,7 +37,7 @@ impl ClientPacket for CSetContainerContent<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

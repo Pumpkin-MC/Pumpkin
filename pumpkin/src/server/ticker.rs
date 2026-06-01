@@ -1,9 +1,14 @@
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
-use std::{
-    sync::{Arc, atomic::Ordering},
-    time::{Duration, Instant},
+use crate::{
+    STOP_INTERRUPT,
+    plugin::server::{
+        server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
+    },
+    server::Server,
 };
-use tokio::time::sleep;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use tokio::time::{Instant, sleep_until};
 use tracing::debug;
 
 pub struct Ticker;
@@ -11,41 +16,40 @@ pub struct Ticker;
 impl Ticker {
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(server: &Arc<Server>) {
-        let mut last_tick = Instant::now();
-        'ticker: loop {
-            if SHOULD_STOP.load(Ordering::Relaxed) {
-                break;
-            }
+        let mut next_tick = Instant::now();
 
-            let tick_start_time = Instant::now();
+        'ticker: loop {
+            let tick_start_time = std::time::Instant::now();
             let manager = &server.tick_rate_manager;
 
             manager.tick();
 
-            // Now server.tick() handles both player/network ticking (always)
-            // and world logic ticking (conditionally based on freeze state)
+            let tick_number = server.tick_count.load(Ordering::Relaxed);
+            let _ = server
+                .plugin_manager
+                .fire(ServerTickStartEvent::new(tick_number))
+                .await;
+
             if manager.is_sprinting() {
-                // A sprint is active, so we tick.
                 manager.start_sprint_tick_work();
                 server.tick().await;
 
-                // After ticking, end the work and check if the sprint is over.
                 if manager.end_sprint_tick_work() {
-                    // This was the last sprint tick. Finish the sprint and restore the previous state.
-                    manager.finish_tick_sprint(server).await;
+                    manager.finish_tick_sprint(server);
                 }
             } else {
-                // Always call tick - it will internally decide what to tick based on frozen state
                 server.tick().await;
             }
 
-            // Record the total time this tick took
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
-            server.update_tick_times(tick_duration_nanos).await;
 
-            // Sleep logic remains the same
-            let now = Instant::now();
-            let elapsed = now.duration_since(last_tick);
+            let tick_number = server.tick_count.load(Ordering::Relaxed);
+            let _ = server
+                .plugin_manager
+                .fire(ServerTickEndEvent::new(tick_number, tick_duration_nanos))
+                .await;
+
+            server.update_tick_times(tick_duration_nanos).await;
 
             let tick_interval = if manager.is_sprinting() {
                 Duration::ZERO
@@ -53,21 +57,22 @@ impl Ticker {
                 Duration::from_nanos(manager.nanoseconds_per_tick() as u64)
             };
 
-            if let Some(sleep_time) = tick_interval.checked_sub(elapsed)
-                && !sleep_time.is_zero()
-            {
-                // Use select! to make sleep interruptible by STOP_INTERRUPT
-                tokio::select! {
-                    () = sleep(sleep_time) => {},
-                    () = STOP_INTERRUPT.cancelled() => {
-                        // Shutdown requested, exit the loop immediately
-                        break 'ticker;
-                    }
+            next_tick += tick_interval;
+
+            tokio::select! {
+                () = sleep_until(next_tick) => {},
+                () = STOP_INTERRUPT.cancelled() => {
+                    break 'ticker;
                 }
             }
 
-            last_tick = Instant::now();
+            // Death Spiral Prevention
+            let now = Instant::now();
+            if now.saturating_duration_since(next_tick) > Duration::from_secs(5) {
+                next_tick = now;
+            }
         }
+
         debug!("Ticker stopped");
     }
 }

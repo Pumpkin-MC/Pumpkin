@@ -1,5 +1,9 @@
 #![allow(unused_imports)]
 
+#[rustfmt::skip]
+#[path = "generated/chest_loot.rs"]
+pub mod chest_loot_table;
+
 #[cfg(feature = "item")]
 #[rustfmt::skip]
 #[path = "generated/item.rs"]
@@ -88,6 +92,7 @@ pub mod meta_data_type;
 pub mod noise_parameter;
 
 #[cfg(feature = "biome")]
+#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/biome.rs"]
 pub mod biome;
@@ -180,6 +185,14 @@ pub mod world {
     pub use super::world_event::*;
 }
 
+#[rustfmt::skip]
+#[path = "generated/placed_feature.rs"]
+pub mod placed_feature;
+
+#[rustfmt::skip]
+#[path = "generated/configured_feature.rs"]
+pub mod configured_feature;
+
 #[cfg(feature = "scoreboard")]
 #[rustfmt::skip]
 #[path = "generated/scoreboard_slot.rs"]
@@ -196,6 +209,7 @@ pub mod damage;
 pub mod fluid;
 
 #[cfg(feature = "block")]
+#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;
@@ -214,6 +228,11 @@ pub mod item_id_remap;
 #[rustfmt::skip]
 #[path = "generated/entity_id_remap.rs"]
 pub mod entity_id_remap;
+
+#[cfg(feature = "sound_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/sound_id_remap.rs"]
+pub mod sound_id_remap;
 
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
@@ -289,3 +308,18 @@ pub use blocks::Block;
 #[rustfmt::skip]
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
+
+#[cfg(feature = "carver")]
+#[rustfmt::skip]
+#[path = "generated/carver.rs"]
+pub mod carver;
+
+#[cfg(feature = "villager")]
+#[rustfmt::skip]
+#[path = "generated/villager.rs"]
+pub mod villager;
+
+#[cfg(feature = "slot_ranges")]
+#[rustfmt::skip]
+#[path = "generated/slot_ranges.rs"]
+pub mod slot_ranges;

@@ -57,9 +57,14 @@ fn resolve_sender_world(
     sender: &CommandSender,
     server: &crate::server::Server,
 ) -> std::sync::Arc<World> {
-    sender
-        .world()
-        .unwrap_or_else(|| server.worlds.load().first().unwrap().clone())
+    sender.world().unwrap_or_else(|| {
+        server
+            .worlds
+            .load()
+            .first()
+            .expect("Server should have at least one world")
+            .clone()
+    })
 }
 
 struct EntitiesToEntityExecutor;
@@ -81,8 +86,9 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             let pitch = destination.pitch.load();
             let world = destination.world.load_full();
             if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                     [],
                 )));
             }
@@ -112,8 +118,9 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                     [],
                 )));
             }
@@ -147,8 +154,9 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                     [],
                 )));
             }
@@ -183,8 +191,9 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                     [],
                 )));
             }
@@ -219,8 +228,9 @@ impl CommandExecutor for EntitiesToPosExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                    translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                     [],
                 )));
             }
@@ -259,8 +269,9 @@ impl CommandExecutor for SelfToEntityExecutor {
             match sender {
                 CommandSender::Player(player) => {
                     if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
-                            translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                             [],
                         )));
                     }
@@ -271,8 +282,9 @@ impl CommandExecutor for SelfToEntityExecutor {
 
                     Ok(1)
                 }
-                _ => Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::PERMISSIONS_REQUIRES_PLAYER,
+                _ => Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
                     [],
                 ))),
             }
@@ -295,8 +307,9 @@ impl CommandExecutor for SelfToPosExecutor {
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
                     if !World::is_valid(BlockPos(pos.floor_to_i32())) {
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
-                            translation::COMMANDS_TELEPORT_INVALIDPOSITION,
+                        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
+                            translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
                             [],
                         )));
                     }
@@ -307,8 +320,9 @@ impl CommandExecutor for SelfToPosExecutor {
 
                     Ok(1)
                 }
-                _ => Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::PERMISSIONS_REQUIRES_PLAYER,
+                _ => Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+                    translation::java::PERMISSIONS_REQUIRES_PLAYER,
                     [],
                 ))),
             }

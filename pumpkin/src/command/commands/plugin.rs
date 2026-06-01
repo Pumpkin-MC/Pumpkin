@@ -158,6 +158,53 @@ impl CommandExecutor for UnloadExecutor {
     }
 }
 
+struct HotReloadExecutor(bool);
+
+impl CommandExecutor for HotReloadExecutor {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let enabled = self.0;
+
+            if enabled {
+                if let Err(e) = server.plugin_manager.start_watcher().await {
+                    return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                        "Failed to start plugin watcher: {e}"
+                    ))));
+                }
+
+                sender
+                    .send_message(
+                        TextComponent::text("Hot reloading has been enabled.")
+                            .color_named(NamedColor::Green),
+                    )
+                    .await;
+                sender
+                    .send_message(
+                        TextComponent::text("WARNING: Hot reloading can impact performance and should only be enabled during plugin development.")
+                            .color_named(NamedColor::Red),
+                    )
+                    .await;
+            } else {
+                server.plugin_manager.stop_watcher().await;
+
+                sender
+                    .send_message(
+                        TextComponent::text("Hot reloading has been disabled.")
+                            .color_named(NamedColor::Green),
+                    )
+                    .await;
+            }
+
+            Ok(1)
+        })
+    }
+}
+
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         require(|sender| sender.has_permission_lvl(PermissionLvl::Three))
@@ -168,6 +215,11 @@ pub fn init_command_tree() -> CommandTree {
             .then(
                 literal("unload")
                     .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(UnloadExecutor)),
+            )
+            .then(
+                literal("hotreload")
+                    .then(literal("enable").execute(HotReloadExecutor(true)))
+                    .then(literal("disable").execute(HotReloadExecutor(false))),
             )
             .then(literal("list").execute(ListExecutor)),
     )

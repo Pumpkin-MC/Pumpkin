@@ -114,7 +114,7 @@ pub fn build() -> TokenStream {
 
     quote! {
         use crate::tag::{RegistryKey, Tag, Taggable};
-        
+
         #[derive(Clone, Copy, Debug, PartialEq)]
         pub struct DamageType {
             pub death_message_type: DeathMessageType,

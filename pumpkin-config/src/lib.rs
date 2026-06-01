@@ -2,6 +2,7 @@ use fun::FunConfig;
 use logging::LoggingConfig;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
+use recipe::RecipeConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::net::SocketAddr;
@@ -11,6 +12,8 @@ use tracing::{debug, warn};
 pub mod fun;
 pub mod logging;
 pub mod networking;
+pub mod plugins;
+pub mod recipe;
 
 pub mod resource_pack;
 
@@ -20,6 +23,7 @@ pub use networking::auth::AuthenticationConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
+pub use plugins::PluginsConfig;
 pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
 
@@ -40,6 +44,26 @@ use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
 use world::LevelConfig;
+
+#[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct PumpkinConfig {
+    #[serde(flatten)]
+    pub basic: BasicConfiguration,
+    #[serde(flatten)]
+    pub advanced: AdvancedConfiguration,
+}
+
+impl LoadConfiguration for PumpkinConfig {
+    fn get_path() -> &'static Path {
+        Path::new("pumpkin.toml")
+    }
+
+    fn validate(&self) {
+        self.basic.validate();
+        self.advanced.validate();
+    }
+}
 
 /// Advanced configuration for optional and feature-specific server settings.
 ///
@@ -70,6 +94,10 @@ pub struct AdvancedConfiguration {
     pub player_data: PlayerDataConfig,
     /// Optional fun and experimental features.
     pub fun: FunConfig,
+    /// Recipe-related configuration.
+    pub recipe: RecipeConfig,
+    /// Plugin-related configuration.
+    pub plugins: PluginsConfig,
 }
 
 /// Basic configuration for core server settings.
@@ -170,6 +198,38 @@ impl BasicConfiguration {
     #[must_use]
     pub fn get_world_path(&self) -> PathBuf {
         PathBuf::from(&self.default_level_name)
+    }
+
+    pub fn validate(&self) {
+        let min = NonZeroU8::new(2).unwrap();
+        let max = NonZeroU8::new(64).unwrap();
+
+        assert!(
+            self.view_distance.ge(&min),
+            "View distance must be at least 2"
+        );
+        assert!(
+            self.view_distance.le(&max),
+            "View distance must be less than 64"
+        );
+        if self.online_mode {
+            assert!(
+                self.encryption,
+                "When online mode is enabled, encryption must be enabled"
+            );
+        }
+        if self.allow_chat_reports {
+            assert!(
+                self.online_mode,
+                "When allow_chat_reports is enabled, online_mode must be enabled"
+            );
+        }
+    }
+}
+
+impl AdvancedConfiguration {
+    pub const fn validate(&self) {
+        //self.resource_pack.validate();
     }
 }
 
@@ -303,46 +363,4 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
-}
-
-impl LoadConfiguration for AdvancedConfiguration {
-    fn get_path() -> &'static Path {
-        Path::new("features.toml")
-    }
-
-    fn validate(&self) {
-        self.resource_pack.validate();
-    }
-}
-
-impl LoadConfiguration for BasicConfiguration {
-    fn get_path() -> &'static Path {
-        Path::new("configuration.toml")
-    }
-
-    fn validate(&self) {
-        let min = NonZeroU8::new(2).unwrap();
-        let max = NonZeroU8::new(64).unwrap();
-
-        assert!(
-            self.view_distance.ge(&min),
-            "View distance must be at least 2"
-        );
-        assert!(
-            self.view_distance.le(&max),
-            "View distance must be less than 64"
-        );
-        if self.online_mode {
-            assert!(
-                self.encryption,
-                "When online mode is enabled, encryption must be enabled"
-            );
-        }
-        if self.allow_chat_reports {
-            assert!(
-                self.online_mode,
-                "When allow_chat_reports is enabled, online_mode must be enabled"
-            );
-        }
-    }
 }

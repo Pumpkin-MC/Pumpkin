@@ -61,14 +61,13 @@ impl Goal for PlaceBlockGoal {
             let world = entity.world.load();
             let target_pos = BlockPos::new(bx, by, bz);
 
-            let state_id = world.get_block_state_id(&target_pos).await;
+            let state_id = world.get_block_state_id(&target_pos);
             if !is_air(state_id) {
                 return;
             }
 
             let below_pos = BlockPos::new(bx, by - 1, bz);
-            let below_block = world.get_block(&below_pos).await;
-            let below_state = world.get_block_state(&below_pos).await;
+            let (below_block, below_state) = world.get_block_and_state(&below_pos);
             if !below_state.is_solid()
                 || !below_state.is_full_cube()
                 || below_block == &Block::BEDROCK
@@ -80,7 +79,7 @@ impl Goal for PlaceBlockGoal {
             world
                 .set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL)
                 .await;
-            self.enderman.set_carried_block(None).await;
+            self.enderman.set_carried_block(None);
         })
     }
 

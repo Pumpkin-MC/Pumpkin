@@ -15,7 +15,7 @@ use crate::generation::feature::features::tree::trunk::{
     upwards_branching::UpwardsBranchingTrunkPlacer,
 };
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub mod bending;
 pub mod cherry;
@@ -43,7 +43,7 @@ impl TrunkPlacer {
 
     pub fn set_dirt<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: &BlockPos,
@@ -85,7 +85,7 @@ impl TrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
@@ -122,7 +122,7 @@ impl TrunkType {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
@@ -142,7 +142,16 @@ impl TrunkType {
                 below_trunk_provider,
                 trunk_state,
             ),
-            Self::Forking(_) => (vec![], vec![]), // TODO
+            Self::Forking(_) => ForkingTrunkPlacer::generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
             Self::Giant(_) => GiantTrunkPlacer::generate(
                 block_registry,
                 placer,
@@ -193,8 +202,26 @@ impl TrunkType {
                 below_trunk_provider,
                 trunk_state,
             ),
-            Self::UpwardsBranching(_) => (vec![], vec![]), // TODO
-            Self::Cherry(_) => (vec![], vec![]),           // TODO
+            Self::UpwardsBranching(upwards_branching) => upwards_branching.generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
+            Self::Cherry(cherry) => cherry.generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
         }
     }
 }

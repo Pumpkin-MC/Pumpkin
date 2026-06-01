@@ -42,7 +42,7 @@ pub trait LoadJSONConfiguration {
     where
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
-        let exe_dir = env::current_dir().unwrap();
+        let exe_dir = env::current_dir().expect("Failed to get current directory");
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
             debug!("creating new data root folder");
@@ -63,7 +63,11 @@ pub trait LoadJSONConfiguration {
         } else {
             let content = Self::default();
 
-            if let Err(err) = fs::write(&path, serde_json::to_string_pretty(&content).unwrap()) {
+            if let Err(err) = fs::write(
+                &path,
+                serde_json::to_string_pretty(&content)
+                    .expect("Failed to serialize default data config"),
+            ) {
                 error!(
                     "Couldn't write default data config to {}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
                     path.display(),
@@ -87,7 +91,7 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
     where
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
-        let exe_dir = env::current_dir().unwrap();
+        let exe_dir = env::current_dir().expect("Failed to get current directory");
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
             debug!("creating new data root folder");

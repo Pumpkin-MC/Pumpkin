@@ -1,18 +1,29 @@
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
+use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
 };
 use thiserror::Error;
-use tokio::sync::{Notify, RwLock};
-use tracing::{error, info};
+use tokio::{
+    sync::{Notify, RwLock},
+    task::JoinHandle,
+};
+use tracing::{debug, error, info, warn};
 
 pub mod api;
+pub mod cache;
 pub mod loader;
+/// Constants for plugin permissions.
+///
+/// Plugins can request these permissions in their metadata to access specific
+/// host features.
+pub mod permissions;
 
 use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
@@ -22,6 +33,8 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
 pub const PLUGIN_API_VERSION: u32 = 2;
+
+const PLUGIN_DIR: &str = "./plugins";
 
 /// A trait for handling events dynamically.
 ///
@@ -169,6 +182,9 @@ pub struct PluginManager {
     plugin_states: RwLock<HashMap<String, PluginState>>,
     // Notification for plugin state changes
     state_notify: Arc<Notify>,
+    // Background task for hot reloading
+    hot_reload_task: RwLock<Option<JoinHandle<()>>>,
+    hot_reload_enabled: AtomicBool,
 }
 
 /// Represents a successfully loaded plugin
@@ -182,6 +198,7 @@ struct LoadedPlugin {
     loader_data: Option<Box<dyn Any + Send + Sync>>,
     is_active: bool,
     context: Arc<Context>,
+    path: PathBuf,
 }
 
 /// Error types for plugin management
@@ -201,6 +218,9 @@ pub enum ManagerError {
 
     #[error("Plugin manager not initialized properly")]
     ManagerNotInitialized,
+
+    #[error("Dependency error: {0}")]
+    DependencyError(String),
 }
 
 impl Default for PluginManager {
@@ -218,6 +238,8 @@ impl Default for PluginManager {
             services: Arc::new(RwLock::new(HashMap::new())),
             plugin_states: RwLock::new(HashMap::new()),
             state_notify: Arc::new(Notify::new()),
+            hot_reload_task: RwLock::new(None),
+            hot_reload_enabled: AtomicBool::new(false),
         }
     }
 }
@@ -257,6 +279,108 @@ impl PluginManager {
         self.retry_unloaded_files().await;
     }
 
+    /// Start watching the plugins directory for changes
+    pub async fn start_watcher(&self) -> Result<(), ManagerError> {
+        if self.hot_reload_task.read().await.is_some() {
+            return Ok(());
+        }
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let mut watcher = notify::recommended_watcher(move |res| {
+            if let Ok(event) = res {
+                let _ = tx.blocking_send(event);
+            }
+        })
+        .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
+
+        let plugin_dir = Path::new(PLUGIN_DIR);
+        if !plugin_dir.exists() {
+            std::fs::create_dir_all(plugin_dir)?;
+        }
+
+        watcher
+            .watch(plugin_dir, RecursiveMode::NonRecursive)
+            .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
+
+        let self_ref = self
+            .self_ref
+            .read()
+            .await
+            .clone()
+            .ok_or(ManagerError::ManagerNotInitialized)?;
+
+        let task = tokio::spawn(async move {
+            // Keep watcher alive by moving it into the task
+            let _watcher = watcher;
+
+            while let Some(event) = rx.recv().await {
+                if !self_ref
+                    .hot_reload_enabled
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    continue;
+                }
+
+                match event.kind {
+                    EventKind::Modify(ModifyKind::Data(_)) | EventKind::Create(_) => {
+                        for path in event.paths {
+                            if path.extension().is_some_and(|ext| ext == "wasm") {
+                                debug!("Detected change in plugin: {:?}", path);
+                                // Give it a small delay to ensure file is completely written
+                                tokio::time::sleep(Duration::from_millis(100)).await;
+
+                                // We need to find if this plugin is already loaded to unload it first
+                                let plugin_name = {
+                                    let plugins = self_ref.plugins.read().await;
+                                    plugins
+                                        .iter()
+                                        .find(|p| p.path == path)
+                                        .map(|p| p.metadata.name.clone())
+                                };
+
+                                if let Some(name) = plugin_name {
+                                    info!("Hot-reloading plugin: {}", name);
+                                    let _ = self_ref.unload_plugin(&name).await;
+                                }
+
+                                // For now, we just try to load it. If it's already loaded,
+                                // the loader might handle it or we might get a duplicate.
+                                // Most WASM loaders will just create a new instance.
+                                if let Err(e) = self_ref.start_loading_plugin(&path).await {
+                                    error!("Failed to hot-reload plugin {:?}: {}", path, e);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        *self.hot_reload_task.write().await = Some(task);
+        self.set_hot_reload_enabled(true);
+        Ok(())
+    }
+
+    /// Stop watching the plugins directory for changes
+    pub async fn stop_watcher(&self) {
+        let mut task_lock = self.hot_reload_task.write().await;
+        if let Some(handle) = task_lock.take() {
+            handle.abort();
+        }
+        self.set_hot_reload_enabled(false);
+    }
+
+    pub fn set_hot_reload_enabled(&self, enabled: bool) {
+        self.hot_reload_enabled
+            .store(enabled, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn is_hot_reload_enabled(&self) -> bool {
+        self.hot_reload_enabled
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Retry loading files that couldn't be loaded previously
     async fn retry_unloaded_files(&self) {
         let files_to_retry: Vec<PathBuf> =
@@ -291,17 +415,267 @@ impl PluginManager {
         self.loaders.read().await.clone()
     }
 
+    /// Helper for topological sort of plugins based on dependencies
+    fn topological_sort(plugins: &[(String, Vec<String>)]) -> Result<Vec<String>, String> {
+        fn visit(
+            name: &str,
+            deps_map: &HashMap<String, &Vec<String>>,
+            plugin_names: &HashSet<String>,
+            visited: &mut HashSet<String>,
+            current_path: &mut HashSet<String>,
+            sorted: &mut Vec<String>,
+        ) -> Result<(), String> {
+            if current_path.contains(name) {
+                return Err(format!(
+                    "Circular dependency detected involving plugin: {name}"
+                ));
+            }
+            if !visited.contains(name) {
+                current_path.insert(name.to_string());
+                if let Some(deps) = deps_map.get(name) {
+                    for dep in *deps {
+                        if !plugin_names.contains(dep) {
+                            return Err(format!("Plugin {name} depends on missing plugin: {dep}"));
+                        }
+                        visit(dep, deps_map, plugin_names, visited, current_path, sorted)?;
+                    }
+                }
+                current_path.remove(name);
+                visited.insert(name.to_string());
+                sorted.push(name.to_string());
+            }
+            Ok(())
+        }
+        let mut sorted = Vec::new();
+        let mut visited = HashSet::new();
+        let mut current_path = HashSet::new();
+        let plugin_names: HashSet<String> = plugins.iter().map(|(n, _)| n.clone()).collect();
+        let deps_map: HashMap<String, &Vec<String>> =
+            plugins.iter().map(|(n, d)| (n.clone(), d)).collect();
+
+        for (name, _) in plugins {
+            visit(
+                name,
+                &deps_map,
+                &plugin_names,
+                &mut visited,
+                &mut current_path,
+                &mut sorted,
+            )?;
+        }
+
+        Ok(sorted)
+    }
+
+    /// Ask the server owner if they allow the permissions requested by a plugin
+    #[expect(clippy::print_stdout)]
+    fn ask_permission_confirmation(metadata: &PluginMetadata) -> (bool, std::time::Duration) {
+        use colored::Colorize;
+        use rustyline::DefaultEditor;
+
+        if metadata.permissions.is_empty() {
+            return (true, std::time::Duration::ZERO);
+        }
+
+        let start_time = std::time::Instant::now();
+
+        println!(
+            "\n{} \"{}\" ({}) requests the following permissions:",
+            "Plugin".bold(),
+            metadata.name.cyan(),
+            metadata.version.green()
+        );
+        for permission in &metadata.permissions {
+            if let Some(description) = permissions::get_permission_description(permission) {
+                println!(
+                    "  - {}: {}",
+                    permission.yellow().bold(),
+                    description.italic()
+                );
+            } else {
+                println!("  - {}", permission.yellow().bold());
+            }
+        }
+
+        let prompt = format!(
+            "\n{} [y/N]: ",
+            "Do you want to allow these permissions and load the plugin?".bold()
+        );
+
+        let mut rl_taken = if let Some(logger_option) = crate::LOGGER_IMPL.get()
+            && let Some((wrapper, _, _)) = logger_option
+            && let Some(rl) = wrapper.take_readline()
+        {
+            Some((wrapper, rl))
+        } else {
+            None
+        };
+
+        let result = if let Some((_, ref mut rl)) = rl_taken {
+            rl.readline(&prompt).is_ok_and(|line| {
+                let input = line.trim().to_lowercase();
+                input == "y" || input == "yes"
+            })
+        } else {
+            let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
+            rl.readline(&prompt).is_ok_and(|line| {
+                let input = line.trim().to_lowercase();
+                input == "y" || input == "yes"
+            })
+        };
+
+        if let Some((wrapper, rl)) = rl_taken {
+            wrapper.return_readline(rl);
+        }
+
+        (result, start_time.elapsed())
+    }
+
+    /// Spawn initialization for a single plugin
+    #[expect(clippy::too_many_lines)]
+    async fn spawn_plugin_initialization(
+        &self,
+        mut instance: Box<dyn Plugin>,
+        metadata: PluginMetadata,
+        loader_data: Box<dyn Any + Send + Sync>,
+        loader: Arc<dyn PluginLoader>,
+        path: PathBuf,
+    ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
+        // Mark plugin as loading
+        self.plugin_states
+            .write()
+            .await
+            .insert(metadata.name.clone(), PluginState::Loading);
+
+        let self_ref = self
+            .self_ref
+            .read()
+            .await
+            .clone()
+            .ok_or(ManagerError::ServerNotInitialized)?;
+
+        let context = Arc::new(Context::new(
+            metadata.clone(),
+            Arc::clone(
+                &self
+                    .server
+                    .read()
+                    .await
+                    .clone()
+                    .ok_or(ManagerError::ServerNotInitialized)?,
+            ),
+            Arc::clone(&self.handlers),
+            Arc::clone(&self_ref),
+            Arc::clone(&LOGGER_IMPL),
+        ));
+
+        // Create the plugin structure first
+        let plugin = LoadedPlugin {
+            metadata: metadata.clone(),
+            instance: None, // Will be set after successful initialization
+            loader: loader.clone(),
+            loader_data: Some(loader_data),
+            is_active: false, // Will be set to true after successful initialization
+            context: context.clone(),
+            path,
+        };
+
+        let plugin_index = {
+            let mut plugins = self.plugins.write().await;
+            plugins.push(plugin);
+            plugins.len() - 1
+        };
+
+        // Spawn async task for plugin initialization
+        let self_ref_clone = Arc::clone(&self_ref);
+        let state_notify = Arc::clone(&self.state_notify);
+        let plugin_name = metadata.name.clone();
+        let loader_clone = loader.clone();
+
+        let task = tokio::spawn(async move {
+            // Initialize the plugin
+            match instance.on_load(context.clone()).await {
+                Ok(()) => {
+                    // Update plugin state to loaded
+                    {
+                        let mut plugins = self_ref_clone.plugins.write().await;
+                        if let Some(plugin) = plugins.get_mut(plugin_index) {
+                            plugin.instance = Some(instance);
+                            plugin.is_active = true;
+                        }
+                    }
+                    self_ref_clone
+                        .plugin_states
+                        .write()
+                        .await
+                        .insert(plugin_name.clone(), PluginState::Loaded);
+                    state_notify.notify_waiters();
+
+                    info!("Loaded {} ({})", metadata.name, metadata.version);
+
+                    if !metadata.permissions.is_empty() {
+                        warn!(
+                            "Plugin \"{}\" uses the following permissions: {:?}",
+                            metadata.name, metadata.permissions
+                        );
+                    }
+                }
+                Err(e) => {
+                    // Handle initialization failure
+                    let error_msg = format!("Initialization failed: {e}");
+                    let _ = instance.on_unload(context).await;
+
+                    // Get the loader data before removing the plugin
+                    let loader_data: Option<Box<dyn Any + Send + Sync>> = {
+                        let mut plugins = self_ref_clone.plugins.write().await;
+                        if let Some(plugin) = plugins.get_mut(plugin_index) {
+                            plugin.loader_data.take()
+                        } else {
+                            None
+                        }
+                    };
+
+                    // Try to unload the plugin data
+                    if let Some(data) = loader_data {
+                        tokio::spawn(async move {
+                            loader_clone.unload(data).await.ok();
+                        });
+                    }
+
+                    {
+                        let mut plugins = self_ref_clone.plugins.write().await;
+                        if plugin_index < plugins.len() {
+                            plugins.remove(plugin_index);
+                        }
+                    };
+                    self_ref_clone
+                        .plugin_states
+                        .write()
+                        .await
+                        .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
+                    state_notify.notify_waiters();
+
+                    error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
+                }
+            }
+        });
+
+        Ok(task)
+    }
+
     /// Load all plugins from the plugin directory
-    pub async fn load_plugins(&self) -> Result<(), ManagerError> {
-        const PLUGIN_DIR: &str = "./plugins";
+    pub async fn load_plugins(&self) -> Result<std::time::Duration, ManagerError> {
         let path = Path::new(PLUGIN_DIR);
 
         if !path.exists() {
             std::fs::create_dir(path)?;
-            return Ok(());
+            return Ok(std::time::Duration::ZERO);
         }
 
-        let mut load_tasks = Vec::new();
+        let cache_path = path.join("permission_cache.json");
+        let mut cache = cache::PermissionCache::load(&cache_path).await;
+
+        let mut prepared_plugins = Vec::new();
 
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
@@ -319,143 +693,161 @@ impl PluginManager {
                 continue;
             }
 
-            // Start loading plugin concurrently
-            match self.start_loading_plugin(&path).await {
-                Ok(task) => load_tasks.push(task),
-                Err(err) => error!("{}", err),
+            // Find a loader that can handle this file
+            let loaders = self.loaders.read().await;
+            let mut loader_found = false;
+            for loader in loaders.iter() {
+                if loader.can_load(&path) {
+                    match loader.load(&path).await {
+                        Ok((instance, metadata, loader_data)) => {
+                            prepared_plugins.push((
+                                instance,
+                                metadata,
+                                loader_data,
+                                loader.clone(),
+                                path.clone(),
+                            ));
+                            loader_found = true;
+                        }
+                        Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
+                    }
+                    break;
+                }
+            }
+
+            if !loader_found {
+                self.unloaded_files.write().await.insert(path.clone());
             }
         }
 
-        // Wait for all plugins to complete loading (but don't block on individual plugin initialization)
-        join_all(load_tasks).await;
+        // Resolve dependencies
+        let metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
+            .iter()
+            .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
+            .collect();
 
-        Ok(())
+        let sorted_names =
+            Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
+
+        // Map names back to prepared plugins
+        #[expect(clippy::type_complexity)]
+        let mut plugins_map: HashMap<
+            String,
+            (
+                Box<dyn Plugin>,
+                PluginMetadata,
+                Box<dyn Any + Send + Sync>,
+                Arc<dyn PluginLoader>,
+                PathBuf,
+            ),
+        > = prepared_plugins
+            .into_iter()
+            .map(|(i, m, d, l, p)| (m.name.clone(), (i, m, d, l, p)))
+            .collect();
+
+        let mut total_wait_time = std::time::Duration::ZERO;
+
+        for name in sorted_names {
+            if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
+            {
+                let (allowed, wait_time) = self
+                    .check_permissions_cached(&path, &metadata, &mut cache, &cache_path)
+                    .await;
+
+                total_wait_time += wait_time;
+
+                if !allowed {
+                    warn!(
+                        "Permission denied for plugin \"{}\", skipping loading.",
+                        metadata.name
+                    );
+                    continue;
+                }
+
+                match self
+                    .spawn_plugin_initialization(instance, metadata, loader_data, loader, path)
+                    .await
+                {
+                    Ok(task) => {
+                        // We must await each initialization to ensure dependencies are ready
+                        if let Err(err) = task.await {
+                            error!("Plugin initialization task panicked: {}", err);
+                        }
+                    }
+                    Err(err) => error!("{}", err),
+                }
+            }
+        }
+
+        Ok(total_wait_time)
+    }
+
+    async fn check_permissions_cached(
+        &self,
+        path: &Path,
+        metadata: &PluginMetadata,
+        cache: &mut cache::PermissionCache,
+        cache_path: &Path,
+    ) -> (bool, std::time::Duration) {
+        let hash = cache::calculate_hash(path).await.unwrap_or_default();
+
+        if let Some(entry) = cache.entries.get(&hash)
+            && entry.permissions_requested == metadata.permissions
+        {
+            info!(
+                "Found cached permission decision for plugin \"{}\" (approved: {})",
+                metadata.name, entry.approved
+            );
+            return (entry.approved, std::time::Duration::ZERO);
+        }
+
+        let (allowed, wait_time) = Self::ask_permission_confirmation(metadata);
+        cache.entries.insert(
+            hash,
+            cache::PermissionCacheEntry {
+                permissions_requested: metadata.permissions.clone(),
+                approved: allowed,
+            },
+        );
+        let _ = cache.save(cache_path).await;
+        (allowed, wait_time)
     }
 
     /// Start loading a plugin asynchronously
-    #[expect(clippy::too_many_lines)]
     async fn start_loading_plugin(
         &self,
         path: &Path,
     ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
         for loader in self.loaders.read().await.iter() {
             if loader.can_load(path) {
-                let (mut instance, metadata, loader_data) = loader.load(path).await?;
+                let (instance, metadata, loader_data) = loader.load(path).await?;
 
-                // Mark plugin as loading
-                self.plugin_states
-                    .write()
-                    .await
-                    .insert(metadata.name.clone(), PluginState::Loading);
+                let cache_path = Path::new(PLUGIN_DIR).join("permission_cache.json");
+                let mut cache = cache::PermissionCache::load(&cache_path).await;
 
-                let self_ref = self
-                    .self_ref
-                    .read()
-                    .await
-                    .clone()
-                    .ok_or(ManagerError::ServerNotInitialized)?;
+                let (allowed, _) = self
+                    .check_permissions_cached(path, &metadata, &mut cache, &cache_path)
+                    .await;
 
-                let context = Arc::new(Context::new(
-                    metadata.clone(),
-                    Arc::clone(
-                        &self
-                            .server
-                            .read()
-                            .await
-                            .clone()
-                            .ok_or(ManagerError::ServerNotInitialized)?,
-                    ),
-                    Arc::clone(&self.handlers),
-                    Arc::clone(&self_ref),
-                    Arc::clone(&LOGGER_IMPL),
-                ));
+                if !allowed {
+                    warn!(
+                        "Permission denied for plugin \"{}\", skipping loading.",
+                        metadata.name
+                    );
+                    return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                        "Permission denied".to_string(),
+                    )));
+                }
 
-                // Create the plugin structure first
-                let plugin = LoadedPlugin {
-                    metadata: metadata.clone(),
-                    instance: None, // Will be set after successful initialization
-                    loader: loader.clone(),
-                    loader_data: Some(loader_data),
-                    is_active: false, // Will be set to true after successful initialization
-                    context: context.clone(),
-                };
-
-                let plugin_index = {
-                    let mut plugins = self.plugins.write().await;
-                    plugins.push(plugin);
-                    plugins.len() - 1
-                };
-
-                // Remove from unloaded files if it was there
-                self.unloaded_files.write().await.remove(path);
-
-                // Spawn async task for plugin initialization
-                let self_ref_clone = Arc::clone(&self_ref);
-                let state_notify = Arc::clone(&self.state_notify);
-                let plugin_name = metadata.name.clone();
-                let loader_clone = loader.clone();
-
-                let task = tokio::spawn(async move {
-                    // Initialize the plugin
-                    match instance.on_load(context.clone()).await {
-                        Ok(()) => {
-                            // Update plugin state to loaded
-                            {
-                                let mut plugins = self_ref_clone.plugins.write().await;
-                                if let Some(plugin) = plugins.get_mut(plugin_index) {
-                                    plugin.instance = Some(instance);
-                                    plugin.is_active = true;
-                                }
-                            }
-                            self_ref_clone
-                                .plugin_states
-                                .write()
-                                .await
-                                .insert(plugin_name.clone(), PluginState::Loaded);
-                            state_notify.notify_waiters();
-
-                            info!("Loaded {} ({})", metadata.name, metadata.version);
-                        }
-                        Err(e) => {
-                            // Handle initialization failure
-                            let error_msg = format!("Initialization failed: {e}");
-                            let _ = instance.on_unload(context).await;
-
-                            // Get the loader data before removing the plugin
-                            let loader_data: Option<Box<dyn Any + Send + Sync>> = {
-                                let mut plugins = self_ref_clone.plugins.write().await;
-                                if let Some(plugin) = plugins.get_mut(plugin_index) {
-                                    plugin.loader_data.take()
-                                } else {
-                                    None
-                                }
-                            };
-
-                            // Try to unload the plugin data
-                            if let Some(data) = loader_data {
-                                tokio::spawn(async move {
-                                    loader_clone.unload(data).await.ok();
-                                });
-                            }
-
-                            {
-                                let mut plugins = self_ref_clone.plugins.write().await;
-                                if plugin_index < plugins.len() {
-                                    plugins.remove(plugin_index);
-                                }
-                            };
-                            self_ref_clone.plugin_states.write().await.insert(
-                                plugin_name.clone(),
-                                PluginState::Failed(error_msg.clone()),
-                            );
-                            state_notify.notify_waiters();
-
-                            error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
-                        }
-                    }
-                });
-
-                return Ok(task);
+                return self
+                    .spawn_plugin_initialization(
+                        instance,
+                        metadata,
+                        loader_data,
+                        loader.clone(),
+                        path.to_path_buf(),
+                    )
+                    .await;
             }
         }
 
@@ -655,5 +1047,43 @@ impl PluginManager {
             }
         }
         event
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn topological_sort() {
+        let plugins = vec![
+            ("A".to_string(), vec!["B".to_string()]),
+            ("B".to_string(), vec!["C".to_string()]),
+            ("C".to_string(), vec![]),
+        ];
+        let sorted = PluginManager::topological_sort(&plugins).unwrap();
+        assert_eq!(sorted, vec!["C", "B", "A"]);
+
+        let plugins_complex = vec![
+            ("A".to_string(), vec!["B".to_string(), "C".to_string()]),
+            ("B".to_string(), vec!["D".to_string()]),
+            ("C".to_string(), vec!["D".to_string()]),
+            ("D".to_string(), vec![]),
+        ];
+        let sorted = PluginManager::topological_sort(&plugins_complex).unwrap();
+        // Multiple valid sorts possible, but D must be before B and C, and B, C must be before A.
+        assert_eq!(sorted[0], "D");
+        assert!(sorted[1] == "B" || sorted[1] == "C");
+        assert!(sorted[2] == "B" || sorted[2] == "C");
+        assert_eq!(sorted[3], "A");
+
+        let plugins_circular = vec![
+            ("A".to_string(), vec!["B".to_string()]),
+            ("B".to_string(), vec!["A".to_string()]),
+        ];
+        assert!(PluginManager::topological_sort(&plugins_circular).is_err());
+
+        let plugins_missing = vec![("A".to_string(), vec!["B".to_string()])];
+        assert!(PluginManager::topological_sort(&plugins_missing).is_err());
     }
 }

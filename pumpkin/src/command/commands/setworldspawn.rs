@@ -108,8 +108,9 @@ async fn setworldspawn(
         )));
     };
     if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
-        return Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
+            translation::java::COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD,
             [],
         )));
     }
@@ -150,8 +151,9 @@ async fn setworldspawn(
     server.level_info.store(Arc::new(new_info));
 
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_SETWORLDSPAWN_SUCCESS_NEW,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_SETWORLDSPAWN_SUCCESS_NEW,
+            translation::java::COMMANDS_SETWORLDSPAWN_SUCCESS_NEW,
             [
                 TextComponent::text(new_position.0.x.to_string()),
                 TextComponent::text(new_position.0.y.to_string()),

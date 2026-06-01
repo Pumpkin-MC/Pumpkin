@@ -65,7 +65,7 @@ impl CommandExecutor for Executor {
                         .find_map(|(id, component)| {
                             (id == &MaxStackSize).then(|| get::<MaxStackSizeImpl>(*component).size)
                         })
-                        .unwrap(),
+                        .expect("Item should have MaxStackSize component"),
                 );
                 let mut remaining = item_count;
 
@@ -81,7 +81,8 @@ impl CommandExecutor for Executor {
             }
 
             let msg = if targets.len() == 1 {
-                TextComponent::translate(
+                TextComponent::translate_cross(
+                    "commands.give.success.single",
                     "commands.give.success.single",
                     [
                         TextComponent::text(item_count.to_string()),
@@ -96,7 +97,8 @@ impl CommandExecutor for Executor {
                     ],
                 )
             } else {
-                TextComponent::translate(
+                TextComponent::translate_cross(
+                    "commands.give.success.multiple",
                     "commands.give.success.multiple",
                     [
                         TextComponent::text(item_count.to_string()),

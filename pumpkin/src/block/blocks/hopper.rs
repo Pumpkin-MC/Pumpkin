@@ -8,6 +8,7 @@ use crate::block::{
 };
 use crate::world::World;
 
+use crate::block::entities::hopper::HopperBlockEntity;
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper};
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_hopper;
@@ -19,7 +20,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
@@ -43,7 +43,11 @@ impl ScreenHandlerFactory for HopperBlockScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_HOPPER, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_HOPPER,
+            translation::bedrock::CONTAINER_HOPPER,
+            &[],
+        )
     }
 }
 
@@ -55,7 +59,7 @@ type HopperLikeProperties = pumpkin_data::block_properties::HopperLikeProperties
 impl BlockBehaviour for HopperBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
@@ -86,9 +90,7 @@ impl BlockBehaviour for HopperBlock {
         Box::pin(async move {
             let props = HopperLikeProperties::from_state_id(args.state_id, args.block);
             let hopper_block_entity = HopperBlockEntity::new(*args.position, props.facing);
-            args.world
-                .add_block_entity(Arc::new(hopper_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(hopper_block_entity));
             if Block::from_state_id(args.old_state_id) != Block::from_state_id(args.state_id) {
                 check_powered_state(args.world, args.position, args.state_id, args.block).await;
             }
@@ -100,7 +102,7 @@ impl BlockBehaviour for HopperBlock {
             check_powered_state(
                 args.world,
                 args.position,
-                args.world.get_block_state_id(args.position).await,
+                args.world.get_block_state_id(args.position),
                 args.block,
             )
             .await;

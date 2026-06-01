@@ -9,6 +9,7 @@ use crate::entity::projectile::{
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 
 pub struct PotionItem;
@@ -59,30 +60,31 @@ impl ItemBehaviour for SplashPotionItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntityWitchThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityWitchThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
             let entity = Entity::new(world.clone(), position, &EntityType::SPLASH_POTION);
-            let splash = SplashPotionEntity::new_shot(entity, &player.living_entity.entity).await;
+            let splash = SplashPotionEntity::new_shot(entity, &player.living_entity.entity);
 
             // Copy the held item stack data into the projectile
             let main = player.inventory.held_item();
             let mut used_main = true;
-            let mut stack = main.lock().await.clone();
-            if stack.is_empty() || stack.item.id != pumpkin_data::item::Item::SPLASH_POTION.id {
+            let mut stack = {
+                let s = main.lock().await.clone();
+                (!s.is_empty() && s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id)
+                    .then_some(s)
+            };
+            if stack.is_none() {
                 let off = player.inventory.off_hand_item().await;
-                let off_stack = off.lock().await.clone();
-                if !off_stack.is_empty()
-                    && off_stack.item.id == pumpkin_data::item::Item::SPLASH_POTION.id
-                {
-                    stack = off_stack;
+                let s = off.lock().await.clone();
+                if !s.is_empty() && s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id {
+                    stack = Some(s);
                     used_main = false;
                 }
             }
+            let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
             splash.set_item_stack(stack).await;
 
             let yaw = player.living_entity.entity.yaw.load();
@@ -132,30 +134,31 @@ impl ItemBehaviour for LingeringPotionItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntityWitchThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityWitchThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
             let entity = Entity::new(world.clone(), position, &EntityType::LINGERING_POTION);
-            let ling = LingeringPotionEntity::new_shot(entity, &player.living_entity.entity).await;
+            let ling = LingeringPotionEntity::new_shot(entity, &player.living_entity.entity);
 
             // Copy the held item stack data into the projectile
             let main = player.inventory.held_item();
             let mut used_main = true;
-            let mut stack = main.lock().await.clone();
-            if stack.is_empty() || stack.item.id != pumpkin_data::item::Item::LINGERING_POTION.id {
+            let mut stack = {
+                let s = main.lock().await.clone();
+                (!s.is_empty() && s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id)
+                    .then_some(s)
+            };
+            if stack.is_none() {
                 let off = player.inventory.off_hand_item().await;
-                let off_stack = off.lock().await.clone();
-                if !off_stack.is_empty()
-                    && off_stack.item.id == pumpkin_data::item::Item::LINGERING_POTION.id
-                {
-                    stack = off_stack;
+                let s = off.lock().await.clone();
+                if !s.is_empty() && s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id {
+                    stack = Some(s);
                     used_main = false;
                 }
             }
+            let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
             ling.set_item_stack(stack).await;
 
             let yaw = player.living_entity.entity.yaw.load();

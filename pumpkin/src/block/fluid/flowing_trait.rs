@@ -79,8 +79,8 @@ pub trait FlowingFluid: Send + Sync {
         block_pos: &'a BlockPos,
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
-            //let block = world.get_block(block_pos).await;
-            let current_block_state_id = world.get_block_state_id(block_pos).await;
+            //let block = world.get_block(block_pos);
+            let current_block_state_id = world.get_block_state_id(block_pos);
             let block = Block::from_state_id(current_block_state_id);
 
             if !self.has_fluid_at(fluid, current_block_state_id) {
@@ -109,14 +109,12 @@ pub trait FlowingFluid: Send + Sync {
 
                         // Schedule next tick for this position
                         let tick_delay = self.get_flow_speed(world);
-                        world
-                            .schedule_fluid_tick(
-                                fluid,
-                                *block_pos,
-                                tick_delay,
-                                TickPriority::Normal,
-                            )
-                            .await;
+                        world.schedule_fluid_tick(
+                            fluid,
+                            *block_pos,
+                            tick_delay,
+                            TickPriority::Normal,
+                        );
                     }
 
                     // Use the new state for spreading
@@ -160,7 +158,7 @@ pub trait FlowingFluid: Send + Sync {
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
             let below_pos = block_pos.down();
-            let below_state = world.get_block_state(&below_pos).await;
+            let below_state = world.get_block_state(&below_pos);
             let below_block = Block::from_state_id(below_state.id);
             let is_hole = physics::can_be_replaced(below_state, below_block, fluid);
 
@@ -200,7 +198,7 @@ pub trait FlowingFluid: Send + Sync {
                 BlockDirection::East,
             ] {
                 let neighbor_pos = block_pos.offset(direction.to_offset());
-                let neighbor_id = world.get_block_state_id(&neighbor_pos).await;
+                let neighbor_id = world.get_block_state_id(&neighbor_pos);
                 if self
                     .get_effective_props(fluid, neighbor_id)
                     .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False)
@@ -229,7 +227,7 @@ pub trait FlowingFluid: Send + Sync {
         block_pos: &'a BlockPos,
     ) -> impl std::future::Future<Output = Option<FlowingFluidProperties>> + Send + 'a {
         async move {
-            let current_state_id = world.get_block_state_id(block_pos).await;
+            let current_state_id = world.get_block_state_id(block_pos);
             let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
 
             // Sources never change
@@ -247,7 +245,7 @@ pub trait FlowingFluid: Send + Sync {
                 BlockDirection::East,
             ] {
                 let neighbor_pos = block_pos.offset(direction.to_offset());
-                let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
+                let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
                 let Some(neighbor_props) = self.get_effective_props(fluid, neighbor_state_id)
                 else {
                     continue;
@@ -271,7 +269,7 @@ pub trait FlowingFluid: Send + Sync {
             // Attempt infinite source formation first
             if self.can_convert_to_source(world) && neighbor_source_count >= 2 {
                 let below_pos = block_pos.down();
-                let below_state = world.get_block_state(&below_pos).await;
+                let below_state = world.get_block_state(&below_pos);
                 let below_state_id = below_state.id;
 
                 // Check if block below is a stable source of the same fluid
@@ -288,7 +286,7 @@ pub trait FlowingFluid: Send + Sync {
 
             // Then: if there's water above, this block is ALWAYS level 8, falling=true
             let above_pos = block_pos.up();
-            let above_state_id = world.get_block_state_id(&above_pos).await;
+            let above_state_id = world.get_block_state_id(&above_pos);
 
             if self.has_fluid_at(fluid, above_state_id) {
                 return Some(self.get_flowing(fluid, Level::L8, true));
@@ -324,7 +322,7 @@ pub trait FlowingFluid: Send + Sync {
         new_props: FlowingFluidProperties,
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
-            let current_state_id = world.get_block_state_id(pos).await;
+            let current_state_id = world.get_block_state_id(pos);
             if let Some(current_props) = self.get_effective_props(fluid, current_state_id) {
                 let current_level = i32::from(current_props.level.to_index()) + 1;
                 let new_level = i32::from(new_props.level.to_index()) + 1;
@@ -367,7 +365,7 @@ pub trait FlowingFluid: Send + Sync {
                 }
             } else {
                 // Replace non-fluid blocks
-                let block = world.get_block(pos).await;
+                let block = world.get_block(pos);
                 if block.id != Block::AIR.id {
                     world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
                 }
@@ -400,9 +398,7 @@ pub trait FlowingFluid: Send + Sync {
 
             if !is_source {
                 let tick_delay = self.get_flow_speed(world);
-                world
-                    .schedule_fluid_tick(fluid, *pos, tick_delay, TickPriority::Normal)
-                    .await;
+                world.schedule_fluid_tick(fluid, *pos, tick_delay, TickPriority::Normal);
             }
         }
     }
@@ -431,7 +427,7 @@ pub trait FlowingFluid: Send + Sync {
                 BlockDirection::East,
             ] {
                 let neighbor_pos = pos.offset(direction.to_offset());
-                let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
+                let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
 
                 if self
                     .get_effective_props(fluid, neighbor_state_id)
@@ -448,7 +444,7 @@ pub trait FlowingFluid: Send + Sync {
 
             // Check the block below
             let below_pos = pos.down();
-            let below_state = world.get_block_state(&below_pos).await;
+            let below_state = world.get_block_state(&below_pos);
             let below_state_id = below_state.id;
 
             // Check if block below is a stable source of the same fluid

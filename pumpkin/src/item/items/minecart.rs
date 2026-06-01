@@ -28,7 +28,10 @@ impl MinecartItem {
             val if val == Item::HOPPER_MINECART.id => &EntityType::HOPPER_MINECART,
             val if val == Item::FURNACE_MINECART.id => &EntityType::FURNACE_MINECART,
             val if val == Item::COMMAND_BLOCK_MINECART.id => &EntityType::COMMAND_BLOCK_MINECART,
-            _ => unreachable!(),
+            _ => {
+                tracing::error!("Unknown minecart item ID: {}", item.id);
+                &EntityType::MINECART
+            }
         }
     }
 }
@@ -64,7 +67,7 @@ impl ItemBehaviour for MinecartItem {
             if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
                 return;
             }
-            let state_id = world.get_block_state_id(&location).await;
+            let state_id = world.get_block_state_id(&location);
             let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
                 PoweredRailLikeProperties::from_state_id(state_id, block)
                     .shape

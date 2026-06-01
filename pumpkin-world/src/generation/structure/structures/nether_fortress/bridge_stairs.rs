@@ -16,7 +16,6 @@ use crate::{
 };
 
 /// Stairway that transitions from bridge level to interior level (7 × 11 × 7).
-#[derive(Clone)]
 pub struct BridgeStairsPiece {
     pub piece: NetherFortressPiece,
 }
@@ -141,9 +140,5 @@ impl StructurePieceBase for BridgeStairsPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

@@ -1,4 +1,5 @@
 use core::str;
+use serde::Serialize;
 use std::io::{Read, Write};
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
 };
 
 pub mod deserializer;
-use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
+use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 pub mod serializer;
@@ -59,8 +60,8 @@ pub trait NetworkReadExt {
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
-    fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
-    fn get_string(&mut self) -> Result<String, ReadingError>;
+    fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError>;
+    fn get_str(&mut self) -> Result<Box<str>, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -153,25 +154,43 @@ impl<R: Read> NetworkReadExt for R {
         VarULong::decode(self)
     }
 
-    fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
-        let size = self.get_var_uint()?.0 as usize;
-        if size > bound {
-            return Err(ReadingError::TooLarge("string".to_string()));
+    fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError> {
+        let bytes_len = self.get_var_uint()?.0 as usize;
+
+        // We treat `bound` as the maximum number of Java `char`s allowed.
+
+        // First, check if there are too many bytes to even fit in the UTF-16 bound.
+        // 1 Java `char` takes a maximum of 3 bytes in UTF-8:
+        let maximum_utf8_bytes = bound.saturating_mul(3);
+        if bytes_len > maximum_utf8_bytes {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"
+            )));
         }
 
-        let data = self.read_boxed_slice(size)?;
-        String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))
+        let data = self.read_boxed_slice(bytes_len)?;
+        let string =
+            std::str::from_utf8(&data).map_err(|e| ReadingError::Message(e.to_string()))?;
+
+        // Next, if we're able to find the (bound + 1)th UTF-16 character, the string is too big.
+        if string.encode_utf16().nth(bound).is_some() {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many UTF-16 characters (more than the maximum limit {bound})"
+            )));
+        }
+
+        Ok(string.into())
     }
 
-    fn get_string(&mut self) -> Result<String, ReadingError> {
-        self.get_string_bounded(i32::MAX as usize)
+    fn get_str(&mut self) -> Result<Box<str>, ReadingError> {
+        self.get_str_bounded(i32::MAX as usize)
     }
 
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
         let mut bytes = [0u8; 16];
         self.read_exact(&mut bytes)
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-        Ok(uuid::Uuid::from_slice(&bytes).expect("Failed to parse UUID"))
+        Ok(uuid::Uuid::from_bytes(bytes))
     }
 
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError> {
@@ -265,9 +284,7 @@ pub trait NetworkWriteExt {
         list: &[G],
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
-        self.write_var_int(&list.len().try_into().map_err(|_| {
-            WritingError::Message(format!("{} isn't representable as a VarInt", list.len()))
-        })?)?;
+        self.write_var_int(&(list.len() as i32).into())?;
 
         for data in list {
             writer(self, data)?;
@@ -275,6 +292,10 @@ pub trait NetworkWriteExt {
 
         Ok(())
     }
+
+    fn write_serialize<G: Serialize>(&mut self, data: &G) -> Result<(), WritingError>
+    where
+        Self: Sized;
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
 }
@@ -340,7 +361,13 @@ impl<W: Write> NetworkWriteExt for W {
     }
 
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError> {
-        assert!(data.len() <= bound);
+        if data.len() > bound {
+            return Err(WritingError::Message(format!(
+                "string length {} exceeds bound {}",
+                data.len(),
+                bound
+            )));
+        }
         self.write_var_int(&data.len().try_into().map_err(|_| {
             WritingError::Message(format!("{} isn't representable as a VarInt", data.len()))
         })?)?;
@@ -380,6 +407,7 @@ impl<W: Write> NetworkWriteExt for W {
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
         self.write_var_int(&(list.len() as i32).into())?;
+
         for data in list {
             writer(self, data)?;
         }
@@ -387,8 +415,13 @@ impl<W: Write> NetworkWriteExt for W {
         Ok(())
     }
 
+    fn write_serialize<G: Serialize>(&mut self, data: &G) -> Result<(), WritingError> {
+        let mut serializer = serializer::Serializer::new(self);
+        data.serialize(&mut serializer)
+    }
+
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        let mut write_adaptor = WriteAdaptor::new(self);
+        let mut write_adaptor = NbtWriteHelperJava::new(self);
         data.serialize(&mut write_adaptor)
             .map_err(|e| WritingError::Message(e.to_string()))?;
 
@@ -408,7 +441,7 @@ mod test {
     };
 
     #[test]
-    fn i32_reserialize() {
+    fn i32_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
         struct Foo {
             bar: i32,
@@ -416,17 +449,17 @@ mod test {
         let foo = Foo { bar: 69 };
         let mut bytes = Vec::new();
         let mut serializer = serializer::Serializer::new(&mut bytes);
-        foo.serialize(&mut serializer).unwrap();
+        foo.serialize(&mut serializer)?;
 
         let cursor = Cursor::new(bytes);
-        let deserialized: Foo =
-            Foo::deserialize(&mut deserializer::Deserializer::new(cursor)).unwrap();
+        let deserialized: Foo = Foo::deserialize(&mut deserializer::Deserializer::new(cursor))?;
 
         assert_eq!(foo, deserialized);
+        Ok(())
     }
 
     #[test]
-    fn varint_reserialize() {
+    fn varint_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
         struct Foo {
             bar: VarInt,
@@ -434,17 +467,17 @@ mod test {
         let foo = Foo { bar: 69.into() };
         let mut bytes = Vec::new();
         let mut serializer = serializer::Serializer::new(&mut bytes);
-        foo.serialize(&mut serializer).unwrap();
+        foo.serialize(&mut serializer)?;
 
         let cursor = Cursor::new(bytes);
-        let deserialized: Foo =
-            Foo::deserialize(&mut deserializer::Deserializer::new(cursor)).unwrap();
+        let deserialized: Foo = Foo::deserialize(&mut deserializer::Deserializer::new(cursor))?;
 
         assert_eq!(foo, deserialized);
+        Ok(())
     }
 
     #[test]
-    fn char_reserialize() {
+    fn char_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct CharStruct {
             c: char,
@@ -454,42 +487,42 @@ mod test {
         let original = CharStruct { c: 'A' };
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
-        original.serialize(&mut ser).unwrap();
+        original.serialize(&mut ser)?;
         assert_eq!(bytes, vec![0, 0, 0, 0x41]);
 
         let de_cursor = Cursor::new(bytes);
         let deserialized: CharStruct =
-            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor))?;
         assert_eq!(original, deserialized);
 
         // Test with complex char
         let original_complex = CharStruct { c: 'Ω' }; // Greek Omega, U+03A9
         let mut bytes_complex = Vec::new();
         let mut ser_complex = serializer::Serializer::new(&mut bytes_complex);
-        original_complex.serialize(&mut ser_complex).unwrap();
+        original_complex.serialize(&mut ser_complex)?;
         assert_eq!(bytes_complex, vec![0, 0, 0x03, 0xA9]);
 
         let de_cursor_complex = Cursor::new(bytes_complex);
         let deserialized_complex: CharStruct =
-            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_complex))
-                .unwrap();
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_complex))?;
         assert_eq!(original_complex, deserialized_complex);
 
         // Test with an emoji
         let original_emoji = CharStruct { c: '\u{1F383}' }; // Pumpkin emoji, U+1F383
         let mut bytes_emoji = Vec::new();
         let mut ser_emoji = serializer::Serializer::new(&mut bytes_emoji);
-        original_emoji.serialize(&mut ser_emoji).unwrap();
+        original_emoji.serialize(&mut ser_emoji)?;
         assert_eq!(bytes_emoji, vec![0, 0x01, 0xF3, 0x83]);
 
         let de_cursor_emoji = Cursor::new(bytes_emoji);
         let deserialized_emoji: CharStruct =
-            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_emoji)).unwrap();
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_emoji))?;
         assert_eq!(original_emoji, deserialized_emoji);
+        Ok(())
     }
 
     #[test]
-    fn i128_reserialize() {
+    fn i128_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct I128Struct {
             val: i128,
@@ -500,12 +533,12 @@ mod test {
         };
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
-        original.serialize(&mut ser).unwrap();
+        original.serialize(&mut ser)?;
         assert_eq!(bytes, original.val.to_be_bytes());
 
         let de_cursor = Cursor::new(bytes);
         let deserialized: I128Struct =
-            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor))?;
         assert_eq!(original, deserialized);
 
         let original_neg = I128Struct {
@@ -513,17 +546,18 @@ mod test {
         };
         let mut bytes_neg = Vec::new();
         let mut ser_neg = serializer::Serializer::new(&mut bytes_neg);
-        original_neg.serialize(&mut ser_neg).unwrap();
+        original_neg.serialize(&mut ser_neg)?;
         assert_eq!(bytes_neg, original_neg.val.to_be_bytes());
 
         let de_cursor_neg = Cursor::new(bytes_neg);
         let deserialized_neg: I128Struct =
-            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor_neg)).unwrap();
+            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor_neg))?;
         assert_eq!(original_neg, deserialized_neg);
+        Ok(())
     }
 
     #[test]
-    fn u128_reserialize() {
+    fn u128_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct U128Struct {
             val: u128,
@@ -534,17 +568,18 @@ mod test {
         };
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
-        original.serialize(&mut ser).unwrap();
+        original.serialize(&mut ser)?;
         assert_eq!(bytes, original.val.to_be_bytes());
 
         let de_cursor = Cursor::new(bytes);
         let deserialized: U128Struct =
-            U128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+            U128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor))?;
         assert_eq!(original, deserialized);
+        Ok(())
     }
 
     #[test]
-    fn unit_reserialize() {
+    fn unit_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct UnitStruct;
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -556,12 +591,12 @@ mod test {
         let original = UnitStruct;
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
-        original.serialize(&mut ser).unwrap();
+        original.serialize(&mut ser)?;
         assert!(bytes.is_empty());
 
         let de_cursor = Cursor::new(bytes);
         let deserialized: UnitStruct =
-            UnitStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+            UnitStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor))?;
         assert_eq!(original, deserialized);
 
         let original_with_unit = StructWithUnit {
@@ -571,7 +606,7 @@ mod test {
         };
         let mut bytes_with_unit = Vec::new();
         let mut ser_with_unit = serializer::Serializer::new(&mut bytes_with_unit);
-        original_with_unit.serialize(&mut ser_with_unit).unwrap();
+        original_with_unit.serialize(&mut ser_with_unit)?;
 
         // Check that only a and c were serialized
         let mut expected_bytes = Vec::new();
@@ -581,13 +616,13 @@ mod test {
 
         let de_cursor_with_unit = Cursor::new(bytes_with_unit);
         let deserialized_with_unit: StructWithUnit =
-            StructWithUnit::deserialize(&mut deserializer::Deserializer::new(de_cursor_with_unit))
-                .unwrap();
+            StructWithUnit::deserialize(&mut deserializer::Deserializer::new(de_cursor_with_unit))?;
         assert_eq!(original_with_unit, deserialized_with_unit);
+        Ok(())
     }
 
     #[test]
-    fn enum_reserialize() {
+    fn enum_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         enum MyEnum {
             A,
@@ -598,25 +633,25 @@ mod test {
         let original_a = MyEnum::A;
         let mut bytes_a = Vec::new();
         let mut ser_a = serializer::Serializer::new(&mut bytes_a);
-        original_a.serialize(&mut ser_a).unwrap();
+        original_a.serialize(&mut ser_a)?;
         // VarInt for index 0
         assert_eq!(bytes_a, vec![0x00]);
         let de_cursor_a = Cursor::new(bytes_a);
         let deserialized_a: MyEnum =
-            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_a)).unwrap();
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_a))?;
         assert_eq!(original_a, deserialized_a);
 
         let original_b = MyEnum::B(123);
         let mut bytes_b = Vec::new();
         let mut ser_b = serializer::Serializer::new(&mut bytes_b);
-        original_b.serialize(&mut ser_b).unwrap();
+        original_b.serialize(&mut ser_b)?;
         // VarInt for index 1, then i32 for 123
         let mut expected_bytes_b = vec![0x01];
         expected_bytes_b.extend_from_slice(&123i32.to_be_bytes());
         assert_eq!(bytes_b, expected_bytes_b);
         let de_cursor_b = Cursor::new(bytes_b);
         let deserialized_b: MyEnum =
-            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_b)).unwrap();
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_b))?;
         assert_eq!(original_b, deserialized_b);
 
         let original_c = MyEnum::C {
@@ -625,7 +660,7 @@ mod test {
         };
         let mut bytes_c = Vec::new();
         let mut ser_c = serializer::Serializer::new(&mut bytes_c);
-        original_c.serialize(&mut ser_c).unwrap();
+        original_c.serialize(&mut ser_c)?;
         // VarInt for index 2, then i32 for 456, then string "hello"
         let mut expected_bytes_c = vec![0x02];
         expected_bytes_c.extend_from_slice(&456i32.to_be_bytes());
@@ -634,19 +669,20 @@ mod test {
         assert_eq!(bytes_c, expected_bytes_c);
         let de_cursor_c = Cursor::new(bytes_c);
         let deserialized_c: MyEnum =
-            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_c)).unwrap();
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_c))?;
         assert_eq!(original_c, deserialized_c);
+        Ok(())
     }
 
     #[test]
-    fn tuple_struct_reserialize() {
+    fn tuple_struct_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
         struct MyTupleStruct(i32, String);
 
         let original = MyTupleStruct(789, "world".to_string());
         let mut bytes = Vec::new();
         let mut ser = serializer::Serializer::new(&mut bytes);
-        original.serialize(&mut ser).unwrap();
+        original.serialize(&mut ser)?;
 
         let mut expected_bytes = Vec::new();
         expected_bytes.extend_from_slice(&789i32.to_be_bytes());
@@ -656,12 +692,13 @@ mod test {
 
         let de_cursor = Cursor::new(bytes);
         let deserialized: MyTupleStruct =
-            MyTupleStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+            MyTupleStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor))?;
         assert_eq!(original, deserialized);
+        Ok(())
     }
 
     #[test]
-    fn map_reserialize() {
+    fn map_reserialize() -> Result<(), Box<dyn std::error::Error>> {
         use std::collections::HashMap;
 
         #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -677,14 +714,14 @@ mod test {
 
         let mut bytes = Vec::new();
         let mut serializer = serializer::Serializer::new(&mut bytes);
-        original.serialize(&mut serializer).unwrap();
+        original.serialize(&mut serializer)?;
 
         // Expected bytes: VarInt for map length (2), then key1, value1, key2, value2
         // Order of elements in HashMap is not guaranteed, so we check deserialized content
 
         let de_cursor = Cursor::new(bytes.clone()); // Clone bytes for potential debug
         let deserialized: MyMapStruct =
-            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor))?;
 
         assert_eq!(original.map.len(), deserialized.map.len());
         for (k, v) in original.map {
@@ -697,13 +734,13 @@ mod test {
         };
         let mut empty_map_bytes = Vec::new();
         let mut empty_map_ser = serializer::Serializer::new(&mut empty_map_bytes);
-        empty_map_original.serialize(&mut empty_map_ser).unwrap();
+        empty_map_original.serialize(&mut empty_map_ser)?;
         assert_eq!(empty_map_bytes, vec![0x00]); // VarInt for length 0
 
         let empty_map_de_cursor = Cursor::new(empty_map_bytes);
         let empty_map_deserialized: MyMapStruct =
-            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(empty_map_de_cursor))
-                .unwrap();
+            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(empty_map_de_cursor))?;
         assert_eq!(empty_map_original, empty_map_deserialized);
+        Ok(())
     }
 }

@@ -20,7 +20,6 @@ use crate::{
 };
 
 /// Interior corridor that turns right (SE), optionally containing a chest (5 × 7 × 5).
-#[derive(Clone)]
 pub struct CorridorRightTurnPiece {
     pub piece: NetherFortressPiece,
     pub contains_chest: bool,
@@ -92,7 +91,7 @@ impl StructurePieceBase for CorridorRightTurnPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
-        _random: &mut RandomGenerator,
+        random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
@@ -129,14 +128,21 @@ impl StructurePieceBase for CorridorRightTurnPiece {
         p.fill_with_outline(chunk, &bb, false, 3, 3, 4, 3, 4, 4, f_ew, f_ew);
 
         // Optional chest
-        // TODO
-        // if self.contains_chest {
-        //     let chest_pos = p.offset_pos(1, 2, 3);
-        //     if bb.contains_pos(&chest_pos) {
-        //         self.contains_chest = false;
-        //         p.add_chest(chunk, &bb, random, 1, 2, 3, "nether_bridge");
-        //     }
-        // }
+        if self.contains_chest {
+            let chest_pos = p.offset_pos(1, 2, 3);
+            if bb.contains_pos(&chest_pos) {
+                self.contains_chest = false;
+                p.add_chest(
+                    chunk,
+                    &bb,
+                    random,
+                    1,
+                    2,
+                    3,
+                    "minecraft:chests/nether_bridge",
+                );
+            }
+        }
 
         // Ceiling
         p.fill_with_outline(chunk, &bb, false, 0, 6, 0, 4, 6, 4, nb, nb);
@@ -146,9 +152,5 @@ impl StructurePieceBase for CorridorRightTurnPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

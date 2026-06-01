@@ -14,6 +14,8 @@ pub struct PluginGui {
     pub window_type: WindowType,
     pub title: TextComponent,
     pub inventory: Arc<PluginInventory>,
+    pub allow_grab_items: bool,
+    pub allow_put_items: bool,
 }
 
 pub struct PluginInventory {
@@ -81,6 +83,14 @@ impl Inventory for PluginInventory {
         })
     }
 
+    fn on_open(&self) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+
+    fn on_close(&self) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -93,10 +103,21 @@ pub struct PluginScreenHandler {
 
 impl PluginScreenHandler {
     #[must_use]
-    pub fn new(sync_id: u8, window_type: WindowType, inventory: &Arc<PluginInventory>) -> Self {
+    pub fn new(
+        sync_id: u8,
+        window_type: WindowType,
+        inventory: &Arc<PluginInventory>,
+        allow_grab_items: bool,
+        allow_put_items: bool,
+    ) -> Self {
+        let mut behaviour = ScreenHandlerBehaviour::new(sync_id, Some(window_type));
+        behaviour.allow_grab_items = allow_grab_items;
+        behaviour.allow_put_items = allow_put_items;
+        behaviour.container_slots = inventory.size();
+
         let mut handler = Self {
             inventory: inventory.clone(),
-            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
+            behaviour,
         };
 
         for i in 0..inventory.size() {
@@ -111,10 +132,15 @@ impl ScreenHandler for PluginScreenHandler {
     fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             self.default_on_closed(player).await;
+            self.inventory.on_close().await;
         })
     }
 
     fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 

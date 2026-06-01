@@ -43,7 +43,6 @@ pub struct MojangPublicKeys {
     pub authentication_keys: Option<Vec<JsonPublicKey>>,
 }
 
-pub const MOJANG_BEDROCK_PUBLIC_KEY_BASE64: &str = "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAECRXueJeTDqNRRgJi/vlRufByu/2G0i2Ebt6YMar5QX/R0DIIyrJMcUpruK4QveTfJSTp3Shlq4Gk34cD/4GUWwkv0DVuzeuB+tXija7HBxii03NHDbPAD0AKnLr2wdAp";
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
@@ -107,7 +106,7 @@ pub fn authenticate(
 
 pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<(), TextureError> {
     let from64 = general_purpose::STANDARD
-        .decode(&property.value)
+        .decode(property.value.as_bytes())
         .map_err(|e| TextureError::DecodeError(e.to_string()))?;
     let textures: ProfileTextures =
         serde_json::from_slice(&from64).map_err(|e| TextureError::JSONError(e.to_string()))?;

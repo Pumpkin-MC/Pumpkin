@@ -20,7 +20,6 @@ use crate::{
 };
 
 /// Interior corridor piece with a balcony overlook (9 × 7 × 9).
-#[derive(Clone)]
 pub struct CorridorBalconyPiece {
     pub piece: NetherFortressPiece,
 }
@@ -72,7 +71,7 @@ impl StructurePieceBase for CorridorBalconyPiece {
 
         // In Java: `i` is 1 for EAST/SOUTH facing, 5 for WEST/NORTH.
         let i = match self.piece.piece.facing {
-            Some(BlockDirection::West) | Some(BlockDirection::North) => 5,
+            Some(BlockDirection::West | BlockDirection::North) => 5,
             _ => 1,
         };
 
@@ -163,9 +162,5 @@ impl StructurePieceBase for CorridorBalconyPiece {
                 p.fill_downwards(chunk, nb, j, -1, i, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

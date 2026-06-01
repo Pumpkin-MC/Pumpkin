@@ -572,30 +572,23 @@ impl<R> DataResult<R> {
     ///
     /// The [`Lifecycle`] of the returned `DataResult` is the addition of both results.
     pub fn with_errors_from<T>(self, result: &DataResult<T>) -> Self {
-        match (&self, result) {
-            // If both values are successes, do nothing.
-            // If `self` is already an error result, do nothing.
-            (Self::Success { .. }, DataResult::Success { .. }) | (Self::Error { .. }, _) => self,
+        let current_lifecycle = self.lifecycle();
+
+        match (self, result) {
+            (s @ Self::Error { .. }, _) | (s, DataResult::Success { .. }) => s,
 
             (
-                Self::Success { .. },
+                Self::Success { result: val, .. },
                 DataResult::Error {
                     message,
                     lifecycle: other_lifecycle,
                     ..
                 },
-            ) => {
-                let self_lifecycle = self.lifecycle();
-                if let Self::Success { result, .. } = self {
-                    Self::new_partial_error_with_lifecycle(
-                        message.clone(),
-                        result,
-                        self_lifecycle.add(*other_lifecycle),
-                    )
-                } else {
-                    unreachable!()
-                }
-            }
+            ) => Self::new_partial_error_with_lifecycle(
+                message.clone(),
+                val,
+                current_lifecycle.add(*other_lifecycle),
+            ),
         }
     }
 
@@ -628,8 +621,78 @@ macro_rules! assert_success {
     }};
 }
 
+/// Asserts that encoding the left expression will lead to a complete result (success) whose stored result is `$right`.
+#[macro_export]
+macro_rules! assert_encode_success {
+    ($left:expr, $ops:expr, $right:expr $(,)?) => {{
+        let result = $crate::codec::Encode::encode_start(&$left, &$ops);
+        assert!(
+            result.is_success(),
+            "Expected a `DataResult` success, got: {:?}",
+            result
+        );
+        assert_eq!(
+            result.unwrap(),
+            $right,
+            "`DataResult` was successful but the value doesn't match"
+        );
+    }};
+}
+
+/// Asserts that decoding the left expression will lead to a `DataResult` whose provided method returns `true`.
+#[macro_export]
+macro_rules! assert_decode {
+    ($ty:ty, $input:expr, $ops:expr, $func:ident $(,)?) => {{
+        let result = <$ty as $crate::codec::Decode>::parse($input, &$ops);
+        assert!(
+            result.$func(),
+            concat!(
+                "Expected a `DataResult` that returns `true` for ",
+                stringify!($func),
+                ", got: {:?}"
+            ),
+            result
+        );
+    }};
+}
+
 impl<T> Default for DataResult<T> {
     fn default() -> Self {
         Self::new_error("Default DataResult")
     }
+}
+
+/// A type conversion from one type to this type that may fail, resulting in a [`DataResult`].
+///
+/// Always prefer using [`FlatTryFrom`] over [`FlatTryInto`] for implementing the conversion,
+/// as an implementation of [`FlatTryInto`] will automatically work as well.
+pub trait FlatTryFrom<T>: Sized {
+    /// Performs the conversion.
+    fn flat_try_from(value: T) -> DataResult<Self>;
+}
+
+impl<T> FlatTryFrom<T> for T {
+    fn flat_try_from(value: T) -> DataResult<Self> {
+        DataResult::new_success(value)
+    }
+}
+
+impl<T, U> FlatTryInto<U> for T
+where
+    U: FlatTryFrom<T>,
+{
+    #[inline]
+    /// Calls `U::flat_try_from()`, which performs the conversion.
+    fn flat_try_into(self) -> DataResult<U> {
+        U::flat_try_from(self)
+    }
+}
+
+/// A type conversion from this type to another that may fail, resulting in a [`DataResult`].
+///
+/// Always prefer using [`FlatTryFrom`] over [`FlatTryInto`] for implementing the conversion,
+/// as an implementation of [`FlatTryInto`] will automatically work as well.
+pub trait FlatTryInto<T>: Sized {
+    /// Performs the conversion.
+    fn flat_try_into(self) -> DataResult<T>;
 }

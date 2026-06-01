@@ -2,6 +2,11 @@
 use crate::Block;
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
+#[allow(
+    clippy::wildcard_imports,
+    clippy::enum_glob_use,
+    clippy::too_many_lines
+)]
 use crate::data_component::DataComponent::*;
 use crate::data_component_impl::IDSet::{IDs, Tag};
 use crate::data_component_impl::*;
@@ -30,7 +35,7 @@ impl Hash for Item {
     }
 }
 impl Item {
-    pub const ACACIA_BOAT: Item = Item {
+    pub const ACACIA_BOAT: Self = Self {
         id: 872,
         registry_key: "acacia_boat",
         components: &[
@@ -49,7 +54,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_BUTTON: Item = Item {
+    pub const ACACIA_BUTTON: Self = Self {
         id: 756,
         registry_key: "acacia_button",
         components: &[
@@ -68,7 +73,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_CHEST_BOAT: Item = Item {
+    pub const ACACIA_CHEST_BOAT: Self = Self {
         id: 873,
         registry_key: "acacia_chest_boat",
         components: &[
@@ -87,7 +92,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_DOOR: Item = Item {
+    pub const ACACIA_DOOR: Self = Self {
         id: 785,
         registry_key: "acacia_door",
         components: &[
@@ -106,7 +111,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_FENCE: Item = Item {
+    pub const ACACIA_FENCE: Self = Self {
         id: 349,
         registry_key: "acacia_fence",
         components: &[
@@ -125,7 +130,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_FENCE_GATE: Item = Item {
+    pub const ACACIA_FENCE_GATE: Self = Self {
         id: 826,
         registry_key: "acacia_fence_gate",
         components: &[
@@ -144,7 +149,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_HANGING_SIGN: Item = Item {
+    pub const ACACIA_HANGING_SIGN: Self = Self {
         id: 1005,
         registry_key: "acacia_hanging_sign",
         components: &[
@@ -163,7 +168,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_LEAVES: Item = Item {
+    pub const ACACIA_LEAVES: Self = Self {
         id: 186,
         registry_key: "acacia_leaves",
         components: &[
@@ -182,7 +187,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_LOG: Item = Item {
+    pub const ACACIA_LOG: Self = Self {
         id: 138,
         registry_key: "acacia_log",
         components: &[
@@ -201,7 +206,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_PLANKS: Item = Item {
+    pub const ACACIA_PLANKS: Self = Self {
         id: 40,
         registry_key: "acacia_planks",
         components: &[
@@ -220,7 +225,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_PRESSURE_PLATE: Item = Item {
+    pub const ACACIA_PRESSURE_PLATE: Self = Self {
         id: 772,
         registry_key: "acacia_pressure_plate",
         components: &[
@@ -239,7 +244,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_SAPLING: Item = Item {
+    pub const ACACIA_SAPLING: Self = Self {
         id: 53,
         registry_key: "acacia_sapling",
         components: &[
@@ -258,7 +263,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_SHELF: Item = Item {
+    pub const ACACIA_SHELF: Self = Self {
         id: 306,
         registry_key: "acacia_shelf",
         components: &[
@@ -277,7 +282,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_SIGN: Item = Item {
+    pub const ACACIA_SIGN: Self = Self {
         id: 993,
         registry_key: "acacia_sign",
         components: &[
@@ -296,7 +301,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_SLAB: Item = Item {
+    pub const ACACIA_SLAB: Self = Self {
         id: 275,
         registry_key: "acacia_slab",
         components: &[
@@ -315,7 +320,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_STAIRS: Item = Item {
+    pub const ACACIA_STAIRS: Self = Self {
         id: 446,
         registry_key: "acacia_stairs",
         components: &[
@@ -334,7 +339,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_TRAPDOOR: Item = Item {
+    pub const ACACIA_TRAPDOOR: Self = Self {
         id: 806,
         registry_key: "acacia_trapdoor",
         components: &[
@@ -353,7 +358,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACACIA_WOOD: Item = Item {
+    pub const ACACIA_WOOD: Self = Self {
         id: 175,
         registry_key: "acacia_wood",
         components: &[
@@ -372,7 +377,7 @@ impl Item {
             ),
         ],
     };
-    pub const ACTIVATOR_RAIL: Item = Item {
+    pub const ACTIVATOR_RAIL: Self = Self {
         id: 837,
         registry_key: "activator_rail",
         components: &[
@@ -391,7 +396,7 @@ impl Item {
             ),
         ],
     };
-    pub const AIR: Item = Item {
+    pub const AIR: Self = Self {
         id: 0,
         registry_key: "air",
         components: &[
@@ -410,7 +415,7 @@ impl Item {
             ),
         ],
     };
-    pub const ALLAY_SPAWN_EGG: Item = Item {
+    pub const ALLAY_SPAWN_EGG: Self = Self {
         id: 1164,
         registry_key: "allay_spawn_egg",
         components: &[
@@ -429,7 +434,7 @@ impl Item {
             ),
         ],
     };
-    pub const ALLIUM: Item = Item {
+    pub const ALLIUM: Self = Self {
         id: 235,
         registry_key: "allium",
         components: &[
@@ -448,7 +453,7 @@ impl Item {
             ),
         ],
     };
-    pub const AMETHYST_BLOCK: Item = Item {
+    pub const AMETHYST_BLOCK: Self = Self {
         id: 88,
         registry_key: "amethyst_block",
         components: &[
@@ -467,7 +472,7 @@ impl Item {
             ),
         ],
     };
-    pub const AMETHYST_CLUSTER: Item = Item {
+    pub const AMETHYST_CLUSTER: Self = Self {
         id: 1419,
         registry_key: "amethyst_cluster",
         components: &[
@@ -486,7 +491,7 @@ impl Item {
             ),
         ],
     };
-    pub const AMETHYST_SHARD: Item = Item {
+    pub const AMETHYST_SHARD: Self = Self {
         id: 903,
         registry_key: "amethyst_shard",
         components: &[
@@ -505,7 +510,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANCIENT_DEBRIS: Item = Item {
+    pub const ANCIENT_DEBRIS: Self = Self {
         id: 82,
         registry_key: "ancient_debris",
         components: &[
@@ -530,7 +535,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANDESITE: Item = Item {
+    pub const ANDESITE: Self = Self {
         id: 6,
         registry_key: "andesite",
         components: &[
@@ -549,7 +554,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANDESITE_SLAB: Item = Item {
+    pub const ANDESITE_SLAB: Self = Self {
         id: 709,
         registry_key: "andesite_slab",
         components: &[
@@ -568,7 +573,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANDESITE_STAIRS: Item = Item {
+    pub const ANDESITE_STAIRS: Self = Self {
         id: 692,
         registry_key: "andesite_stairs",
         components: &[
@@ -587,7 +592,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANDESITE_WALL: Item = Item {
+    pub const ANDESITE_WALL: Self = Self {
         id: 467,
         registry_key: "andesite_wall",
         components: &[
@@ -606,7 +611,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANGLER_POTTERY_SHERD: Item = Item {
+    pub const ANGLER_POTTERY_SHERD: Self = Self {
         id: 1446,
         registry_key: "angler_pottery_sherd",
         components: &[
@@ -625,7 +630,7 @@ impl Item {
             ),
         ],
     };
-    pub const ANVIL: Item = Item {
+    pub const ANVIL: Self = Self {
         id: 479,
         registry_key: "anvil",
         components: &[
@@ -644,7 +649,7 @@ impl Item {
             ),
         ],
     };
-    pub const APPLE: Item = Item {
+    pub const APPLE: Self = Self {
         id: 894,
         registry_key: "apple",
         components: &[
@@ -681,7 +686,7 @@ impl Item {
             ),
         ],
     };
-    pub const ARCHER_POTTERY_SHERD: Item = Item {
+    pub const ARCHER_POTTERY_SHERD: Self = Self {
         id: 1447,
         registry_key: "archer_pottery_sherd",
         components: &[
@@ -700,7 +705,7 @@ impl Item {
             ),
         ],
     };
-    pub const ARMADILLO_SCUTE: Item = Item {
+    pub const ARMADILLO_SCUTE: Self = Self {
         id: 890,
         registry_key: "armadillo_scute",
         components: &[
@@ -719,7 +724,7 @@ impl Item {
             ),
         ],
     };
-    pub const ARMADILLO_SPAWN_EGG: Item = Item {
+    pub const ARMADILLO_SPAWN_EGG: Self = Self {
         id: 1142,
         registry_key: "armadillo_spawn_egg",
         components: &[
@@ -738,7 +743,7 @@ impl Item {
             ),
         ],
     };
-    pub const ARMOR_STAND: Item = Item {
+    pub const ARMOR_STAND: Self = Self {
         id: 1255,
         registry_key: "armor_stand",
         components: &[
@@ -757,7 +762,7 @@ impl Item {
             ),
         ],
     };
-    pub const ARMS_UP_POTTERY_SHERD: Item = Item {
+    pub const ARMS_UP_POTTERY_SHERD: Self = Self {
         id: 1448,
         registry_key: "arms_up_pottery_sherd",
         components: &[
@@ -776,7 +781,7 @@ impl Item {
             ),
         ],
     };
-    pub const ARROW: Item = Item {
+    pub const ARROW: Self = Self {
         id: 896,
         registry_key: "arrow",
         components: &[
@@ -795,7 +800,7 @@ impl Item {
             ),
         ],
     };
-    pub const AXOLOTL_BUCKET: Item = Item {
+    pub const AXOLOTL_BUCKET: Self = Self {
         id: 1024,
         registry_key: "axolotl_bucket",
         components: &[
@@ -814,7 +819,7 @@ impl Item {
             ),
         ],
     };
-    pub const AXOLOTL_SPAWN_EGG: Item = Item {
+    pub const AXOLOTL_SPAWN_EGG: Self = Self {
         id: 1152,
         registry_key: "axolotl_spawn_egg",
         components: &[
@@ -833,7 +838,7 @@ impl Item {
             ),
         ],
     };
-    pub const AZALEA: Item = Item {
+    pub const AZALEA: Self = Self {
         id: 205,
         registry_key: "azalea",
         components: &[
@@ -852,7 +857,7 @@ impl Item {
             ),
         ],
     };
-    pub const AZALEA_LEAVES: Item = Item {
+    pub const AZALEA_LEAVES: Self = Self {
         id: 191,
         registry_key: "azalea_leaves",
         components: &[
@@ -871,7 +876,7 @@ impl Item {
             ),
         ],
     };
-    pub const AZURE_BLUET: Item = Item {
+    pub const AZURE_BLUET: Self = Self {
         id: 236,
         registry_key: "azure_bluet",
         components: &[
@@ -890,7 +895,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAKED_POTATO: Item = Item {
+    pub const BAKED_POTATO: Self = Self {
         id: 1230,
         registry_key: "baked_potato",
         components: &[
@@ -927,7 +932,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO: Item = Item {
+    pub const BAMBOO: Self = Self {
         id: 270,
         registry_key: "bamboo",
         components: &[
@@ -946,7 +951,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_BLOCK: Item = Item {
+    pub const BAMBOO_BLOCK: Self = Self {
         id: 147,
         registry_key: "bamboo_block",
         components: &[
@@ -965,7 +970,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_BUTTON: Item = Item {
+    pub const BAMBOO_BUTTON: Self = Self {
         id: 761,
         registry_key: "bamboo_button",
         components: &[
@@ -984,7 +989,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_CHEST_RAFT: Item = Item {
+    pub const BAMBOO_CHEST_RAFT: Self = Self {
         id: 883,
         registry_key: "bamboo_chest_raft",
         components: &[
@@ -1003,7 +1008,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_DOOR: Item = Item {
+    pub const BAMBOO_DOOR: Self = Self {
         id: 790,
         registry_key: "bamboo_door",
         components: &[
@@ -1022,7 +1027,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_FENCE: Item = Item {
+    pub const BAMBOO_FENCE: Self = Self {
         id: 354,
         registry_key: "bamboo_fence",
         components: &[
@@ -1041,7 +1046,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_FENCE_GATE: Item = Item {
+    pub const BAMBOO_FENCE_GATE: Self = Self {
         id: 831,
         registry_key: "bamboo_fence_gate",
         components: &[
@@ -1060,7 +1065,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_HANGING_SIGN: Item = Item {
+    pub const BAMBOO_HANGING_SIGN: Self = Self {
         id: 1010,
         registry_key: "bamboo_hanging_sign",
         components: &[
@@ -1079,7 +1084,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_MOSAIC: Item = Item {
+    pub const BAMBOO_MOSAIC: Self = Self {
         id: 48,
         registry_key: "bamboo_mosaic",
         components: &[
@@ -1098,7 +1103,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_MOSAIC_SLAB: Item = Item {
+    pub const BAMBOO_MOSAIC_SLAB: Self = Self {
         id: 281,
         registry_key: "bamboo_mosaic_slab",
         components: &[
@@ -1117,7 +1122,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_MOSAIC_STAIRS: Item = Item {
+    pub const BAMBOO_MOSAIC_STAIRS: Self = Self {
         id: 452,
         registry_key: "bamboo_mosaic_stairs",
         components: &[
@@ -1136,7 +1141,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_PLANKS: Item = Item {
+    pub const BAMBOO_PLANKS: Self = Self {
         id: 45,
         registry_key: "bamboo_planks",
         components: &[
@@ -1155,7 +1160,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_PRESSURE_PLATE: Item = Item {
+    pub const BAMBOO_PRESSURE_PLATE: Self = Self {
         id: 777,
         registry_key: "bamboo_pressure_plate",
         components: &[
@@ -1174,7 +1179,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_RAFT: Item = Item {
+    pub const BAMBOO_RAFT: Self = Self {
         id: 882,
         registry_key: "bamboo_raft",
         components: &[
@@ -1193,7 +1198,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_SHELF: Item = Item {
+    pub const BAMBOO_SHELF: Self = Self {
         id: 307,
         registry_key: "bamboo_shelf",
         components: &[
@@ -1212,7 +1217,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_SIGN: Item = Item {
+    pub const BAMBOO_SIGN: Self = Self {
         id: 998,
         registry_key: "bamboo_sign",
         components: &[
@@ -1231,7 +1236,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_SLAB: Item = Item {
+    pub const BAMBOO_SLAB: Self = Self {
         id: 280,
         registry_key: "bamboo_slab",
         components: &[
@@ -1250,7 +1255,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_STAIRS: Item = Item {
+    pub const BAMBOO_STAIRS: Self = Self {
         id: 451,
         registry_key: "bamboo_stairs",
         components: &[
@@ -1269,7 +1274,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAMBOO_TRAPDOOR: Item = Item {
+    pub const BAMBOO_TRAPDOOR: Self = Self {
         id: 811,
         registry_key: "bamboo_trapdoor",
         components: &[
@@ -1288,7 +1293,7 @@ impl Item {
             ),
         ],
     };
-    pub const BARREL: Item = Item {
+    pub const BARREL: Self = Self {
         id: 1355,
         registry_key: "barrel",
         components: &[
@@ -1307,7 +1312,7 @@ impl Item {
             ),
         ],
     };
-    pub const BARRIER: Item = Item {
+    pub const BARRIER: Self = Self {
         id: 503,
         registry_key: "barrier",
         components: &[
@@ -1326,7 +1331,7 @@ impl Item {
             ),
         ],
     };
-    pub const BASALT: Item = Item {
+    pub const BASALT: Self = Self {
         id: 363,
         registry_key: "basalt",
         components: &[
@@ -1345,7 +1350,7 @@ impl Item {
             ),
         ],
     };
-    pub const BAT_SPAWN_EGG: Item = Item {
+    pub const BAT_SPAWN_EGG: Self = Self {
         id: 1143,
         registry_key: "bat_spawn_egg",
         components: &[
@@ -1364,7 +1369,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEACON: Item = Item {
+    pub const BEACON: Self = Self {
         id: 456,
         registry_key: "beacon",
         components: &[
@@ -1383,7 +1388,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEDROCK: Item = Item {
+    pub const BEDROCK: Self = Self {
         id: 58,
         registry_key: "bedrock",
         components: &[
@@ -1402,7 +1407,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEE_NEST: Item = Item {
+    pub const BEE_NEST: Self = Self {
         id: 1380,
         registry_key: "bee_nest",
         components: &[
@@ -1421,7 +1426,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEE_SPAWN_EGG: Item = Item {
+    pub const BEE_SPAWN_EGG: Self = Self {
         id: 1144,
         registry_key: "bee_spawn_egg",
         components: &[
@@ -1440,7 +1445,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEEF: Item = Item {
+    pub const BEEF: Self = Self {
         id: 1111,
         registry_key: "beef",
         components: &[
@@ -1477,7 +1482,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEEHIVE: Item = Item {
+    pub const BEEHIVE: Self = Self {
         id: 1381,
         registry_key: "beehive",
         components: &[
@@ -1496,7 +1501,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEETROOT: Item = Item {
+    pub const BEETROOT: Self = Self {
         id: 1288,
         registry_key: "beetroot",
         components: &[
@@ -1533,7 +1538,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEETROOT_SEEDS: Item = Item {
+    pub const BEETROOT_SEEDS: Self = Self {
         id: 1289,
         registry_key: "beetroot_seeds",
         components: &[
@@ -1552,7 +1557,7 @@ impl Item {
             ),
         ],
     };
-    pub const BEETROOT_SOUP: Item = Item {
+    pub const BEETROOT_SOUP: Self = Self {
         id: 1290,
         registry_key: "beetroot_soup",
         components: &[
@@ -1589,7 +1594,7 @@ impl Item {
             ),
         ],
     };
-    pub const BELL: Item = Item {
+    pub const BELL: Self = Self {
         id: 1363,
         registry_key: "bell",
         components: &[
@@ -1608,7 +1613,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIG_DRIPLEAF: Item = Item {
+    pub const BIG_DRIPLEAF: Self = Self {
         id: 268,
         registry_key: "big_dripleaf",
         components: &[
@@ -1627,7 +1632,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_BOAT: Item = Item {
+    pub const BIRCH_BOAT: Self = Self {
         id: 868,
         registry_key: "birch_boat",
         components: &[
@@ -1646,7 +1651,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_BUTTON: Item = Item {
+    pub const BIRCH_BUTTON: Self = Self {
         id: 754,
         registry_key: "birch_button",
         components: &[
@@ -1665,7 +1670,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_CHEST_BOAT: Item = Item {
+    pub const BIRCH_CHEST_BOAT: Self = Self {
         id: 869,
         registry_key: "birch_chest_boat",
         components: &[
@@ -1684,7 +1689,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_DOOR: Item = Item {
+    pub const BIRCH_DOOR: Self = Self {
         id: 783,
         registry_key: "birch_door",
         components: &[
@@ -1703,7 +1708,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_FENCE: Item = Item {
+    pub const BIRCH_FENCE: Self = Self {
         id: 347,
         registry_key: "birch_fence",
         components: &[
@@ -1722,7 +1727,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_FENCE_GATE: Item = Item {
+    pub const BIRCH_FENCE_GATE: Self = Self {
         id: 824,
         registry_key: "birch_fence_gate",
         components: &[
@@ -1741,7 +1746,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_HANGING_SIGN: Item = Item {
+    pub const BIRCH_HANGING_SIGN: Self = Self {
         id: 1003,
         registry_key: "birch_hanging_sign",
         components: &[
@@ -1760,7 +1765,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_LEAVES: Item = Item {
+    pub const BIRCH_LEAVES: Self = Self {
         id: 184,
         registry_key: "birch_leaves",
         components: &[
@@ -1779,7 +1784,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_LOG: Item = Item {
+    pub const BIRCH_LOG: Self = Self {
         id: 136,
         registry_key: "birch_log",
         components: &[
@@ -1798,7 +1803,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_PLANKS: Item = Item {
+    pub const BIRCH_PLANKS: Self = Self {
         id: 38,
         registry_key: "birch_planks",
         components: &[
@@ -1817,7 +1822,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_PRESSURE_PLATE: Item = Item {
+    pub const BIRCH_PRESSURE_PLATE: Self = Self {
         id: 770,
         registry_key: "birch_pressure_plate",
         components: &[
@@ -1836,7 +1841,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_SAPLING: Item = Item {
+    pub const BIRCH_SAPLING: Self = Self {
         id: 51,
         registry_key: "birch_sapling",
         components: &[
@@ -1855,7 +1860,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_SHELF: Item = Item {
+    pub const BIRCH_SHELF: Self = Self {
         id: 308,
         registry_key: "birch_shelf",
         components: &[
@@ -1874,7 +1879,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_SIGN: Item = Item {
+    pub const BIRCH_SIGN: Self = Self {
         id: 991,
         registry_key: "birch_sign",
         components: &[
@@ -1893,7 +1898,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_SLAB: Item = Item {
+    pub const BIRCH_SLAB: Self = Self {
         id: 273,
         registry_key: "birch_slab",
         components: &[
@@ -1912,7 +1917,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_STAIRS: Item = Item {
+    pub const BIRCH_STAIRS: Self = Self {
         id: 444,
         registry_key: "birch_stairs",
         components: &[
@@ -1931,7 +1936,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_TRAPDOOR: Item = Item {
+    pub const BIRCH_TRAPDOOR: Self = Self {
         id: 804,
         registry_key: "birch_trapdoor",
         components: &[
@@ -1950,7 +1955,7 @@ impl Item {
             ),
         ],
     };
-    pub const BIRCH_WOOD: Item = Item {
+    pub const BIRCH_WOOD: Self = Self {
         id: 173,
         registry_key: "birch_wood",
         components: &[
@@ -1969,7 +1974,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_BANNER: Item = Item {
+    pub const BLACK_BANNER: Self = Self {
         id: 1282,
         registry_key: "black_banner",
         components: &[
@@ -1988,7 +1993,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_BED: Item = Item {
+    pub const BLACK_BED: Self = Self {
         id: 1102,
         registry_key: "black_bed",
         components: &[
@@ -2007,7 +2012,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_BUNDLE: Item = Item {
+    pub const BLACK_BUNDLE: Self = Self {
         id: 1053,
         registry_key: "black_bundle",
         components: &[
@@ -2026,7 +2031,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_CANDLE: Item = Item {
+    pub const BLACK_CANDLE: Self = Self {
         id: 1415,
         registry_key: "black_candle",
         components: &[
@@ -2045,7 +2050,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_CARPET: Item = Item {
+    pub const BLACK_CARPET: Self = Self {
         id: 521,
         registry_key: "black_carpet",
         components: &[
@@ -2083,7 +2088,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_CONCRETE: Item = Item {
+    pub const BLACK_CONCRETE: Self = Self {
         id: 630,
         registry_key: "black_concrete",
         components: &[
@@ -2102,7 +2107,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_CONCRETE_POWDER: Item = Item {
+    pub const BLACK_CONCRETE_POWDER: Self = Self {
         id: 646,
         registry_key: "black_concrete_powder",
         components: &[
@@ -2121,7 +2126,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_DYE: Item = Item {
+    pub const BLACK_DYE: Self = Self {
         id: 1082,
         registry_key: "black_dye",
         components: &[
@@ -2140,7 +2145,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_GLAZED_TERRACOTTA: Item = Item {
+    pub const BLACK_GLAZED_TERRACOTTA: Self = Self {
         id: 614,
         registry_key: "black_glazed_terracotta",
         components: &[
@@ -2159,7 +2164,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_HARNESS: Item = Item {
+    pub const BLACK_HARNESS: Self = Self {
         id: 854,
         registry_key: "black_harness",
         components: &[
@@ -2194,7 +2199,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_SHULKER_BOX: Item = Item {
+    pub const BLACK_SHULKER_BOX: Self = Self {
         id: 598,
         registry_key: "black_shulker_box",
         components: &[
@@ -2213,7 +2218,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_STAINED_GLASS: Item = Item {
+    pub const BLACK_STAINED_GLASS: Self = Self {
         id: 546,
         registry_key: "black_stained_glass",
         components: &[
@@ -2232,7 +2237,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_STAINED_GLASS_PANE: Item = Item {
+    pub const BLACK_STAINED_GLASS_PANE: Self = Self {
         id: 562,
         registry_key: "black_stained_glass_pane",
         components: &[
@@ -2251,7 +2256,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_TERRACOTTA: Item = Item {
+    pub const BLACK_TERRACOTTA: Self = Self {
         id: 502,
         registry_key: "black_terracotta",
         components: &[
@@ -2270,7 +2275,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACK_WOOL: Item = Item {
+    pub const BLACK_WOOL: Self = Self {
         id: 228,
         registry_key: "black_wool",
         components: &[
@@ -2289,7 +2294,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACKSTONE: Item = Item {
+    pub const BLACKSTONE: Self = Self {
         id: 1386,
         registry_key: "blackstone",
         components: &[
@@ -2308,7 +2313,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACKSTONE_SLAB: Item = Item {
+    pub const BLACKSTONE_SLAB: Self = Self {
         id: 1387,
         registry_key: "blackstone_slab",
         components: &[
@@ -2327,7 +2332,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACKSTONE_STAIRS: Item = Item {
+    pub const BLACKSTONE_STAIRS: Self = Self {
         id: 1388,
         registry_key: "blackstone_stairs",
         components: &[
@@ -2346,7 +2351,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLACKSTONE_WALL: Item = Item {
+    pub const BLACKSTONE_WALL: Self = Self {
         id: 472,
         registry_key: "blackstone_wall",
         components: &[
@@ -2365,7 +2370,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLADE_POTTERY_SHERD: Item = Item {
+    pub const BLADE_POTTERY_SHERD: Self = Self {
         id: 1449,
         registry_key: "blade_pottery_sherd",
         components: &[
@@ -2384,7 +2389,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLAST_FURNACE: Item = Item {
+    pub const BLAST_FURNACE: Self = Self {
         id: 1357,
         registry_key: "blast_furnace",
         components: &[
@@ -2403,7 +2408,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLAZE_POWDER: Item = Item {
+    pub const BLAZE_POWDER: Self = Self {
         id: 1125,
         registry_key: "blaze_powder",
         components: &[
@@ -2422,7 +2427,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLAZE_ROD: Item = Item {
+    pub const BLAZE_ROD: Self = Self {
         id: 1117,
         registry_key: "blaze_rod",
         components: &[
@@ -2441,7 +2446,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLAZE_SPAWN_EGG: Item = Item {
+    pub const BLAZE_SPAWN_EGG: Self = Self {
         id: 1204,
         registry_key: "blaze_spawn_egg",
         components: &[
@@ -2460,7 +2465,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_BANNER: Item = Item {
+    pub const BLUE_BANNER: Self = Self {
         id: 1278,
         registry_key: "blue_banner",
         components: &[
@@ -2479,7 +2484,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_BED: Item = Item {
+    pub const BLUE_BED: Self = Self {
         id: 1098,
         registry_key: "blue_bed",
         components: &[
@@ -2498,7 +2503,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_BUNDLE: Item = Item {
+    pub const BLUE_BUNDLE: Self = Self {
         id: 1049,
         registry_key: "blue_bundle",
         components: &[
@@ -2517,7 +2522,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_CANDLE: Item = Item {
+    pub const BLUE_CANDLE: Self = Self {
         id: 1411,
         registry_key: "blue_candle",
         components: &[
@@ -2536,7 +2541,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_CARPET: Item = Item {
+    pub const BLUE_CARPET: Self = Self {
         id: 517,
         registry_key: "blue_carpet",
         components: &[
@@ -2574,7 +2579,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_CONCRETE: Item = Item {
+    pub const BLUE_CONCRETE: Self = Self {
         id: 626,
         registry_key: "blue_concrete",
         components: &[
@@ -2593,7 +2598,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_CONCRETE_POWDER: Item = Item {
+    pub const BLUE_CONCRETE_POWDER: Self = Self {
         id: 642,
         registry_key: "blue_concrete_powder",
         components: &[
@@ -2612,7 +2617,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_DYE: Item = Item {
+    pub const BLUE_DYE: Self = Self {
         id: 1078,
         registry_key: "blue_dye",
         components: &[
@@ -2631,7 +2636,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_EGG: Item = Item {
+    pub const BLUE_EGG: Self = Self {
         id: 1033,
         registry_key: "blue_egg",
         components: &[
@@ -2650,7 +2655,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_GLAZED_TERRACOTTA: Item = Item {
+    pub const BLUE_GLAZED_TERRACOTTA: Self = Self {
         id: 610,
         registry_key: "blue_glazed_terracotta",
         components: &[
@@ -2669,7 +2674,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_HARNESS: Item = Item {
+    pub const BLUE_HARNESS: Self = Self {
         id: 850,
         registry_key: "blue_harness",
         components: &[
@@ -2704,7 +2709,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_ICE: Item = Item {
+    pub const BLUE_ICE: Self = Self {
         id: 680,
         registry_key: "blue_ice",
         components: &[
@@ -2723,7 +2728,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_ORCHID: Item = Item {
+    pub const BLUE_ORCHID: Self = Self {
         id: 234,
         registry_key: "blue_orchid",
         components: &[
@@ -2742,7 +2747,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_SHULKER_BOX: Item = Item {
+    pub const BLUE_SHULKER_BOX: Self = Self {
         id: 594,
         registry_key: "blue_shulker_box",
         components: &[
@@ -2761,7 +2766,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_STAINED_GLASS: Item = Item {
+    pub const BLUE_STAINED_GLASS: Self = Self {
         id: 542,
         registry_key: "blue_stained_glass",
         components: &[
@@ -2780,7 +2785,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_STAINED_GLASS_PANE: Item = Item {
+    pub const BLUE_STAINED_GLASS_PANE: Self = Self {
         id: 558,
         registry_key: "blue_stained_glass_pane",
         components: &[
@@ -2799,7 +2804,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_TERRACOTTA: Item = Item {
+    pub const BLUE_TERRACOTTA: Self = Self {
         id: 498,
         registry_key: "blue_terracotta",
         components: &[
@@ -2818,7 +2823,7 @@ impl Item {
             ),
         ],
     };
-    pub const BLUE_WOOL: Item = Item {
+    pub const BLUE_WOOL: Self = Self {
         id: 224,
         registry_key: "blue_wool",
         components: &[
@@ -2837,7 +2842,7 @@ impl Item {
             ),
         ],
     };
-    pub const BOGGED_SPAWN_EGG: Item = Item {
+    pub const BOGGED_SPAWN_EGG: Self = Self {
         id: 1173,
         registry_key: "bogged_spawn_egg",
         components: &[
@@ -2856,7 +2861,7 @@ impl Item {
             ),
         ],
     };
-    pub const BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1445,
         registry_key: "bolt_armor_trim_smithing_template",
         components: &[
@@ -2875,7 +2880,7 @@ impl Item {
             ),
         ],
     };
-    pub const BONE: Item = Item {
+    pub const BONE: Self = Self {
         id: 1084,
         registry_key: "bone",
         components: &[
@@ -2894,7 +2899,7 @@ impl Item {
             ),
         ],
     };
-    pub const BONE_BLOCK: Item = Item {
+    pub const BONE_BLOCK: Self = Self {
         id: 580,
         registry_key: "bone_block",
         components: &[
@@ -2913,7 +2918,7 @@ impl Item {
             ),
         ],
     };
-    pub const BONE_MEAL: Item = Item {
+    pub const BONE_MEAL: Self = Self {
         id: 1083,
         registry_key: "bone_meal",
         components: &[
@@ -2932,7 +2937,7 @@ impl Item {
             ),
         ],
     };
-    pub const BOOK: Item = Item {
+    pub const BOOK: Self = Self {
         id: 1030,
         registry_key: "book",
         components: &[
@@ -2949,9 +2954,10 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
-    pub const BOOKSHELF: Item = Item {
+    pub const BOOKSHELF: Self = Self {
         id: 318,
         registry_key: "bookshelf",
         components: &[
@@ -2970,7 +2976,7 @@ impl Item {
             ),
         ],
     };
-    pub const BORDURE_INDENTED_BANNER_PATTERN: Item = Item {
+    pub const BORDURE_INDENTED_BANNER_PATTERN: Self = Self {
         id: 1352,
         registry_key: "bordure_indented_banner_pattern",
         components: &[
@@ -2989,7 +2995,7 @@ impl Item {
             ),
         ],
     };
-    pub const BOW: Item = Item {
+    pub const BOW: Self = Self {
         id: 895,
         registry_key: "bow",
         components: &[
@@ -3008,9 +3014,10 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
-    pub const BOWL: Item = Item {
+    pub const BOWL: Self = Self {
         id: 893,
         registry_key: "bowl",
         components: &[
@@ -3029,7 +3036,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRAIN_CORAL: Item = Item {
+    pub const BRAIN_CORAL: Self = Self {
         id: 661,
         registry_key: "brain_coral",
         components: &[
@@ -3048,7 +3055,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRAIN_CORAL_BLOCK: Item = Item {
+    pub const BRAIN_CORAL_BLOCK: Self = Self {
         id: 656,
         registry_key: "brain_coral_block",
         components: &[
@@ -3067,7 +3074,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRAIN_CORAL_FAN: Item = Item {
+    pub const BRAIN_CORAL_FAN: Self = Self {
         id: 671,
         registry_key: "brain_coral_fan",
         components: &[
@@ -3086,7 +3093,7 @@ impl Item {
             ),
         ],
     };
-    pub const BREAD: Item = Item {
+    pub const BREAD: Self = Self {
         id: 954,
         registry_key: "bread",
         components: &[
@@ -3123,7 +3130,7 @@ impl Item {
             ),
         ],
     };
-    pub const BREEZE_ROD: Item = Item {
+    pub const BREEZE_ROD: Self = Self {
         id: 1223,
         registry_key: "breeze_rod",
         components: &[
@@ -3142,7 +3149,7 @@ impl Item {
             ),
         ],
     };
-    pub const BREEZE_SPAWN_EGG: Item = Item {
+    pub const BREEZE_SPAWN_EGG: Self = Self {
         id: 1189,
         registry_key: "breeze_spawn_egg",
         components: &[
@@ -3161,7 +3168,7 @@ impl Item {
             ),
         ],
     };
-    pub const BREWER_POTTERY_SHERD: Item = Item {
+    pub const BREWER_POTTERY_SHERD: Self = Self {
         id: 1450,
         registry_key: "brewer_pottery_sherd",
         components: &[
@@ -3180,7 +3187,7 @@ impl Item {
             ),
         ],
     };
-    pub const BREWING_STAND: Item = Item {
+    pub const BREWING_STAND: Self = Self {
         id: 1127,
         registry_key: "brewing_stand",
         components: &[
@@ -3199,7 +3206,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRICK: Item = Item {
+    pub const BRICK: Self = Self {
         id: 1026,
         registry_key: "brick",
         components: &[
@@ -3218,7 +3225,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRICK_SLAB: Item = Item {
+    pub const BRICK_SLAB: Self = Self {
         id: 290,
         registry_key: "brick_slab",
         components: &[
@@ -3237,7 +3244,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRICK_STAIRS: Item = Item {
+    pub const BRICK_STAIRS: Self = Self {
         id: 420,
         registry_key: "brick_stairs",
         components: &[
@@ -3256,7 +3263,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRICK_WALL: Item = Item {
+    pub const BRICK_WALL: Self = Self {
         id: 459,
         registry_key: "brick_wall",
         components: &[
@@ -3275,7 +3282,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRICKS: Item = Item {
+    pub const BRICKS: Self = Self {
         id: 305,
         registry_key: "bricks",
         components: &[
@@ -3294,7 +3301,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_BANNER: Item = Item {
+    pub const BROWN_BANNER: Self = Self {
         id: 1279,
         registry_key: "brown_banner",
         components: &[
@@ -3313,7 +3320,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_BED: Item = Item {
+    pub const BROWN_BED: Self = Self {
         id: 1099,
         registry_key: "brown_bed",
         components: &[
@@ -3332,7 +3339,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_BUNDLE: Item = Item {
+    pub const BROWN_BUNDLE: Self = Self {
         id: 1050,
         registry_key: "brown_bundle",
         components: &[
@@ -3351,7 +3358,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_CANDLE: Item = Item {
+    pub const BROWN_CANDLE: Self = Self {
         id: 1412,
         registry_key: "brown_candle",
         components: &[
@@ -3370,7 +3377,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_CARPET: Item = Item {
+    pub const BROWN_CARPET: Self = Self {
         id: 518,
         registry_key: "brown_carpet",
         components: &[
@@ -3408,7 +3415,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_CONCRETE: Item = Item {
+    pub const BROWN_CONCRETE: Self = Self {
         id: 627,
         registry_key: "brown_concrete",
         components: &[
@@ -3427,7 +3434,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_CONCRETE_POWDER: Item = Item {
+    pub const BROWN_CONCRETE_POWDER: Self = Self {
         id: 643,
         registry_key: "brown_concrete_powder",
         components: &[
@@ -3446,7 +3453,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_DYE: Item = Item {
+    pub const BROWN_DYE: Self = Self {
         id: 1079,
         registry_key: "brown_dye",
         components: &[
@@ -3465,7 +3472,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_EGG: Item = Item {
+    pub const BROWN_EGG: Self = Self {
         id: 1034,
         registry_key: "brown_egg",
         components: &[
@@ -3484,7 +3491,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_GLAZED_TERRACOTTA: Item = Item {
+    pub const BROWN_GLAZED_TERRACOTTA: Self = Self {
         id: 611,
         registry_key: "brown_glazed_terracotta",
         components: &[
@@ -3503,7 +3510,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_HARNESS: Item = Item {
+    pub const BROWN_HARNESS: Self = Self {
         id: 851,
         registry_key: "brown_harness",
         components: &[
@@ -3538,7 +3545,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_MUSHROOM: Item = Item {
+    pub const BROWN_MUSHROOM: Self = Self {
         id: 248,
         registry_key: "brown_mushroom",
         components: &[
@@ -3557,7 +3564,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_MUSHROOM_BLOCK: Item = Item {
+    pub const BROWN_MUSHROOM_BLOCK: Self = Self {
         id: 388,
         registry_key: "brown_mushroom_block",
         components: &[
@@ -3576,7 +3583,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_SHULKER_BOX: Item = Item {
+    pub const BROWN_SHULKER_BOX: Self = Self {
         id: 595,
         registry_key: "brown_shulker_box",
         components: &[
@@ -3595,7 +3602,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_STAINED_GLASS: Item = Item {
+    pub const BROWN_STAINED_GLASS: Self = Self {
         id: 543,
         registry_key: "brown_stained_glass",
         components: &[
@@ -3614,7 +3621,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_STAINED_GLASS_PANE: Item = Item {
+    pub const BROWN_STAINED_GLASS_PANE: Self = Self {
         id: 559,
         registry_key: "brown_stained_glass_pane",
         components: &[
@@ -3633,7 +3640,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_TERRACOTTA: Item = Item {
+    pub const BROWN_TERRACOTTA: Self = Self {
         id: 499,
         registry_key: "brown_terracotta",
         components: &[
@@ -3652,7 +3659,7 @@ impl Item {
             ),
         ],
     };
-    pub const BROWN_WOOL: Item = Item {
+    pub const BROWN_WOOL: Self = Self {
         id: 225,
         registry_key: "brown_wool",
         components: &[
@@ -3671,7 +3678,7 @@ impl Item {
             ),
         ],
     };
-    pub const BRUSH: Item = Item {
+    pub const BRUSH: Self = Self {
         id: 1426,
         registry_key: "brush",
         components: &[
@@ -3692,7 +3699,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUBBLE_CORAL: Item = Item {
+    pub const BUBBLE_CORAL: Self = Self {
         id: 662,
         registry_key: "bubble_coral",
         components: &[
@@ -3711,7 +3718,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUBBLE_CORAL_BLOCK: Item = Item {
+    pub const BUBBLE_CORAL_BLOCK: Self = Self {
         id: 657,
         registry_key: "bubble_coral_block",
         components: &[
@@ -3730,7 +3737,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUBBLE_CORAL_FAN: Item = Item {
+    pub const BUBBLE_CORAL_FAN: Self = Self {
         id: 672,
         registry_key: "bubble_coral_fan",
         components: &[
@@ -3749,7 +3756,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUCKET: Item = Item {
+    pub const BUCKET: Self = Self {
         id: 1013,
         registry_key: "bucket",
         components: &[
@@ -3768,7 +3775,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUDDING_AMETHYST: Item = Item {
+    pub const BUDDING_AMETHYST: Self = Self {
         id: 89,
         registry_key: "budding_amethyst",
         components: &[
@@ -3787,7 +3794,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUNDLE: Item = Item {
+    pub const BUNDLE: Self = Self {
         id: 1037,
         registry_key: "bundle",
         components: &[
@@ -3806,7 +3813,7 @@ impl Item {
             ),
         ],
     };
-    pub const BURN_POTTERY_SHERD: Item = Item {
+    pub const BURN_POTTERY_SHERD: Self = Self {
         id: 1451,
         registry_key: "burn_pottery_sherd",
         components: &[
@@ -3825,7 +3832,7 @@ impl Item {
             ),
         ],
     };
-    pub const BUSH: Item = Item {
+    pub const BUSH: Self = Self {
         id: 204,
         registry_key: "bush",
         components: &[
@@ -3844,7 +3851,7 @@ impl Item {
             ),
         ],
     };
-    pub const CACTUS: Item = Item {
+    pub const CACTUS: Self = Self {
         id: 341,
         registry_key: "cactus",
         components: &[
@@ -3863,7 +3870,7 @@ impl Item {
             ),
         ],
     };
-    pub const CACTUS_FLOWER: Item = Item {
+    pub const CACTUS_FLOWER: Self = Self {
         id: 342,
         registry_key: "cactus_flower",
         components: &[
@@ -3882,7 +3889,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAKE: Item = Item {
+    pub const CAKE: Self = Self {
         id: 1086,
         registry_key: "cake",
         components: &[
@@ -3901,7 +3908,7 @@ impl Item {
             ),
         ],
     };
-    pub const CALCITE: Item = Item {
+    pub const CALCITE: Self = Self {
         id: 11,
         registry_key: "calcite",
         components: &[
@@ -3920,7 +3927,7 @@ impl Item {
             ),
         ],
     };
-    pub const CALIBRATED_SCULK_SENSOR: Item = Item {
+    pub const CALIBRATED_SCULK_SENSOR: Self = Self {
         id: 744,
         registry_key: "calibrated_sculk_sensor",
         components: &[
@@ -3939,7 +3946,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAMEL_HUSK_SPAWN_EGG: Item = Item {
+    pub const CAMEL_HUSK_SPAWN_EGG: Self = Self {
         id: 1174,
         registry_key: "camel_husk_spawn_egg",
         components: &[
@@ -3958,7 +3965,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAMEL_SPAWN_EGG: Item = Item {
+    pub const CAMEL_SPAWN_EGG: Self = Self {
         id: 1135,
         registry_key: "camel_spawn_egg",
         components: &[
@@ -3977,7 +3984,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAMPFIRE: Item = Item {
+    pub const CAMPFIRE: Self = Self {
         id: 1376,
         registry_key: "campfire",
         components: &[
@@ -3996,7 +4003,7 @@ impl Item {
             ),
         ],
     };
-    pub const CANDLE: Item = Item {
+    pub const CANDLE: Self = Self {
         id: 1399,
         registry_key: "candle",
         components: &[
@@ -4015,7 +4022,7 @@ impl Item {
             ),
         ],
     };
-    pub const CARROT: Item = Item {
+    pub const CARROT: Self = Self {
         id: 1228,
         registry_key: "carrot",
         components: &[
@@ -4052,7 +4059,7 @@ impl Item {
             ),
         ],
     };
-    pub const CARROT_ON_A_STICK: Item = Item {
+    pub const CARROT_ON_A_STICK: Self = Self {
         id: 860,
         registry_key: "carrot_on_a_stick",
         components: &[
@@ -4073,7 +4080,7 @@ impl Item {
             ),
         ],
     };
-    pub const CARTOGRAPHY_TABLE: Item = Item {
+    pub const CARTOGRAPHY_TABLE: Self = Self {
         id: 1358,
         registry_key: "cartography_table",
         components: &[
@@ -4092,7 +4099,7 @@ impl Item {
             ),
         ],
     };
-    pub const CARVED_PUMPKIN: Item = Item {
+    pub const CARVED_PUMPKIN: Self = Self {
         id: 358,
         registry_key: "carved_pumpkin",
         components: &[
@@ -4133,7 +4140,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAT_SPAWN_EGG: Item = Item {
+    pub const CAT_SPAWN_EGG: Self = Self {
         id: 1139,
         registry_key: "cat_spawn_egg",
         components: &[
@@ -4152,7 +4159,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAULDRON: Item = Item {
+    pub const CAULDRON: Self = Self {
         id: 1128,
         registry_key: "cauldron",
         components: &[
@@ -4171,7 +4178,7 @@ impl Item {
             ),
         ],
     };
-    pub const CAVE_SPIDER_SPAWN_EGG: Item = Item {
+    pub const CAVE_SPIDER_SPAWN_EGG: Self = Self {
         id: 1187,
         registry_key: "cave_spider_spawn_egg",
         components: &[
@@ -4190,7 +4197,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHAIN_COMMAND_BLOCK: Item = Item {
+    pub const CHAIN_COMMAND_BLOCK: Self = Self {
         id: 575,
         registry_key: "chain_command_block",
         components: &[
@@ -4209,7 +4216,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHAINMAIL_BOOTS: Item = Item {
+    pub const CHAINMAIL_BOOTS: Self = Self {
         id: 966,
         registry_key: "chainmail_boots",
         components: &[
@@ -4259,9 +4266,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
-    pub const CHAINMAIL_CHESTPLATE: Item = Item {
+    pub const CHAINMAIL_CHESTPLATE: Self = Self {
         id: 964,
         registry_key: "chainmail_chestplate",
         components: &[
@@ -4311,9 +4319,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
-    pub const CHAINMAIL_HELMET: Item = Item {
+    pub const CHAINMAIL_HELMET: Self = Self {
         id: 963,
         registry_key: "chainmail_helmet",
         components: &[
@@ -4363,9 +4372,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
-    pub const CHAINMAIL_LEGGINGS: Item = Item {
+    pub const CHAINMAIL_LEGGINGS: Self = Self {
         id: 965,
         registry_key: "chainmail_leggings",
         components: &[
@@ -4415,9 +4425,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
-    pub const CHARCOAL: Item = Item {
+    pub const CHARCOAL: Self = Self {
         id: 898,
         registry_key: "charcoal",
         components: &[
@@ -4436,7 +4447,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_BOAT: Item = Item {
+    pub const CHERRY_BOAT: Self = Self {
         id: 874,
         registry_key: "cherry_boat",
         components: &[
@@ -4455,7 +4466,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_BUTTON: Item = Item {
+    pub const CHERRY_BUTTON: Self = Self {
         id: 757,
         registry_key: "cherry_button",
         components: &[
@@ -4474,7 +4485,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_CHEST_BOAT: Item = Item {
+    pub const CHERRY_CHEST_BOAT: Self = Self {
         id: 875,
         registry_key: "cherry_chest_boat",
         components: &[
@@ -4493,7 +4504,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_DOOR: Item = Item {
+    pub const CHERRY_DOOR: Self = Self {
         id: 786,
         registry_key: "cherry_door",
         components: &[
@@ -4512,7 +4523,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_FENCE: Item = Item {
+    pub const CHERRY_FENCE: Self = Self {
         id: 350,
         registry_key: "cherry_fence",
         components: &[
@@ -4531,7 +4542,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_FENCE_GATE: Item = Item {
+    pub const CHERRY_FENCE_GATE: Self = Self {
         id: 827,
         registry_key: "cherry_fence_gate",
         components: &[
@@ -4550,7 +4561,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_HANGING_SIGN: Item = Item {
+    pub const CHERRY_HANGING_SIGN: Self = Self {
         id: 1006,
         registry_key: "cherry_hanging_sign",
         components: &[
@@ -4569,7 +4580,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_LEAVES: Item = Item {
+    pub const CHERRY_LEAVES: Self = Self {
         id: 187,
         registry_key: "cherry_leaves",
         components: &[
@@ -4588,7 +4599,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_LOG: Item = Item {
+    pub const CHERRY_LOG: Self = Self {
         id: 139,
         registry_key: "cherry_log",
         components: &[
@@ -4607,7 +4618,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_PLANKS: Item = Item {
+    pub const CHERRY_PLANKS: Self = Self {
         id: 41,
         registry_key: "cherry_planks",
         components: &[
@@ -4626,7 +4637,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_PRESSURE_PLATE: Item = Item {
+    pub const CHERRY_PRESSURE_PLATE: Self = Self {
         id: 773,
         registry_key: "cherry_pressure_plate",
         components: &[
@@ -4645,7 +4656,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_SAPLING: Item = Item {
+    pub const CHERRY_SAPLING: Self = Self {
         id: 54,
         registry_key: "cherry_sapling",
         components: &[
@@ -4664,7 +4675,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_SHELF: Item = Item {
+    pub const CHERRY_SHELF: Self = Self {
         id: 309,
         registry_key: "cherry_shelf",
         components: &[
@@ -4683,7 +4694,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_SIGN: Item = Item {
+    pub const CHERRY_SIGN: Self = Self {
         id: 994,
         registry_key: "cherry_sign",
         components: &[
@@ -4702,7 +4713,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_SLAB: Item = Item {
+    pub const CHERRY_SLAB: Self = Self {
         id: 276,
         registry_key: "cherry_slab",
         components: &[
@@ -4721,7 +4732,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_STAIRS: Item = Item {
+    pub const CHERRY_STAIRS: Self = Self {
         id: 447,
         registry_key: "cherry_stairs",
         components: &[
@@ -4740,7 +4751,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_TRAPDOOR: Item = Item {
+    pub const CHERRY_TRAPDOOR: Self = Self {
         id: 807,
         registry_key: "cherry_trapdoor",
         components: &[
@@ -4759,7 +4770,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHERRY_WOOD: Item = Item {
+    pub const CHERRY_WOOD: Self = Self {
         id: 176,
         registry_key: "cherry_wood",
         components: &[
@@ -4778,7 +4789,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHEST: Item = Item {
+    pub const CHEST: Self = Self {
         id: 332,
         registry_key: "chest",
         components: &[
@@ -4797,7 +4808,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHEST_MINECART: Item = Item {
+    pub const CHEST_MINECART: Self = Self {
         id: 856,
         registry_key: "chest_minecart",
         components: &[
@@ -4816,7 +4827,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHICKEN: Item = Item {
+    pub const CHICKEN: Self = Self {
         id: 1113,
         registry_key: "chicken",
         components: &[
@@ -4863,7 +4874,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHICKEN_SPAWN_EGG: Item = Item {
+    pub const CHICKEN_SPAWN_EGG: Self = Self {
         id: 1131,
         registry_key: "chicken_spawn_egg",
         components: &[
@@ -4882,7 +4893,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHIPPED_ANVIL: Item = Item {
+    pub const CHIPPED_ANVIL: Self = Self {
         id: 480,
         registry_key: "chipped_anvil",
         components: &[
@@ -4901,7 +4912,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_BOOKSHELF: Item = Item {
+    pub const CHISELED_BOOKSHELF: Self = Self {
         id: 319,
         registry_key: "chiseled_bookshelf",
         components: &[
@@ -4920,7 +4931,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_COPPER: Item = Item {
+    pub const CHISELED_COPPER: Self = Self {
         id: 98,
         registry_key: "chiseled_copper",
         components: &[
@@ -4939,7 +4950,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_DEEPSLATE: Item = Item {
+    pub const CHISELED_DEEPSLATE: Self = Self {
         id: 386,
         registry_key: "chiseled_deepslate",
         components: &[
@@ -4958,7 +4969,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_NETHER_BRICKS: Item = Item {
+    pub const CHISELED_NETHER_BRICKS: Self = Self {
         id: 427,
         registry_key: "chiseled_nether_bricks",
         components: &[
@@ -4977,7 +4988,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_POLISHED_BLACKSTONE: Item = Item {
+    pub const CHISELED_POLISHED_BLACKSTONE: Self = Self {
         id: 1393,
         registry_key: "chiseled_polished_blackstone",
         components: &[
@@ -4996,7 +5007,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_QUARTZ_BLOCK: Item = Item {
+    pub const CHISELED_QUARTZ_BLOCK: Self = Self {
         id: 482,
         registry_key: "chiseled_quartz_block",
         components: &[
@@ -5015,7 +5026,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_RED_SANDSTONE: Item = Item {
+    pub const CHISELED_RED_SANDSTONE: Self = Self {
         id: 571,
         registry_key: "chiseled_red_sandstone",
         components: &[
@@ -5034,7 +5045,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_RESIN_BRICKS: Item = Item {
+    pub const CHISELED_RESIN_BRICKS: Self = Self {
         id: 419,
         registry_key: "chiseled_resin_bricks",
         components: &[
@@ -5053,7 +5064,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_SANDSTONE: Item = Item {
+    pub const CHISELED_SANDSTONE: Self = Self {
         id: 199,
         registry_key: "chiseled_sandstone",
         components: &[
@@ -5072,7 +5083,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_STONE_BRICKS: Item = Item {
+    pub const CHISELED_STONE_BRICKS: Self = Self {
         id: 379,
         registry_key: "chiseled_stone_bricks",
         components: &[
@@ -5091,7 +5102,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_TUFF: Item = Item {
+    pub const CHISELED_TUFF: Self = Self {
         id: 16,
         registry_key: "chiseled_tuff",
         components: &[
@@ -5110,7 +5121,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHISELED_TUFF_BRICKS: Item = Item {
+    pub const CHISELED_TUFF_BRICKS: Self = Self {
         id: 25,
         registry_key: "chiseled_tuff_bricks",
         components: &[
@@ -5129,7 +5140,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHORUS_FLOWER: Item = Item {
+    pub const CHORUS_FLOWER: Self = Self {
         id: 326,
         registry_key: "chorus_flower",
         components: &[
@@ -5148,7 +5159,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHORUS_FRUIT: Item = Item {
+    pub const CHORUS_FRUIT: Self = Self {
         id: 1284,
         registry_key: "chorus_fruit",
         components: &[
@@ -5185,7 +5196,7 @@ impl Item {
             ),
         ],
     };
-    pub const CHORUS_PLANT: Item = Item {
+    pub const CHORUS_PLANT: Self = Self {
         id: 325,
         registry_key: "chorus_plant",
         components: &[
@@ -5204,7 +5215,7 @@ impl Item {
             ),
         ],
     };
-    pub const CLAY: Item = Item {
+    pub const CLAY: Self = Self {
         id: 343,
         registry_key: "clay",
         components: &[
@@ -5223,7 +5234,7 @@ impl Item {
             ),
         ],
     };
-    pub const CLAY_BALL: Item = Item {
+    pub const CLAY_BALL: Self = Self {
         id: 1027,
         registry_key: "clay_ball",
         components: &[
@@ -5242,7 +5253,7 @@ impl Item {
             ),
         ],
     };
-    pub const CLOCK: Item = Item {
+    pub const CLOCK: Self = Self {
         id: 1055,
         registry_key: "clock",
         components: &[
@@ -5261,7 +5272,7 @@ impl Item {
             ),
         ],
     };
-    pub const CLOSED_EYEBLOSSOM: Item = Item {
+    pub const CLOSED_EYEBLOSSOM: Self = Self {
         id: 232,
         registry_key: "closed_eyeblossom",
         components: &[
@@ -5280,7 +5291,7 @@ impl Item {
             ),
         ],
     };
-    pub const COAL: Item = Item {
+    pub const COAL: Self = Self {
         id: 897,
         registry_key: "coal",
         components: &[
@@ -5299,7 +5310,7 @@ impl Item {
             ),
         ],
     };
-    pub const COAL_BLOCK: Item = Item {
+    pub const COAL_BLOCK: Self = Self {
         id: 83,
         registry_key: "coal_block",
         components: &[
@@ -5318,7 +5329,7 @@ impl Item {
             ),
         ],
     };
-    pub const COAL_ORE: Item = Item {
+    pub const COAL_ORE: Self = Self {
         id: 64,
         registry_key: "coal_ore",
         components: &[
@@ -5337,7 +5348,7 @@ impl Item {
             ),
         ],
     };
-    pub const COARSE_DIRT: Item = Item {
+    pub const COARSE_DIRT: Self = Self {
         id: 29,
         registry_key: "coarse_dirt",
         components: &[
@@ -5356,7 +5367,7 @@ impl Item {
             ),
         ],
     };
-    pub const COAST_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const COAST_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1430,
         registry_key: "coast_armor_trim_smithing_template",
         components: &[
@@ -5375,7 +5386,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLED_DEEPSLATE: Item = Item {
+    pub const COBBLED_DEEPSLATE: Self = Self {
         id: 9,
         registry_key: "cobbled_deepslate",
         components: &[
@@ -5394,7 +5405,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLED_DEEPSLATE_SLAB: Item = Item {
+    pub const COBBLED_DEEPSLATE_SLAB: Self = Self {
         id: 713,
         registry_key: "cobbled_deepslate_slab",
         components: &[
@@ -5413,7 +5424,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLED_DEEPSLATE_STAIRS: Item = Item {
+    pub const COBBLED_DEEPSLATE_STAIRS: Self = Self {
         id: 696,
         registry_key: "cobbled_deepslate_stairs",
         components: &[
@@ -5432,7 +5443,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLED_DEEPSLATE_WALL: Item = Item {
+    pub const COBBLED_DEEPSLATE_WALL: Self = Self {
         id: 475,
         registry_key: "cobbled_deepslate_wall",
         components: &[
@@ -5451,7 +5462,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLESTONE: Item = Item {
+    pub const COBBLESTONE: Self = Self {
         id: 35,
         registry_key: "cobblestone",
         components: &[
@@ -5470,7 +5481,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLESTONE_SLAB: Item = Item {
+    pub const COBBLESTONE_SLAB: Self = Self {
         id: 289,
         registry_key: "cobblestone_slab",
         components: &[
@@ -5489,7 +5500,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLESTONE_STAIRS: Item = Item {
+    pub const COBBLESTONE_STAIRS: Self = Self {
         id: 337,
         registry_key: "cobblestone_stairs",
         components: &[
@@ -5508,7 +5519,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBBLESTONE_WALL: Item = Item {
+    pub const COBBLESTONE_WALL: Self = Self {
         id: 457,
         registry_key: "cobblestone_wall",
         components: &[
@@ -5527,7 +5538,7 @@ impl Item {
             ),
         ],
     };
-    pub const COBWEB: Item = Item {
+    pub const COBWEB: Self = Self {
         id: 201,
         registry_key: "cobweb",
         components: &[
@@ -5546,7 +5557,7 @@ impl Item {
             ),
         ],
     };
-    pub const COCOA_BEANS: Item = Item {
+    pub const COCOA_BEANS: Self = Self {
         id: 1066,
         registry_key: "cocoa_beans",
         components: &[
@@ -5565,7 +5576,7 @@ impl Item {
             ),
         ],
     };
-    pub const COD: Item = Item {
+    pub const COD: Self = Self {
         id: 1058,
         registry_key: "cod",
         components: &[
@@ -5602,7 +5613,7 @@ impl Item {
             ),
         ],
     };
-    pub const COD_BUCKET: Item = Item {
+    pub const COD_BUCKET: Self = Self {
         id: 1022,
         registry_key: "cod_bucket",
         components: &[
@@ -5629,7 +5640,7 @@ impl Item {
             ),
         ],
     };
-    pub const COD_SPAWN_EGG: Item = Item {
+    pub const COD_SPAWN_EGG: Self = Self {
         id: 1153,
         registry_key: "cod_spawn_egg",
         components: &[
@@ -5648,7 +5659,7 @@ impl Item {
             ),
         ],
     };
-    pub const COMMAND_BLOCK: Item = Item {
+    pub const COMMAND_BLOCK: Self = Self {
         id: 455,
         registry_key: "command_block",
         components: &[
@@ -5667,7 +5678,7 @@ impl Item {
             ),
         ],
     };
-    pub const COMMAND_BLOCK_MINECART: Item = Item {
+    pub const COMMAND_BLOCK_MINECART: Self = Self {
         id: 1264,
         registry_key: "command_block_minecart",
         components: &[
@@ -5686,7 +5697,7 @@ impl Item {
             ),
         ],
     };
-    pub const COMPARATOR: Item = Item {
+    pub const COMPARATOR: Self = Self {
         id: 722,
         registry_key: "comparator",
         components: &[
@@ -5705,7 +5716,7 @@ impl Item {
             ),
         ],
     };
-    pub const COMPASS: Item = Item {
+    pub const COMPASS: Self = Self {
         id: 1035,
         registry_key: "compass",
         components: &[
@@ -5724,7 +5735,7 @@ impl Item {
             ),
         ],
     };
-    pub const COMPOSTER: Item = Item {
+    pub const COMPOSTER: Self = Self {
         id: 1354,
         registry_key: "composter",
         components: &[
@@ -5743,7 +5754,7 @@ impl Item {
             ),
         ],
     };
-    pub const CONDUIT: Item = Item {
+    pub const CONDUIT: Self = Self {
         id: 681,
         registry_key: "conduit",
         components: &[
@@ -5762,7 +5773,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_BEEF: Item = Item {
+    pub const COOKED_BEEF: Self = Self {
         id: 1112,
         registry_key: "cooked_beef",
         components: &[
@@ -5799,7 +5810,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_CHICKEN: Item = Item {
+    pub const COOKED_CHICKEN: Self = Self {
         id: 1114,
         registry_key: "cooked_chicken",
         components: &[
@@ -5836,7 +5847,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_COD: Item = Item {
+    pub const COOKED_COD: Self = Self {
         id: 1062,
         registry_key: "cooked_cod",
         components: &[
@@ -5873,7 +5884,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_MUTTON: Item = Item {
+    pub const COOKED_MUTTON: Self = Self {
         id: 1266,
         registry_key: "cooked_mutton",
         components: &[
@@ -5910,7 +5921,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_PORKCHOP: Item = Item {
+    pub const COOKED_PORKCHOP: Self = Self {
         id: 985,
         registry_key: "cooked_porkchop",
         components: &[
@@ -5947,7 +5958,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_RABBIT: Item = Item {
+    pub const COOKED_RABBIT: Self = Self {
         id: 1251,
         registry_key: "cooked_rabbit",
         components: &[
@@ -5984,7 +5995,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKED_SALMON: Item = Item {
+    pub const COOKED_SALMON: Self = Self {
         id: 1063,
         registry_key: "cooked_salmon",
         components: &[
@@ -6021,7 +6032,7 @@ impl Item {
             ),
         ],
     };
-    pub const COOKIE: Item = Item {
+    pub const COOKIE: Self = Self {
         id: 1103,
         registry_key: "cookie",
         components: &[
@@ -6058,7 +6069,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_AXE: Item = Item {
+    pub const COPPER_AXE: Self = Self {
         id: 920,
         registry_key: "copper_axe",
         components: &[
@@ -6118,9 +6129,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
-    pub const COPPER_BARS: Item = Item {
+    pub const COPPER_BARS: Self = Self {
         id: 392,
         registry_key: "copper_bars",
         components: &[
@@ -6139,7 +6151,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_BLOCK: Item = Item {
+    pub const COPPER_BLOCK: Self = Self {
         id: 91,
         registry_key: "copper_block",
         components: &[
@@ -6158,7 +6170,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_BOOTS: Item = Item {
+    pub const COPPER_BOOTS: Self = Self {
         id: 962,
         registry_key: "copper_boots",
         components: &[
@@ -6208,9 +6220,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
-    pub const COPPER_BULB: Item = Item {
+    pub const COPPER_BULB: Self = Self {
         id: 1477,
         registry_key: "copper_bulb",
         components: &[
@@ -6229,7 +6242,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_CHAIN: Item = Item {
+    pub const COPPER_CHAIN: Self = Self {
         id: 401,
         registry_key: "copper_chain",
         components: &[
@@ -6248,7 +6261,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_CHEST: Item = Item {
+    pub const COPPER_CHEST: Self = Self {
         id: 1485,
         registry_key: "copper_chest",
         components: &[
@@ -6267,7 +6280,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_CHESTPLATE: Item = Item {
+    pub const COPPER_CHESTPLATE: Self = Self {
         id: 960,
         registry_key: "copper_chestplate",
         components: &[
@@ -6317,9 +6330,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
-    pub const COPPER_DOOR: Item = Item {
+    pub const COPPER_DOOR: Self = Self {
         id: 793,
         registry_key: "copper_door",
         components: &[
@@ -6338,7 +6352,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_GOLEM_SPAWN_EGG: Item = Item {
+    pub const COPPER_GOLEM_SPAWN_EGG: Self = Self {
         id: 1167,
         registry_key: "copper_golem_spawn_egg",
         components: &[
@@ -6357,7 +6371,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_GOLEM_STATUE: Item = Item {
+    pub const COPPER_GOLEM_STATUE: Self = Self {
         id: 1493,
         registry_key: "copper_golem_statue",
         components: &[
@@ -6376,7 +6390,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_GRATE: Item = Item {
+    pub const COPPER_GRATE: Self = Self {
         id: 1469,
         registry_key: "copper_grate",
         components: &[
@@ -6395,7 +6409,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_HELMET: Item = Item {
+    pub const COPPER_HELMET: Self = Self {
         id: 959,
         registry_key: "copper_helmet",
         components: &[
@@ -6445,9 +6459,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
-    pub const COPPER_HOE: Item = Item {
+    pub const COPPER_HOE: Self = Self {
         id: 921,
         registry_key: "copper_hoe",
         components: &[
@@ -6507,9 +6522,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
-    pub const COPPER_HORSE_ARMOR: Item = Item {
+    pub const COPPER_HORSE_ARMOR: Self = Self {
         id: 1256,
         registry_key: "copper_horse_armor",
         components: &[
@@ -6559,7 +6575,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_INGOT: Item = Item {
+    pub const COPPER_INGOT: Self = Self {
         id: 907,
         registry_key: "copper_ingot",
         components: &[
@@ -6578,7 +6594,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_LANTERN: Item = Item {
+    pub const COPPER_LANTERN: Self = Self {
         id: 1366,
         registry_key: "copper_lantern",
         components: &[
@@ -6597,7 +6613,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_LEGGINGS: Item = Item {
+    pub const COPPER_LEGGINGS: Self = Self {
         id: 961,
         registry_key: "copper_leggings",
         components: &[
@@ -6647,9 +6663,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
-    pub const COPPER_NAUTILUS_ARMOR: Item = Item {
+    pub const COPPER_NAUTILUS_ARMOR: Self = Self {
         id: 1338,
         registry_key: "copper_nautilus_armor",
         components: &[
@@ -6699,7 +6716,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_NUGGET: Item = Item {
+    pub const COPPER_NUGGET: Self = Self {
         id: 1307,
         registry_key: "copper_nugget",
         components: &[
@@ -6718,7 +6735,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_ORE: Item = Item {
+    pub const COPPER_ORE: Self = Self {
         id: 68,
         registry_key: "copper_ore",
         components: &[
@@ -6737,7 +6754,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_PICKAXE: Item = Item {
+    pub const COPPER_PICKAXE: Self = Self {
         id: 919,
         registry_key: "copper_pickaxe",
         components: &[
@@ -6797,9 +6814,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
-    pub const COPPER_SHOVEL: Item = Item {
+    pub const COPPER_SHOVEL: Self = Self {
         id: 918,
         registry_key: "copper_shovel",
         components: &[
@@ -6859,9 +6877,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
-    pub const COPPER_SPEAR: Item = Item {
+    pub const COPPER_SPEAR: Self = Self {
         id: 1299,
         registry_key: "copper_spear",
         components: &[
@@ -6901,9 +6920,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
-    pub const COPPER_SWORD: Item = Item {
+    pub const COPPER_SWORD: Self = Self {
         id: 917,
         registry_key: "copper_sword",
         components: &[
@@ -6968,9 +6988,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
-    pub const COPPER_TORCH: Item = Item {
+    pub const COPPER_TORCH: Self = Self {
         id: 367,
         registry_key: "copper_torch",
         components: &[
@@ -6989,7 +7010,7 @@ impl Item {
             ),
         ],
     };
-    pub const COPPER_TRAPDOOR: Item = Item {
+    pub const COPPER_TRAPDOOR: Self = Self {
         id: 814,
         registry_key: "copper_trapdoor",
         components: &[
@@ -7008,7 +7029,7 @@ impl Item {
             ),
         ],
     };
-    pub const CORNFLOWER: Item = Item {
+    pub const CORNFLOWER: Self = Self {
         id: 242,
         registry_key: "cornflower",
         components: &[
@@ -7027,7 +7048,7 @@ impl Item {
             ),
         ],
     };
-    pub const COW_SPAWN_EGG: Item = Item {
+    pub const COW_SPAWN_EGG: Self = Self {
         id: 1132,
         registry_key: "cow_spawn_egg",
         components: &[
@@ -7046,7 +7067,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRACKED_DEEPSLATE_BRICKS: Item = Item {
+    pub const CRACKED_DEEPSLATE_BRICKS: Self = Self {
         id: 383,
         registry_key: "cracked_deepslate_bricks",
         components: &[
@@ -7065,7 +7086,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRACKED_DEEPSLATE_TILES: Item = Item {
+    pub const CRACKED_DEEPSLATE_TILES: Self = Self {
         id: 385,
         registry_key: "cracked_deepslate_tiles",
         components: &[
@@ -7084,7 +7105,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRACKED_NETHER_BRICKS: Item = Item {
+    pub const CRACKED_NETHER_BRICKS: Self = Self {
         id: 426,
         registry_key: "cracked_nether_bricks",
         components: &[
@@ -7103,7 +7124,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRACKED_POLISHED_BLACKSTONE_BRICKS: Item = Item {
+    pub const CRACKED_POLISHED_BLACKSTONE_BRICKS: Self = Self {
         id: 1397,
         registry_key: "cracked_polished_blackstone_bricks",
         components: &[
@@ -7122,7 +7143,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRACKED_STONE_BRICKS: Item = Item {
+    pub const CRACKED_STONE_BRICKS: Self = Self {
         id: 378,
         registry_key: "cracked_stone_bricks",
         components: &[
@@ -7141,7 +7162,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRAFTER: Item = Item {
+    pub const CRAFTER: Self = Self {
         id: 1104,
         registry_key: "crafter",
         components: &[
@@ -7160,7 +7181,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRAFTING_TABLE: Item = Item {
+    pub const CRAFTING_TABLE: Self = Self {
         id: 333,
         registry_key: "crafting_table",
         components: &[
@@ -7179,7 +7200,7 @@ impl Item {
             ),
         ],
     };
-    pub const CREAKING_HEART: Item = Item {
+    pub const CREAKING_HEART: Self = Self {
         id: 331,
         registry_key: "creaking_heart",
         components: &[
@@ -7198,7 +7219,7 @@ impl Item {
             ),
         ],
     };
-    pub const CREAKING_SPAWN_EGG: Item = Item {
+    pub const CREAKING_SPAWN_EGG: Self = Self {
         id: 1190,
         registry_key: "creaking_spawn_egg",
         components: &[
@@ -7217,7 +7238,7 @@ impl Item {
             ),
         ],
     };
-    pub const CREEPER_BANNER_PATTERN: Item = Item {
+    pub const CREEPER_BANNER_PATTERN: Self = Self {
         id: 1344,
         registry_key: "creeper_banner_pattern",
         components: &[
@@ -7236,7 +7257,7 @@ impl Item {
             ),
         ],
     };
-    pub const CREEPER_HEAD: Item = Item {
+    pub const CREEPER_HEAD: Self = Self {
         id: 1238,
         registry_key: "creeper_head",
         components: &[
@@ -7277,7 +7298,7 @@ impl Item {
             ),
         ],
     };
-    pub const CREEPER_SPAWN_EGG: Item = Item {
+    pub const CREEPER_SPAWN_EGG: Self = Self {
         id: 1191,
         registry_key: "creeper_spawn_egg",
         components: &[
@@ -7296,7 +7317,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_BUTTON: Item = Item {
+    pub const CRIMSON_BUTTON: Self = Self {
         id: 762,
         registry_key: "crimson_button",
         components: &[
@@ -7315,7 +7336,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_DOOR: Item = Item {
+    pub const CRIMSON_DOOR: Self = Self {
         id: 791,
         registry_key: "crimson_door",
         components: &[
@@ -7334,7 +7355,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_FENCE: Item = Item {
+    pub const CRIMSON_FENCE: Self = Self {
         id: 355,
         registry_key: "crimson_fence",
         components: &[
@@ -7353,7 +7374,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_FENCE_GATE: Item = Item {
+    pub const CRIMSON_FENCE_GATE: Self = Self {
         id: 832,
         registry_key: "crimson_fence_gate",
         components: &[
@@ -7372,7 +7393,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_FUNGUS: Item = Item {
+    pub const CRIMSON_FUNGUS: Self = Self {
         id: 250,
         registry_key: "crimson_fungus",
         components: &[
@@ -7391,7 +7412,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_HANGING_SIGN: Item = Item {
+    pub const CRIMSON_HANGING_SIGN: Self = Self {
         id: 1011,
         registry_key: "crimson_hanging_sign",
         components: &[
@@ -7410,7 +7431,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_HYPHAE: Item = Item {
+    pub const CRIMSON_HYPHAE: Self = Self {
         id: 180,
         registry_key: "crimson_hyphae",
         components: &[
@@ -7429,7 +7450,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_NYLIUM: Item = Item {
+    pub const CRIMSON_NYLIUM: Self = Self {
         id: 33,
         registry_key: "crimson_nylium",
         components: &[
@@ -7448,7 +7469,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_PLANKS: Item = Item {
+    pub const CRIMSON_PLANKS: Self = Self {
         id: 46,
         registry_key: "crimson_planks",
         components: &[
@@ -7467,7 +7488,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_PRESSURE_PLATE: Item = Item {
+    pub const CRIMSON_PRESSURE_PLATE: Self = Self {
         id: 778,
         registry_key: "crimson_pressure_plate",
         components: &[
@@ -7486,7 +7507,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_ROOTS: Item = Item {
+    pub const CRIMSON_ROOTS: Self = Self {
         id: 252,
         registry_key: "crimson_roots",
         components: &[
@@ -7505,7 +7526,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_SHELF: Item = Item {
+    pub const CRIMSON_SHELF: Self = Self {
         id: 310,
         registry_key: "crimson_shelf",
         components: &[
@@ -7524,7 +7545,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_SIGN: Item = Item {
+    pub const CRIMSON_SIGN: Self = Self {
         id: 999,
         registry_key: "crimson_sign",
         components: &[
@@ -7543,7 +7564,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_SLAB: Item = Item {
+    pub const CRIMSON_SLAB: Self = Self {
         id: 282,
         registry_key: "crimson_slab",
         components: &[
@@ -7562,7 +7583,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_STAIRS: Item = Item {
+    pub const CRIMSON_STAIRS: Self = Self {
         id: 453,
         registry_key: "crimson_stairs",
         components: &[
@@ -7581,7 +7602,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_STEM: Item = Item {
+    pub const CRIMSON_STEM: Self = Self {
         id: 145,
         registry_key: "crimson_stem",
         components: &[
@@ -7600,7 +7621,7 @@ impl Item {
             ),
         ],
     };
-    pub const CRIMSON_TRAPDOOR: Item = Item {
+    pub const CRIMSON_TRAPDOOR: Self = Self {
         id: 812,
         registry_key: "crimson_trapdoor",
         components: &[
@@ -7619,7 +7640,7 @@ impl Item {
             ),
         ],
     };
-    pub const CROSSBOW: Item = Item {
+    pub const CROSSBOW: Self = Self {
         id: 1340,
         registry_key: "crossbow",
         components: &[
@@ -7638,9 +7659,10 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
-    pub const CRYING_OBSIDIAN: Item = Item {
+    pub const CRYING_OBSIDIAN: Self = Self {
         id: 1385,
         registry_key: "crying_obsidian",
         components: &[
@@ -7659,7 +7681,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_COPPER: Item = Item {
+    pub const CUT_COPPER: Self = Self {
         id: 102,
         registry_key: "cut_copper",
         components: &[
@@ -7678,7 +7700,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_COPPER_SLAB: Item = Item {
+    pub const CUT_COPPER_SLAB: Self = Self {
         id: 110,
         registry_key: "cut_copper_slab",
         components: &[
@@ -7697,7 +7719,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_COPPER_STAIRS: Item = Item {
+    pub const CUT_COPPER_STAIRS: Self = Self {
         id: 106,
         registry_key: "cut_copper_stairs",
         components: &[
@@ -7716,7 +7738,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_RED_SANDSTONE: Item = Item {
+    pub const CUT_RED_SANDSTONE: Self = Self {
         id: 572,
         registry_key: "cut_red_sandstone",
         components: &[
@@ -7735,7 +7757,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_RED_SANDSTONE_SLAB: Item = Item {
+    pub const CUT_RED_SANDSTONE_SLAB: Self = Self {
         id: 296,
         registry_key: "cut_red_sandstone_slab",
         components: &[
@@ -7754,7 +7776,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_SANDSTONE: Item = Item {
+    pub const CUT_SANDSTONE: Self = Self {
         id: 200,
         registry_key: "cut_sandstone",
         components: &[
@@ -7773,7 +7795,7 @@ impl Item {
             ),
         ],
     };
-    pub const CUT_SANDSTONE_SLAB: Item = Item {
+    pub const CUT_SANDSTONE_SLAB: Self = Self {
         id: 287,
         registry_key: "cut_sandstone_slab",
         components: &[
@@ -7792,7 +7814,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_BANNER: Item = Item {
+    pub const CYAN_BANNER: Self = Self {
         id: 1276,
         registry_key: "cyan_banner",
         components: &[
@@ -7811,7 +7833,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_BED: Item = Item {
+    pub const CYAN_BED: Self = Self {
         id: 1096,
         registry_key: "cyan_bed",
         components: &[
@@ -7830,7 +7852,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_BUNDLE: Item = Item {
+    pub const CYAN_BUNDLE: Self = Self {
         id: 1047,
         registry_key: "cyan_bundle",
         components: &[
@@ -7849,7 +7871,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_CANDLE: Item = Item {
+    pub const CYAN_CANDLE: Self = Self {
         id: 1409,
         registry_key: "cyan_candle",
         components: &[
@@ -7868,7 +7890,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_CARPET: Item = Item {
+    pub const CYAN_CARPET: Self = Self {
         id: 515,
         registry_key: "cyan_carpet",
         components: &[
@@ -7906,7 +7928,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_CONCRETE: Item = Item {
+    pub const CYAN_CONCRETE: Self = Self {
         id: 624,
         registry_key: "cyan_concrete",
         components: &[
@@ -7925,7 +7947,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_CONCRETE_POWDER: Item = Item {
+    pub const CYAN_CONCRETE_POWDER: Self = Self {
         id: 640,
         registry_key: "cyan_concrete_powder",
         components: &[
@@ -7944,7 +7966,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_DYE: Item = Item {
+    pub const CYAN_DYE: Self = Self {
         id: 1076,
         registry_key: "cyan_dye",
         components: &[
@@ -7963,7 +7985,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_GLAZED_TERRACOTTA: Item = Item {
+    pub const CYAN_GLAZED_TERRACOTTA: Self = Self {
         id: 608,
         registry_key: "cyan_glazed_terracotta",
         components: &[
@@ -7982,7 +8004,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_HARNESS: Item = Item {
+    pub const CYAN_HARNESS: Self = Self {
         id: 848,
         registry_key: "cyan_harness",
         components: &[
@@ -8017,7 +8039,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_SHULKER_BOX: Item = Item {
+    pub const CYAN_SHULKER_BOX: Self = Self {
         id: 592,
         registry_key: "cyan_shulker_box",
         components: &[
@@ -8036,7 +8058,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_STAINED_GLASS: Item = Item {
+    pub const CYAN_STAINED_GLASS: Self = Self {
         id: 540,
         registry_key: "cyan_stained_glass",
         components: &[
@@ -8055,7 +8077,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_STAINED_GLASS_PANE: Item = Item {
+    pub const CYAN_STAINED_GLASS_PANE: Self = Self {
         id: 556,
         registry_key: "cyan_stained_glass_pane",
         components: &[
@@ -8074,7 +8096,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_TERRACOTTA: Item = Item {
+    pub const CYAN_TERRACOTTA: Self = Self {
         id: 496,
         registry_key: "cyan_terracotta",
         components: &[
@@ -8093,7 +8115,7 @@ impl Item {
             ),
         ],
     };
-    pub const CYAN_WOOL: Item = Item {
+    pub const CYAN_WOOL: Self = Self {
         id: 222,
         registry_key: "cyan_wool",
         components: &[
@@ -8112,7 +8134,7 @@ impl Item {
             ),
         ],
     };
-    pub const DAMAGED_ANVIL: Item = Item {
+    pub const DAMAGED_ANVIL: Self = Self {
         id: 481,
         registry_key: "damaged_anvil",
         components: &[
@@ -8131,7 +8153,7 @@ impl Item {
             ),
         ],
     };
-    pub const DANDELION: Item = Item {
+    pub const DANDELION: Self = Self {
         id: 229,
         registry_key: "dandelion",
         components: &[
@@ -8150,7 +8172,7 @@ impl Item {
             ),
         ],
     };
-    pub const DANGER_POTTERY_SHERD: Item = Item {
+    pub const DANGER_POTTERY_SHERD: Self = Self {
         id: 1452,
         registry_key: "danger_pottery_sherd",
         components: &[
@@ -8169,7 +8191,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_BOAT: Item = Item {
+    pub const DARK_OAK_BOAT: Self = Self {
         id: 876,
         registry_key: "dark_oak_boat",
         components: &[
@@ -8188,7 +8210,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_BUTTON: Item = Item {
+    pub const DARK_OAK_BUTTON: Self = Self {
         id: 758,
         registry_key: "dark_oak_button",
         components: &[
@@ -8207,7 +8229,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_CHEST_BOAT: Item = Item {
+    pub const DARK_OAK_CHEST_BOAT: Self = Self {
         id: 877,
         registry_key: "dark_oak_chest_boat",
         components: &[
@@ -8226,7 +8248,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_DOOR: Item = Item {
+    pub const DARK_OAK_DOOR: Self = Self {
         id: 787,
         registry_key: "dark_oak_door",
         components: &[
@@ -8245,7 +8267,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_FENCE: Item = Item {
+    pub const DARK_OAK_FENCE: Self = Self {
         id: 351,
         registry_key: "dark_oak_fence",
         components: &[
@@ -8264,7 +8286,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_FENCE_GATE: Item = Item {
+    pub const DARK_OAK_FENCE_GATE: Self = Self {
         id: 828,
         registry_key: "dark_oak_fence_gate",
         components: &[
@@ -8283,7 +8305,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_HANGING_SIGN: Item = Item {
+    pub const DARK_OAK_HANGING_SIGN: Self = Self {
         id: 1007,
         registry_key: "dark_oak_hanging_sign",
         components: &[
@@ -8302,7 +8324,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_LEAVES: Item = Item {
+    pub const DARK_OAK_LEAVES: Self = Self {
         id: 188,
         registry_key: "dark_oak_leaves",
         components: &[
@@ -8321,7 +8343,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_LOG: Item = Item {
+    pub const DARK_OAK_LOG: Self = Self {
         id: 141,
         registry_key: "dark_oak_log",
         components: &[
@@ -8340,7 +8362,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_PLANKS: Item = Item {
+    pub const DARK_OAK_PLANKS: Self = Self {
         id: 42,
         registry_key: "dark_oak_planks",
         components: &[
@@ -8359,7 +8381,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_PRESSURE_PLATE: Item = Item {
+    pub const DARK_OAK_PRESSURE_PLATE: Self = Self {
         id: 774,
         registry_key: "dark_oak_pressure_plate",
         components: &[
@@ -8378,7 +8400,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_SAPLING: Item = Item {
+    pub const DARK_OAK_SAPLING: Self = Self {
         id: 55,
         registry_key: "dark_oak_sapling",
         components: &[
@@ -8397,7 +8419,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_SHELF: Item = Item {
+    pub const DARK_OAK_SHELF: Self = Self {
         id: 311,
         registry_key: "dark_oak_shelf",
         components: &[
@@ -8416,7 +8438,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_SIGN: Item = Item {
+    pub const DARK_OAK_SIGN: Self = Self {
         id: 995,
         registry_key: "dark_oak_sign",
         components: &[
@@ -8435,7 +8457,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_SLAB: Item = Item {
+    pub const DARK_OAK_SLAB: Self = Self {
         id: 277,
         registry_key: "dark_oak_slab",
         components: &[
@@ -8454,7 +8476,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_STAIRS: Item = Item {
+    pub const DARK_OAK_STAIRS: Self = Self {
         id: 448,
         registry_key: "dark_oak_stairs",
         components: &[
@@ -8473,7 +8495,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_TRAPDOOR: Item = Item {
+    pub const DARK_OAK_TRAPDOOR: Self = Self {
         id: 808,
         registry_key: "dark_oak_trapdoor",
         components: &[
@@ -8492,7 +8514,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_OAK_WOOD: Item = Item {
+    pub const DARK_OAK_WOOD: Self = Self {
         id: 178,
         registry_key: "dark_oak_wood",
         components: &[
@@ -8511,7 +8533,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_PRISMARINE: Item = Item {
+    pub const DARK_PRISMARINE: Self = Self {
         id: 565,
         registry_key: "dark_prismarine",
         components: &[
@@ -8530,7 +8552,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_PRISMARINE_SLAB: Item = Item {
+    pub const DARK_PRISMARINE_SLAB: Self = Self {
         id: 300,
         registry_key: "dark_prismarine_slab",
         components: &[
@@ -8549,7 +8571,7 @@ impl Item {
             ),
         ],
     };
-    pub const DARK_PRISMARINE_STAIRS: Item = Item {
+    pub const DARK_PRISMARINE_STAIRS: Self = Self {
         id: 568,
         registry_key: "dark_prismarine_stairs",
         components: &[
@@ -8568,7 +8590,7 @@ impl Item {
             ),
         ],
     };
-    pub const DAYLIGHT_DETECTOR: Item = Item {
+    pub const DAYLIGHT_DETECTOR: Self = Self {
         id: 742,
         registry_key: "daylight_detector",
         components: &[
@@ -8587,7 +8609,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BRAIN_CORAL: Item = Item {
+    pub const DEAD_BRAIN_CORAL: Self = Self {
         id: 665,
         registry_key: "dead_brain_coral",
         components: &[
@@ -8606,7 +8628,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BRAIN_CORAL_BLOCK: Item = Item {
+    pub const DEAD_BRAIN_CORAL_BLOCK: Self = Self {
         id: 651,
         registry_key: "dead_brain_coral_block",
         components: &[
@@ -8625,7 +8647,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BRAIN_CORAL_FAN: Item = Item {
+    pub const DEAD_BRAIN_CORAL_FAN: Self = Self {
         id: 676,
         registry_key: "dead_brain_coral_fan",
         components: &[
@@ -8644,7 +8666,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BUBBLE_CORAL: Item = Item {
+    pub const DEAD_BUBBLE_CORAL: Self = Self {
         id: 666,
         registry_key: "dead_bubble_coral",
         components: &[
@@ -8663,7 +8685,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BUBBLE_CORAL_BLOCK: Item = Item {
+    pub const DEAD_BUBBLE_CORAL_BLOCK: Self = Self {
         id: 652,
         registry_key: "dead_bubble_coral_block",
         components: &[
@@ -8682,7 +8704,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BUBBLE_CORAL_FAN: Item = Item {
+    pub const DEAD_BUBBLE_CORAL_FAN: Self = Self {
         id: 677,
         registry_key: "dead_bubble_coral_fan",
         components: &[
@@ -8701,7 +8723,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_BUSH: Item = Item {
+    pub const DEAD_BUSH: Self = Self {
         id: 207,
         registry_key: "dead_bush",
         components: &[
@@ -8720,7 +8742,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_FIRE_CORAL: Item = Item {
+    pub const DEAD_FIRE_CORAL: Self = Self {
         id: 667,
         registry_key: "dead_fire_coral",
         components: &[
@@ -8739,7 +8761,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_FIRE_CORAL_BLOCK: Item = Item {
+    pub const DEAD_FIRE_CORAL_BLOCK: Self = Self {
         id: 653,
         registry_key: "dead_fire_coral_block",
         components: &[
@@ -8758,7 +8780,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_FIRE_CORAL_FAN: Item = Item {
+    pub const DEAD_FIRE_CORAL_FAN: Self = Self {
         id: 678,
         registry_key: "dead_fire_coral_fan",
         components: &[
@@ -8777,7 +8799,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_HORN_CORAL: Item = Item {
+    pub const DEAD_HORN_CORAL: Self = Self {
         id: 668,
         registry_key: "dead_horn_coral",
         components: &[
@@ -8796,7 +8818,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_HORN_CORAL_BLOCK: Item = Item {
+    pub const DEAD_HORN_CORAL_BLOCK: Self = Self {
         id: 654,
         registry_key: "dead_horn_coral_block",
         components: &[
@@ -8815,7 +8837,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_HORN_CORAL_FAN: Item = Item {
+    pub const DEAD_HORN_CORAL_FAN: Self = Self {
         id: 679,
         registry_key: "dead_horn_coral_fan",
         components: &[
@@ -8834,7 +8856,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_TUBE_CORAL: Item = Item {
+    pub const DEAD_TUBE_CORAL: Self = Self {
         id: 669,
         registry_key: "dead_tube_coral",
         components: &[
@@ -8853,7 +8875,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_TUBE_CORAL_BLOCK: Item = Item {
+    pub const DEAD_TUBE_CORAL_BLOCK: Self = Self {
         id: 650,
         registry_key: "dead_tube_coral_block",
         components: &[
@@ -8872,7 +8894,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEAD_TUBE_CORAL_FAN: Item = Item {
+    pub const DEAD_TUBE_CORAL_FAN: Self = Self {
         id: 675,
         registry_key: "dead_tube_coral_fan",
         components: &[
@@ -8891,7 +8913,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEBUG_STICK: Item = Item {
+    pub const DEBUG_STICK: Self = Self {
         id: 1309,
         registry_key: "debug_stick",
         components: &[
@@ -8910,7 +8932,7 @@ impl Item {
             ),
         ],
     };
-    pub const DECORATED_POT: Item = Item {
+    pub const DECORATED_POT: Self = Self {
         id: 320,
         registry_key: "decorated_pot",
         components: &[
@@ -8929,7 +8951,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE: Item = Item {
+    pub const DEEPSLATE: Self = Self {
         id: 8,
         registry_key: "deepslate",
         components: &[
@@ -8948,7 +8970,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_BRICK_SLAB: Item = Item {
+    pub const DEEPSLATE_BRICK_SLAB: Self = Self {
         id: 715,
         registry_key: "deepslate_brick_slab",
         components: &[
@@ -8967,7 +8989,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_BRICK_STAIRS: Item = Item {
+    pub const DEEPSLATE_BRICK_STAIRS: Self = Self {
         id: 698,
         registry_key: "deepslate_brick_stairs",
         components: &[
@@ -8986,7 +9008,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_BRICK_WALL: Item = Item {
+    pub const DEEPSLATE_BRICK_WALL: Self = Self {
         id: 477,
         registry_key: "deepslate_brick_wall",
         components: &[
@@ -9005,7 +9027,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_BRICKS: Item = Item {
+    pub const DEEPSLATE_BRICKS: Self = Self {
         id: 382,
         registry_key: "deepslate_bricks",
         components: &[
@@ -9024,7 +9046,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_COAL_ORE: Item = Item {
+    pub const DEEPSLATE_COAL_ORE: Self = Self {
         id: 65,
         registry_key: "deepslate_coal_ore",
         components: &[
@@ -9043,7 +9065,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_COPPER_ORE: Item = Item {
+    pub const DEEPSLATE_COPPER_ORE: Self = Self {
         id: 69,
         registry_key: "deepslate_copper_ore",
         components: &[
@@ -9062,7 +9084,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_DIAMOND_ORE: Item = Item {
+    pub const DEEPSLATE_DIAMOND_ORE: Self = Self {
         id: 79,
         registry_key: "deepslate_diamond_ore",
         components: &[
@@ -9081,7 +9103,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_EMERALD_ORE: Item = Item {
+    pub const DEEPSLATE_EMERALD_ORE: Self = Self {
         id: 75,
         registry_key: "deepslate_emerald_ore",
         components: &[
@@ -9100,7 +9122,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_GOLD_ORE: Item = Item {
+    pub const DEEPSLATE_GOLD_ORE: Self = Self {
         id: 71,
         registry_key: "deepslate_gold_ore",
         components: &[
@@ -9119,7 +9141,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_IRON_ORE: Item = Item {
+    pub const DEEPSLATE_IRON_ORE: Self = Self {
         id: 67,
         registry_key: "deepslate_iron_ore",
         components: &[
@@ -9138,7 +9160,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_LAPIS_ORE: Item = Item {
+    pub const DEEPSLATE_LAPIS_ORE: Self = Self {
         id: 77,
         registry_key: "deepslate_lapis_ore",
         components: &[
@@ -9157,7 +9179,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_REDSTONE_ORE: Item = Item {
+    pub const DEEPSLATE_REDSTONE_ORE: Self = Self {
         id: 73,
         registry_key: "deepslate_redstone_ore",
         components: &[
@@ -9176,7 +9198,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_TILE_SLAB: Item = Item {
+    pub const DEEPSLATE_TILE_SLAB: Self = Self {
         id: 716,
         registry_key: "deepslate_tile_slab",
         components: &[
@@ -9195,7 +9217,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_TILE_STAIRS: Item = Item {
+    pub const DEEPSLATE_TILE_STAIRS: Self = Self {
         id: 699,
         registry_key: "deepslate_tile_stairs",
         components: &[
@@ -9214,7 +9236,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_TILE_WALL: Item = Item {
+    pub const DEEPSLATE_TILE_WALL: Self = Self {
         id: 478,
         registry_key: "deepslate_tile_wall",
         components: &[
@@ -9233,7 +9255,7 @@ impl Item {
             ),
         ],
     };
-    pub const DEEPSLATE_TILES: Item = Item {
+    pub const DEEPSLATE_TILES: Self = Self {
         id: 384,
         registry_key: "deepslate_tiles",
         components: &[
@@ -9252,7 +9274,7 @@ impl Item {
             ),
         ],
     };
-    pub const DETECTOR_RAIL: Item = Item {
+    pub const DETECTOR_RAIL: Self = Self {
         id: 835,
         registry_key: "detector_rail",
         components: &[
@@ -9271,7 +9293,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIAMOND: Item = Item {
+    pub const DIAMOND: Self = Self {
         id: 899,
         registry_key: "diamond",
         components: &[
@@ -9290,7 +9312,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIAMOND_AXE: Item = Item {
+    pub const DIAMOND_AXE: Self = Self {
         id: 940,
         registry_key: "diamond_axe",
         components: &[
@@ -9350,9 +9372,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_BLOCK: Item = Item {
+    pub const DIAMOND_BLOCK: Self = Self {
         id: 93,
         registry_key: "diamond_block",
         components: &[
@@ -9371,7 +9394,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIAMOND_BOOTS: Item = Item {
+    pub const DIAMOND_BOOTS: Self = Self {
         id: 974,
         registry_key: "diamond_boots",
         components: &[
@@ -9421,9 +9444,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_CHESTPLATE: Item = Item {
+    pub const DIAMOND_CHESTPLATE: Self = Self {
         id: 972,
         registry_key: "diamond_chestplate",
         components: &[
@@ -9473,9 +9497,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_HELMET: Item = Item {
+    pub const DIAMOND_HELMET: Self = Self {
         id: 971,
         registry_key: "diamond_helmet",
         components: &[
@@ -9525,9 +9550,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_HOE: Item = Item {
+    pub const DIAMOND_HOE: Self = Self {
         id: 941,
         registry_key: "diamond_hoe",
         components: &[
@@ -9587,9 +9613,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_HORSE_ARMOR: Item = Item {
+    pub const DIAMOND_HORSE_ARMOR: Self = Self {
         id: 1259,
         registry_key: "diamond_horse_armor",
         components: &[
@@ -9639,7 +9666,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIAMOND_LEGGINGS: Item = Item {
+    pub const DIAMOND_LEGGINGS: Self = Self {
         id: 973,
         registry_key: "diamond_leggings",
         components: &[
@@ -9689,9 +9716,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_NAUTILUS_ARMOR: Item = Item {
+    pub const DIAMOND_NAUTILUS_ARMOR: Self = Self {
         id: 1336,
         registry_key: "diamond_nautilus_armor",
         components: &[
@@ -9741,7 +9769,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIAMOND_ORE: Item = Item {
+    pub const DIAMOND_ORE: Self = Self {
         id: 78,
         registry_key: "diamond_ore",
         components: &[
@@ -9760,7 +9788,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIAMOND_PICKAXE: Item = Item {
+    pub const DIAMOND_PICKAXE: Self = Self {
         id: 939,
         registry_key: "diamond_pickaxe",
         components: &[
@@ -9820,9 +9848,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_SHOVEL: Item = Item {
+    pub const DIAMOND_SHOVEL: Self = Self {
         id: 938,
         registry_key: "diamond_shovel",
         components: &[
@@ -9882,9 +9911,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_SPEAR: Item = Item {
+    pub const DIAMOND_SPEAR: Self = Self {
         id: 1302,
         registry_key: "diamond_spear",
         components: &[
@@ -9924,9 +9954,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIAMOND_SWORD: Item = Item {
+    pub const DIAMOND_SWORD: Self = Self {
         id: 937,
         registry_key: "diamond_sword",
         components: &[
@@ -9991,9 +10022,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
-    pub const DIORITE: Item = Item {
+    pub const DIORITE: Self = Self {
         id: 4,
         registry_key: "diorite",
         components: &[
@@ -10012,7 +10044,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIORITE_SLAB: Item = Item {
+    pub const DIORITE_SLAB: Self = Self {
         id: 712,
         registry_key: "diorite_slab",
         components: &[
@@ -10031,7 +10063,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIORITE_STAIRS: Item = Item {
+    pub const DIORITE_STAIRS: Self = Self {
         id: 695,
         registry_key: "diorite_stairs",
         components: &[
@@ -10050,7 +10082,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIORITE_WALL: Item = Item {
+    pub const DIORITE_WALL: Self = Self {
         id: 471,
         registry_key: "diorite_wall",
         components: &[
@@ -10069,7 +10101,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIRT: Item = Item {
+    pub const DIRT: Self = Self {
         id: 28,
         registry_key: "dirt",
         components: &[
@@ -10088,7 +10120,7 @@ impl Item {
             ),
         ],
     };
-    pub const DIRT_PATH: Item = Item {
+    pub const DIRT_PATH: Self = Self {
         id: 524,
         registry_key: "dirt_path",
         components: &[
@@ -10107,7 +10139,7 @@ impl Item {
             ),
         ],
     };
-    pub const DISC_FRAGMENT_5: Item = Item {
+    pub const DISC_FRAGMENT_5: Self = Self {
         id: 1331,
         registry_key: "disc_fragment_5",
         components: &[
@@ -10126,7 +10158,7 @@ impl Item {
             ),
         ],
     };
-    pub const DISPENSER: Item = Item {
+    pub const DISPENSER: Self = Self {
         id: 729,
         registry_key: "dispenser",
         components: &[
@@ -10145,7 +10177,7 @@ impl Item {
             ),
         ],
     };
-    pub const DOLPHIN_SPAWN_EGG: Item = Item {
+    pub const DOLPHIN_SPAWN_EGG: Self = Self {
         id: 1154,
         registry_key: "dolphin_spawn_egg",
         components: &[
@@ -10164,7 +10196,7 @@ impl Item {
             ),
         ],
     };
-    pub const DONKEY_SPAWN_EGG: Item = Item {
+    pub const DONKEY_SPAWN_EGG: Self = Self {
         id: 1136,
         registry_key: "donkey_spawn_egg",
         components: &[
@@ -10183,7 +10215,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRAGON_BREATH: Item = Item {
+    pub const DRAGON_BREATH: Self = Self {
         id: 1291,
         registry_key: "dragon_breath",
         components: &[
@@ -10202,7 +10234,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRAGON_EGG: Item = Item {
+    pub const DRAGON_EGG: Self = Self {
         id: 438,
         registry_key: "dragon_egg",
         components: &[
@@ -10221,7 +10253,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRAGON_HEAD: Item = Item {
+    pub const DRAGON_HEAD: Self = Self {
         id: 1239,
         registry_key: "dragon_head",
         components: &[
@@ -10262,7 +10294,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRIED_GHAST: Item = Item {
+    pub const DRIED_GHAST: Self = Self {
         id: 649,
         registry_key: "dried_ghast",
         components: &[
@@ -10281,7 +10313,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRIED_KELP: Item = Item {
+    pub const DRIED_KELP: Self = Self {
         id: 1108,
         registry_key: "dried_kelp",
         components: &[
@@ -10318,7 +10350,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRIED_KELP_BLOCK: Item = Item {
+    pub const DRIED_KELP_BLOCK: Self = Self {
         id: 1028,
         registry_key: "dried_kelp_block",
         components: &[
@@ -10337,7 +10369,7 @@ impl Item {
             ),
         ],
     };
-    pub const DRIPSTONE_BLOCK: Item = Item {
+    pub const DRIPSTONE_BLOCK: Self = Self {
         id: 26,
         registry_key: "dripstone_block",
         components: &[
@@ -10356,7 +10388,7 @@ impl Item {
             ),
         ],
     };
-    pub const DROPPER: Item = Item {
+    pub const DROPPER: Self = Self {
         id: 730,
         registry_key: "dropper",
         components: &[
@@ -10375,7 +10407,7 @@ impl Item {
             ),
         ],
     };
-    pub const DROWNED_SPAWN_EGG: Item = Item {
+    pub const DROWNED_SPAWN_EGG: Self = Self {
         id: 1175,
         registry_key: "drowned_spawn_egg",
         components: &[
@@ -10394,7 +10426,7 @@ impl Item {
             ),
         ],
     };
-    pub const DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1429,
         registry_key: "dune_armor_trim_smithing_template",
         components: &[
@@ -10413,7 +10445,7 @@ impl Item {
             ),
         ],
     };
-    pub const ECHO_SHARD: Item = Item {
+    pub const ECHO_SHARD: Self = Self {
         id: 1425,
         registry_key: "echo_shard",
         components: &[
@@ -10432,7 +10464,7 @@ impl Item {
             ),
         ],
     };
-    pub const EGG: Item = Item {
+    pub const EGG: Self = Self {
         id: 1032,
         registry_key: "egg",
         components: &[
@@ -10451,7 +10483,7 @@ impl Item {
             ),
         ],
     };
-    pub const ELDER_GUARDIAN_SPAWN_EGG: Item = Item {
+    pub const ELDER_GUARDIAN_SPAWN_EGG: Self = Self {
         id: 1192,
         registry_key: "elder_guardian_spawn_egg",
         components: &[
@@ -10470,7 +10502,7 @@ impl Item {
             ),
         ],
     };
-    pub const ELYTRA: Item = Item {
+    pub const ELYTRA: Self = Self {
         id: 863,
         registry_key: "elytra",
         components: &[
@@ -10507,7 +10539,7 @@ impl Item {
             ),
         ],
     };
-    pub const EMERALD: Item = Item {
+    pub const EMERALD: Self = Self {
         id: 900,
         registry_key: "emerald",
         components: &[
@@ -10526,7 +10558,7 @@ impl Item {
             ),
         ],
     };
-    pub const EMERALD_BLOCK: Item = Item {
+    pub const EMERALD_BLOCK: Self = Self {
         id: 441,
         registry_key: "emerald_block",
         components: &[
@@ -10545,7 +10577,7 @@ impl Item {
             ),
         ],
     };
-    pub const EMERALD_ORE: Item = Item {
+    pub const EMERALD_ORE: Self = Self {
         id: 74,
         registry_key: "emerald_ore",
         components: &[
@@ -10564,7 +10596,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENCHANTED_BOOK: Item = Item {
+    pub const ENCHANTED_BOOK: Self = Self {
         id: 1245,
         registry_key: "enchanted_book",
         components: &[
@@ -10583,7 +10615,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENCHANTED_GOLDEN_APPLE: Item = Item {
+    pub const ENCHANTED_GOLDEN_APPLE: Self = Self {
         id: 988,
         registry_key: "enchanted_golden_apple",
         components: &[
@@ -10656,7 +10688,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENCHANTING_TABLE: Item = Item {
+    pub const ENCHANTING_TABLE: Self = Self {
         id: 434,
         registry_key: "enchanting_table",
         components: &[
@@ -10675,7 +10707,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_CRYSTAL: Item = Item {
+    pub const END_CRYSTAL: Self = Self {
         id: 1283,
         registry_key: "end_crystal",
         components: &[
@@ -10694,7 +10726,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_PORTAL_FRAME: Item = Item {
+    pub const END_PORTAL_FRAME: Self = Self {
         id: 435,
         registry_key: "end_portal_frame",
         components: &[
@@ -10713,7 +10745,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_ROD: Item = Item {
+    pub const END_ROD: Self = Self {
         id: 324,
         registry_key: "end_rod",
         components: &[
@@ -10732,7 +10764,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_STONE: Item = Item {
+    pub const END_STONE: Self = Self {
         id: 436,
         registry_key: "end_stone",
         components: &[
@@ -10751,7 +10783,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_STONE_BRICK_SLAB: Item = Item {
+    pub const END_STONE_BRICK_SLAB: Self = Self {
         id: 705,
         registry_key: "end_stone_brick_slab",
         components: &[
@@ -10770,7 +10802,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_STONE_BRICK_STAIRS: Item = Item {
+    pub const END_STONE_BRICK_STAIRS: Self = Self {
         id: 687,
         registry_key: "end_stone_brick_stairs",
         components: &[
@@ -10789,7 +10821,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_STONE_BRICK_WALL: Item = Item {
+    pub const END_STONE_BRICK_WALL: Self = Self {
         id: 470,
         registry_key: "end_stone_brick_wall",
         components: &[
@@ -10808,7 +10840,7 @@ impl Item {
             ),
         ],
     };
-    pub const END_STONE_BRICKS: Item = Item {
+    pub const END_STONE_BRICKS: Self = Self {
         id: 437,
         registry_key: "end_stone_bricks",
         components: &[
@@ -10827,7 +10859,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENDER_CHEST: Item = Item {
+    pub const ENDER_CHEST: Self = Self {
         id: 440,
         registry_key: "ender_chest",
         components: &[
@@ -10846,7 +10878,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENDER_DRAGON_SPAWN_EGG: Item = Item {
+    pub const ENDER_DRAGON_SPAWN_EGG: Self = Self {
         id: 1214,
         registry_key: "ender_dragon_spawn_egg",
         components: &[
@@ -10865,7 +10897,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENDER_EYE: Item = Item {
+    pub const ENDER_EYE: Self = Self {
         id: 1129,
         registry_key: "ender_eye",
         components: &[
@@ -10884,7 +10916,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENDER_PEARL: Item = Item {
+    pub const ENDER_PEARL: Self = Self {
         id: 1116,
         registry_key: "ender_pearl",
         components: &[
@@ -10903,7 +10935,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENDERMAN_SPAWN_EGG: Item = Item {
+    pub const ENDERMAN_SPAWN_EGG: Self = Self {
         id: 1215,
         registry_key: "enderman_spawn_egg",
         components: &[
@@ -10922,7 +10954,7 @@ impl Item {
             ),
         ],
     };
-    pub const ENDERMITE_SPAWN_EGG: Item = Item {
+    pub const ENDERMITE_SPAWN_EGG: Self = Self {
         id: 1216,
         registry_key: "endermite_spawn_egg",
         components: &[
@@ -10941,7 +10973,7 @@ impl Item {
             ),
         ],
     };
-    pub const EVOKER_SPAWN_EGG: Item = Item {
+    pub const EVOKER_SPAWN_EGG: Self = Self {
         id: 1199,
         registry_key: "evoker_spawn_egg",
         components: &[
@@ -10960,7 +10992,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPERIENCE_BOTTLE: Item = Item {
+    pub const EXPERIENCE_BOTTLE: Self = Self {
         id: 1218,
         registry_key: "experience_bottle",
         components: &[
@@ -10979,7 +11011,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPLORER_POTTERY_SHERD: Item = Item {
+    pub const EXPLORER_POTTERY_SHERD: Self = Self {
         id: 1453,
         registry_key: "explorer_pottery_sherd",
         components: &[
@@ -10998,7 +11030,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_CHISELED_COPPER: Item = Item {
+    pub const EXPOSED_CHISELED_COPPER: Self = Self {
         id: 99,
         registry_key: "exposed_chiseled_copper",
         components: &[
@@ -11017,7 +11049,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER: Item = Item {
+    pub const EXPOSED_COPPER: Self = Self {
         id: 95,
         registry_key: "exposed_copper",
         components: &[
@@ -11036,7 +11068,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_BARS: Item = Item {
+    pub const EXPOSED_COPPER_BARS: Self = Self {
         id: 393,
         registry_key: "exposed_copper_bars",
         components: &[
@@ -11055,7 +11087,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_BULB: Item = Item {
+    pub const EXPOSED_COPPER_BULB: Self = Self {
         id: 1478,
         registry_key: "exposed_copper_bulb",
         components: &[
@@ -11074,7 +11106,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_CHAIN: Item = Item {
+    pub const EXPOSED_COPPER_CHAIN: Self = Self {
         id: 402,
         registry_key: "exposed_copper_chain",
         components: &[
@@ -11093,7 +11125,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_CHEST: Item = Item {
+    pub const EXPOSED_COPPER_CHEST: Self = Self {
         id: 1486,
         registry_key: "exposed_copper_chest",
         components: &[
@@ -11112,7 +11144,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_DOOR: Item = Item {
+    pub const EXPOSED_COPPER_DOOR: Self = Self {
         id: 794,
         registry_key: "exposed_copper_door",
         components: &[
@@ -11131,7 +11163,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const EXPOSED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1494,
         registry_key: "exposed_copper_golem_statue",
         components: &[
@@ -11150,7 +11182,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_GRATE: Item = Item {
+    pub const EXPOSED_COPPER_GRATE: Self = Self {
         id: 1470,
         registry_key: "exposed_copper_grate",
         components: &[
@@ -11169,7 +11201,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_LANTERN: Item = Item {
+    pub const EXPOSED_COPPER_LANTERN: Self = Self {
         id: 1367,
         registry_key: "exposed_copper_lantern",
         components: &[
@@ -11188,7 +11220,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_COPPER_TRAPDOOR: Item = Item {
+    pub const EXPOSED_COPPER_TRAPDOOR: Self = Self {
         id: 815,
         registry_key: "exposed_copper_trapdoor",
         components: &[
@@ -11207,7 +11239,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_CUT_COPPER: Item = Item {
+    pub const EXPOSED_CUT_COPPER: Self = Self {
         id: 103,
         registry_key: "exposed_cut_copper",
         components: &[
@@ -11226,7 +11258,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_CUT_COPPER_SLAB: Item = Item {
+    pub const EXPOSED_CUT_COPPER_SLAB: Self = Self {
         id: 111,
         registry_key: "exposed_cut_copper_slab",
         components: &[
@@ -11245,7 +11277,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_CUT_COPPER_STAIRS: Item = Item {
+    pub const EXPOSED_CUT_COPPER_STAIRS: Self = Self {
         id: 107,
         registry_key: "exposed_cut_copper_stairs",
         components: &[
@@ -11264,7 +11296,7 @@ impl Item {
             ),
         ],
     };
-    pub const EXPOSED_LIGHTNING_ROD: Item = Item {
+    pub const EXPOSED_LIGHTNING_ROD: Self = Self {
         id: 735,
         registry_key: "exposed_lightning_rod",
         components: &[
@@ -11283,7 +11315,7 @@ impl Item {
             ),
         ],
     };
-    pub const EYE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const EYE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1433,
         registry_key: "eye_armor_trim_smithing_template",
         components: &[
@@ -11302,7 +11334,7 @@ impl Item {
             ),
         ],
     };
-    pub const FARMLAND: Item = Item {
+    pub const FARMLAND: Self = Self {
         id: 334,
         registry_key: "farmland",
         components: &[
@@ -11321,7 +11353,7 @@ impl Item {
             ),
         ],
     };
-    pub const FEATHER: Item = Item {
+    pub const FEATHER: Self = Self {
         id: 950,
         registry_key: "feather",
         components: &[
@@ -11340,7 +11372,7 @@ impl Item {
             ),
         ],
     };
-    pub const FERMENTED_SPIDER_EYE: Item = Item {
+    pub const FERMENTED_SPIDER_EYE: Self = Self {
         id: 1124,
         registry_key: "fermented_spider_eye",
         components: &[
@@ -11359,7 +11391,7 @@ impl Item {
             ),
         ],
     };
-    pub const FERN: Item = Item {
+    pub const FERN: Self = Self {
         id: 203,
         registry_key: "fern",
         components: &[
@@ -11378,7 +11410,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIELD_MASONED_BANNER_PATTERN: Item = Item {
+    pub const FIELD_MASONED_BANNER_PATTERN: Self = Self {
         id: 1351,
         registry_key: "field_masoned_banner_pattern",
         components: &[
@@ -11397,7 +11429,7 @@ impl Item {
             ),
         ],
     };
-    pub const FILLED_MAP: Item = Item {
+    pub const FILLED_MAP: Self = Self {
         id: 1105,
         registry_key: "filled_map",
         components: &[
@@ -11416,7 +11448,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIRE_CHARGE: Item = Item {
+    pub const FIRE_CHARGE: Self = Self {
         id: 1219,
         registry_key: "fire_charge",
         components: &[
@@ -11435,7 +11467,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIRE_CORAL: Item = Item {
+    pub const FIRE_CORAL: Self = Self {
         id: 663,
         registry_key: "fire_coral",
         components: &[
@@ -11454,7 +11486,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIRE_CORAL_BLOCK: Item = Item {
+    pub const FIRE_CORAL_BLOCK: Self = Self {
         id: 658,
         registry_key: "fire_coral_block",
         components: &[
@@ -11473,7 +11505,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIRE_CORAL_FAN: Item = Item {
+    pub const FIRE_CORAL_FAN: Self = Self {
         id: 673,
         registry_key: "fire_coral_fan",
         components: &[
@@ -11492,7 +11524,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIREFLY_BUSH: Item = Item {
+    pub const FIREFLY_BUSH: Self = Self {
         id: 208,
         registry_key: "firefly_bush",
         components: &[
@@ -11511,7 +11543,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIREWORK_ROCKET: Item = Item {
+    pub const FIREWORK_ROCKET: Self = Self {
         id: 1243,
         registry_key: "firework_rocket",
         components: &[
@@ -11530,7 +11562,7 @@ impl Item {
             ),
         ],
     };
-    pub const FIREWORK_STAR: Item = Item {
+    pub const FIREWORK_STAR: Self = Self {
         id: 1244,
         registry_key: "firework_star",
         components: &[
@@ -11549,7 +11581,7 @@ impl Item {
             ),
         ],
     };
-    pub const FISHING_ROD: Item = Item {
+    pub const FISHING_ROD: Self = Self {
         id: 1054,
         registry_key: "fishing_rod",
         components: &[
@@ -11568,9 +11600,10 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
-    pub const FLETCHING_TABLE: Item = Item {
+    pub const FLETCHING_TABLE: Self = Self {
         id: 1359,
         registry_key: "fletching_table",
         components: &[
@@ -11589,7 +11622,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLINT: Item = Item {
+    pub const FLINT: Self = Self {
         id: 983,
         registry_key: "flint",
         components: &[
@@ -11608,7 +11641,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLINT_AND_STEEL: Item = Item {
+    pub const FLINT_AND_STEEL: Self = Self {
         id: 892,
         registry_key: "flint_and_steel",
         components: &[
@@ -11629,7 +11662,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1444,
         registry_key: "flow_armor_trim_smithing_template",
         components: &[
@@ -11648,7 +11681,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOW_BANNER_PATTERN: Item = Item {
+    pub const FLOW_BANNER_PATTERN: Self = Self {
         id: 1349,
         registry_key: "flow_banner_pattern",
         components: &[
@@ -11667,7 +11700,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOW_POTTERY_SHERD: Item = Item {
+    pub const FLOW_POTTERY_SHERD: Self = Self {
         id: 1454,
         registry_key: "flow_pottery_sherd",
         components: &[
@@ -11686,7 +11719,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOWER_BANNER_PATTERN: Item = Item {
+    pub const FLOWER_BANNER_PATTERN: Self = Self {
         id: 1343,
         registry_key: "flower_banner_pattern",
         components: &[
@@ -11705,7 +11738,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOWER_POT: Item = Item {
+    pub const FLOWER_POT: Self = Self {
         id: 1227,
         registry_key: "flower_pot",
         components: &[
@@ -11724,7 +11757,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOWERING_AZALEA: Item = Item {
+    pub const FLOWERING_AZALEA: Self = Self {
         id: 206,
         registry_key: "flowering_azalea",
         components: &[
@@ -11743,7 +11776,7 @@ impl Item {
             ),
         ],
     };
-    pub const FLOWERING_AZALEA_LEAVES: Item = Item {
+    pub const FLOWERING_AZALEA_LEAVES: Self = Self {
         id: 192,
         registry_key: "flowering_azalea_leaves",
         components: &[
@@ -11762,7 +11795,7 @@ impl Item {
             ),
         ],
     };
-    pub const FOX_SPAWN_EGG: Item = Item {
+    pub const FOX_SPAWN_EGG: Self = Self {
         id: 1145,
         registry_key: "fox_spawn_egg",
         components: &[
@@ -11781,7 +11814,7 @@ impl Item {
             ),
         ],
     };
-    pub const FRIEND_POTTERY_SHERD: Item = Item {
+    pub const FRIEND_POTTERY_SHERD: Self = Self {
         id: 1455,
         registry_key: "friend_pottery_sherd",
         components: &[
@@ -11800,7 +11833,7 @@ impl Item {
             ),
         ],
     };
-    pub const FROG_SPAWN_EGG: Item = Item {
+    pub const FROG_SPAWN_EGG: Self = Self {
         id: 1155,
         registry_key: "frog_spawn_egg",
         components: &[
@@ -11819,7 +11852,7 @@ impl Item {
             ),
         ],
     };
-    pub const FROGSPAWN: Item = Item {
+    pub const FROGSPAWN: Self = Self {
         id: 1424,
         registry_key: "frogspawn",
         components: &[
@@ -11838,7 +11871,7 @@ impl Item {
             ),
         ],
     };
-    pub const FURNACE: Item = Item {
+    pub const FURNACE: Self = Self {
         id: 335,
         registry_key: "furnace",
         components: &[
@@ -11857,7 +11890,7 @@ impl Item {
             ),
         ],
     };
-    pub const FURNACE_MINECART: Item = Item {
+    pub const FURNACE_MINECART: Self = Self {
         id: 857,
         registry_key: "furnace_minecart",
         components: &[
@@ -11876,7 +11909,7 @@ impl Item {
             ),
         ],
     };
-    pub const GHAST_SPAWN_EGG: Item = Item {
+    pub const GHAST_SPAWN_EGG: Self = Self {
         id: 1205,
         registry_key: "ghast_spawn_egg",
         components: &[
@@ -11895,7 +11928,7 @@ impl Item {
             ),
         ],
     };
-    pub const GHAST_TEAR: Item = Item {
+    pub const GHAST_TEAR: Self = Self {
         id: 1118,
         registry_key: "ghast_tear",
         components: &[
@@ -11914,7 +11947,7 @@ impl Item {
             ),
         ],
     };
-    pub const GILDED_BLACKSTONE: Item = Item {
+    pub const GILDED_BLACKSTONE: Self = Self {
         id: 1389,
         registry_key: "gilded_blackstone",
         components: &[
@@ -11933,7 +11966,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLASS: Item = Item {
+    pub const GLASS: Self = Self {
         id: 195,
         registry_key: "glass",
         components: &[
@@ -11952,7 +11985,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLASS_BOTTLE: Item = Item {
+    pub const GLASS_BOTTLE: Self = Self {
         id: 1121,
         registry_key: "glass_bottle",
         components: &[
@@ -11971,7 +12004,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLASS_PANE: Item = Item {
+    pub const GLASS_PANE: Self = Self {
         id: 409,
         registry_key: "glass_pane",
         components: &[
@@ -11990,7 +12023,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLISTERING_MELON_SLICE: Item = Item {
+    pub const GLISTERING_MELON_SLICE: Self = Self {
         id: 1130,
         registry_key: "glistering_melon_slice",
         components: &[
@@ -12009,7 +12042,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOBE_BANNER_PATTERN: Item = Item {
+    pub const GLOBE_BANNER_PATTERN: Self = Self {
         id: 1347,
         registry_key: "globe_banner_pattern",
         components: &[
@@ -12028,7 +12061,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOW_BERRIES: Item = Item {
+    pub const GLOW_BERRIES: Self = Self {
         id: 1375,
         registry_key: "glow_berries",
         components: &[
@@ -12065,7 +12098,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOW_INK_SAC: Item = Item {
+    pub const GLOW_INK_SAC: Self = Self {
         id: 1065,
         registry_key: "glow_ink_sac",
         components: &[
@@ -12084,7 +12117,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOW_ITEM_FRAME: Item = Item {
+    pub const GLOW_ITEM_FRAME: Self = Self {
         id: 1226,
         registry_key: "glow_item_frame",
         components: &[
@@ -12103,7 +12136,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOW_LICHEN: Item = Item {
+    pub const GLOW_LICHEN: Self = Self {
         id: 412,
         registry_key: "glow_lichen",
         components: &[
@@ -12122,7 +12155,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOW_SQUID_SPAWN_EGG: Item = Item {
+    pub const GLOW_SQUID_SPAWN_EGG: Self = Self {
         id: 1156,
         registry_key: "glow_squid_spawn_egg",
         components: &[
@@ -12141,7 +12174,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOWSTONE: Item = Item {
+    pub const GLOWSTONE: Self = Self {
         id: 368,
         registry_key: "glowstone",
         components: &[
@@ -12160,7 +12193,7 @@ impl Item {
             ),
         ],
     };
-    pub const GLOWSTONE_DUST: Item = Item {
+    pub const GLOWSTONE_DUST: Self = Self {
         id: 1057,
         registry_key: "glowstone_dust",
         components: &[
@@ -12179,7 +12212,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOAT_HORN: Item = Item {
+    pub const GOAT_HORN: Self = Self {
         id: 1353,
         registry_key: "goat_horn",
         components: &[
@@ -12198,7 +12231,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOAT_SPAWN_EGG: Item = Item {
+    pub const GOAT_SPAWN_EGG: Self = Self {
         id: 1146,
         registry_key: "goat_spawn_egg",
         components: &[
@@ -12217,7 +12250,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLD_BLOCK: Item = Item {
+    pub const GOLD_BLOCK: Self = Self {
         id: 92,
         registry_key: "gold_block",
         components: &[
@@ -12236,7 +12269,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLD_INGOT: Item = Item {
+    pub const GOLD_INGOT: Self = Self {
         id: 909,
         registry_key: "gold_ingot",
         components: &[
@@ -12255,7 +12288,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLD_NUGGET: Item = Item {
+    pub const GOLD_NUGGET: Self = Self {
         id: 1119,
         registry_key: "gold_nugget",
         components: &[
@@ -12274,7 +12307,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLD_ORE: Item = Item {
+    pub const GOLD_ORE: Self = Self {
         id: 70,
         registry_key: "gold_ore",
         components: &[
@@ -12293,7 +12326,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLDEN_APPLE: Item = Item {
+    pub const GOLDEN_APPLE: Self = Self {
         id: 987,
         registry_key: "golden_apple",
         components: &[
@@ -12350,7 +12383,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLDEN_AXE: Item = Item {
+    pub const GOLDEN_AXE: Self = Self {
         id: 930,
         registry_key: "golden_axe",
         components: &[
@@ -12410,9 +12443,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
-    pub const GOLDEN_BOOTS: Item = Item {
+    pub const GOLDEN_BOOTS: Self = Self {
         id: 978,
         registry_key: "golden_boots",
         components: &[
@@ -12462,9 +12496,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
-    pub const GOLDEN_CARROT: Item = Item {
+    pub const GOLDEN_CARROT: Self = Self {
         id: 1233,
         registry_key: "golden_carrot",
         components: &[
@@ -12501,7 +12536,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLDEN_CHESTPLATE: Item = Item {
+    pub const GOLDEN_CHESTPLATE: Self = Self {
         id: 976,
         registry_key: "golden_chestplate",
         components: &[
@@ -12551,9 +12586,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
-    pub const GOLDEN_DANDELION: Item = Item {
+    pub const GOLDEN_DANDELION: Self = Self {
         id: 230,
         registry_key: "golden_dandelion",
         components: &[
@@ -12572,7 +12608,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLDEN_HELMET: Item = Item {
+    pub const GOLDEN_HELMET: Self = Self {
         id: 975,
         registry_key: "golden_helmet",
         components: &[
@@ -12622,9 +12658,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
-    pub const GOLDEN_HOE: Item = Item {
+    pub const GOLDEN_HOE: Self = Self {
         id: 931,
         registry_key: "golden_hoe",
         components: &[
@@ -12684,9 +12721,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
-    pub const GOLDEN_HORSE_ARMOR: Item = Item {
+    pub const GOLDEN_HORSE_ARMOR: Self = Self {
         id: 1258,
         registry_key: "golden_horse_armor",
         components: &[
@@ -12736,7 +12774,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLDEN_LEGGINGS: Item = Item {
+    pub const GOLDEN_LEGGINGS: Self = Self {
         id: 977,
         registry_key: "golden_leggings",
         components: &[
@@ -12786,9 +12824,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
-    pub const GOLDEN_NAUTILUS_ARMOR: Item = Item {
+    pub const GOLDEN_NAUTILUS_ARMOR: Self = Self {
         id: 1335,
         registry_key: "golden_nautilus_armor",
         components: &[
@@ -12838,7 +12877,7 @@ impl Item {
             ),
         ],
     };
-    pub const GOLDEN_PICKAXE: Item = Item {
+    pub const GOLDEN_PICKAXE: Self = Self {
         id: 929,
         registry_key: "golden_pickaxe",
         components: &[
@@ -12898,9 +12937,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
-    pub const GOLDEN_SHOVEL: Item = Item {
+    pub const GOLDEN_SHOVEL: Self = Self {
         id: 928,
         registry_key: "golden_shovel",
         components: &[
@@ -12960,9 +13000,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
-    pub const GOLDEN_SPEAR: Item = Item {
+    pub const GOLDEN_SPEAR: Self = Self {
         id: 1301,
         registry_key: "golden_spear",
         components: &[
@@ -13002,9 +13043,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
-    pub const GOLDEN_SWORD: Item = Item {
+    pub const GOLDEN_SWORD: Self = Self {
         id: 927,
         registry_key: "golden_sword",
         components: &[
@@ -13069,9 +13111,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
-    pub const GRANITE: Item = Item {
+    pub const GRANITE: Self = Self {
         id: 2,
         registry_key: "granite",
         components: &[
@@ -13090,7 +13133,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRANITE_SLAB: Item = Item {
+    pub const GRANITE_SLAB: Self = Self {
         id: 708,
         registry_key: "granite_slab",
         components: &[
@@ -13109,7 +13152,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRANITE_STAIRS: Item = Item {
+    pub const GRANITE_STAIRS: Self = Self {
         id: 691,
         registry_key: "granite_stairs",
         components: &[
@@ -13128,7 +13171,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRANITE_WALL: Item = Item {
+    pub const GRANITE_WALL: Self = Self {
         id: 463,
         registry_key: "granite_wall",
         components: &[
@@ -13147,7 +13190,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRASS_BLOCK: Item = Item {
+    pub const GRASS_BLOCK: Self = Self {
         id: 27,
         registry_key: "grass_block",
         components: &[
@@ -13166,7 +13209,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAVEL: Item = Item {
+    pub const GRAVEL: Self = Self {
         id: 63,
         registry_key: "gravel",
         components: &[
@@ -13185,7 +13228,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_BANNER: Item = Item {
+    pub const GRAY_BANNER: Self = Self {
         id: 1274,
         registry_key: "gray_banner",
         components: &[
@@ -13204,7 +13247,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_BED: Item = Item {
+    pub const GRAY_BED: Self = Self {
         id: 1094,
         registry_key: "gray_bed",
         components: &[
@@ -13223,7 +13266,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_BUNDLE: Item = Item {
+    pub const GRAY_BUNDLE: Self = Self {
         id: 1045,
         registry_key: "gray_bundle",
         components: &[
@@ -13242,7 +13285,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_CANDLE: Item = Item {
+    pub const GRAY_CANDLE: Self = Self {
         id: 1407,
         registry_key: "gray_candle",
         components: &[
@@ -13261,7 +13304,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_CARPET: Item = Item {
+    pub const GRAY_CARPET: Self = Self {
         id: 513,
         registry_key: "gray_carpet",
         components: &[
@@ -13299,7 +13342,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_CONCRETE: Item = Item {
+    pub const GRAY_CONCRETE: Self = Self {
         id: 622,
         registry_key: "gray_concrete",
         components: &[
@@ -13318,7 +13361,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_CONCRETE_POWDER: Item = Item {
+    pub const GRAY_CONCRETE_POWDER: Self = Self {
         id: 638,
         registry_key: "gray_concrete_powder",
         components: &[
@@ -13337,7 +13380,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_DYE: Item = Item {
+    pub const GRAY_DYE: Self = Self {
         id: 1074,
         registry_key: "gray_dye",
         components: &[
@@ -13356,7 +13399,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_GLAZED_TERRACOTTA: Item = Item {
+    pub const GRAY_GLAZED_TERRACOTTA: Self = Self {
         id: 606,
         registry_key: "gray_glazed_terracotta",
         components: &[
@@ -13375,7 +13418,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_HARNESS: Item = Item {
+    pub const GRAY_HARNESS: Self = Self {
         id: 846,
         registry_key: "gray_harness",
         components: &[
@@ -13410,7 +13453,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_SHULKER_BOX: Item = Item {
+    pub const GRAY_SHULKER_BOX: Self = Self {
         id: 590,
         registry_key: "gray_shulker_box",
         components: &[
@@ -13429,7 +13472,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_STAINED_GLASS: Item = Item {
+    pub const GRAY_STAINED_GLASS: Self = Self {
         id: 538,
         registry_key: "gray_stained_glass",
         components: &[
@@ -13448,7 +13491,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_STAINED_GLASS_PANE: Item = Item {
+    pub const GRAY_STAINED_GLASS_PANE: Self = Self {
         id: 554,
         registry_key: "gray_stained_glass_pane",
         components: &[
@@ -13467,7 +13510,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_TERRACOTTA: Item = Item {
+    pub const GRAY_TERRACOTTA: Self = Self {
         id: 494,
         registry_key: "gray_terracotta",
         components: &[
@@ -13486,7 +13529,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRAY_WOOL: Item = Item {
+    pub const GRAY_WOOL: Self = Self {
         id: 220,
         registry_key: "gray_wool",
         components: &[
@@ -13505,7 +13548,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_BANNER: Item = Item {
+    pub const GREEN_BANNER: Self = Self {
         id: 1280,
         registry_key: "green_banner",
         components: &[
@@ -13524,7 +13567,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_BED: Item = Item {
+    pub const GREEN_BED: Self = Self {
         id: 1100,
         registry_key: "green_bed",
         components: &[
@@ -13543,7 +13586,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_BUNDLE: Item = Item {
+    pub const GREEN_BUNDLE: Self = Self {
         id: 1051,
         registry_key: "green_bundle",
         components: &[
@@ -13562,7 +13605,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_CANDLE: Item = Item {
+    pub const GREEN_CANDLE: Self = Self {
         id: 1413,
         registry_key: "green_candle",
         components: &[
@@ -13581,7 +13624,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_CARPET: Item = Item {
+    pub const GREEN_CARPET: Self = Self {
         id: 519,
         registry_key: "green_carpet",
         components: &[
@@ -13619,7 +13662,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_CONCRETE: Item = Item {
+    pub const GREEN_CONCRETE: Self = Self {
         id: 628,
         registry_key: "green_concrete",
         components: &[
@@ -13638,7 +13681,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_CONCRETE_POWDER: Item = Item {
+    pub const GREEN_CONCRETE_POWDER: Self = Self {
         id: 644,
         registry_key: "green_concrete_powder",
         components: &[
@@ -13657,7 +13700,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_DYE: Item = Item {
+    pub const GREEN_DYE: Self = Self {
         id: 1080,
         registry_key: "green_dye",
         components: &[
@@ -13676,7 +13719,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_GLAZED_TERRACOTTA: Item = Item {
+    pub const GREEN_GLAZED_TERRACOTTA: Self = Self {
         id: 612,
         registry_key: "green_glazed_terracotta",
         components: &[
@@ -13695,7 +13738,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_HARNESS: Item = Item {
+    pub const GREEN_HARNESS: Self = Self {
         id: 852,
         registry_key: "green_harness",
         components: &[
@@ -13730,7 +13773,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_SHULKER_BOX: Item = Item {
+    pub const GREEN_SHULKER_BOX: Self = Self {
         id: 596,
         registry_key: "green_shulker_box",
         components: &[
@@ -13749,7 +13792,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_STAINED_GLASS: Item = Item {
+    pub const GREEN_STAINED_GLASS: Self = Self {
         id: 544,
         registry_key: "green_stained_glass",
         components: &[
@@ -13768,7 +13811,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_STAINED_GLASS_PANE: Item = Item {
+    pub const GREEN_STAINED_GLASS_PANE: Self = Self {
         id: 560,
         registry_key: "green_stained_glass_pane",
         components: &[
@@ -13787,7 +13830,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_TERRACOTTA: Item = Item {
+    pub const GREEN_TERRACOTTA: Self = Self {
         id: 500,
         registry_key: "green_terracotta",
         components: &[
@@ -13806,7 +13849,7 @@ impl Item {
             ),
         ],
     };
-    pub const GREEN_WOOL: Item = Item {
+    pub const GREEN_WOOL: Self = Self {
         id: 226,
         registry_key: "green_wool",
         components: &[
@@ -13825,7 +13868,7 @@ impl Item {
             ),
         ],
     };
-    pub const GRINDSTONE: Item = Item {
+    pub const GRINDSTONE: Self = Self {
         id: 1360,
         registry_key: "grindstone",
         components: &[
@@ -13844,7 +13887,7 @@ impl Item {
             ),
         ],
     };
-    pub const GUARDIAN_SPAWN_EGG: Item = Item {
+    pub const GUARDIAN_SPAWN_EGG: Self = Self {
         id: 1193,
         registry_key: "guardian_spawn_egg",
         components: &[
@@ -13863,7 +13906,7 @@ impl Item {
             ),
         ],
     };
-    pub const GUNPOWDER: Item = Item {
+    pub const GUNPOWDER: Self = Self {
         id: 951,
         registry_key: "gunpowder",
         components: &[
@@ -13882,7 +13925,7 @@ impl Item {
             ),
         ],
     };
-    pub const GUSTER_BANNER_PATTERN: Item = Item {
+    pub const GUSTER_BANNER_PATTERN: Self = Self {
         id: 1350,
         registry_key: "guster_banner_pattern",
         components: &[
@@ -13901,7 +13944,7 @@ impl Item {
             ),
         ],
     };
-    pub const GUSTER_POTTERY_SHERD: Item = Item {
+    pub const GUSTER_POTTERY_SHERD: Self = Self {
         id: 1456,
         registry_key: "guster_pottery_sherd",
         components: &[
@@ -13920,7 +13963,7 @@ impl Item {
             ),
         ],
     };
-    pub const HANGING_ROOTS: Item = Item {
+    pub const HANGING_ROOTS: Self = Self {
         id: 267,
         registry_key: "hanging_roots",
         components: &[
@@ -13939,7 +13982,7 @@ impl Item {
             ),
         ],
     };
-    pub const HAPPY_GHAST_SPAWN_EGG: Item = Item {
+    pub const HAPPY_GHAST_SPAWN_EGG: Self = Self {
         id: 1206,
         registry_key: "happy_ghast_spawn_egg",
         components: &[
@@ -13958,7 +14001,7 @@ impl Item {
             ),
         ],
     };
-    pub const HAY_BLOCK: Item = Item {
+    pub const HAY_BLOCK: Self = Self {
         id: 505,
         registry_key: "hay_block",
         components: &[
@@ -13977,7 +14020,7 @@ impl Item {
             ),
         ],
     };
-    pub const HEART_OF_THE_SEA: Item = Item {
+    pub const HEART_OF_THE_SEA: Self = Self {
         id: 1339,
         registry_key: "heart_of_the_sea",
         components: &[
@@ -13996,7 +14039,7 @@ impl Item {
             ),
         ],
     };
-    pub const HEART_POTTERY_SHERD: Item = Item {
+    pub const HEART_POTTERY_SHERD: Self = Self {
         id: 1457,
         registry_key: "heart_pottery_sherd",
         components: &[
@@ -14015,7 +14058,7 @@ impl Item {
             ),
         ],
     };
-    pub const HEARTBREAK_POTTERY_SHERD: Item = Item {
+    pub const HEARTBREAK_POTTERY_SHERD: Self = Self {
         id: 1458,
         registry_key: "heartbreak_pottery_sherd",
         components: &[
@@ -14034,7 +14077,7 @@ impl Item {
             ),
         ],
     };
-    pub const HEAVY_CORE: Item = Item {
+    pub const HEAVY_CORE: Self = Self {
         id: 87,
         registry_key: "heavy_core",
         components: &[
@@ -14053,7 +14096,7 @@ impl Item {
             ),
         ],
     };
-    pub const HEAVY_WEIGHTED_PRESSURE_PLATE: Item = Item {
+    pub const HEAVY_WEIGHTED_PRESSURE_PLATE: Self = Self {
         id: 767,
         registry_key: "heavy_weighted_pressure_plate",
         components: &[
@@ -14072,7 +14115,7 @@ impl Item {
             ),
         ],
     };
-    pub const HOGLIN_SPAWN_EGG: Item = Item {
+    pub const HOGLIN_SPAWN_EGG: Self = Self {
         id: 1207,
         registry_key: "hoglin_spawn_egg",
         components: &[
@@ -14091,7 +14134,7 @@ impl Item {
             ),
         ],
     };
-    pub const HONEY_BLOCK: Item = Item {
+    pub const HONEY_BLOCK: Self = Self {
         id: 726,
         registry_key: "honey_block",
         components: &[
@@ -14110,7 +14153,7 @@ impl Item {
             ),
         ],
     };
-    pub const HONEY_BOTTLE: Item = Item {
+    pub const HONEY_BOTTLE: Self = Self {
         id: 1382,
         registry_key: "honey_bottle",
         components: &[
@@ -14149,7 +14192,7 @@ impl Item {
             ),
         ],
     };
-    pub const HONEYCOMB: Item = Item {
+    pub const HONEYCOMB: Self = Self {
         id: 1379,
         registry_key: "honeycomb",
         components: &[
@@ -14168,7 +14211,7 @@ impl Item {
             ),
         ],
     };
-    pub const HONEYCOMB_BLOCK: Item = Item {
+    pub const HONEYCOMB_BLOCK: Self = Self {
         id: 1383,
         registry_key: "honeycomb_block",
         components: &[
@@ -14187,7 +14230,7 @@ impl Item {
             ),
         ],
     };
-    pub const HOPPER: Item = Item {
+    pub const HOPPER: Self = Self {
         id: 728,
         registry_key: "hopper",
         components: &[
@@ -14206,7 +14249,7 @@ impl Item {
             ),
         ],
     };
-    pub const HOPPER_MINECART: Item = Item {
+    pub const HOPPER_MINECART: Self = Self {
         id: 859,
         registry_key: "hopper_minecart",
         components: &[
@@ -14225,7 +14268,7 @@ impl Item {
             ),
         ],
     };
-    pub const HORN_CORAL: Item = Item {
+    pub const HORN_CORAL: Self = Self {
         id: 664,
         registry_key: "horn_coral",
         components: &[
@@ -14244,7 +14287,7 @@ impl Item {
             ),
         ],
     };
-    pub const HORN_CORAL_BLOCK: Item = Item {
+    pub const HORN_CORAL_BLOCK: Self = Self {
         id: 659,
         registry_key: "horn_coral_block",
         components: &[
@@ -14263,7 +14306,7 @@ impl Item {
             ),
         ],
     };
-    pub const HORN_CORAL_FAN: Item = Item {
+    pub const HORN_CORAL_FAN: Self = Self {
         id: 674,
         registry_key: "horn_coral_fan",
         components: &[
@@ -14282,7 +14325,7 @@ impl Item {
             ),
         ],
     };
-    pub const HORSE_SPAWN_EGG: Item = Item {
+    pub const HORSE_SPAWN_EGG: Self = Self {
         id: 1137,
         registry_key: "horse_spawn_egg",
         components: &[
@@ -14301,7 +14344,7 @@ impl Item {
             ),
         ],
     };
-    pub const HOST_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const HOST_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1443,
         registry_key: "host_armor_trim_smithing_template",
         components: &[
@@ -14320,7 +14363,7 @@ impl Item {
             ),
         ],
     };
-    pub const HOWL_POTTERY_SHERD: Item = Item {
+    pub const HOWL_POTTERY_SHERD: Self = Self {
         id: 1459,
         registry_key: "howl_pottery_sherd",
         components: &[
@@ -14339,7 +14382,7 @@ impl Item {
             ),
         ],
     };
-    pub const HUSK_SPAWN_EGG: Item = Item {
+    pub const HUSK_SPAWN_EGG: Self = Self {
         id: 1176,
         registry_key: "husk_spawn_egg",
         components: &[
@@ -14358,7 +14401,7 @@ impl Item {
             ),
         ],
     };
-    pub const ICE: Item = Item {
+    pub const ICE: Self = Self {
         id: 339,
         registry_key: "ice",
         components: &[
@@ -14377,7 +14420,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_CHISELED_STONE_BRICKS: Item = Item {
+    pub const INFESTED_CHISELED_STONE_BRICKS: Self = Self {
         id: 374,
         registry_key: "infested_chiseled_stone_bricks",
         components: &[
@@ -14396,7 +14439,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_COBBLESTONE: Item = Item {
+    pub const INFESTED_COBBLESTONE: Self = Self {
         id: 370,
         registry_key: "infested_cobblestone",
         components: &[
@@ -14415,7 +14458,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_CRACKED_STONE_BRICKS: Item = Item {
+    pub const INFESTED_CRACKED_STONE_BRICKS: Self = Self {
         id: 373,
         registry_key: "infested_cracked_stone_bricks",
         components: &[
@@ -14434,7 +14477,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_DEEPSLATE: Item = Item {
+    pub const INFESTED_DEEPSLATE: Self = Self {
         id: 375,
         registry_key: "infested_deepslate",
         components: &[
@@ -14453,7 +14496,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_MOSSY_STONE_BRICKS: Item = Item {
+    pub const INFESTED_MOSSY_STONE_BRICKS: Self = Self {
         id: 372,
         registry_key: "infested_mossy_stone_bricks",
         components: &[
@@ -14472,7 +14515,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_STONE: Item = Item {
+    pub const INFESTED_STONE: Self = Self {
         id: 369,
         registry_key: "infested_stone",
         components: &[
@@ -14491,7 +14534,7 @@ impl Item {
             ),
         ],
     };
-    pub const INFESTED_STONE_BRICKS: Item = Item {
+    pub const INFESTED_STONE_BRICKS: Self = Self {
         id: 371,
         registry_key: "infested_stone_bricks",
         components: &[
@@ -14510,7 +14553,7 @@ impl Item {
             ),
         ],
     };
-    pub const INK_SAC: Item = Item {
+    pub const INK_SAC: Self = Self {
         id: 1064,
         registry_key: "ink_sac",
         components: &[
@@ -14529,7 +14572,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_AXE: Item = Item {
+    pub const IRON_AXE: Self = Self {
         id: 935,
         registry_key: "iron_axe",
         components: &[
@@ -14589,9 +14632,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
-    pub const IRON_BARS: Item = Item {
+    pub const IRON_BARS: Self = Self {
         id: 391,
         registry_key: "iron_bars",
         components: &[
@@ -14610,7 +14654,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_BLOCK: Item = Item {
+    pub const IRON_BLOCK: Self = Self {
         id: 90,
         registry_key: "iron_block",
         components: &[
@@ -14629,7 +14673,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_BOOTS: Item = Item {
+    pub const IRON_BOOTS: Self = Self {
         id: 970,
         registry_key: "iron_boots",
         components: &[
@@ -14679,9 +14723,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
-    pub const IRON_CHAIN: Item = Item {
+    pub const IRON_CHAIN: Self = Self {
         id: 400,
         registry_key: "iron_chain",
         components: &[
@@ -14700,7 +14745,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_CHESTPLATE: Item = Item {
+    pub const IRON_CHESTPLATE: Self = Self {
         id: 968,
         registry_key: "iron_chestplate",
         components: &[
@@ -14750,9 +14795,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
-    pub const IRON_DOOR: Item = Item {
+    pub const IRON_DOOR: Self = Self {
         id: 780,
         registry_key: "iron_door",
         components: &[
@@ -14771,7 +14817,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_GOLEM_SPAWN_EGG: Item = Item {
+    pub const IRON_GOLEM_SPAWN_EGG: Self = Self {
         id: 1168,
         registry_key: "iron_golem_spawn_egg",
         components: &[
@@ -14790,7 +14836,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_HELMET: Item = Item {
+    pub const IRON_HELMET: Self = Self {
         id: 967,
         registry_key: "iron_helmet",
         components: &[
@@ -14840,9 +14886,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
-    pub const IRON_HOE: Item = Item {
+    pub const IRON_HOE: Self = Self {
         id: 936,
         registry_key: "iron_hoe",
         components: &[
@@ -14902,9 +14949,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
-    pub const IRON_HORSE_ARMOR: Item = Item {
+    pub const IRON_HORSE_ARMOR: Self = Self {
         id: 1257,
         registry_key: "iron_horse_armor",
         components: &[
@@ -14954,7 +15002,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_INGOT: Item = Item {
+    pub const IRON_INGOT: Self = Self {
         id: 905,
         registry_key: "iron_ingot",
         components: &[
@@ -14973,7 +15021,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_LEGGINGS: Item = Item {
+    pub const IRON_LEGGINGS: Self = Self {
         id: 969,
         registry_key: "iron_leggings",
         components: &[
@@ -15023,9 +15071,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
-    pub const IRON_NAUTILUS_ARMOR: Item = Item {
+    pub const IRON_NAUTILUS_ARMOR: Self = Self {
         id: 1334,
         registry_key: "iron_nautilus_armor",
         components: &[
@@ -15075,7 +15124,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_NUGGET: Item = Item {
+    pub const IRON_NUGGET: Self = Self {
         id: 1306,
         registry_key: "iron_nugget",
         components: &[
@@ -15094,7 +15143,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_ORE: Item = Item {
+    pub const IRON_ORE: Self = Self {
         id: 66,
         registry_key: "iron_ore",
         components: &[
@@ -15113,7 +15162,7 @@ impl Item {
             ),
         ],
     };
-    pub const IRON_PICKAXE: Item = Item {
+    pub const IRON_PICKAXE: Self = Self {
         id: 934,
         registry_key: "iron_pickaxe",
         components: &[
@@ -15173,9 +15222,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
-    pub const IRON_SHOVEL: Item = Item {
+    pub const IRON_SHOVEL: Self = Self {
         id: 933,
         registry_key: "iron_shovel",
         components: &[
@@ -15235,9 +15285,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
-    pub const IRON_SPEAR: Item = Item {
+    pub const IRON_SPEAR: Self = Self {
         id: 1300,
         registry_key: "iron_spear",
         components: &[
@@ -15277,9 +15328,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
-    pub const IRON_SWORD: Item = Item {
+    pub const IRON_SWORD: Self = Self {
         id: 932,
         registry_key: "iron_sword",
         components: &[
@@ -15344,9 +15396,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
-    pub const IRON_TRAPDOOR: Item = Item {
+    pub const IRON_TRAPDOOR: Self = Self {
         id: 801,
         registry_key: "iron_trapdoor",
         components: &[
@@ -15365,7 +15418,7 @@ impl Item {
             ),
         ],
     };
-    pub const ITEM_FRAME: Item = Item {
+    pub const ITEM_FRAME: Self = Self {
         id: 1225,
         registry_key: "item_frame",
         components: &[
@@ -15384,7 +15437,7 @@ impl Item {
             ),
         ],
     };
-    pub const JACK_O_LANTERN: Item = Item {
+    pub const JACK_O_LANTERN: Self = Self {
         id: 359,
         registry_key: "jack_o_lantern",
         components: &[
@@ -15403,7 +15456,7 @@ impl Item {
             ),
         ],
     };
-    pub const JIGSAW: Item = Item {
+    pub const JIGSAW: Self = Self {
         id: 885,
         registry_key: "jigsaw",
         components: &[
@@ -15422,7 +15475,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUKEBOX: Item = Item {
+    pub const JUKEBOX: Self = Self {
         id: 344,
         registry_key: "jukebox",
         components: &[
@@ -15441,7 +15494,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_BOAT: Item = Item {
+    pub const JUNGLE_BOAT: Self = Self {
         id: 870,
         registry_key: "jungle_boat",
         components: &[
@@ -15460,7 +15513,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_BUTTON: Item = Item {
+    pub const JUNGLE_BUTTON: Self = Self {
         id: 755,
         registry_key: "jungle_button",
         components: &[
@@ -15479,7 +15532,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_CHEST_BOAT: Item = Item {
+    pub const JUNGLE_CHEST_BOAT: Self = Self {
         id: 871,
         registry_key: "jungle_chest_boat",
         components: &[
@@ -15498,7 +15551,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_DOOR: Item = Item {
+    pub const JUNGLE_DOOR: Self = Self {
         id: 784,
         registry_key: "jungle_door",
         components: &[
@@ -15517,7 +15570,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_FENCE: Item = Item {
+    pub const JUNGLE_FENCE: Self = Self {
         id: 348,
         registry_key: "jungle_fence",
         components: &[
@@ -15536,7 +15589,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_FENCE_GATE: Item = Item {
+    pub const JUNGLE_FENCE_GATE: Self = Self {
         id: 825,
         registry_key: "jungle_fence_gate",
         components: &[
@@ -15555,7 +15608,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_HANGING_SIGN: Item = Item {
+    pub const JUNGLE_HANGING_SIGN: Self = Self {
         id: 1004,
         registry_key: "jungle_hanging_sign",
         components: &[
@@ -15574,7 +15627,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_LEAVES: Item = Item {
+    pub const JUNGLE_LEAVES: Self = Self {
         id: 185,
         registry_key: "jungle_leaves",
         components: &[
@@ -15593,7 +15646,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_LOG: Item = Item {
+    pub const JUNGLE_LOG: Self = Self {
         id: 137,
         registry_key: "jungle_log",
         components: &[
@@ -15612,7 +15665,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_PLANKS: Item = Item {
+    pub const JUNGLE_PLANKS: Self = Self {
         id: 39,
         registry_key: "jungle_planks",
         components: &[
@@ -15631,7 +15684,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_PRESSURE_PLATE: Item = Item {
+    pub const JUNGLE_PRESSURE_PLATE: Self = Self {
         id: 771,
         registry_key: "jungle_pressure_plate",
         components: &[
@@ -15650,7 +15703,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_SAPLING: Item = Item {
+    pub const JUNGLE_SAPLING: Self = Self {
         id: 52,
         registry_key: "jungle_sapling",
         components: &[
@@ -15669,7 +15722,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_SHELF: Item = Item {
+    pub const JUNGLE_SHELF: Self = Self {
         id: 312,
         registry_key: "jungle_shelf",
         components: &[
@@ -15688,7 +15741,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_SIGN: Item = Item {
+    pub const JUNGLE_SIGN: Self = Self {
         id: 992,
         registry_key: "jungle_sign",
         components: &[
@@ -15707,7 +15760,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_SLAB: Item = Item {
+    pub const JUNGLE_SLAB: Self = Self {
         id: 274,
         registry_key: "jungle_slab",
         components: &[
@@ -15726,7 +15779,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_STAIRS: Item = Item {
+    pub const JUNGLE_STAIRS: Self = Self {
         id: 445,
         registry_key: "jungle_stairs",
         components: &[
@@ -15745,7 +15798,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_TRAPDOOR: Item = Item {
+    pub const JUNGLE_TRAPDOOR: Self = Self {
         id: 805,
         registry_key: "jungle_trapdoor",
         components: &[
@@ -15764,7 +15817,7 @@ impl Item {
             ),
         ],
     };
-    pub const JUNGLE_WOOD: Item = Item {
+    pub const JUNGLE_WOOD: Self = Self {
         id: 174,
         registry_key: "jungle_wood",
         components: &[
@@ -15783,7 +15836,7 @@ impl Item {
             ),
         ],
     };
-    pub const KELP: Item = Item {
+    pub const KELP: Self = Self {
         id: 258,
         registry_key: "kelp",
         components: &[
@@ -15802,7 +15855,7 @@ impl Item {
             ),
         ],
     };
-    pub const KNOWLEDGE_BOOK: Item = Item {
+    pub const KNOWLEDGE_BOOK: Self = Self {
         id: 1308,
         registry_key: "knowledge_book",
         components: &[
@@ -15821,7 +15874,7 @@ impl Item {
             ),
         ],
     };
-    pub const LADDER: Item = Item {
+    pub const LADDER: Self = Self {
         id: 336,
         registry_key: "ladder",
         components: &[
@@ -15840,7 +15893,7 @@ impl Item {
             ),
         ],
     };
-    pub const LANTERN: Item = Item {
+    pub const LANTERN: Self = Self {
         id: 1364,
         registry_key: "lantern",
         components: &[
@@ -15859,7 +15912,7 @@ impl Item {
             ),
         ],
     };
-    pub const LAPIS_BLOCK: Item = Item {
+    pub const LAPIS_BLOCK: Self = Self {
         id: 197,
         registry_key: "lapis_block",
         components: &[
@@ -15878,7 +15931,7 @@ impl Item {
             ),
         ],
     };
-    pub const LAPIS_LAZULI: Item = Item {
+    pub const LAPIS_LAZULI: Self = Self {
         id: 901,
         registry_key: "lapis_lazuli",
         components: &[
@@ -15897,7 +15950,7 @@ impl Item {
             ),
         ],
     };
-    pub const LAPIS_ORE: Item = Item {
+    pub const LAPIS_ORE: Self = Self {
         id: 76,
         registry_key: "lapis_ore",
         components: &[
@@ -15916,7 +15969,7 @@ impl Item {
             ),
         ],
     };
-    pub const LARGE_AMETHYST_BUD: Item = Item {
+    pub const LARGE_AMETHYST_BUD: Self = Self {
         id: 1418,
         registry_key: "large_amethyst_bud",
         components: &[
@@ -15935,7 +15988,7 @@ impl Item {
             ),
         ],
     };
-    pub const LARGE_FERN: Item = Item {
+    pub const LARGE_FERN: Self = Self {
         id: 530,
         registry_key: "large_fern",
         components: &[
@@ -15954,7 +16007,7 @@ impl Item {
             ),
         ],
     };
-    pub const LAVA_BUCKET: Item = Item {
+    pub const LAVA_BUCKET: Self = Self {
         id: 1015,
         registry_key: "lava_bucket",
         components: &[
@@ -15973,7 +16026,7 @@ impl Item {
             ),
         ],
     };
-    pub const LEAD: Item = Item {
+    pub const LEAD: Self = Self {
         id: 1262,
         registry_key: "lead",
         components: &[
@@ -15992,7 +16045,7 @@ impl Item {
             ),
         ],
     };
-    pub const LEAF_LITTER: Item = Item {
+    pub const LEAF_LITTER: Self = Self {
         id: 261,
         registry_key: "leaf_litter",
         components: &[
@@ -16011,7 +16064,7 @@ impl Item {
             ),
         ],
     };
-    pub const LEATHER: Item = Item {
+    pub const LEATHER: Self = Self {
         id: 1018,
         registry_key: "leather",
         components: &[
@@ -16030,7 +16083,7 @@ impl Item {
             ),
         ],
     };
-    pub const LEATHER_BOOTS: Item = Item {
+    pub const LEATHER_BOOTS: Self = Self {
         id: 958,
         registry_key: "leather_boots",
         components: &[
@@ -16080,9 +16133,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const LEATHER_CHESTPLATE: Item = Item {
+    pub const LEATHER_CHESTPLATE: Self = Self {
         id: 956,
         registry_key: "leather_chestplate",
         components: &[
@@ -16132,9 +16186,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const LEATHER_HELMET: Item = Item {
+    pub const LEATHER_HELMET: Self = Self {
         id: 955,
         registry_key: "leather_helmet",
         components: &[
@@ -16184,9 +16239,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const LEATHER_HORSE_ARMOR: Item = Item {
+    pub const LEATHER_HORSE_ARMOR: Self = Self {
         id: 1261,
         registry_key: "leather_horse_armor",
         components: &[
@@ -16236,7 +16292,7 @@ impl Item {
             ),
         ],
     };
-    pub const LEATHER_LEGGINGS: Item = Item {
+    pub const LEATHER_LEGGINGS: Self = Self {
         id: 957,
         registry_key: "leather_leggings",
         components: &[
@@ -16286,9 +16342,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const LECTERN: Item = Item {
+    pub const LECTERN: Self = Self {
         id: 731,
         registry_key: "lectern",
         components: &[
@@ -16307,7 +16364,7 @@ impl Item {
             ),
         ],
     };
-    pub const LEVER: Item = Item {
+    pub const LEVER: Self = Self {
         id: 733,
         registry_key: "lever",
         components: &[
@@ -16326,7 +16383,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT: Item = Item {
+    pub const LIGHT: Self = Self {
         id: 504,
         registry_key: "light",
         components: &[
@@ -16345,7 +16402,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_BANNER: Item = Item {
+    pub const LIGHT_BLUE_BANNER: Self = Self {
         id: 1270,
         registry_key: "light_blue_banner",
         components: &[
@@ -16364,7 +16421,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_BED: Item = Item {
+    pub const LIGHT_BLUE_BED: Self = Self {
         id: 1090,
         registry_key: "light_blue_bed",
         components: &[
@@ -16383,7 +16440,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_BUNDLE: Item = Item {
+    pub const LIGHT_BLUE_BUNDLE: Self = Self {
         id: 1041,
         registry_key: "light_blue_bundle",
         components: &[
@@ -16402,7 +16459,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_CANDLE: Item = Item {
+    pub const LIGHT_BLUE_CANDLE: Self = Self {
         id: 1403,
         registry_key: "light_blue_candle",
         components: &[
@@ -16421,7 +16478,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_CARPET: Item = Item {
+    pub const LIGHT_BLUE_CARPET: Self = Self {
         id: 509,
         registry_key: "light_blue_carpet",
         components: &[
@@ -16459,7 +16516,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_CONCRETE: Item = Item {
+    pub const LIGHT_BLUE_CONCRETE: Self = Self {
         id: 618,
         registry_key: "light_blue_concrete",
         components: &[
@@ -16478,7 +16535,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_CONCRETE_POWDER: Item = Item {
+    pub const LIGHT_BLUE_CONCRETE_POWDER: Self = Self {
         id: 634,
         registry_key: "light_blue_concrete_powder",
         components: &[
@@ -16497,7 +16554,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_DYE: Item = Item {
+    pub const LIGHT_BLUE_DYE: Self = Self {
         id: 1070,
         registry_key: "light_blue_dye",
         components: &[
@@ -16516,7 +16573,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_GLAZED_TERRACOTTA: Item = Item {
+    pub const LIGHT_BLUE_GLAZED_TERRACOTTA: Self = Self {
         id: 602,
         registry_key: "light_blue_glazed_terracotta",
         components: &[
@@ -16535,7 +16592,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_HARNESS: Item = Item {
+    pub const LIGHT_BLUE_HARNESS: Self = Self {
         id: 842,
         registry_key: "light_blue_harness",
         components: &[
@@ -16570,7 +16627,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_SHULKER_BOX: Item = Item {
+    pub const LIGHT_BLUE_SHULKER_BOX: Self = Self {
         id: 586,
         registry_key: "light_blue_shulker_box",
         components: &[
@@ -16589,7 +16646,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_STAINED_GLASS: Item = Item {
+    pub const LIGHT_BLUE_STAINED_GLASS: Self = Self {
         id: 534,
         registry_key: "light_blue_stained_glass",
         components: &[
@@ -16608,7 +16665,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_STAINED_GLASS_PANE: Item = Item {
+    pub const LIGHT_BLUE_STAINED_GLASS_PANE: Self = Self {
         id: 550,
         registry_key: "light_blue_stained_glass_pane",
         components: &[
@@ -16627,7 +16684,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_TERRACOTTA: Item = Item {
+    pub const LIGHT_BLUE_TERRACOTTA: Self = Self {
         id: 490,
         registry_key: "light_blue_terracotta",
         components: &[
@@ -16646,7 +16703,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_BLUE_WOOL: Item = Item {
+    pub const LIGHT_BLUE_WOOL: Self = Self {
         id: 216,
         registry_key: "light_blue_wool",
         components: &[
@@ -16665,7 +16722,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_BANNER: Item = Item {
+    pub const LIGHT_GRAY_BANNER: Self = Self {
         id: 1275,
         registry_key: "light_gray_banner",
         components: &[
@@ -16684,7 +16741,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_BED: Item = Item {
+    pub const LIGHT_GRAY_BED: Self = Self {
         id: 1095,
         registry_key: "light_gray_bed",
         components: &[
@@ -16703,7 +16760,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_BUNDLE: Item = Item {
+    pub const LIGHT_GRAY_BUNDLE: Self = Self {
         id: 1046,
         registry_key: "light_gray_bundle",
         components: &[
@@ -16722,7 +16779,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_CANDLE: Item = Item {
+    pub const LIGHT_GRAY_CANDLE: Self = Self {
         id: 1408,
         registry_key: "light_gray_candle",
         components: &[
@@ -16741,7 +16798,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_CARPET: Item = Item {
+    pub const LIGHT_GRAY_CARPET: Self = Self {
         id: 514,
         registry_key: "light_gray_carpet",
         components: &[
@@ -16779,7 +16836,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_CONCRETE: Item = Item {
+    pub const LIGHT_GRAY_CONCRETE: Self = Self {
         id: 623,
         registry_key: "light_gray_concrete",
         components: &[
@@ -16798,7 +16855,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_CONCRETE_POWDER: Item = Item {
+    pub const LIGHT_GRAY_CONCRETE_POWDER: Self = Self {
         id: 639,
         registry_key: "light_gray_concrete_powder",
         components: &[
@@ -16817,7 +16874,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_DYE: Item = Item {
+    pub const LIGHT_GRAY_DYE: Self = Self {
         id: 1075,
         registry_key: "light_gray_dye",
         components: &[
@@ -16836,7 +16893,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_GLAZED_TERRACOTTA: Item = Item {
+    pub const LIGHT_GRAY_GLAZED_TERRACOTTA: Self = Self {
         id: 607,
         registry_key: "light_gray_glazed_terracotta",
         components: &[
@@ -16855,7 +16912,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_HARNESS: Item = Item {
+    pub const LIGHT_GRAY_HARNESS: Self = Self {
         id: 847,
         registry_key: "light_gray_harness",
         components: &[
@@ -16890,7 +16947,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_SHULKER_BOX: Item = Item {
+    pub const LIGHT_GRAY_SHULKER_BOX: Self = Self {
         id: 591,
         registry_key: "light_gray_shulker_box",
         components: &[
@@ -16909,7 +16966,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_STAINED_GLASS: Item = Item {
+    pub const LIGHT_GRAY_STAINED_GLASS: Self = Self {
         id: 539,
         registry_key: "light_gray_stained_glass",
         components: &[
@@ -16928,7 +16985,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_STAINED_GLASS_PANE: Item = Item {
+    pub const LIGHT_GRAY_STAINED_GLASS_PANE: Self = Self {
         id: 555,
         registry_key: "light_gray_stained_glass_pane",
         components: &[
@@ -16947,7 +17004,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_TERRACOTTA: Item = Item {
+    pub const LIGHT_GRAY_TERRACOTTA: Self = Self {
         id: 495,
         registry_key: "light_gray_terracotta",
         components: &[
@@ -16966,7 +17023,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_GRAY_WOOL: Item = Item {
+    pub const LIGHT_GRAY_WOOL: Self = Self {
         id: 221,
         registry_key: "light_gray_wool",
         components: &[
@@ -16985,7 +17042,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHT_WEIGHTED_PRESSURE_PLATE: Item = Item {
+    pub const LIGHT_WEIGHTED_PRESSURE_PLATE: Self = Self {
         id: 766,
         registry_key: "light_weighted_pressure_plate",
         components: &[
@@ -17004,7 +17061,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIGHTNING_ROD: Item = Item {
+    pub const LIGHTNING_ROD: Self = Self {
         id: 734,
         registry_key: "lightning_rod",
         components: &[
@@ -17023,7 +17080,7 @@ impl Item {
             ),
         ],
     };
-    pub const LILAC: Item = Item {
+    pub const LILAC: Self = Self {
         id: 526,
         registry_key: "lilac",
         components: &[
@@ -17042,7 +17099,7 @@ impl Item {
             ),
         ],
     };
-    pub const LILY_OF_THE_VALLEY: Item = Item {
+    pub const LILY_OF_THE_VALLEY: Self = Self {
         id: 243,
         registry_key: "lily_of_the_valley",
         components: &[
@@ -17061,7 +17118,7 @@ impl Item {
             ),
         ],
     };
-    pub const LILY_PAD: Item = Item {
+    pub const LILY_PAD: Self = Self {
         id: 424,
         registry_key: "lily_pad",
         components: &[
@@ -17080,7 +17137,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_BANNER: Item = Item {
+    pub const LIME_BANNER: Self = Self {
         id: 1272,
         registry_key: "lime_banner",
         components: &[
@@ -17099,7 +17156,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_BED: Item = Item {
+    pub const LIME_BED: Self = Self {
         id: 1092,
         registry_key: "lime_bed",
         components: &[
@@ -17118,7 +17175,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_BUNDLE: Item = Item {
+    pub const LIME_BUNDLE: Self = Self {
         id: 1043,
         registry_key: "lime_bundle",
         components: &[
@@ -17137,7 +17194,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_CANDLE: Item = Item {
+    pub const LIME_CANDLE: Self = Self {
         id: 1405,
         registry_key: "lime_candle",
         components: &[
@@ -17156,7 +17213,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_CARPET: Item = Item {
+    pub const LIME_CARPET: Self = Self {
         id: 511,
         registry_key: "lime_carpet",
         components: &[
@@ -17194,7 +17251,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_CONCRETE: Item = Item {
+    pub const LIME_CONCRETE: Self = Self {
         id: 620,
         registry_key: "lime_concrete",
         components: &[
@@ -17213,7 +17270,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_CONCRETE_POWDER: Item = Item {
+    pub const LIME_CONCRETE_POWDER: Self = Self {
         id: 636,
         registry_key: "lime_concrete_powder",
         components: &[
@@ -17232,7 +17289,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_DYE: Item = Item {
+    pub const LIME_DYE: Self = Self {
         id: 1072,
         registry_key: "lime_dye",
         components: &[
@@ -17251,7 +17308,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_GLAZED_TERRACOTTA: Item = Item {
+    pub const LIME_GLAZED_TERRACOTTA: Self = Self {
         id: 604,
         registry_key: "lime_glazed_terracotta",
         components: &[
@@ -17270,7 +17327,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_HARNESS: Item = Item {
+    pub const LIME_HARNESS: Self = Self {
         id: 844,
         registry_key: "lime_harness",
         components: &[
@@ -17305,7 +17362,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_SHULKER_BOX: Item = Item {
+    pub const LIME_SHULKER_BOX: Self = Self {
         id: 588,
         registry_key: "lime_shulker_box",
         components: &[
@@ -17324,7 +17381,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_STAINED_GLASS: Item = Item {
+    pub const LIME_STAINED_GLASS: Self = Self {
         id: 536,
         registry_key: "lime_stained_glass",
         components: &[
@@ -17343,7 +17400,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_STAINED_GLASS_PANE: Item = Item {
+    pub const LIME_STAINED_GLASS_PANE: Self = Self {
         id: 552,
         registry_key: "lime_stained_glass_pane",
         components: &[
@@ -17362,7 +17419,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_TERRACOTTA: Item = Item {
+    pub const LIME_TERRACOTTA: Self = Self {
         id: 492,
         registry_key: "lime_terracotta",
         components: &[
@@ -17381,7 +17438,7 @@ impl Item {
             ),
         ],
     };
-    pub const LIME_WOOL: Item = Item {
+    pub const LIME_WOOL: Self = Self {
         id: 218,
         registry_key: "lime_wool",
         components: &[
@@ -17400,7 +17457,7 @@ impl Item {
             ),
         ],
     };
-    pub const LINGERING_POTION: Item = Item {
+    pub const LINGERING_POTION: Self = Self {
         id: 1295,
         registry_key: "lingering_potion",
         components: &[
@@ -17419,7 +17476,7 @@ impl Item {
             ),
         ],
     };
-    pub const LLAMA_SPAWN_EGG: Item = Item {
+    pub const LLAMA_SPAWN_EGG: Self = Self {
         id: 1147,
         registry_key: "llama_spawn_egg",
         components: &[
@@ -17438,7 +17495,7 @@ impl Item {
             ),
         ],
     };
-    pub const LODESTONE: Item = Item {
+    pub const LODESTONE: Self = Self {
         id: 1384,
         registry_key: "lodestone",
         components: &[
@@ -17457,7 +17514,7 @@ impl Item {
             ),
         ],
     };
-    pub const LOOM: Item = Item {
+    pub const LOOM: Self = Self {
         id: 1342,
         registry_key: "loom",
         components: &[
@@ -17476,7 +17533,7 @@ impl Item {
             ),
         ],
     };
-    pub const MACE: Item = Item {
+    pub const MACE: Self = Self {
         id: 1224,
         registry_key: "mace",
         components: &[
@@ -17525,9 +17582,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const MAGENTA_BANNER: Item = Item {
+    pub const MAGENTA_BANNER: Self = Self {
         id: 1269,
         registry_key: "magenta_banner",
         components: &[
@@ -17546,7 +17604,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_BED: Item = Item {
+    pub const MAGENTA_BED: Self = Self {
         id: 1089,
         registry_key: "magenta_bed",
         components: &[
@@ -17565,7 +17623,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_BUNDLE: Item = Item {
+    pub const MAGENTA_BUNDLE: Self = Self {
         id: 1040,
         registry_key: "magenta_bundle",
         components: &[
@@ -17584,7 +17642,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_CANDLE: Item = Item {
+    pub const MAGENTA_CANDLE: Self = Self {
         id: 1402,
         registry_key: "magenta_candle",
         components: &[
@@ -17603,7 +17661,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_CARPET: Item = Item {
+    pub const MAGENTA_CARPET: Self = Self {
         id: 508,
         registry_key: "magenta_carpet",
         components: &[
@@ -17641,7 +17699,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_CONCRETE: Item = Item {
+    pub const MAGENTA_CONCRETE: Self = Self {
         id: 617,
         registry_key: "magenta_concrete",
         components: &[
@@ -17660,7 +17718,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_CONCRETE_POWDER: Item = Item {
+    pub const MAGENTA_CONCRETE_POWDER: Self = Self {
         id: 633,
         registry_key: "magenta_concrete_powder",
         components: &[
@@ -17679,7 +17737,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_DYE: Item = Item {
+    pub const MAGENTA_DYE: Self = Self {
         id: 1069,
         registry_key: "magenta_dye",
         components: &[
@@ -17698,7 +17756,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_GLAZED_TERRACOTTA: Item = Item {
+    pub const MAGENTA_GLAZED_TERRACOTTA: Self = Self {
         id: 601,
         registry_key: "magenta_glazed_terracotta",
         components: &[
@@ -17717,7 +17775,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_HARNESS: Item = Item {
+    pub const MAGENTA_HARNESS: Self = Self {
         id: 841,
         registry_key: "magenta_harness",
         components: &[
@@ -17752,7 +17810,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_SHULKER_BOX: Item = Item {
+    pub const MAGENTA_SHULKER_BOX: Self = Self {
         id: 585,
         registry_key: "magenta_shulker_box",
         components: &[
@@ -17771,7 +17829,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_STAINED_GLASS: Item = Item {
+    pub const MAGENTA_STAINED_GLASS: Self = Self {
         id: 533,
         registry_key: "magenta_stained_glass",
         components: &[
@@ -17790,7 +17848,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_STAINED_GLASS_PANE: Item = Item {
+    pub const MAGENTA_STAINED_GLASS_PANE: Self = Self {
         id: 549,
         registry_key: "magenta_stained_glass_pane",
         components: &[
@@ -17809,7 +17867,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_TERRACOTTA: Item = Item {
+    pub const MAGENTA_TERRACOTTA: Self = Self {
         id: 489,
         registry_key: "magenta_terracotta",
         components: &[
@@ -17828,7 +17886,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGENTA_WOOL: Item = Item {
+    pub const MAGENTA_WOOL: Self = Self {
         id: 215,
         registry_key: "magenta_wool",
         components: &[
@@ -17847,7 +17905,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGMA_BLOCK: Item = Item {
+    pub const MAGMA_BLOCK: Self = Self {
         id: 576,
         registry_key: "magma_block",
         components: &[
@@ -17866,7 +17924,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGMA_CREAM: Item = Item {
+    pub const MAGMA_CREAM: Self = Self {
         id: 1126,
         registry_key: "magma_cream",
         components: &[
@@ -17885,7 +17943,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAGMA_CUBE_SPAWN_EGG: Item = Item {
+    pub const MAGMA_CUBE_SPAWN_EGG: Self = Self {
         id: 1208,
         registry_key: "magma_cube_spawn_egg",
         components: &[
@@ -17904,7 +17962,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_BOAT: Item = Item {
+    pub const MANGROVE_BOAT: Self = Self {
         id: 880,
         registry_key: "mangrove_boat",
         components: &[
@@ -17923,7 +17981,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_BUTTON: Item = Item {
+    pub const MANGROVE_BUTTON: Self = Self {
         id: 760,
         registry_key: "mangrove_button",
         components: &[
@@ -17942,7 +18000,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_CHEST_BOAT: Item = Item {
+    pub const MANGROVE_CHEST_BOAT: Self = Self {
         id: 881,
         registry_key: "mangrove_chest_boat",
         components: &[
@@ -17961,7 +18019,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_DOOR: Item = Item {
+    pub const MANGROVE_DOOR: Self = Self {
         id: 789,
         registry_key: "mangrove_door",
         components: &[
@@ -17980,7 +18038,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_FENCE: Item = Item {
+    pub const MANGROVE_FENCE: Self = Self {
         id: 353,
         registry_key: "mangrove_fence",
         components: &[
@@ -17999,7 +18057,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_FENCE_GATE: Item = Item {
+    pub const MANGROVE_FENCE_GATE: Self = Self {
         id: 830,
         registry_key: "mangrove_fence_gate",
         components: &[
@@ -18018,7 +18076,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_HANGING_SIGN: Item = Item {
+    pub const MANGROVE_HANGING_SIGN: Self = Self {
         id: 1009,
         registry_key: "mangrove_hanging_sign",
         components: &[
@@ -18037,7 +18095,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_LEAVES: Item = Item {
+    pub const MANGROVE_LEAVES: Self = Self {
         id: 190,
         registry_key: "mangrove_leaves",
         components: &[
@@ -18056,7 +18114,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_LOG: Item = Item {
+    pub const MANGROVE_LOG: Self = Self {
         id: 142,
         registry_key: "mangrove_log",
         components: &[
@@ -18075,7 +18133,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_PLANKS: Item = Item {
+    pub const MANGROVE_PLANKS: Self = Self {
         id: 44,
         registry_key: "mangrove_planks",
         components: &[
@@ -18094,7 +18152,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_PRESSURE_PLATE: Item = Item {
+    pub const MANGROVE_PRESSURE_PLATE: Self = Self {
         id: 776,
         registry_key: "mangrove_pressure_plate",
         components: &[
@@ -18113,7 +18171,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_PROPAGULE: Item = Item {
+    pub const MANGROVE_PROPAGULE: Self = Self {
         id: 57,
         registry_key: "mangrove_propagule",
         components: &[
@@ -18132,7 +18190,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_ROOTS: Item = Item {
+    pub const MANGROVE_ROOTS: Self = Self {
         id: 143,
         registry_key: "mangrove_roots",
         components: &[
@@ -18151,7 +18209,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_SHELF: Item = Item {
+    pub const MANGROVE_SHELF: Self = Self {
         id: 313,
         registry_key: "mangrove_shelf",
         components: &[
@@ -18170,7 +18228,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_SIGN: Item = Item {
+    pub const MANGROVE_SIGN: Self = Self {
         id: 997,
         registry_key: "mangrove_sign",
         components: &[
@@ -18189,7 +18247,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_SLAB: Item = Item {
+    pub const MANGROVE_SLAB: Self = Self {
         id: 279,
         registry_key: "mangrove_slab",
         components: &[
@@ -18208,7 +18266,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_STAIRS: Item = Item {
+    pub const MANGROVE_STAIRS: Self = Self {
         id: 450,
         registry_key: "mangrove_stairs",
         components: &[
@@ -18227,7 +18285,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_TRAPDOOR: Item = Item {
+    pub const MANGROVE_TRAPDOOR: Self = Self {
         id: 810,
         registry_key: "mangrove_trapdoor",
         components: &[
@@ -18246,7 +18304,7 @@ impl Item {
             ),
         ],
     };
-    pub const MANGROVE_WOOD: Item = Item {
+    pub const MANGROVE_WOOD: Self = Self {
         id: 179,
         registry_key: "mangrove_wood",
         components: &[
@@ -18265,7 +18323,7 @@ impl Item {
             ),
         ],
     };
-    pub const MAP: Item = Item {
+    pub const MAP: Self = Self {
         id: 1232,
         registry_key: "map",
         components: &[
@@ -18284,7 +18342,7 @@ impl Item {
             ),
         ],
     };
-    pub const MEDIUM_AMETHYST_BUD: Item = Item {
+    pub const MEDIUM_AMETHYST_BUD: Self = Self {
         id: 1417,
         registry_key: "medium_amethyst_bud",
         components: &[
@@ -18303,7 +18361,7 @@ impl Item {
             ),
         ],
     };
-    pub const MELON: Item = Item {
+    pub const MELON: Self = Self {
         id: 410,
         registry_key: "melon",
         components: &[
@@ -18322,7 +18380,7 @@ impl Item {
             ),
         ],
     };
-    pub const MELON_SEEDS: Item = Item {
+    pub const MELON_SEEDS: Self = Self {
         id: 1110,
         registry_key: "melon_seeds",
         components: &[
@@ -18341,7 +18399,7 @@ impl Item {
             ),
         ],
     };
-    pub const MELON_SLICE: Item = Item {
+    pub const MELON_SLICE: Self = Self {
         id: 1107,
         registry_key: "melon_slice",
         components: &[
@@ -18378,7 +18436,7 @@ impl Item {
             ),
         ],
     };
-    pub const MILK_BUCKET: Item = Item {
+    pub const MILK_BUCKET: Self = Self {
         id: 1019,
         registry_key: "milk_bucket",
         components: &[
@@ -18407,7 +18465,7 @@ impl Item {
             ),
         ],
     };
-    pub const MINECART: Item = Item {
+    pub const MINECART: Self = Self {
         id: 855,
         registry_key: "minecart",
         components: &[
@@ -18426,7 +18484,7 @@ impl Item {
             ),
         ],
     };
-    pub const MINER_POTTERY_SHERD: Item = Item {
+    pub const MINER_POTTERY_SHERD: Self = Self {
         id: 1460,
         registry_key: "miner_pottery_sherd",
         components: &[
@@ -18445,7 +18503,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOJANG_BANNER_PATTERN: Item = Item {
+    pub const MOJANG_BANNER_PATTERN: Self = Self {
         id: 1346,
         registry_key: "mojang_banner_pattern",
         components: &[
@@ -18464,7 +18522,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOOSHROOM_SPAWN_EGG: Item = Item {
+    pub const MOOSHROOM_SPAWN_EGG: Self = Self {
         id: 1165,
         registry_key: "mooshroom_spawn_egg",
         components: &[
@@ -18483,7 +18541,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSS_BLOCK: Item = Item {
+    pub const MOSS_BLOCK: Self = Self {
         id: 263,
         registry_key: "moss_block",
         components: &[
@@ -18502,7 +18560,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSS_CARPET: Item = Item {
+    pub const MOSS_CARPET: Self = Self {
         id: 262,
         registry_key: "moss_carpet",
         components: &[
@@ -18521,7 +18579,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_COBBLESTONE: Item = Item {
+    pub const MOSSY_COBBLESTONE: Self = Self {
         id: 321,
         registry_key: "mossy_cobblestone",
         components: &[
@@ -18540,7 +18598,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_COBBLESTONE_SLAB: Item = Item {
+    pub const MOSSY_COBBLESTONE_SLAB: Self = Self {
         id: 704,
         registry_key: "mossy_cobblestone_slab",
         components: &[
@@ -18559,7 +18617,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_COBBLESTONE_STAIRS: Item = Item {
+    pub const MOSSY_COBBLESTONE_STAIRS: Self = Self {
         id: 686,
         registry_key: "mossy_cobblestone_stairs",
         components: &[
@@ -18578,7 +18636,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_COBBLESTONE_WALL: Item = Item {
+    pub const MOSSY_COBBLESTONE_WALL: Self = Self {
         id: 458,
         registry_key: "mossy_cobblestone_wall",
         components: &[
@@ -18597,7 +18655,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_STONE_BRICK_SLAB: Item = Item {
+    pub const MOSSY_STONE_BRICK_SLAB: Self = Self {
         id: 702,
         registry_key: "mossy_stone_brick_slab",
         components: &[
@@ -18616,7 +18674,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_STONE_BRICK_STAIRS: Item = Item {
+    pub const MOSSY_STONE_BRICK_STAIRS: Self = Self {
         id: 684,
         registry_key: "mossy_stone_brick_stairs",
         components: &[
@@ -18635,7 +18693,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_STONE_BRICK_WALL: Item = Item {
+    pub const MOSSY_STONE_BRICK_WALL: Self = Self {
         id: 462,
         registry_key: "mossy_stone_brick_wall",
         components: &[
@@ -18654,7 +18712,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOSSY_STONE_BRICKS: Item = Item {
+    pub const MOSSY_STONE_BRICKS: Self = Self {
         id: 377,
         registry_key: "mossy_stone_bricks",
         components: &[
@@ -18673,7 +18731,7 @@ impl Item {
             ),
         ],
     };
-    pub const MOURNER_POTTERY_SHERD: Item = Item {
+    pub const MOURNER_POTTERY_SHERD: Self = Self {
         id: 1461,
         registry_key: "mourner_pottery_sherd",
         components: &[
@@ -18692,7 +18750,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUD: Item = Item {
+    pub const MUD: Self = Self {
         id: 32,
         registry_key: "mud",
         components: &[
@@ -18711,7 +18769,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUD_BRICK_SLAB: Item = Item {
+    pub const MUD_BRICK_SLAB: Self = Self {
         id: 292,
         registry_key: "mud_brick_slab",
         components: &[
@@ -18730,7 +18788,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUD_BRICK_STAIRS: Item = Item {
+    pub const MUD_BRICK_STAIRS: Self = Self {
         id: 422,
         registry_key: "mud_brick_stairs",
         components: &[
@@ -18749,7 +18807,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUD_BRICK_WALL: Item = Item {
+    pub const MUD_BRICK_WALL: Self = Self {
         id: 465,
         registry_key: "mud_brick_wall",
         components: &[
@@ -18768,7 +18826,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUD_BRICKS: Item = Item {
+    pub const MUD_BRICKS: Self = Self {
         id: 381,
         registry_key: "mud_bricks",
         components: &[
@@ -18787,7 +18845,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUDDY_MANGROVE_ROOTS: Item = Item {
+    pub const MUDDY_MANGROVE_ROOTS: Self = Self {
         id: 144,
         registry_key: "muddy_mangrove_roots",
         components: &[
@@ -18806,7 +18864,7 @@ impl Item {
             ),
         ],
     };
-    pub const MULE_SPAWN_EGG: Item = Item {
+    pub const MULE_SPAWN_EGG: Self = Self {
         id: 1138,
         registry_key: "mule_spawn_egg",
         components: &[
@@ -18825,7 +18883,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSHROOM_STEM: Item = Item {
+    pub const MUSHROOM_STEM: Self = Self {
         id: 390,
         registry_key: "mushroom_stem",
         components: &[
@@ -18844,7 +18902,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSHROOM_STEW: Item = Item {
+    pub const MUSHROOM_STEW: Self = Self {
         id: 948,
         registry_key: "mushroom_stew",
         components: &[
@@ -18881,7 +18939,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_11: Item = Item {
+    pub const MUSIC_DISC_11: Self = Self {
         id: 1323,
         registry_key: "music_disc_11",
         components: &[
@@ -18906,7 +18964,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_13: Item = Item {
+    pub const MUSIC_DISC_13: Self = Self {
         id: 1310,
         registry_key: "music_disc_13",
         components: &[
@@ -18931,7 +18989,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_5: Item = Item {
+    pub const MUSIC_DISC_5: Self = Self {
         id: 1327,
         registry_key: "music_disc_5",
         components: &[
@@ -18956,7 +19014,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_BLOCKS: Item = Item {
+    pub const MUSIC_DISC_BLOCKS: Self = Self {
         id: 1312,
         registry_key: "music_disc_blocks",
         components: &[
@@ -18981,7 +19039,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_CAT: Item = Item {
+    pub const MUSIC_DISC_CAT: Self = Self {
         id: 1311,
         registry_key: "music_disc_cat",
         components: &[
@@ -19006,7 +19064,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_CHIRP: Item = Item {
+    pub const MUSIC_DISC_CHIRP: Self = Self {
         id: 1313,
         registry_key: "music_disc_chirp",
         components: &[
@@ -19031,7 +19089,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_CREATOR: Item = Item {
+    pub const MUSIC_DISC_CREATOR: Self = Self {
         id: 1314,
         registry_key: "music_disc_creator",
         components: &[
@@ -19056,7 +19114,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_CREATOR_MUSIC_BOX: Item = Item {
+    pub const MUSIC_DISC_CREATOR_MUSIC_BOX: Self = Self {
         id: 1315,
         registry_key: "music_disc_creator_music_box",
         components: &[
@@ -19081,7 +19139,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_FAR: Item = Item {
+    pub const MUSIC_DISC_FAR: Self = Self {
         id: 1316,
         registry_key: "music_disc_far",
         components: &[
@@ -19106,7 +19164,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_LAVA_CHICKEN: Item = Item {
+    pub const MUSIC_DISC_LAVA_CHICKEN: Self = Self {
         id: 1317,
         registry_key: "music_disc_lava_chicken",
         components: &[
@@ -19131,7 +19189,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_MALL: Item = Item {
+    pub const MUSIC_DISC_MALL: Self = Self {
         id: 1318,
         registry_key: "music_disc_mall",
         components: &[
@@ -19156,7 +19214,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_MELLOHI: Item = Item {
+    pub const MUSIC_DISC_MELLOHI: Self = Self {
         id: 1319,
         registry_key: "music_disc_mellohi",
         components: &[
@@ -19181,7 +19239,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_OTHERSIDE: Item = Item {
+    pub const MUSIC_DISC_OTHERSIDE: Self = Self {
         id: 1325,
         registry_key: "music_disc_otherside",
         components: &[
@@ -19206,7 +19264,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_PIGSTEP: Item = Item {
+    pub const MUSIC_DISC_PIGSTEP: Self = Self {
         id: 1328,
         registry_key: "music_disc_pigstep",
         components: &[
@@ -19231,7 +19289,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_PRECIPICE: Item = Item {
+    pub const MUSIC_DISC_PRECIPICE: Self = Self {
         id: 1329,
         registry_key: "music_disc_precipice",
         components: &[
@@ -19256,7 +19314,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_RELIC: Item = Item {
+    pub const MUSIC_DISC_RELIC: Self = Self {
         id: 1326,
         registry_key: "music_disc_relic",
         components: &[
@@ -19281,7 +19339,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_STAL: Item = Item {
+    pub const MUSIC_DISC_STAL: Self = Self {
         id: 1320,
         registry_key: "music_disc_stal",
         components: &[
@@ -19306,7 +19364,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_STRAD: Item = Item {
+    pub const MUSIC_DISC_STRAD: Self = Self {
         id: 1321,
         registry_key: "music_disc_strad",
         components: &[
@@ -19331,7 +19389,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_TEARS: Item = Item {
+    pub const MUSIC_DISC_TEARS: Self = Self {
         id: 1330,
         registry_key: "music_disc_tears",
         components: &[
@@ -19356,7 +19414,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_WAIT: Item = Item {
+    pub const MUSIC_DISC_WAIT: Self = Self {
         id: 1324,
         registry_key: "music_disc_wait",
         components: &[
@@ -19381,7 +19439,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUSIC_DISC_WARD: Item = Item {
+    pub const MUSIC_DISC_WARD: Self = Self {
         id: 1322,
         registry_key: "music_disc_ward",
         components: &[
@@ -19406,7 +19464,7 @@ impl Item {
             ),
         ],
     };
-    pub const MUTTON: Item = Item {
+    pub const MUTTON: Self = Self {
         id: 1265,
         registry_key: "mutton",
         components: &[
@@ -19443,7 +19501,7 @@ impl Item {
             ),
         ],
     };
-    pub const MYCELIUM: Item = Item {
+    pub const MYCELIUM: Self = Self {
         id: 423,
         registry_key: "mycelium",
         components: &[
@@ -19462,7 +19520,7 @@ impl Item {
             ),
         ],
     };
-    pub const NAME_TAG: Item = Item {
+    pub const NAME_TAG: Self = Self {
         id: 1263,
         registry_key: "name_tag",
         components: &[
@@ -19481,7 +19539,7 @@ impl Item {
             ),
         ],
     };
-    pub const NAUTILUS_SHELL: Item = Item {
+    pub const NAUTILUS_SHELL: Self = Self {
         id: 1333,
         registry_key: "nautilus_shell",
         components: &[
@@ -19500,7 +19558,7 @@ impl Item {
             ),
         ],
     };
-    pub const NAUTILUS_SPAWN_EGG: Item = Item {
+    pub const NAUTILUS_SPAWN_EGG: Self = Self {
         id: 1157,
         registry_key: "nautilus_spawn_egg",
         components: &[
@@ -19519,7 +19577,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_BRICK: Item = Item {
+    pub const NETHER_BRICK: Self = Self {
         id: 1246,
         registry_key: "nether_brick",
         components: &[
@@ -19538,7 +19596,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_BRICK_FENCE: Item = Item {
+    pub const NETHER_BRICK_FENCE: Self = Self {
         id: 428,
         registry_key: "nether_brick_fence",
         components: &[
@@ -19557,7 +19615,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_BRICK_SLAB: Item = Item {
+    pub const NETHER_BRICK_SLAB: Self = Self {
         id: 293,
         registry_key: "nether_brick_slab",
         components: &[
@@ -19576,7 +19634,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_BRICK_STAIRS: Item = Item {
+    pub const NETHER_BRICK_STAIRS: Self = Self {
         id: 429,
         registry_key: "nether_brick_stairs",
         components: &[
@@ -19595,7 +19653,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_BRICK_WALL: Item = Item {
+    pub const NETHER_BRICK_WALL: Self = Self {
         id: 466,
         registry_key: "nether_brick_wall",
         components: &[
@@ -19614,7 +19672,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_BRICKS: Item = Item {
+    pub const NETHER_BRICKS: Self = Self {
         id: 425,
         registry_key: "nether_bricks",
         components: &[
@@ -19633,7 +19691,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_GOLD_ORE: Item = Item {
+    pub const NETHER_GOLD_ORE: Self = Self {
         id: 80,
         registry_key: "nether_gold_ore",
         components: &[
@@ -19652,7 +19710,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_QUARTZ_ORE: Item = Item {
+    pub const NETHER_QUARTZ_ORE: Self = Self {
         id: 81,
         registry_key: "nether_quartz_ore",
         components: &[
@@ -19671,7 +19729,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_SPROUTS: Item = Item {
+    pub const NETHER_SPROUTS: Self = Self {
         id: 254,
         registry_key: "nether_sprouts",
         components: &[
@@ -19690,7 +19748,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_STAR: Item = Item {
+    pub const NETHER_STAR: Self = Self {
         id: 1241,
         registry_key: "nether_star",
         components: &[
@@ -19715,7 +19773,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_WART: Item = Item {
+    pub const NETHER_WART: Self = Self {
         id: 1120,
         registry_key: "nether_wart",
         components: &[
@@ -19734,7 +19792,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHER_WART_BLOCK: Item = Item {
+    pub const NETHER_WART_BLOCK: Self = Self {
         id: 577,
         registry_key: "nether_wart_block",
         components: &[
@@ -19753,7 +19811,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERITE_AXE: Item = Item {
+    pub const NETHERITE_AXE: Self = Self {
         id: 945,
         registry_key: "netherite_axe",
         components: &[
@@ -19819,9 +19877,10 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_BLOCK: Item = Item {
+    pub const NETHERITE_BLOCK: Self = Self {
         id: 94,
         registry_key: "netherite_block",
         components: &[
@@ -19846,7 +19905,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERITE_BOOTS: Item = Item {
+    pub const NETHERITE_BOOTS: Self = Self {
         id: 982,
         registry_key: "netherite_boots",
         components: &[
@@ -19909,9 +19968,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_CHESTPLATE: Item = Item {
+    pub const NETHERITE_CHESTPLATE: Self = Self {
         id: 980,
         registry_key: "netherite_chestplate",
         components: &[
@@ -19974,9 +20034,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_HELMET: Item = Item {
+    pub const NETHERITE_HELMET: Self = Self {
         id: 979,
         registry_key: "netherite_helmet",
         components: &[
@@ -20039,9 +20100,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_HOE: Item = Item {
+    pub const NETHERITE_HOE: Self = Self {
         id: 946,
         registry_key: "netherite_hoe",
         components: &[
@@ -20107,9 +20169,10 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_HORSE_ARMOR: Item = Item {
+    pub const NETHERITE_HORSE_ARMOR: Self = Self {
         id: 1260,
         registry_key: "netherite_horse_armor",
         components: &[
@@ -20172,7 +20235,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERITE_INGOT: Item = Item {
+    pub const NETHERITE_INGOT: Self = Self {
         id: 910,
         registry_key: "netherite_ingot",
         components: &[
@@ -20197,7 +20260,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERITE_LEGGINGS: Item = Item {
+    pub const NETHERITE_LEGGINGS: Self = Self {
         id: 981,
         registry_key: "netherite_leggings",
         components: &[
@@ -20260,9 +20323,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_NAUTILUS_ARMOR: Item = Item {
+    pub const NETHERITE_NAUTILUS_ARMOR: Self = Self {
         id: 1337,
         registry_key: "netherite_nautilus_armor",
         components: &[
@@ -20325,7 +20389,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERITE_PICKAXE: Item = Item {
+    pub const NETHERITE_PICKAXE: Self = Self {
         id: 944,
         registry_key: "netherite_pickaxe",
         components: &[
@@ -20391,9 +20455,10 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_SCRAP: Item = Item {
+    pub const NETHERITE_SCRAP: Self = Self {
         id: 911,
         registry_key: "netherite_scrap",
         components: &[
@@ -20418,7 +20483,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERITE_SHOVEL: Item = Item {
+    pub const NETHERITE_SHOVEL: Self = Self {
         id: 943,
         registry_key: "netherite_shovel",
         components: &[
@@ -20484,9 +20549,10 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_SPEAR: Item = Item {
+    pub const NETHERITE_SPEAR: Self = Self {
         id: 1303,
         registry_key: "netherite_spear",
         components: &[
@@ -20532,9 +20598,10 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_SWORD: Item = Item {
+    pub const NETHERITE_SWORD: Self = Self {
         id: 942,
         registry_key: "netherite_sword",
         components: &[
@@ -20605,9 +20672,10 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const NETHERITE_UPGRADE_SMITHING_TEMPLATE: Item = Item {
+    pub const NETHERITE_UPGRADE_SMITHING_TEMPLATE: Self = Self {
         id: 1427,
         registry_key: "netherite_upgrade_smithing_template",
         components: &[
@@ -20626,7 +20694,7 @@ impl Item {
             ),
         ],
     };
-    pub const NETHERRACK: Item = Item {
+    pub const NETHERRACK: Self = Self {
         id: 360,
         registry_key: "netherrack",
         components: &[
@@ -20645,7 +20713,7 @@ impl Item {
             ),
         ],
     };
-    pub const NOTE_BLOCK: Item = Item {
+    pub const NOTE_BLOCK: Self = Self {
         id: 749,
         registry_key: "note_block",
         components: &[
@@ -20664,7 +20732,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_BOAT: Item = Item {
+    pub const OAK_BOAT: Self = Self {
         id: 864,
         registry_key: "oak_boat",
         components: &[
@@ -20683,7 +20751,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_BUTTON: Item = Item {
+    pub const OAK_BUTTON: Self = Self {
         id: 752,
         registry_key: "oak_button",
         components: &[
@@ -20702,7 +20770,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_CHEST_BOAT: Item = Item {
+    pub const OAK_CHEST_BOAT: Self = Self {
         id: 865,
         registry_key: "oak_chest_boat",
         components: &[
@@ -20721,7 +20789,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_DOOR: Item = Item {
+    pub const OAK_DOOR: Self = Self {
         id: 781,
         registry_key: "oak_door",
         components: &[
@@ -20740,7 +20808,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_FENCE: Item = Item {
+    pub const OAK_FENCE: Self = Self {
         id: 345,
         registry_key: "oak_fence",
         components: &[
@@ -20759,7 +20827,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_FENCE_GATE: Item = Item {
+    pub const OAK_FENCE_GATE: Self = Self {
         id: 822,
         registry_key: "oak_fence_gate",
         components: &[
@@ -20778,7 +20846,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_HANGING_SIGN: Item = Item {
+    pub const OAK_HANGING_SIGN: Self = Self {
         id: 1001,
         registry_key: "oak_hanging_sign",
         components: &[
@@ -20797,7 +20865,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_LEAVES: Item = Item {
+    pub const OAK_LEAVES: Self = Self {
         id: 182,
         registry_key: "oak_leaves",
         components: &[
@@ -20816,7 +20884,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_LOG: Item = Item {
+    pub const OAK_LOG: Self = Self {
         id: 134,
         registry_key: "oak_log",
         components: &[
@@ -20835,7 +20903,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_PLANKS: Item = Item {
+    pub const OAK_PLANKS: Self = Self {
         id: 36,
         registry_key: "oak_planks",
         components: &[
@@ -20854,7 +20922,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_PRESSURE_PLATE: Item = Item {
+    pub const OAK_PRESSURE_PLATE: Self = Self {
         id: 768,
         registry_key: "oak_pressure_plate",
         components: &[
@@ -20873,7 +20941,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_SAPLING: Item = Item {
+    pub const OAK_SAPLING: Self = Self {
         id: 49,
         registry_key: "oak_sapling",
         components: &[
@@ -20892,7 +20960,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_SHELF: Item = Item {
+    pub const OAK_SHELF: Self = Self {
         id: 314,
         registry_key: "oak_shelf",
         components: &[
@@ -20911,7 +20979,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_SIGN: Item = Item {
+    pub const OAK_SIGN: Self = Self {
         id: 989,
         registry_key: "oak_sign",
         components: &[
@@ -20930,7 +20998,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_SLAB: Item = Item {
+    pub const OAK_SLAB: Self = Self {
         id: 271,
         registry_key: "oak_slab",
         components: &[
@@ -20949,7 +21017,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_STAIRS: Item = Item {
+    pub const OAK_STAIRS: Self = Self {
         id: 442,
         registry_key: "oak_stairs",
         components: &[
@@ -20968,7 +21036,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_TRAPDOOR: Item = Item {
+    pub const OAK_TRAPDOOR: Self = Self {
         id: 802,
         registry_key: "oak_trapdoor",
         components: &[
@@ -20987,7 +21055,7 @@ impl Item {
             ),
         ],
     };
-    pub const OAK_WOOD: Item = Item {
+    pub const OAK_WOOD: Self = Self {
         id: 171,
         registry_key: "oak_wood",
         components: &[
@@ -21006,7 +21074,7 @@ impl Item {
             ),
         ],
     };
-    pub const OBSERVER: Item = Item {
+    pub const OBSERVER: Self = Self {
         id: 727,
         registry_key: "observer",
         components: &[
@@ -21025,7 +21093,7 @@ impl Item {
             ),
         ],
     };
-    pub const OBSIDIAN: Item = Item {
+    pub const OBSIDIAN: Self = Self {
         id: 322,
         registry_key: "obsidian",
         components: &[
@@ -21044,7 +21112,7 @@ impl Item {
             ),
         ],
     };
-    pub const OCELOT_SPAWN_EGG: Item = Item {
+    pub const OCELOT_SPAWN_EGG: Self = Self {
         id: 1148,
         registry_key: "ocelot_spawn_egg",
         components: &[
@@ -21063,7 +21131,7 @@ impl Item {
             ),
         ],
     };
-    pub const OCHRE_FROGLIGHT: Item = Item {
+    pub const OCHRE_FROGLIGHT: Self = Self {
         id: 1421,
         registry_key: "ochre_froglight",
         components: &[
@@ -21082,7 +21150,7 @@ impl Item {
             ),
         ],
     };
-    pub const OMINOUS_BOTTLE: Item = Item {
+    pub const OMINOUS_BOTTLE: Self = Self {
         id: 1505,
         registry_key: "ominous_bottle",
         components: &[
@@ -21113,7 +21181,7 @@ impl Item {
             ),
         ],
     };
-    pub const OMINOUS_TRIAL_KEY: Item = Item {
+    pub const OMINOUS_TRIAL_KEY: Self = Self {
         id: 1503,
         registry_key: "ominous_trial_key",
         components: &[
@@ -21132,7 +21200,7 @@ impl Item {
             ),
         ],
     };
-    pub const OPEN_EYEBLOSSOM: Item = Item {
+    pub const OPEN_EYEBLOSSOM: Self = Self {
         id: 231,
         registry_key: "open_eyeblossom",
         components: &[
@@ -21151,7 +21219,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_BANNER: Item = Item {
+    pub const ORANGE_BANNER: Self = Self {
         id: 1268,
         registry_key: "orange_banner",
         components: &[
@@ -21170,7 +21238,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_BED: Item = Item {
+    pub const ORANGE_BED: Self = Self {
         id: 1088,
         registry_key: "orange_bed",
         components: &[
@@ -21189,7 +21257,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_BUNDLE: Item = Item {
+    pub const ORANGE_BUNDLE: Self = Self {
         id: 1039,
         registry_key: "orange_bundle",
         components: &[
@@ -21208,7 +21276,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_CANDLE: Item = Item {
+    pub const ORANGE_CANDLE: Self = Self {
         id: 1401,
         registry_key: "orange_candle",
         components: &[
@@ -21227,7 +21295,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_CARPET: Item = Item {
+    pub const ORANGE_CARPET: Self = Self {
         id: 507,
         registry_key: "orange_carpet",
         components: &[
@@ -21265,7 +21333,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_CONCRETE: Item = Item {
+    pub const ORANGE_CONCRETE: Self = Self {
         id: 616,
         registry_key: "orange_concrete",
         components: &[
@@ -21284,7 +21352,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_CONCRETE_POWDER: Item = Item {
+    pub const ORANGE_CONCRETE_POWDER: Self = Self {
         id: 632,
         registry_key: "orange_concrete_powder",
         components: &[
@@ -21303,7 +21371,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_DYE: Item = Item {
+    pub const ORANGE_DYE: Self = Self {
         id: 1068,
         registry_key: "orange_dye",
         components: &[
@@ -21322,7 +21390,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_GLAZED_TERRACOTTA: Item = Item {
+    pub const ORANGE_GLAZED_TERRACOTTA: Self = Self {
         id: 600,
         registry_key: "orange_glazed_terracotta",
         components: &[
@@ -21341,7 +21409,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_HARNESS: Item = Item {
+    pub const ORANGE_HARNESS: Self = Self {
         id: 840,
         registry_key: "orange_harness",
         components: &[
@@ -21376,7 +21444,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_SHULKER_BOX: Item = Item {
+    pub const ORANGE_SHULKER_BOX: Self = Self {
         id: 584,
         registry_key: "orange_shulker_box",
         components: &[
@@ -21395,7 +21463,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_STAINED_GLASS: Item = Item {
+    pub const ORANGE_STAINED_GLASS: Self = Self {
         id: 532,
         registry_key: "orange_stained_glass",
         components: &[
@@ -21414,7 +21482,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_STAINED_GLASS_PANE: Item = Item {
+    pub const ORANGE_STAINED_GLASS_PANE: Self = Self {
         id: 548,
         registry_key: "orange_stained_glass_pane",
         components: &[
@@ -21433,7 +21501,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_TERRACOTTA: Item = Item {
+    pub const ORANGE_TERRACOTTA: Self = Self {
         id: 488,
         registry_key: "orange_terracotta",
         components: &[
@@ -21452,7 +21520,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_TULIP: Item = Item {
+    pub const ORANGE_TULIP: Self = Self {
         id: 238,
         registry_key: "orange_tulip",
         components: &[
@@ -21471,7 +21539,7 @@ impl Item {
             ),
         ],
     };
-    pub const ORANGE_WOOL: Item = Item {
+    pub const ORANGE_WOOL: Self = Self {
         id: 214,
         registry_key: "orange_wool",
         components: &[
@@ -21490,7 +21558,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXEYE_DAISY: Item = Item {
+    pub const OXEYE_DAISY: Self = Self {
         id: 241,
         registry_key: "oxeye_daisy",
         components: &[
@@ -21509,7 +21577,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_CHISELED_COPPER: Item = Item {
+    pub const OXIDIZED_CHISELED_COPPER: Self = Self {
         id: 101,
         registry_key: "oxidized_chiseled_copper",
         components: &[
@@ -21528,7 +21596,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER: Item = Item {
+    pub const OXIDIZED_COPPER: Self = Self {
         id: 97,
         registry_key: "oxidized_copper",
         components: &[
@@ -21547,7 +21615,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_BARS: Item = Item {
+    pub const OXIDIZED_COPPER_BARS: Self = Self {
         id: 395,
         registry_key: "oxidized_copper_bars",
         components: &[
@@ -21566,7 +21634,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_BULB: Item = Item {
+    pub const OXIDIZED_COPPER_BULB: Self = Self {
         id: 1480,
         registry_key: "oxidized_copper_bulb",
         components: &[
@@ -21585,7 +21653,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_CHAIN: Item = Item {
+    pub const OXIDIZED_COPPER_CHAIN: Self = Self {
         id: 404,
         registry_key: "oxidized_copper_chain",
         components: &[
@@ -21604,7 +21672,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_CHEST: Item = Item {
+    pub const OXIDIZED_COPPER_CHEST: Self = Self {
         id: 1488,
         registry_key: "oxidized_copper_chest",
         components: &[
@@ -21623,7 +21691,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_DOOR: Item = Item {
+    pub const OXIDIZED_COPPER_DOOR: Self = Self {
         id: 796,
         registry_key: "oxidized_copper_door",
         components: &[
@@ -21642,7 +21710,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const OXIDIZED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1496,
         registry_key: "oxidized_copper_golem_statue",
         components: &[
@@ -21661,7 +21729,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_GRATE: Item = Item {
+    pub const OXIDIZED_COPPER_GRATE: Self = Self {
         id: 1472,
         registry_key: "oxidized_copper_grate",
         components: &[
@@ -21680,7 +21748,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_LANTERN: Item = Item {
+    pub const OXIDIZED_COPPER_LANTERN: Self = Self {
         id: 1369,
         registry_key: "oxidized_copper_lantern",
         components: &[
@@ -21699,7 +21767,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_COPPER_TRAPDOOR: Item = Item {
+    pub const OXIDIZED_COPPER_TRAPDOOR: Self = Self {
         id: 817,
         registry_key: "oxidized_copper_trapdoor",
         components: &[
@@ -21718,7 +21786,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_CUT_COPPER: Item = Item {
+    pub const OXIDIZED_CUT_COPPER: Self = Self {
         id: 105,
         registry_key: "oxidized_cut_copper",
         components: &[
@@ -21737,7 +21805,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_CUT_COPPER_SLAB: Item = Item {
+    pub const OXIDIZED_CUT_COPPER_SLAB: Self = Self {
         id: 113,
         registry_key: "oxidized_cut_copper_slab",
         components: &[
@@ -21756,7 +21824,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_CUT_COPPER_STAIRS: Item = Item {
+    pub const OXIDIZED_CUT_COPPER_STAIRS: Self = Self {
         id: 109,
         registry_key: "oxidized_cut_copper_stairs",
         components: &[
@@ -21775,7 +21843,7 @@ impl Item {
             ),
         ],
     };
-    pub const OXIDIZED_LIGHTNING_ROD: Item = Item {
+    pub const OXIDIZED_LIGHTNING_ROD: Self = Self {
         id: 737,
         registry_key: "oxidized_lightning_rod",
         components: &[
@@ -21794,7 +21862,7 @@ impl Item {
             ),
         ],
     };
-    pub const PACKED_ICE: Item = Item {
+    pub const PACKED_ICE: Self = Self {
         id: 523,
         registry_key: "packed_ice",
         components: &[
@@ -21813,7 +21881,7 @@ impl Item {
             ),
         ],
     };
-    pub const PACKED_MUD: Item = Item {
+    pub const PACKED_MUD: Self = Self {
         id: 380,
         registry_key: "packed_mud",
         components: &[
@@ -21832,7 +21900,7 @@ impl Item {
             ),
         ],
     };
-    pub const PAINTING: Item = Item {
+    pub const PAINTING: Self = Self {
         id: 986,
         registry_key: "painting",
         components: &[
@@ -21851,7 +21919,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_HANGING_MOSS: Item = Item {
+    pub const PALE_HANGING_MOSS: Self = Self {
         id: 265,
         registry_key: "pale_hanging_moss",
         components: &[
@@ -21870,7 +21938,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_MOSS_BLOCK: Item = Item {
+    pub const PALE_MOSS_BLOCK: Self = Self {
         id: 266,
         registry_key: "pale_moss_block",
         components: &[
@@ -21889,7 +21957,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_MOSS_CARPET: Item = Item {
+    pub const PALE_MOSS_CARPET: Self = Self {
         id: 264,
         registry_key: "pale_moss_carpet",
         components: &[
@@ -21908,7 +21976,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_BOAT: Item = Item {
+    pub const PALE_OAK_BOAT: Self = Self {
         id: 878,
         registry_key: "pale_oak_boat",
         components: &[
@@ -21927,7 +21995,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_BUTTON: Item = Item {
+    pub const PALE_OAK_BUTTON: Self = Self {
         id: 759,
         registry_key: "pale_oak_button",
         components: &[
@@ -21946,7 +22014,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_CHEST_BOAT: Item = Item {
+    pub const PALE_OAK_CHEST_BOAT: Self = Self {
         id: 879,
         registry_key: "pale_oak_chest_boat",
         components: &[
@@ -21965,7 +22033,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_DOOR: Item = Item {
+    pub const PALE_OAK_DOOR: Self = Self {
         id: 788,
         registry_key: "pale_oak_door",
         components: &[
@@ -21984,7 +22052,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_FENCE: Item = Item {
+    pub const PALE_OAK_FENCE: Self = Self {
         id: 352,
         registry_key: "pale_oak_fence",
         components: &[
@@ -22003,7 +22071,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_FENCE_GATE: Item = Item {
+    pub const PALE_OAK_FENCE_GATE: Self = Self {
         id: 829,
         registry_key: "pale_oak_fence_gate",
         components: &[
@@ -22022,7 +22090,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_HANGING_SIGN: Item = Item {
+    pub const PALE_OAK_HANGING_SIGN: Self = Self {
         id: 1008,
         registry_key: "pale_oak_hanging_sign",
         components: &[
@@ -22041,7 +22109,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_LEAVES: Item = Item {
+    pub const PALE_OAK_LEAVES: Self = Self {
         id: 189,
         registry_key: "pale_oak_leaves",
         components: &[
@@ -22060,7 +22128,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_LOG: Item = Item {
+    pub const PALE_OAK_LOG: Self = Self {
         id: 140,
         registry_key: "pale_oak_log",
         components: &[
@@ -22079,7 +22147,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_PLANKS: Item = Item {
+    pub const PALE_OAK_PLANKS: Self = Self {
         id: 43,
         registry_key: "pale_oak_planks",
         components: &[
@@ -22098,7 +22166,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_PRESSURE_PLATE: Item = Item {
+    pub const PALE_OAK_PRESSURE_PLATE: Self = Self {
         id: 775,
         registry_key: "pale_oak_pressure_plate",
         components: &[
@@ -22117,7 +22185,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_SAPLING: Item = Item {
+    pub const PALE_OAK_SAPLING: Self = Self {
         id: 56,
         registry_key: "pale_oak_sapling",
         components: &[
@@ -22136,7 +22204,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_SHELF: Item = Item {
+    pub const PALE_OAK_SHELF: Self = Self {
         id: 315,
         registry_key: "pale_oak_shelf",
         components: &[
@@ -22155,7 +22223,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_SIGN: Item = Item {
+    pub const PALE_OAK_SIGN: Self = Self {
         id: 996,
         registry_key: "pale_oak_sign",
         components: &[
@@ -22174,7 +22242,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_SLAB: Item = Item {
+    pub const PALE_OAK_SLAB: Self = Self {
         id: 278,
         registry_key: "pale_oak_slab",
         components: &[
@@ -22193,7 +22261,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_STAIRS: Item = Item {
+    pub const PALE_OAK_STAIRS: Self = Self {
         id: 449,
         registry_key: "pale_oak_stairs",
         components: &[
@@ -22212,7 +22280,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_TRAPDOOR: Item = Item {
+    pub const PALE_OAK_TRAPDOOR: Self = Self {
         id: 809,
         registry_key: "pale_oak_trapdoor",
         components: &[
@@ -22231,7 +22299,7 @@ impl Item {
             ),
         ],
     };
-    pub const PALE_OAK_WOOD: Item = Item {
+    pub const PALE_OAK_WOOD: Self = Self {
         id: 177,
         registry_key: "pale_oak_wood",
         components: &[
@@ -22250,7 +22318,7 @@ impl Item {
             ),
         ],
     };
-    pub const PANDA_SPAWN_EGG: Item = Item {
+    pub const PANDA_SPAWN_EGG: Self = Self {
         id: 1149,
         registry_key: "panda_spawn_egg",
         components: &[
@@ -22269,7 +22337,7 @@ impl Item {
             ),
         ],
     };
-    pub const PAPER: Item = Item {
+    pub const PAPER: Self = Self {
         id: 1029,
         registry_key: "paper",
         components: &[
@@ -22288,7 +22356,7 @@ impl Item {
             ),
         ],
     };
-    pub const PARCHED_SPAWN_EGG: Item = Item {
+    pub const PARCHED_SPAWN_EGG: Self = Self {
         id: 1177,
         registry_key: "parched_spawn_egg",
         components: &[
@@ -22307,7 +22375,7 @@ impl Item {
             ),
         ],
     };
-    pub const PARROT_SPAWN_EGG: Item = Item {
+    pub const PARROT_SPAWN_EGG: Self = Self {
         id: 1140,
         registry_key: "parrot_spawn_egg",
         components: &[
@@ -22326,7 +22394,7 @@ impl Item {
             ),
         ],
     };
-    pub const PEARLESCENT_FROGLIGHT: Item = Item {
+    pub const PEARLESCENT_FROGLIGHT: Self = Self {
         id: 1423,
         registry_key: "pearlescent_froglight",
         components: &[
@@ -22345,7 +22413,7 @@ impl Item {
             ),
         ],
     };
-    pub const PEONY: Item = Item {
+    pub const PEONY: Self = Self {
         id: 528,
         registry_key: "peony",
         components: &[
@@ -22364,7 +22432,7 @@ impl Item {
             ),
         ],
     };
-    pub const PETRIFIED_OAK_SLAB: Item = Item {
+    pub const PETRIFIED_OAK_SLAB: Self = Self {
         id: 288,
         registry_key: "petrified_oak_slab",
         components: &[
@@ -22383,7 +22451,7 @@ impl Item {
             ),
         ],
     };
-    pub const PHANTOM_MEMBRANE: Item = Item {
+    pub const PHANTOM_MEMBRANE: Self = Self {
         id: 862,
         registry_key: "phantom_membrane",
         components: &[
@@ -22402,7 +22470,7 @@ impl Item {
             ),
         ],
     };
-    pub const PHANTOM_SPAWN_EGG: Item = Item {
+    pub const PHANTOM_SPAWN_EGG: Self = Self {
         id: 1194,
         registry_key: "phantom_spawn_egg",
         components: &[
@@ -22421,7 +22489,7 @@ impl Item {
             ),
         ],
     };
-    pub const PIG_SPAWN_EGG: Item = Item {
+    pub const PIG_SPAWN_EGG: Self = Self {
         id: 1133,
         registry_key: "pig_spawn_egg",
         components: &[
@@ -22440,7 +22508,7 @@ impl Item {
             ),
         ],
     };
-    pub const PIGLIN_BANNER_PATTERN: Item = Item {
+    pub const PIGLIN_BANNER_PATTERN: Self = Self {
         id: 1348,
         registry_key: "piglin_banner_pattern",
         components: &[
@@ -22459,7 +22527,7 @@ impl Item {
             ),
         ],
     };
-    pub const PIGLIN_BRUTE_SPAWN_EGG: Item = Item {
+    pub const PIGLIN_BRUTE_SPAWN_EGG: Self = Self {
         id: 1210,
         registry_key: "piglin_brute_spawn_egg",
         components: &[
@@ -22478,7 +22546,7 @@ impl Item {
             ),
         ],
     };
-    pub const PIGLIN_HEAD: Item = Item {
+    pub const PIGLIN_HEAD: Self = Self {
         id: 1240,
         registry_key: "piglin_head",
         components: &[
@@ -22519,7 +22587,7 @@ impl Item {
             ),
         ],
     };
-    pub const PIGLIN_SPAWN_EGG: Item = Item {
+    pub const PIGLIN_SPAWN_EGG: Self = Self {
         id: 1209,
         registry_key: "piglin_spawn_egg",
         components: &[
@@ -22538,7 +22606,7 @@ impl Item {
             ),
         ],
     };
-    pub const PILLAGER_SPAWN_EGG: Item = Item {
+    pub const PILLAGER_SPAWN_EGG: Self = Self {
         id: 1200,
         registry_key: "pillager_spawn_egg",
         components: &[
@@ -22557,7 +22625,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_BANNER: Item = Item {
+    pub const PINK_BANNER: Self = Self {
         id: 1273,
         registry_key: "pink_banner",
         components: &[
@@ -22576,7 +22644,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_BED: Item = Item {
+    pub const PINK_BED: Self = Self {
         id: 1093,
         registry_key: "pink_bed",
         components: &[
@@ -22595,7 +22663,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_BUNDLE: Item = Item {
+    pub const PINK_BUNDLE: Self = Self {
         id: 1044,
         registry_key: "pink_bundle",
         components: &[
@@ -22614,7 +22682,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_CANDLE: Item = Item {
+    pub const PINK_CANDLE: Self = Self {
         id: 1406,
         registry_key: "pink_candle",
         components: &[
@@ -22633,7 +22701,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_CARPET: Item = Item {
+    pub const PINK_CARPET: Self = Self {
         id: 512,
         registry_key: "pink_carpet",
         components: &[
@@ -22671,7 +22739,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_CONCRETE: Item = Item {
+    pub const PINK_CONCRETE: Self = Self {
         id: 621,
         registry_key: "pink_concrete",
         components: &[
@@ -22690,7 +22758,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_CONCRETE_POWDER: Item = Item {
+    pub const PINK_CONCRETE_POWDER: Self = Self {
         id: 637,
         registry_key: "pink_concrete_powder",
         components: &[
@@ -22709,7 +22777,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_DYE: Item = Item {
+    pub const PINK_DYE: Self = Self {
         id: 1073,
         registry_key: "pink_dye",
         components: &[
@@ -22728,7 +22796,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_GLAZED_TERRACOTTA: Item = Item {
+    pub const PINK_GLAZED_TERRACOTTA: Self = Self {
         id: 605,
         registry_key: "pink_glazed_terracotta",
         components: &[
@@ -22747,7 +22815,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_HARNESS: Item = Item {
+    pub const PINK_HARNESS: Self = Self {
         id: 845,
         registry_key: "pink_harness",
         components: &[
@@ -22782,7 +22850,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_PETALS: Item = Item {
+    pub const PINK_PETALS: Self = Self {
         id: 259,
         registry_key: "pink_petals",
         components: &[
@@ -22801,7 +22869,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_SHULKER_BOX: Item = Item {
+    pub const PINK_SHULKER_BOX: Self = Self {
         id: 589,
         registry_key: "pink_shulker_box",
         components: &[
@@ -22820,7 +22888,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_STAINED_GLASS: Item = Item {
+    pub const PINK_STAINED_GLASS: Self = Self {
         id: 537,
         registry_key: "pink_stained_glass",
         components: &[
@@ -22839,7 +22907,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_STAINED_GLASS_PANE: Item = Item {
+    pub const PINK_STAINED_GLASS_PANE: Self = Self {
         id: 553,
         registry_key: "pink_stained_glass_pane",
         components: &[
@@ -22858,7 +22926,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_TERRACOTTA: Item = Item {
+    pub const PINK_TERRACOTTA: Self = Self {
         id: 493,
         registry_key: "pink_terracotta",
         components: &[
@@ -22877,7 +22945,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_TULIP: Item = Item {
+    pub const PINK_TULIP: Self = Self {
         id: 240,
         registry_key: "pink_tulip",
         components: &[
@@ -22896,7 +22964,7 @@ impl Item {
             ),
         ],
     };
-    pub const PINK_WOOL: Item = Item {
+    pub const PINK_WOOL: Self = Self {
         id: 219,
         registry_key: "pink_wool",
         components: &[
@@ -22915,7 +22983,7 @@ impl Item {
             ),
         ],
     };
-    pub const PISTON: Item = Item {
+    pub const PISTON: Self = Self {
         id: 723,
         registry_key: "piston",
         components: &[
@@ -22934,7 +23002,7 @@ impl Item {
             ),
         ],
     };
-    pub const PITCHER_PLANT: Item = Item {
+    pub const PITCHER_PLANT: Self = Self {
         id: 246,
         registry_key: "pitcher_plant",
         components: &[
@@ -22953,7 +23021,7 @@ impl Item {
             ),
         ],
     };
-    pub const PITCHER_POD: Item = Item {
+    pub const PITCHER_POD: Self = Self {
         id: 1287,
         registry_key: "pitcher_pod",
         components: &[
@@ -22972,7 +23040,7 @@ impl Item {
             ),
         ],
     };
-    pub const PLAYER_HEAD: Item = Item {
+    pub const PLAYER_HEAD: Self = Self {
         id: 1236,
         registry_key: "player_head",
         components: &[
@@ -23013,7 +23081,7 @@ impl Item {
             ),
         ],
     };
-    pub const PLENTY_POTTERY_SHERD: Item = Item {
+    pub const PLENTY_POTTERY_SHERD: Self = Self {
         id: 1462,
         registry_key: "plenty_pottery_sherd",
         components: &[
@@ -23032,7 +23100,7 @@ impl Item {
             ),
         ],
     };
-    pub const PODZOL: Item = Item {
+    pub const PODZOL: Self = Self {
         id: 30,
         registry_key: "podzol",
         components: &[
@@ -23051,7 +23119,7 @@ impl Item {
             ),
         ],
     };
-    pub const POINTED_DRIPSTONE: Item = Item {
+    pub const POINTED_DRIPSTONE: Self = Self {
         id: 1420,
         registry_key: "pointed_dripstone",
         components: &[
@@ -23070,7 +23138,7 @@ impl Item {
             ),
         ],
     };
-    pub const POISONOUS_POTATO: Item = Item {
+    pub const POISONOUS_POTATO: Self = Self {
         id: 1231,
         registry_key: "poisonous_potato",
         components: &[
@@ -23117,7 +23185,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLAR_BEAR_SPAWN_EGG: Item = Item {
+    pub const POLAR_BEAR_SPAWN_EGG: Self = Self {
         id: 1150,
         registry_key: "polar_bear_spawn_egg",
         components: &[
@@ -23136,7 +23204,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_ANDESITE: Item = Item {
+    pub const POLISHED_ANDESITE: Self = Self {
         id: 7,
         registry_key: "polished_andesite",
         components: &[
@@ -23155,7 +23223,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_ANDESITE_SLAB: Item = Item {
+    pub const POLISHED_ANDESITE_SLAB: Self = Self {
         id: 711,
         registry_key: "polished_andesite_slab",
         components: &[
@@ -23174,7 +23242,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_ANDESITE_STAIRS: Item = Item {
+    pub const POLISHED_ANDESITE_STAIRS: Self = Self {
         id: 694,
         registry_key: "polished_andesite_stairs",
         components: &[
@@ -23193,7 +23261,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BASALT: Item = Item {
+    pub const POLISHED_BASALT: Self = Self {
         id: 364,
         registry_key: "polished_basalt",
         components: &[
@@ -23212,7 +23280,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE: Item = Item {
+    pub const POLISHED_BLACKSTONE: Self = Self {
         id: 1390,
         registry_key: "polished_blackstone",
         components: &[
@@ -23231,7 +23299,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_BRICK_SLAB: Item = Item {
+    pub const POLISHED_BLACKSTONE_BRICK_SLAB: Self = Self {
         id: 1395,
         registry_key: "polished_blackstone_brick_slab",
         components: &[
@@ -23250,7 +23318,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_BRICK_STAIRS: Item = Item {
+    pub const POLISHED_BLACKSTONE_BRICK_STAIRS: Self = Self {
         id: 1396,
         registry_key: "polished_blackstone_brick_stairs",
         components: &[
@@ -23269,7 +23337,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_BRICK_WALL: Item = Item {
+    pub const POLISHED_BLACKSTONE_BRICK_WALL: Self = Self {
         id: 474,
         registry_key: "polished_blackstone_brick_wall",
         components: &[
@@ -23288,7 +23356,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_BRICKS: Item = Item {
+    pub const POLISHED_BLACKSTONE_BRICKS: Self = Self {
         id: 1394,
         registry_key: "polished_blackstone_bricks",
         components: &[
@@ -23307,7 +23375,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_BUTTON: Item = Item {
+    pub const POLISHED_BLACKSTONE_BUTTON: Self = Self {
         id: 751,
         registry_key: "polished_blackstone_button",
         components: &[
@@ -23326,7 +23394,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_PRESSURE_PLATE: Item = Item {
+    pub const POLISHED_BLACKSTONE_PRESSURE_PLATE: Self = Self {
         id: 765,
         registry_key: "polished_blackstone_pressure_plate",
         components: &[
@@ -23345,7 +23413,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_SLAB: Item = Item {
+    pub const POLISHED_BLACKSTONE_SLAB: Self = Self {
         id: 1391,
         registry_key: "polished_blackstone_slab",
         components: &[
@@ -23364,7 +23432,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_STAIRS: Item = Item {
+    pub const POLISHED_BLACKSTONE_STAIRS: Self = Self {
         id: 1392,
         registry_key: "polished_blackstone_stairs",
         components: &[
@@ -23383,7 +23451,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_BLACKSTONE_WALL: Item = Item {
+    pub const POLISHED_BLACKSTONE_WALL: Self = Self {
         id: 473,
         registry_key: "polished_blackstone_wall",
         components: &[
@@ -23402,7 +23470,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DEEPSLATE: Item = Item {
+    pub const POLISHED_DEEPSLATE: Self = Self {
         id: 10,
         registry_key: "polished_deepslate",
         components: &[
@@ -23421,7 +23489,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DEEPSLATE_SLAB: Item = Item {
+    pub const POLISHED_DEEPSLATE_SLAB: Self = Self {
         id: 714,
         registry_key: "polished_deepslate_slab",
         components: &[
@@ -23440,7 +23508,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DEEPSLATE_STAIRS: Item = Item {
+    pub const POLISHED_DEEPSLATE_STAIRS: Self = Self {
         id: 697,
         registry_key: "polished_deepslate_stairs",
         components: &[
@@ -23459,7 +23527,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DEEPSLATE_WALL: Item = Item {
+    pub const POLISHED_DEEPSLATE_WALL: Self = Self {
         id: 476,
         registry_key: "polished_deepslate_wall",
         components: &[
@@ -23478,7 +23546,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DIORITE: Item = Item {
+    pub const POLISHED_DIORITE: Self = Self {
         id: 5,
         registry_key: "polished_diorite",
         components: &[
@@ -23497,7 +23565,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DIORITE_SLAB: Item = Item {
+    pub const POLISHED_DIORITE_SLAB: Self = Self {
         id: 703,
         registry_key: "polished_diorite_slab",
         components: &[
@@ -23516,7 +23584,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_DIORITE_STAIRS: Item = Item {
+    pub const POLISHED_DIORITE_STAIRS: Self = Self {
         id: 685,
         registry_key: "polished_diorite_stairs",
         components: &[
@@ -23535,7 +23603,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_GRANITE: Item = Item {
+    pub const POLISHED_GRANITE: Self = Self {
         id: 3,
         registry_key: "polished_granite",
         components: &[
@@ -23554,7 +23622,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_GRANITE_SLAB: Item = Item {
+    pub const POLISHED_GRANITE_SLAB: Self = Self {
         id: 700,
         registry_key: "polished_granite_slab",
         components: &[
@@ -23573,7 +23641,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_GRANITE_STAIRS: Item = Item {
+    pub const POLISHED_GRANITE_STAIRS: Self = Self {
         id: 682,
         registry_key: "polished_granite_stairs",
         components: &[
@@ -23592,7 +23660,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_TUFF: Item = Item {
+    pub const POLISHED_TUFF: Self = Self {
         id: 17,
         registry_key: "polished_tuff",
         components: &[
@@ -23611,7 +23679,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_TUFF_SLAB: Item = Item {
+    pub const POLISHED_TUFF_SLAB: Self = Self {
         id: 18,
         registry_key: "polished_tuff_slab",
         components: &[
@@ -23630,7 +23698,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_TUFF_STAIRS: Item = Item {
+    pub const POLISHED_TUFF_STAIRS: Self = Self {
         id: 19,
         registry_key: "polished_tuff_stairs",
         components: &[
@@ -23649,7 +23717,7 @@ impl Item {
             ),
         ],
     };
-    pub const POLISHED_TUFF_WALL: Item = Item {
+    pub const POLISHED_TUFF_WALL: Self = Self {
         id: 20,
         registry_key: "polished_tuff_wall",
         components: &[
@@ -23668,7 +23736,7 @@ impl Item {
             ),
         ],
     };
-    pub const POPPED_CHORUS_FRUIT: Item = Item {
+    pub const POPPED_CHORUS_FRUIT: Self = Self {
         id: 1285,
         registry_key: "popped_chorus_fruit",
         components: &[
@@ -23687,7 +23755,7 @@ impl Item {
             ),
         ],
     };
-    pub const POPPY: Item = Item {
+    pub const POPPY: Self = Self {
         id: 233,
         registry_key: "poppy",
         components: &[
@@ -23706,7 +23774,7 @@ impl Item {
             ),
         ],
     };
-    pub const PORKCHOP: Item = Item {
+    pub const PORKCHOP: Self = Self {
         id: 984,
         registry_key: "porkchop",
         components: &[
@@ -23743,7 +23811,7 @@ impl Item {
             ),
         ],
     };
-    pub const POTATO: Item = Item {
+    pub const POTATO: Self = Self {
         id: 1229,
         registry_key: "potato",
         components: &[
@@ -23780,7 +23848,7 @@ impl Item {
             ),
         ],
     };
-    pub const POTION: Item = Item {
+    pub const POTION: Self = Self {
         id: 1122,
         registry_key: "potion",
         components: &[
@@ -23809,7 +23877,7 @@ impl Item {
             ),
         ],
     };
-    pub const POWDER_SNOW_BUCKET: Item = Item {
+    pub const POWDER_SNOW_BUCKET: Self = Self {
         id: 1016,
         registry_key: "powder_snow_bucket",
         components: &[
@@ -23828,7 +23896,7 @@ impl Item {
             ),
         ],
     };
-    pub const POWERED_RAIL: Item = Item {
+    pub const POWERED_RAIL: Self = Self {
         id: 834,
         registry_key: "powered_rail",
         components: &[
@@ -23847,7 +23915,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE: Item = Item {
+    pub const PRISMARINE: Self = Self {
         id: 563,
         registry_key: "prismarine",
         components: &[
@@ -23866,7 +23934,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_BRICK_SLAB: Item = Item {
+    pub const PRISMARINE_BRICK_SLAB: Self = Self {
         id: 299,
         registry_key: "prismarine_brick_slab",
         components: &[
@@ -23885,7 +23953,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_BRICK_STAIRS: Item = Item {
+    pub const PRISMARINE_BRICK_STAIRS: Self = Self {
         id: 567,
         registry_key: "prismarine_brick_stairs",
         components: &[
@@ -23904,7 +23972,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_BRICKS: Item = Item {
+    pub const PRISMARINE_BRICKS: Self = Self {
         id: 564,
         registry_key: "prismarine_bricks",
         components: &[
@@ -23923,7 +23991,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_CRYSTALS: Item = Item {
+    pub const PRISMARINE_CRYSTALS: Self = Self {
         id: 1249,
         registry_key: "prismarine_crystals",
         components: &[
@@ -23942,7 +24010,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_SHARD: Item = Item {
+    pub const PRISMARINE_SHARD: Self = Self {
         id: 1248,
         registry_key: "prismarine_shard",
         components: &[
@@ -23961,7 +24029,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_SLAB: Item = Item {
+    pub const PRISMARINE_SLAB: Self = Self {
         id: 298,
         registry_key: "prismarine_slab",
         components: &[
@@ -23980,7 +24048,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_STAIRS: Item = Item {
+    pub const PRISMARINE_STAIRS: Self = Self {
         id: 566,
         registry_key: "prismarine_stairs",
         components: &[
@@ -23999,7 +24067,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRISMARINE_WALL: Item = Item {
+    pub const PRISMARINE_WALL: Self = Self {
         id: 460,
         registry_key: "prismarine_wall",
         components: &[
@@ -24018,7 +24086,7 @@ impl Item {
             ),
         ],
     };
-    pub const PRIZE_POTTERY_SHERD: Item = Item {
+    pub const PRIZE_POTTERY_SHERD: Self = Self {
         id: 1463,
         registry_key: "prize_pottery_sherd",
         components: &[
@@ -24037,7 +24105,7 @@ impl Item {
             ),
         ],
     };
-    pub const PUFFERFISH: Item = Item {
+    pub const PUFFERFISH: Self = Self {
         id: 1061,
         registry_key: "pufferfish",
         components: &[
@@ -24102,7 +24170,7 @@ impl Item {
             ),
         ],
     };
-    pub const PUFFERFISH_BUCKET: Item = Item {
+    pub const PUFFERFISH_BUCKET: Self = Self {
         id: 1020,
         registry_key: "pufferfish_bucket",
         components: &[
@@ -24129,7 +24197,7 @@ impl Item {
             ),
         ],
     };
-    pub const PUFFERFISH_SPAWN_EGG: Item = Item {
+    pub const PUFFERFISH_SPAWN_EGG: Self = Self {
         id: 1158,
         registry_key: "pufferfish_spawn_egg",
         components: &[
@@ -24148,7 +24216,7 @@ impl Item {
             ),
         ],
     };
-    pub const PUMPKIN: Item = Item {
+    pub const PUMPKIN: Self = Self {
         id: 357,
         registry_key: "pumpkin",
         components: &[
@@ -24167,7 +24235,7 @@ impl Item {
             ),
         ],
     };
-    pub const PUMPKIN_PIE: Item = Item {
+    pub const PUMPKIN_PIE: Self = Self {
         id: 1242,
         registry_key: "pumpkin_pie",
         components: &[
@@ -24204,7 +24272,7 @@ impl Item {
             ),
         ],
     };
-    pub const PUMPKIN_SEEDS: Item = Item {
+    pub const PUMPKIN_SEEDS: Self = Self {
         id: 1109,
         registry_key: "pumpkin_seeds",
         components: &[
@@ -24223,7 +24291,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_BANNER: Item = Item {
+    pub const PURPLE_BANNER: Self = Self {
         id: 1277,
         registry_key: "purple_banner",
         components: &[
@@ -24242,7 +24310,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_BED: Item = Item {
+    pub const PURPLE_BED: Self = Self {
         id: 1097,
         registry_key: "purple_bed",
         components: &[
@@ -24261,7 +24329,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_BUNDLE: Item = Item {
+    pub const PURPLE_BUNDLE: Self = Self {
         id: 1048,
         registry_key: "purple_bundle",
         components: &[
@@ -24280,7 +24348,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_CANDLE: Item = Item {
+    pub const PURPLE_CANDLE: Self = Self {
         id: 1410,
         registry_key: "purple_candle",
         components: &[
@@ -24299,7 +24367,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_CARPET: Item = Item {
+    pub const PURPLE_CARPET: Self = Self {
         id: 516,
         registry_key: "purple_carpet",
         components: &[
@@ -24337,7 +24405,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_CONCRETE: Item = Item {
+    pub const PURPLE_CONCRETE: Self = Self {
         id: 625,
         registry_key: "purple_concrete",
         components: &[
@@ -24356,7 +24424,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_CONCRETE_POWDER: Item = Item {
+    pub const PURPLE_CONCRETE_POWDER: Self = Self {
         id: 641,
         registry_key: "purple_concrete_powder",
         components: &[
@@ -24375,7 +24443,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_DYE: Item = Item {
+    pub const PURPLE_DYE: Self = Self {
         id: 1077,
         registry_key: "purple_dye",
         components: &[
@@ -24394,7 +24462,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_GLAZED_TERRACOTTA: Item = Item {
+    pub const PURPLE_GLAZED_TERRACOTTA: Self = Self {
         id: 609,
         registry_key: "purple_glazed_terracotta",
         components: &[
@@ -24413,7 +24481,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_HARNESS: Item = Item {
+    pub const PURPLE_HARNESS: Self = Self {
         id: 849,
         registry_key: "purple_harness",
         components: &[
@@ -24448,7 +24516,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_SHULKER_BOX: Item = Item {
+    pub const PURPLE_SHULKER_BOX: Self = Self {
         id: 593,
         registry_key: "purple_shulker_box",
         components: &[
@@ -24467,7 +24535,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_STAINED_GLASS: Item = Item {
+    pub const PURPLE_STAINED_GLASS: Self = Self {
         id: 541,
         registry_key: "purple_stained_glass",
         components: &[
@@ -24486,7 +24554,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_STAINED_GLASS_PANE: Item = Item {
+    pub const PURPLE_STAINED_GLASS_PANE: Self = Self {
         id: 557,
         registry_key: "purple_stained_glass_pane",
         components: &[
@@ -24505,7 +24573,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_TERRACOTTA: Item = Item {
+    pub const PURPLE_TERRACOTTA: Self = Self {
         id: 497,
         registry_key: "purple_terracotta",
         components: &[
@@ -24524,7 +24592,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPLE_WOOL: Item = Item {
+    pub const PURPLE_WOOL: Self = Self {
         id: 223,
         registry_key: "purple_wool",
         components: &[
@@ -24543,7 +24611,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPUR_BLOCK: Item = Item {
+    pub const PURPUR_BLOCK: Self = Self {
         id: 327,
         registry_key: "purpur_block",
         components: &[
@@ -24562,7 +24630,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPUR_PILLAR: Item = Item {
+    pub const PURPUR_PILLAR: Self = Self {
         id: 328,
         registry_key: "purpur_pillar",
         components: &[
@@ -24581,7 +24649,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPUR_SLAB: Item = Item {
+    pub const PURPUR_SLAB: Self = Self {
         id: 297,
         registry_key: "purpur_slab",
         components: &[
@@ -24600,7 +24668,7 @@ impl Item {
             ),
         ],
     };
-    pub const PURPUR_STAIRS: Item = Item {
+    pub const PURPUR_STAIRS: Self = Self {
         id: 329,
         registry_key: "purpur_stairs",
         components: &[
@@ -24619,7 +24687,7 @@ impl Item {
             ),
         ],
     };
-    pub const QUARTZ: Item = Item {
+    pub const QUARTZ: Self = Self {
         id: 902,
         registry_key: "quartz",
         components: &[
@@ -24638,7 +24706,7 @@ impl Item {
             ),
         ],
     };
-    pub const QUARTZ_BLOCK: Item = Item {
+    pub const QUARTZ_BLOCK: Self = Self {
         id: 483,
         registry_key: "quartz_block",
         components: &[
@@ -24657,7 +24725,7 @@ impl Item {
             ),
         ],
     };
-    pub const QUARTZ_BRICKS: Item = Item {
+    pub const QUARTZ_BRICKS: Self = Self {
         id: 484,
         registry_key: "quartz_bricks",
         components: &[
@@ -24676,7 +24744,7 @@ impl Item {
             ),
         ],
     };
-    pub const QUARTZ_PILLAR: Item = Item {
+    pub const QUARTZ_PILLAR: Self = Self {
         id: 485,
         registry_key: "quartz_pillar",
         components: &[
@@ -24695,7 +24763,7 @@ impl Item {
             ),
         ],
     };
-    pub const QUARTZ_SLAB: Item = Item {
+    pub const QUARTZ_SLAB: Self = Self {
         id: 294,
         registry_key: "quartz_slab",
         components: &[
@@ -24714,7 +24782,7 @@ impl Item {
             ),
         ],
     };
-    pub const QUARTZ_STAIRS: Item = Item {
+    pub const QUARTZ_STAIRS: Self = Self {
         id: 486,
         registry_key: "quartz_stairs",
         components: &[
@@ -24733,7 +24801,7 @@ impl Item {
             ),
         ],
     };
-    pub const RABBIT: Item = Item {
+    pub const RABBIT: Self = Self {
         id: 1250,
         registry_key: "rabbit",
         components: &[
@@ -24770,7 +24838,7 @@ impl Item {
             ),
         ],
     };
-    pub const RABBIT_FOOT: Item = Item {
+    pub const RABBIT_FOOT: Self = Self {
         id: 1253,
         registry_key: "rabbit_foot",
         components: &[
@@ -24789,7 +24857,7 @@ impl Item {
             ),
         ],
     };
-    pub const RABBIT_HIDE: Item = Item {
+    pub const RABBIT_HIDE: Self = Self {
         id: 1254,
         registry_key: "rabbit_hide",
         components: &[
@@ -24808,7 +24876,7 @@ impl Item {
             ),
         ],
     };
-    pub const RABBIT_SPAWN_EGG: Item = Item {
+    pub const RABBIT_SPAWN_EGG: Self = Self {
         id: 1151,
         registry_key: "rabbit_spawn_egg",
         components: &[
@@ -24827,7 +24895,7 @@ impl Item {
             ),
         ],
     };
-    pub const RABBIT_STEW: Item = Item {
+    pub const RABBIT_STEW: Self = Self {
         id: 1252,
         registry_key: "rabbit_stew",
         components: &[
@@ -24864,7 +24932,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAIL: Item = Item {
+    pub const RAIL: Self = Self {
         id: 836,
         registry_key: "rail",
         components: &[
@@ -24883,7 +24951,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1442,
         registry_key: "raiser_armor_trim_smithing_template",
         components: &[
@@ -24902,7 +24970,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAVAGER_SPAWN_EGG: Item = Item {
+    pub const RAVAGER_SPAWN_EGG: Self = Self {
         id: 1201,
         registry_key: "ravager_spawn_egg",
         components: &[
@@ -24921,7 +24989,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAW_COPPER: Item = Item {
+    pub const RAW_COPPER: Self = Self {
         id: 906,
         registry_key: "raw_copper",
         components: &[
@@ -24940,7 +25008,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAW_COPPER_BLOCK: Item = Item {
+    pub const RAW_COPPER_BLOCK: Self = Self {
         id: 85,
         registry_key: "raw_copper_block",
         components: &[
@@ -24959,7 +25027,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAW_GOLD: Item = Item {
+    pub const RAW_GOLD: Self = Self {
         id: 908,
         registry_key: "raw_gold",
         components: &[
@@ -24978,7 +25046,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAW_GOLD_BLOCK: Item = Item {
+    pub const RAW_GOLD_BLOCK: Self = Self {
         id: 86,
         registry_key: "raw_gold_block",
         components: &[
@@ -24997,7 +25065,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAW_IRON: Item = Item {
+    pub const RAW_IRON: Self = Self {
         id: 904,
         registry_key: "raw_iron",
         components: &[
@@ -25016,7 +25084,7 @@ impl Item {
             ),
         ],
     };
-    pub const RAW_IRON_BLOCK: Item = Item {
+    pub const RAW_IRON_BLOCK: Self = Self {
         id: 84,
         registry_key: "raw_iron_block",
         components: &[
@@ -25035,7 +25103,7 @@ impl Item {
             ),
         ],
     };
-    pub const RECOVERY_COMPASS: Item = Item {
+    pub const RECOVERY_COMPASS: Self = Self {
         id: 1036,
         registry_key: "recovery_compass",
         components: &[
@@ -25054,7 +25122,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_BANNER: Item = Item {
+    pub const RED_BANNER: Self = Self {
         id: 1281,
         registry_key: "red_banner",
         components: &[
@@ -25073,7 +25141,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_BED: Item = Item {
+    pub const RED_BED: Self = Self {
         id: 1101,
         registry_key: "red_bed",
         components: &[
@@ -25092,7 +25160,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_BUNDLE: Item = Item {
+    pub const RED_BUNDLE: Self = Self {
         id: 1052,
         registry_key: "red_bundle",
         components: &[
@@ -25111,7 +25179,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_CANDLE: Item = Item {
+    pub const RED_CANDLE: Self = Self {
         id: 1414,
         registry_key: "red_candle",
         components: &[
@@ -25130,7 +25198,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_CARPET: Item = Item {
+    pub const RED_CARPET: Self = Self {
         id: 520,
         registry_key: "red_carpet",
         components: &[
@@ -25168,7 +25236,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_CONCRETE: Item = Item {
+    pub const RED_CONCRETE: Self = Self {
         id: 629,
         registry_key: "red_concrete",
         components: &[
@@ -25187,7 +25255,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_CONCRETE_POWDER: Item = Item {
+    pub const RED_CONCRETE_POWDER: Self = Self {
         id: 645,
         registry_key: "red_concrete_powder",
         components: &[
@@ -25206,7 +25274,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_DYE: Item = Item {
+    pub const RED_DYE: Self = Self {
         id: 1081,
         registry_key: "red_dye",
         components: &[
@@ -25225,7 +25293,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_GLAZED_TERRACOTTA: Item = Item {
+    pub const RED_GLAZED_TERRACOTTA: Self = Self {
         id: 613,
         registry_key: "red_glazed_terracotta",
         components: &[
@@ -25244,7 +25312,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_HARNESS: Item = Item {
+    pub const RED_HARNESS: Self = Self {
         id: 853,
         registry_key: "red_harness",
         components: &[
@@ -25279,7 +25347,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_MUSHROOM: Item = Item {
+    pub const RED_MUSHROOM: Self = Self {
         id: 249,
         registry_key: "red_mushroom",
         components: &[
@@ -25298,7 +25366,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_MUSHROOM_BLOCK: Item = Item {
+    pub const RED_MUSHROOM_BLOCK: Self = Self {
         id: 389,
         registry_key: "red_mushroom_block",
         components: &[
@@ -25317,7 +25385,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_NETHER_BRICK_SLAB: Item = Item {
+    pub const RED_NETHER_BRICK_SLAB: Self = Self {
         id: 710,
         registry_key: "red_nether_brick_slab",
         components: &[
@@ -25336,7 +25404,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_NETHER_BRICK_STAIRS: Item = Item {
+    pub const RED_NETHER_BRICK_STAIRS: Self = Self {
         id: 693,
         registry_key: "red_nether_brick_stairs",
         components: &[
@@ -25355,7 +25423,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_NETHER_BRICK_WALL: Item = Item {
+    pub const RED_NETHER_BRICK_WALL: Self = Self {
         id: 468,
         registry_key: "red_nether_brick_wall",
         components: &[
@@ -25374,7 +25442,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_NETHER_BRICKS: Item = Item {
+    pub const RED_NETHER_BRICKS: Self = Self {
         id: 579,
         registry_key: "red_nether_bricks",
         components: &[
@@ -25393,7 +25461,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_SAND: Item = Item {
+    pub const RED_SAND: Self = Self {
         id: 62,
         registry_key: "red_sand",
         components: &[
@@ -25412,7 +25480,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_SANDSTONE: Item = Item {
+    pub const RED_SANDSTONE: Self = Self {
         id: 570,
         registry_key: "red_sandstone",
         components: &[
@@ -25431,7 +25499,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_SANDSTONE_SLAB: Item = Item {
+    pub const RED_SANDSTONE_SLAB: Self = Self {
         id: 295,
         registry_key: "red_sandstone_slab",
         components: &[
@@ -25450,7 +25518,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_SANDSTONE_STAIRS: Item = Item {
+    pub const RED_SANDSTONE_STAIRS: Self = Self {
         id: 573,
         registry_key: "red_sandstone_stairs",
         components: &[
@@ -25469,7 +25537,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_SANDSTONE_WALL: Item = Item {
+    pub const RED_SANDSTONE_WALL: Self = Self {
         id: 461,
         registry_key: "red_sandstone_wall",
         components: &[
@@ -25488,7 +25556,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_SHULKER_BOX: Item = Item {
+    pub const RED_SHULKER_BOX: Self = Self {
         id: 597,
         registry_key: "red_shulker_box",
         components: &[
@@ -25507,7 +25575,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_STAINED_GLASS: Item = Item {
+    pub const RED_STAINED_GLASS: Self = Self {
         id: 545,
         registry_key: "red_stained_glass",
         components: &[
@@ -25526,7 +25594,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_STAINED_GLASS_PANE: Item = Item {
+    pub const RED_STAINED_GLASS_PANE: Self = Self {
         id: 561,
         registry_key: "red_stained_glass_pane",
         components: &[
@@ -25545,7 +25613,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_TERRACOTTA: Item = Item {
+    pub const RED_TERRACOTTA: Self = Self {
         id: 501,
         registry_key: "red_terracotta",
         components: &[
@@ -25564,7 +25632,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_TULIP: Item = Item {
+    pub const RED_TULIP: Self = Self {
         id: 237,
         registry_key: "red_tulip",
         components: &[
@@ -25583,7 +25651,7 @@ impl Item {
             ),
         ],
     };
-    pub const RED_WOOL: Item = Item {
+    pub const RED_WOOL: Self = Self {
         id: 227,
         registry_key: "red_wool",
         components: &[
@@ -25602,7 +25670,7 @@ impl Item {
             ),
         ],
     };
-    pub const REDSTONE: Item = Item {
+    pub const REDSTONE: Self = Self {
         id: 718,
         registry_key: "redstone",
         components: &[
@@ -25621,7 +25689,7 @@ impl Item {
             ),
         ],
     };
-    pub const REDSTONE_BLOCK: Item = Item {
+    pub const REDSTONE_BLOCK: Self = Self {
         id: 720,
         registry_key: "redstone_block",
         components: &[
@@ -25640,7 +25708,7 @@ impl Item {
             ),
         ],
     };
-    pub const REDSTONE_LAMP: Item = Item {
+    pub const REDSTONE_LAMP: Self = Self {
         id: 748,
         registry_key: "redstone_lamp",
         components: &[
@@ -25659,7 +25727,7 @@ impl Item {
             ),
         ],
     };
-    pub const REDSTONE_ORE: Item = Item {
+    pub const REDSTONE_ORE: Self = Self {
         id: 72,
         registry_key: "redstone_ore",
         components: &[
@@ -25678,7 +25746,7 @@ impl Item {
             ),
         ],
     };
-    pub const REDSTONE_TORCH: Item = Item {
+    pub const REDSTONE_TORCH: Self = Self {
         id: 719,
         registry_key: "redstone_torch",
         components: &[
@@ -25697,7 +25765,7 @@ impl Item {
             ),
         ],
     };
-    pub const REINFORCED_DEEPSLATE: Item = Item {
+    pub const REINFORCED_DEEPSLATE: Self = Self {
         id: 387,
         registry_key: "reinforced_deepslate",
         components: &[
@@ -25716,7 +25784,7 @@ impl Item {
             ),
         ],
     };
-    pub const REPEATER: Item = Item {
+    pub const REPEATER: Self = Self {
         id: 721,
         registry_key: "repeater",
         components: &[
@@ -25735,7 +25803,7 @@ impl Item {
             ),
         ],
     };
-    pub const REPEATING_COMMAND_BLOCK: Item = Item {
+    pub const REPEATING_COMMAND_BLOCK: Self = Self {
         id: 574,
         registry_key: "repeating_command_block",
         components: &[
@@ -25754,7 +25822,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_BLOCK: Item = Item {
+    pub const RESIN_BLOCK: Self = Self {
         id: 414,
         registry_key: "resin_block",
         components: &[
@@ -25773,7 +25841,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_BRICK: Item = Item {
+    pub const RESIN_BRICK: Self = Self {
         id: 1247,
         registry_key: "resin_brick",
         components: &[
@@ -25792,7 +25860,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_BRICK_SLAB: Item = Item {
+    pub const RESIN_BRICK_SLAB: Self = Self {
         id: 417,
         registry_key: "resin_brick_slab",
         components: &[
@@ -25811,7 +25879,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_BRICK_STAIRS: Item = Item {
+    pub const RESIN_BRICK_STAIRS: Self = Self {
         id: 416,
         registry_key: "resin_brick_stairs",
         components: &[
@@ -25830,7 +25898,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_BRICK_WALL: Item = Item {
+    pub const RESIN_BRICK_WALL: Self = Self {
         id: 418,
         registry_key: "resin_brick_wall",
         components: &[
@@ -25849,7 +25917,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_BRICKS: Item = Item {
+    pub const RESIN_BRICKS: Self = Self {
         id: 415,
         registry_key: "resin_bricks",
         components: &[
@@ -25868,7 +25936,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESIN_CLUMP: Item = Item {
+    pub const RESIN_CLUMP: Self = Self {
         id: 413,
         registry_key: "resin_clump",
         components: &[
@@ -25887,7 +25955,7 @@ impl Item {
             ),
         ],
     };
-    pub const RESPAWN_ANCHOR: Item = Item {
+    pub const RESPAWN_ANCHOR: Self = Self {
         id: 1398,
         registry_key: "respawn_anchor",
         components: &[
@@ -25906,7 +25974,7 @@ impl Item {
             ),
         ],
     };
-    pub const RIB_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const RIB_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1437,
         registry_key: "rib_armor_trim_smithing_template",
         components: &[
@@ -25925,7 +25993,7 @@ impl Item {
             ),
         ],
     };
-    pub const ROOTED_DIRT: Item = Item {
+    pub const ROOTED_DIRT: Self = Self {
         id: 31,
         registry_key: "rooted_dirt",
         components: &[
@@ -25944,7 +26012,7 @@ impl Item {
             ),
         ],
     };
-    pub const ROSE_BUSH: Item = Item {
+    pub const ROSE_BUSH: Self = Self {
         id: 527,
         registry_key: "rose_bush",
         components: &[
@@ -25963,7 +26031,7 @@ impl Item {
             ),
         ],
     };
-    pub const ROTTEN_FLESH: Item = Item {
+    pub const ROTTEN_FLESH: Self = Self {
         id: 1115,
         registry_key: "rotten_flesh",
         components: &[
@@ -26010,7 +26078,7 @@ impl Item {
             ),
         ],
     };
-    pub const SADDLE: Item = Item {
+    pub const SADDLE: Self = Self {
         id: 838,
         registry_key: "saddle",
         components: &[
@@ -26045,7 +26113,7 @@ impl Item {
             ),
         ],
     };
-    pub const SALMON: Item = Item {
+    pub const SALMON: Self = Self {
         id: 1059,
         registry_key: "salmon",
         components: &[
@@ -26082,7 +26150,7 @@ impl Item {
             ),
         ],
     };
-    pub const SALMON_BUCKET: Item = Item {
+    pub const SALMON_BUCKET: Self = Self {
         id: 1021,
         registry_key: "salmon_bucket",
         components: &[
@@ -26109,7 +26177,7 @@ impl Item {
             ),
         ],
     };
-    pub const SALMON_SPAWN_EGG: Item = Item {
+    pub const SALMON_SPAWN_EGG: Self = Self {
         id: 1159,
         registry_key: "salmon_spawn_egg",
         components: &[
@@ -26128,7 +26196,7 @@ impl Item {
             ),
         ],
     };
-    pub const SAND: Item = Item {
+    pub const SAND: Self = Self {
         id: 59,
         registry_key: "sand",
         components: &[
@@ -26147,7 +26215,7 @@ impl Item {
             ),
         ],
     };
-    pub const SANDSTONE: Item = Item {
+    pub const SANDSTONE: Self = Self {
         id: 198,
         registry_key: "sandstone",
         components: &[
@@ -26166,7 +26234,7 @@ impl Item {
             ),
         ],
     };
-    pub const SANDSTONE_SLAB: Item = Item {
+    pub const SANDSTONE_SLAB: Self = Self {
         id: 286,
         registry_key: "sandstone_slab",
         components: &[
@@ -26185,7 +26253,7 @@ impl Item {
             ),
         ],
     };
-    pub const SANDSTONE_STAIRS: Item = Item {
+    pub const SANDSTONE_STAIRS: Self = Self {
         id: 439,
         registry_key: "sandstone_stairs",
         components: &[
@@ -26204,7 +26272,7 @@ impl Item {
             ),
         ],
     };
-    pub const SANDSTONE_WALL: Item = Item {
+    pub const SANDSTONE_WALL: Self = Self {
         id: 469,
         registry_key: "sandstone_wall",
         components: &[
@@ -26223,7 +26291,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCAFFOLDING: Item = Item {
+    pub const SCAFFOLDING: Self = Self {
         id: 717,
         registry_key: "scaffolding",
         components: &[
@@ -26242,7 +26310,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCRAPE_POTTERY_SHERD: Item = Item {
+    pub const SCRAPE_POTTERY_SHERD: Self = Self {
         id: 1464,
         registry_key: "scrape_pottery_sherd",
         components: &[
@@ -26261,7 +26329,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCULK: Item = Item {
+    pub const SCULK: Self = Self {
         id: 430,
         registry_key: "sculk",
         components: &[
@@ -26280,7 +26348,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCULK_CATALYST: Item = Item {
+    pub const SCULK_CATALYST: Self = Self {
         id: 432,
         registry_key: "sculk_catalyst",
         components: &[
@@ -26299,7 +26367,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCULK_SENSOR: Item = Item {
+    pub const SCULK_SENSOR: Self = Self {
         id: 743,
         registry_key: "sculk_sensor",
         components: &[
@@ -26318,7 +26386,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCULK_SHRIEKER: Item = Item {
+    pub const SCULK_SHRIEKER: Self = Self {
         id: 433,
         registry_key: "sculk_shrieker",
         components: &[
@@ -26337,7 +26405,7 @@ impl Item {
             ),
         ],
     };
-    pub const SCULK_VEIN: Item = Item {
+    pub const SCULK_VEIN: Self = Self {
         id: 431,
         registry_key: "sculk_vein",
         components: &[
@@ -26356,7 +26424,7 @@ impl Item {
             ),
         ],
     };
-    pub const SEA_LANTERN: Item = Item {
+    pub const SEA_LANTERN: Self = Self {
         id: 569,
         registry_key: "sea_lantern",
         components: &[
@@ -26375,7 +26443,7 @@ impl Item {
             ),
         ],
     };
-    pub const SEA_PICKLE: Item = Item {
+    pub const SEA_PICKLE: Self = Self {
         id: 212,
         registry_key: "sea_pickle",
         components: &[
@@ -26394,7 +26462,7 @@ impl Item {
             ),
         ],
     };
-    pub const SEAGRASS: Item = Item {
+    pub const SEAGRASS: Self = Self {
         id: 211,
         registry_key: "seagrass",
         components: &[
@@ -26413,7 +26481,7 @@ impl Item {
             ),
         ],
     };
-    pub const SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1428,
         registry_key: "sentry_armor_trim_smithing_template",
         components: &[
@@ -26432,7 +26500,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1440,
         registry_key: "shaper_armor_trim_smithing_template",
         components: &[
@@ -26451,7 +26519,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHEAF_POTTERY_SHERD: Item = Item {
+    pub const SHEAF_POTTERY_SHERD: Self = Self {
         id: 1465,
         registry_key: "sheaf_pottery_sherd",
         components: &[
@@ -26470,7 +26538,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHEARS: Item = Item {
+    pub const SHEARS: Self = Self {
         id: 1106,
         registry_key: "shears",
         components: &[
@@ -26521,7 +26589,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHEEP_SPAWN_EGG: Item = Item {
+    pub const SHEEP_SPAWN_EGG: Self = Self {
         id: 1134,
         registry_key: "sheep_spawn_egg",
         components: &[
@@ -26540,7 +26608,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHELTER_POTTERY_SHERD: Item = Item {
+    pub const SHELTER_POTTERY_SHERD: Self = Self {
         id: 1466,
         registry_key: "shelter_pottery_sherd",
         components: &[
@@ -26559,7 +26627,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHIELD: Item = Item {
+    pub const SHIELD: Self = Self {
         id: 1296,
         registry_key: "shield",
         components: &[
@@ -26597,7 +26665,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHORT_DRY_GRASS: Item = Item {
+    pub const SHORT_DRY_GRASS: Self = Self {
         id: 209,
         registry_key: "short_dry_grass",
         components: &[
@@ -26616,7 +26684,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHORT_GRASS: Item = Item {
+    pub const SHORT_GRASS: Self = Self {
         id: 202,
         registry_key: "short_grass",
         components: &[
@@ -26635,7 +26703,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHROOMLIGHT: Item = Item {
+    pub const SHROOMLIGHT: Self = Self {
         id: 1378,
         registry_key: "shroomlight",
         components: &[
@@ -26654,7 +26722,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHULKER_BOX: Item = Item {
+    pub const SHULKER_BOX: Self = Self {
         id: 582,
         registry_key: "shulker_box",
         components: &[
@@ -26673,7 +26741,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHULKER_SHELL: Item = Item {
+    pub const SHULKER_SHELL: Self = Self {
         id: 1305,
         registry_key: "shulker_shell",
         components: &[
@@ -26692,7 +26760,7 @@ impl Item {
             ),
         ],
     };
-    pub const SHULKER_SPAWN_EGG: Item = Item {
+    pub const SHULKER_SPAWN_EGG: Self = Self {
         id: 1217,
         registry_key: "shulker_spawn_egg",
         components: &[
@@ -26711,7 +26779,7 @@ impl Item {
             ),
         ],
     };
-    pub const SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1441,
         registry_key: "silence_armor_trim_smithing_template",
         components: &[
@@ -26730,7 +26798,7 @@ impl Item {
             ),
         ],
     };
-    pub const SILVERFISH_SPAWN_EGG: Item = Item {
+    pub const SILVERFISH_SPAWN_EGG: Self = Self {
         id: 1195,
         registry_key: "silverfish_spawn_egg",
         components: &[
@@ -26749,7 +26817,7 @@ impl Item {
             ),
         ],
     };
-    pub const SKELETON_HORSE_SPAWN_EGG: Item = Item {
+    pub const SKELETON_HORSE_SPAWN_EGG: Self = Self {
         id: 1179,
         registry_key: "skeleton_horse_spawn_egg",
         components: &[
@@ -26768,7 +26836,7 @@ impl Item {
             ),
         ],
     };
-    pub const SKELETON_SKULL: Item = Item {
+    pub const SKELETON_SKULL: Self = Self {
         id: 1234,
         registry_key: "skeleton_skull",
         components: &[
@@ -26809,7 +26877,7 @@ impl Item {
             ),
         ],
     };
-    pub const SKELETON_SPAWN_EGG: Item = Item {
+    pub const SKELETON_SPAWN_EGG: Self = Self {
         id: 1178,
         registry_key: "skeleton_spawn_egg",
         components: &[
@@ -26828,7 +26896,7 @@ impl Item {
             ),
         ],
     };
-    pub const SKULL_BANNER_PATTERN: Item = Item {
+    pub const SKULL_BANNER_PATTERN: Self = Self {
         id: 1345,
         registry_key: "skull_banner_pattern",
         components: &[
@@ -26847,7 +26915,7 @@ impl Item {
             ),
         ],
     };
-    pub const SKULL_POTTERY_SHERD: Item = Item {
+    pub const SKULL_POTTERY_SHERD: Self = Self {
         id: 1467,
         registry_key: "skull_pottery_sherd",
         components: &[
@@ -26866,7 +26934,7 @@ impl Item {
             ),
         ],
     };
-    pub const SLIME_BALL: Item = Item {
+    pub const SLIME_BALL: Self = Self {
         id: 1031,
         registry_key: "slime_ball",
         components: &[
@@ -26885,7 +26953,7 @@ impl Item {
             ),
         ],
     };
-    pub const SLIME_BLOCK: Item = Item {
+    pub const SLIME_BLOCK: Self = Self {
         id: 725,
         registry_key: "slime_block",
         components: &[
@@ -26904,7 +26972,7 @@ impl Item {
             ),
         ],
     };
-    pub const SLIME_SPAWN_EGG: Item = Item {
+    pub const SLIME_SPAWN_EGG: Self = Self {
         id: 1196,
         registry_key: "slime_spawn_egg",
         components: &[
@@ -26923,7 +26991,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMALL_AMETHYST_BUD: Item = Item {
+    pub const SMALL_AMETHYST_BUD: Self = Self {
         id: 1416,
         registry_key: "small_amethyst_bud",
         components: &[
@@ -26942,7 +27010,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMALL_DRIPLEAF: Item = Item {
+    pub const SMALL_DRIPLEAF: Self = Self {
         id: 269,
         registry_key: "small_dripleaf",
         components: &[
@@ -26961,7 +27029,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMITHING_TABLE: Item = Item {
+    pub const SMITHING_TABLE: Self = Self {
         id: 1361,
         registry_key: "smithing_table",
         components: &[
@@ -26980,7 +27048,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOKER: Item = Item {
+    pub const SMOKER: Self = Self {
         id: 1356,
         registry_key: "smoker",
         components: &[
@@ -26999,7 +27067,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_BASALT: Item = Item {
+    pub const SMOOTH_BASALT: Self = Self {
         id: 365,
         registry_key: "smooth_basalt",
         components: &[
@@ -27018,7 +27086,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_QUARTZ: Item = Item {
+    pub const SMOOTH_QUARTZ: Self = Self {
         id: 301,
         registry_key: "smooth_quartz",
         components: &[
@@ -27037,7 +27105,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_QUARTZ_SLAB: Item = Item {
+    pub const SMOOTH_QUARTZ_SLAB: Self = Self {
         id: 707,
         registry_key: "smooth_quartz_slab",
         components: &[
@@ -27056,7 +27124,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_QUARTZ_STAIRS: Item = Item {
+    pub const SMOOTH_QUARTZ_STAIRS: Self = Self {
         id: 690,
         registry_key: "smooth_quartz_stairs",
         components: &[
@@ -27075,7 +27143,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_RED_SANDSTONE: Item = Item {
+    pub const SMOOTH_RED_SANDSTONE: Self = Self {
         id: 302,
         registry_key: "smooth_red_sandstone",
         components: &[
@@ -27094,7 +27162,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_RED_SANDSTONE_SLAB: Item = Item {
+    pub const SMOOTH_RED_SANDSTONE_SLAB: Self = Self {
         id: 701,
         registry_key: "smooth_red_sandstone_slab",
         components: &[
@@ -27113,7 +27181,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_RED_SANDSTONE_STAIRS: Item = Item {
+    pub const SMOOTH_RED_SANDSTONE_STAIRS: Self = Self {
         id: 683,
         registry_key: "smooth_red_sandstone_stairs",
         components: &[
@@ -27132,7 +27200,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_SANDSTONE: Item = Item {
+    pub const SMOOTH_SANDSTONE: Self = Self {
         id: 303,
         registry_key: "smooth_sandstone",
         components: &[
@@ -27151,7 +27219,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_SANDSTONE_SLAB: Item = Item {
+    pub const SMOOTH_SANDSTONE_SLAB: Self = Self {
         id: 706,
         registry_key: "smooth_sandstone_slab",
         components: &[
@@ -27170,7 +27238,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_SANDSTONE_STAIRS: Item = Item {
+    pub const SMOOTH_SANDSTONE_STAIRS: Self = Self {
         id: 689,
         registry_key: "smooth_sandstone_stairs",
         components: &[
@@ -27189,7 +27257,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_STONE: Item = Item {
+    pub const SMOOTH_STONE: Self = Self {
         id: 304,
         registry_key: "smooth_stone",
         components: &[
@@ -27208,7 +27276,7 @@ impl Item {
             ),
         ],
     };
-    pub const SMOOTH_STONE_SLAB: Item = Item {
+    pub const SMOOTH_STONE_SLAB: Self = Self {
         id: 285,
         registry_key: "smooth_stone_slab",
         components: &[
@@ -27227,7 +27295,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNIFFER_EGG: Item = Item {
+    pub const SNIFFER_EGG: Self = Self {
         id: 648,
         registry_key: "sniffer_egg",
         components: &[
@@ -27246,7 +27314,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNIFFER_SPAWN_EGG: Item = Item {
+    pub const SNIFFER_SPAWN_EGG: Self = Self {
         id: 1166,
         registry_key: "sniffer_spawn_egg",
         components: &[
@@ -27265,7 +27333,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNORT_POTTERY_SHERD: Item = Item {
+    pub const SNORT_POTTERY_SHERD: Self = Self {
         id: 1468,
         registry_key: "snort_pottery_sherd",
         components: &[
@@ -27284,7 +27352,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1436,
         registry_key: "snout_armor_trim_smithing_template",
         components: &[
@@ -27303,7 +27371,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNOW: Item = Item {
+    pub const SNOW: Self = Self {
         id: 338,
         registry_key: "snow",
         components: &[
@@ -27322,7 +27390,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNOW_BLOCK: Item = Item {
+    pub const SNOW_BLOCK: Self = Self {
         id: 340,
         registry_key: "snow_block",
         components: &[
@@ -27341,7 +27409,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNOW_GOLEM_SPAWN_EGG: Item = Item {
+    pub const SNOW_GOLEM_SPAWN_EGG: Self = Self {
         id: 1169,
         registry_key: "snow_golem_spawn_egg",
         components: &[
@@ -27360,7 +27428,7 @@ impl Item {
             ),
         ],
     };
-    pub const SNOWBALL: Item = Item {
+    pub const SNOWBALL: Self = Self {
         id: 1017,
         registry_key: "snowball",
         components: &[
@@ -27379,7 +27447,7 @@ impl Item {
             ),
         ],
     };
-    pub const SOUL_CAMPFIRE: Item = Item {
+    pub const SOUL_CAMPFIRE: Self = Self {
         id: 1377,
         registry_key: "soul_campfire",
         components: &[
@@ -27398,7 +27466,7 @@ impl Item {
             ),
         ],
     };
-    pub const SOUL_LANTERN: Item = Item {
+    pub const SOUL_LANTERN: Self = Self {
         id: 1365,
         registry_key: "soul_lantern",
         components: &[
@@ -27417,7 +27485,7 @@ impl Item {
             ),
         ],
     };
-    pub const SOUL_SAND: Item = Item {
+    pub const SOUL_SAND: Self = Self {
         id: 361,
         registry_key: "soul_sand",
         components: &[
@@ -27436,7 +27504,7 @@ impl Item {
             ),
         ],
     };
-    pub const SOUL_SOIL: Item = Item {
+    pub const SOUL_SOIL: Self = Self {
         id: 362,
         registry_key: "soul_soil",
         components: &[
@@ -27455,7 +27523,7 @@ impl Item {
             ),
         ],
     };
-    pub const SOUL_TORCH: Item = Item {
+    pub const SOUL_TORCH: Self = Self {
         id: 366,
         registry_key: "soul_torch",
         components: &[
@@ -27474,7 +27542,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPAWNER: Item = Item {
+    pub const SPAWNER: Self = Self {
         id: 330,
         registry_key: "spawner",
         components: &[
@@ -27493,7 +27561,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPECTRAL_ARROW: Item = Item {
+    pub const SPECTRAL_ARROW: Self = Self {
         id: 1293,
         registry_key: "spectral_arrow",
         components: &[
@@ -27512,7 +27580,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPIDER_EYE: Item = Item {
+    pub const SPIDER_EYE: Self = Self {
         id: 1123,
         registry_key: "spider_eye",
         components: &[
@@ -27559,7 +27627,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPIDER_SPAWN_EGG: Item = Item {
+    pub const SPIDER_SPAWN_EGG: Self = Self {
         id: 1188,
         registry_key: "spider_spawn_egg",
         components: &[
@@ -27578,7 +27646,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1438,
         registry_key: "spire_armor_trim_smithing_template",
         components: &[
@@ -27597,7 +27665,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPLASH_POTION: Item = Item {
+    pub const SPLASH_POTION: Self = Self {
         id: 1292,
         registry_key: "splash_potion",
         components: &[
@@ -27616,7 +27684,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPONGE: Item = Item {
+    pub const SPONGE: Self = Self {
         id: 193,
         registry_key: "sponge",
         components: &[
@@ -27635,7 +27703,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPORE_BLOSSOM: Item = Item {
+    pub const SPORE_BLOSSOM: Self = Self {
         id: 247,
         registry_key: "spore_blossom",
         components: &[
@@ -27654,7 +27722,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_BOAT: Item = Item {
+    pub const SPRUCE_BOAT: Self = Self {
         id: 866,
         registry_key: "spruce_boat",
         components: &[
@@ -27673,7 +27741,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_BUTTON: Item = Item {
+    pub const SPRUCE_BUTTON: Self = Self {
         id: 753,
         registry_key: "spruce_button",
         components: &[
@@ -27692,7 +27760,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_CHEST_BOAT: Item = Item {
+    pub const SPRUCE_CHEST_BOAT: Self = Self {
         id: 867,
         registry_key: "spruce_chest_boat",
         components: &[
@@ -27711,7 +27779,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_DOOR: Item = Item {
+    pub const SPRUCE_DOOR: Self = Self {
         id: 782,
         registry_key: "spruce_door",
         components: &[
@@ -27730,7 +27798,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_FENCE: Item = Item {
+    pub const SPRUCE_FENCE: Self = Self {
         id: 346,
         registry_key: "spruce_fence",
         components: &[
@@ -27749,7 +27817,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_FENCE_GATE: Item = Item {
+    pub const SPRUCE_FENCE_GATE: Self = Self {
         id: 823,
         registry_key: "spruce_fence_gate",
         components: &[
@@ -27768,7 +27836,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_HANGING_SIGN: Item = Item {
+    pub const SPRUCE_HANGING_SIGN: Self = Self {
         id: 1002,
         registry_key: "spruce_hanging_sign",
         components: &[
@@ -27787,7 +27855,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_LEAVES: Item = Item {
+    pub const SPRUCE_LEAVES: Self = Self {
         id: 183,
         registry_key: "spruce_leaves",
         components: &[
@@ -27806,7 +27874,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_LOG: Item = Item {
+    pub const SPRUCE_LOG: Self = Self {
         id: 135,
         registry_key: "spruce_log",
         components: &[
@@ -27825,7 +27893,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_PLANKS: Item = Item {
+    pub const SPRUCE_PLANKS: Self = Self {
         id: 37,
         registry_key: "spruce_planks",
         components: &[
@@ -27844,7 +27912,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_PRESSURE_PLATE: Item = Item {
+    pub const SPRUCE_PRESSURE_PLATE: Self = Self {
         id: 769,
         registry_key: "spruce_pressure_plate",
         components: &[
@@ -27863,7 +27931,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_SAPLING: Item = Item {
+    pub const SPRUCE_SAPLING: Self = Self {
         id: 50,
         registry_key: "spruce_sapling",
         components: &[
@@ -27882,7 +27950,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_SHELF: Item = Item {
+    pub const SPRUCE_SHELF: Self = Self {
         id: 316,
         registry_key: "spruce_shelf",
         components: &[
@@ -27901,7 +27969,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_SIGN: Item = Item {
+    pub const SPRUCE_SIGN: Self = Self {
         id: 990,
         registry_key: "spruce_sign",
         components: &[
@@ -27920,7 +27988,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_SLAB: Item = Item {
+    pub const SPRUCE_SLAB: Self = Self {
         id: 272,
         registry_key: "spruce_slab",
         components: &[
@@ -27939,7 +28007,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_STAIRS: Item = Item {
+    pub const SPRUCE_STAIRS: Self = Self {
         id: 443,
         registry_key: "spruce_stairs",
         components: &[
@@ -27958,7 +28026,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_TRAPDOOR: Item = Item {
+    pub const SPRUCE_TRAPDOOR: Self = Self {
         id: 803,
         registry_key: "spruce_trapdoor",
         components: &[
@@ -27977,7 +28045,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPRUCE_WOOD: Item = Item {
+    pub const SPRUCE_WOOD: Self = Self {
         id: 172,
         registry_key: "spruce_wood",
         components: &[
@@ -27996,7 +28064,7 @@ impl Item {
             ),
         ],
     };
-    pub const SPYGLASS: Item = Item {
+    pub const SPYGLASS: Self = Self {
         id: 1056,
         registry_key: "spyglass",
         components: &[
@@ -28015,7 +28083,7 @@ impl Item {
             ),
         ],
     };
-    pub const SQUID_SPAWN_EGG: Item = Item {
+    pub const SQUID_SPAWN_EGG: Self = Self {
         id: 1160,
         registry_key: "squid_spawn_egg",
         components: &[
@@ -28034,7 +28102,7 @@ impl Item {
             ),
         ],
     };
-    pub const STICK: Item = Item {
+    pub const STICK: Self = Self {
         id: 947,
         registry_key: "stick",
         components: &[
@@ -28053,7 +28121,7 @@ impl Item {
             ),
         ],
     };
-    pub const STICKY_PISTON: Item = Item {
+    pub const STICKY_PISTON: Self = Self {
         id: 724,
         registry_key: "sticky_piston",
         components: &[
@@ -28072,7 +28140,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE: Item = Item {
+    pub const STONE: Self = Self {
         id: 1,
         registry_key: "stone",
         components: &[
@@ -28091,7 +28159,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_AXE: Item = Item {
+    pub const STONE_AXE: Self = Self {
         id: 925,
         registry_key: "stone_axe",
         components: &[
@@ -28151,9 +28219,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
-    pub const STONE_BRICK_SLAB: Item = Item {
+    pub const STONE_BRICK_SLAB: Self = Self {
         id: 291,
         registry_key: "stone_brick_slab",
         components: &[
@@ -28172,7 +28241,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_BRICK_STAIRS: Item = Item {
+    pub const STONE_BRICK_STAIRS: Self = Self {
         id: 421,
         registry_key: "stone_brick_stairs",
         components: &[
@@ -28191,7 +28260,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_BRICK_WALL: Item = Item {
+    pub const STONE_BRICK_WALL: Self = Self {
         id: 464,
         registry_key: "stone_brick_wall",
         components: &[
@@ -28210,7 +28279,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_BRICKS: Item = Item {
+    pub const STONE_BRICKS: Self = Self {
         id: 376,
         registry_key: "stone_bricks",
         components: &[
@@ -28229,7 +28298,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_BUTTON: Item = Item {
+    pub const STONE_BUTTON: Self = Self {
         id: 750,
         registry_key: "stone_button",
         components: &[
@@ -28248,7 +28317,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_HOE: Item = Item {
+    pub const STONE_HOE: Self = Self {
         id: 926,
         registry_key: "stone_hoe",
         components: &[
@@ -28308,9 +28377,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
-    pub const STONE_PICKAXE: Item = Item {
+    pub const STONE_PICKAXE: Self = Self {
         id: 924,
         registry_key: "stone_pickaxe",
         components: &[
@@ -28370,9 +28440,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
-    pub const STONE_PRESSURE_PLATE: Item = Item {
+    pub const STONE_PRESSURE_PLATE: Self = Self {
         id: 764,
         registry_key: "stone_pressure_plate",
         components: &[
@@ -28391,7 +28462,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_SHOVEL: Item = Item {
+    pub const STONE_SHOVEL: Self = Self {
         id: 923,
         registry_key: "stone_shovel",
         components: &[
@@ -28451,9 +28522,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
-    pub const STONE_SLAB: Item = Item {
+    pub const STONE_SLAB: Self = Self {
         id: 284,
         registry_key: "stone_slab",
         components: &[
@@ -28472,7 +28544,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_SPEAR: Item = Item {
+    pub const STONE_SPEAR: Self = Self {
         id: 1298,
         registry_key: "stone_spear",
         components: &[
@@ -28512,9 +28584,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
-    pub const STONE_STAIRS: Item = Item {
+    pub const STONE_STAIRS: Self = Self {
         id: 688,
         registry_key: "stone_stairs",
         components: &[
@@ -28533,7 +28606,7 @@ impl Item {
             ),
         ],
     };
-    pub const STONE_SWORD: Item = Item {
+    pub const STONE_SWORD: Self = Self {
         id: 922,
         registry_key: "stone_sword",
         components: &[
@@ -28598,9 +28671,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
-    pub const STONECUTTER: Item = Item {
+    pub const STONECUTTER: Self = Self {
         id: 1362,
         registry_key: "stonecutter",
         components: &[
@@ -28619,7 +28693,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRAY_SPAWN_EGG: Item = Item {
+    pub const STRAY_SPAWN_EGG: Self = Self {
         id: 1180,
         registry_key: "stray_spawn_egg",
         components: &[
@@ -28638,7 +28712,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIDER_SPAWN_EGG: Item = Item {
+    pub const STRIDER_SPAWN_EGG: Self = Self {
         id: 1211,
         registry_key: "strider_spawn_egg",
         components: &[
@@ -28657,7 +28731,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRING: Item = Item {
+    pub const STRING: Self = Self {
         id: 949,
         registry_key: "string",
         components: &[
@@ -28676,7 +28750,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_ACACIA_LOG: Item = Item {
+    pub const STRIPPED_ACACIA_LOG: Self = Self {
         id: 152,
         registry_key: "stripped_acacia_log",
         components: &[
@@ -28695,7 +28769,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_ACACIA_WOOD: Item = Item {
+    pub const STRIPPED_ACACIA_WOOD: Self = Self {
         id: 163,
         registry_key: "stripped_acacia_wood",
         components: &[
@@ -28714,7 +28788,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_BAMBOO_BLOCK: Item = Item {
+    pub const STRIPPED_BAMBOO_BLOCK: Self = Self {
         id: 170,
         registry_key: "stripped_bamboo_block",
         components: &[
@@ -28733,7 +28807,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_BIRCH_LOG: Item = Item {
+    pub const STRIPPED_BIRCH_LOG: Self = Self {
         id: 150,
         registry_key: "stripped_birch_log",
         components: &[
@@ -28752,7 +28826,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_BIRCH_WOOD: Item = Item {
+    pub const STRIPPED_BIRCH_WOOD: Self = Self {
         id: 161,
         registry_key: "stripped_birch_wood",
         components: &[
@@ -28771,7 +28845,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_CHERRY_LOG: Item = Item {
+    pub const STRIPPED_CHERRY_LOG: Self = Self {
         id: 153,
         registry_key: "stripped_cherry_log",
         components: &[
@@ -28790,7 +28864,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_CHERRY_WOOD: Item = Item {
+    pub const STRIPPED_CHERRY_WOOD: Self = Self {
         id: 164,
         registry_key: "stripped_cherry_wood",
         components: &[
@@ -28809,7 +28883,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_CRIMSON_HYPHAE: Item = Item {
+    pub const STRIPPED_CRIMSON_HYPHAE: Self = Self {
         id: 168,
         registry_key: "stripped_crimson_hyphae",
         components: &[
@@ -28828,7 +28902,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_CRIMSON_STEM: Item = Item {
+    pub const STRIPPED_CRIMSON_STEM: Self = Self {
         id: 157,
         registry_key: "stripped_crimson_stem",
         components: &[
@@ -28847,7 +28921,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_DARK_OAK_LOG: Item = Item {
+    pub const STRIPPED_DARK_OAK_LOG: Self = Self {
         id: 154,
         registry_key: "stripped_dark_oak_log",
         components: &[
@@ -28866,7 +28940,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_DARK_OAK_WOOD: Item = Item {
+    pub const STRIPPED_DARK_OAK_WOOD: Self = Self {
         id: 165,
         registry_key: "stripped_dark_oak_wood",
         components: &[
@@ -28885,7 +28959,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_JUNGLE_LOG: Item = Item {
+    pub const STRIPPED_JUNGLE_LOG: Self = Self {
         id: 151,
         registry_key: "stripped_jungle_log",
         components: &[
@@ -28904,7 +28978,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_JUNGLE_WOOD: Item = Item {
+    pub const STRIPPED_JUNGLE_WOOD: Self = Self {
         id: 162,
         registry_key: "stripped_jungle_wood",
         components: &[
@@ -28923,7 +28997,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_MANGROVE_LOG: Item = Item {
+    pub const STRIPPED_MANGROVE_LOG: Self = Self {
         id: 156,
         registry_key: "stripped_mangrove_log",
         components: &[
@@ -28942,7 +29016,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_MANGROVE_WOOD: Item = Item {
+    pub const STRIPPED_MANGROVE_WOOD: Self = Self {
         id: 167,
         registry_key: "stripped_mangrove_wood",
         components: &[
@@ -28961,7 +29035,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_OAK_LOG: Item = Item {
+    pub const STRIPPED_OAK_LOG: Self = Self {
         id: 148,
         registry_key: "stripped_oak_log",
         components: &[
@@ -28980,7 +29054,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_OAK_WOOD: Item = Item {
+    pub const STRIPPED_OAK_WOOD: Self = Self {
         id: 159,
         registry_key: "stripped_oak_wood",
         components: &[
@@ -28999,7 +29073,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_PALE_OAK_LOG: Item = Item {
+    pub const STRIPPED_PALE_OAK_LOG: Self = Self {
         id: 155,
         registry_key: "stripped_pale_oak_log",
         components: &[
@@ -29018,7 +29092,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_PALE_OAK_WOOD: Item = Item {
+    pub const STRIPPED_PALE_OAK_WOOD: Self = Self {
         id: 166,
         registry_key: "stripped_pale_oak_wood",
         components: &[
@@ -29037,7 +29111,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_SPRUCE_LOG: Item = Item {
+    pub const STRIPPED_SPRUCE_LOG: Self = Self {
         id: 149,
         registry_key: "stripped_spruce_log",
         components: &[
@@ -29056,7 +29130,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_SPRUCE_WOOD: Item = Item {
+    pub const STRIPPED_SPRUCE_WOOD: Self = Self {
         id: 160,
         registry_key: "stripped_spruce_wood",
         components: &[
@@ -29075,7 +29149,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_WARPED_HYPHAE: Item = Item {
+    pub const STRIPPED_WARPED_HYPHAE: Self = Self {
         id: 169,
         registry_key: "stripped_warped_hyphae",
         components: &[
@@ -29094,7 +29168,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRIPPED_WARPED_STEM: Item = Item {
+    pub const STRIPPED_WARPED_STEM: Self = Self {
         id: 158,
         registry_key: "stripped_warped_stem",
         components: &[
@@ -29113,7 +29187,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRUCTURE_BLOCK: Item = Item {
+    pub const STRUCTURE_BLOCK: Self = Self {
         id: 884,
         registry_key: "structure_block",
         components: &[
@@ -29132,7 +29206,7 @@ impl Item {
             ),
         ],
     };
-    pub const STRUCTURE_VOID: Item = Item {
+    pub const STRUCTURE_VOID: Self = Self {
         id: 581,
         registry_key: "structure_void",
         components: &[
@@ -29151,7 +29225,7 @@ impl Item {
             ),
         ],
     };
-    pub const SUGAR: Item = Item {
+    pub const SUGAR: Self = Self {
         id: 1085,
         registry_key: "sugar",
         components: &[
@@ -29170,7 +29244,7 @@ impl Item {
             ),
         ],
     };
-    pub const SUGAR_CANE: Item = Item {
+    pub const SUGAR_CANE: Self = Self {
         id: 257,
         registry_key: "sugar_cane",
         components: &[
@@ -29189,7 +29263,7 @@ impl Item {
             ),
         ],
     };
-    pub const SUNFLOWER: Item = Item {
+    pub const SUNFLOWER: Self = Self {
         id: 525,
         registry_key: "sunflower",
         components: &[
@@ -29208,7 +29282,7 @@ impl Item {
             ),
         ],
     };
-    pub const SUSPICIOUS_GRAVEL: Item = Item {
+    pub const SUSPICIOUS_GRAVEL: Self = Self {
         id: 61,
         registry_key: "suspicious_gravel",
         components: &[
@@ -29227,7 +29301,7 @@ impl Item {
             ),
         ],
     };
-    pub const SUSPICIOUS_SAND: Item = Item {
+    pub const SUSPICIOUS_SAND: Self = Self {
         id: 60,
         registry_key: "suspicious_sand",
         components: &[
@@ -29246,7 +29320,7 @@ impl Item {
             ),
         ],
     };
-    pub const SUSPICIOUS_STEW: Item = Item {
+    pub const SUSPICIOUS_STEW: Self = Self {
         id: 1341,
         registry_key: "suspicious_stew",
         components: &[
@@ -29283,7 +29357,7 @@ impl Item {
             ),
         ],
     };
-    pub const SWEET_BERRIES: Item = Item {
+    pub const SWEET_BERRIES: Self = Self {
         id: 1374,
         registry_key: "sweet_berries",
         components: &[
@@ -29320,7 +29394,7 @@ impl Item {
             ),
         ],
     };
-    pub const TADPOLE_BUCKET: Item = Item {
+    pub const TADPOLE_BUCKET: Self = Self {
         id: 1025,
         registry_key: "tadpole_bucket",
         components: &[
@@ -29339,7 +29413,7 @@ impl Item {
             ),
         ],
     };
-    pub const TADPOLE_SPAWN_EGG: Item = Item {
+    pub const TADPOLE_SPAWN_EGG: Self = Self {
         id: 1161,
         registry_key: "tadpole_spawn_egg",
         components: &[
@@ -29358,7 +29432,7 @@ impl Item {
             ),
         ],
     };
-    pub const TALL_DRY_GRASS: Item = Item {
+    pub const TALL_DRY_GRASS: Self = Self {
         id: 210,
         registry_key: "tall_dry_grass",
         components: &[
@@ -29377,7 +29451,7 @@ impl Item {
             ),
         ],
     };
-    pub const TALL_GRASS: Item = Item {
+    pub const TALL_GRASS: Self = Self {
         id: 529,
         registry_key: "tall_grass",
         components: &[
@@ -29396,7 +29470,7 @@ impl Item {
             ),
         ],
     };
-    pub const TARGET: Item = Item {
+    pub const TARGET: Self = Self {
         id: 732,
         registry_key: "target",
         components: &[
@@ -29415,7 +29489,7 @@ impl Item {
             ),
         ],
     };
-    pub const TERRACOTTA: Item = Item {
+    pub const TERRACOTTA: Self = Self {
         id: 522,
         registry_key: "terracotta",
         components: &[
@@ -29434,7 +29508,7 @@ impl Item {
             ),
         ],
     };
-    pub const TEST_BLOCK: Item = Item {
+    pub const TEST_BLOCK: Self = Self {
         id: 886,
         registry_key: "test_block",
         components: &[
@@ -29453,7 +29527,7 @@ impl Item {
             ),
         ],
     };
-    pub const TEST_INSTANCE_BLOCK: Item = Item {
+    pub const TEST_INSTANCE_BLOCK: Self = Self {
         id: 887,
         registry_key: "test_instance_block",
         components: &[
@@ -29472,7 +29546,7 @@ impl Item {
             ),
         ],
     };
-    pub const TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1435,
         registry_key: "tide_armor_trim_smithing_template",
         components: &[
@@ -29491,7 +29565,7 @@ impl Item {
             ),
         ],
     };
-    pub const TINTED_GLASS: Item = Item {
+    pub const TINTED_GLASS: Self = Self {
         id: 196,
         registry_key: "tinted_glass",
         components: &[
@@ -29510,7 +29584,7 @@ impl Item {
             ),
         ],
     };
-    pub const TIPPED_ARROW: Item = Item {
+    pub const TIPPED_ARROW: Self = Self {
         id: 1294,
         registry_key: "tipped_arrow",
         components: &[
@@ -29529,7 +29603,7 @@ impl Item {
             ),
         ],
     };
-    pub const TNT: Item = Item {
+    pub const TNT: Self = Self {
         id: 747,
         registry_key: "tnt",
         components: &[
@@ -29548,7 +29622,7 @@ impl Item {
             ),
         ],
     };
-    pub const TNT_MINECART: Item = Item {
+    pub const TNT_MINECART: Self = Self {
         id: 858,
         registry_key: "tnt_minecart",
         components: &[
@@ -29567,7 +29641,7 @@ impl Item {
             ),
         ],
     };
-    pub const TORCH: Item = Item {
+    pub const TORCH: Self = Self {
         id: 323,
         registry_key: "torch",
         components: &[
@@ -29586,7 +29660,7 @@ impl Item {
             ),
         ],
     };
-    pub const TORCHFLOWER: Item = Item {
+    pub const TORCHFLOWER: Self = Self {
         id: 245,
         registry_key: "torchflower",
         components: &[
@@ -29605,7 +29679,7 @@ impl Item {
             ),
         ],
     };
-    pub const TORCHFLOWER_SEEDS: Item = Item {
+    pub const TORCHFLOWER_SEEDS: Self = Self {
         id: 1286,
         registry_key: "torchflower_seeds",
         components: &[
@@ -29624,7 +29698,7 @@ impl Item {
             ),
         ],
     };
-    pub const TOTEM_OF_UNDYING: Item = Item {
+    pub const TOTEM_OF_UNDYING: Self = Self {
         id: 1304,
         registry_key: "totem_of_undying",
         components: &[
@@ -29644,7 +29718,7 @@ impl Item {
             (DeathProtection, &DeathProtectionImpl),
         ],
     };
-    pub const TRADER_LLAMA_SPAWN_EGG: Item = Item {
+    pub const TRADER_LLAMA_SPAWN_EGG: Self = Self {
         id: 1170,
         registry_key: "trader_llama_spawn_egg",
         components: &[
@@ -29663,7 +29737,7 @@ impl Item {
             ),
         ],
     };
-    pub const TRAPPED_CHEST: Item = Item {
+    pub const TRAPPED_CHEST: Self = Self {
         id: 746,
         registry_key: "trapped_chest",
         components: &[
@@ -29682,7 +29756,7 @@ impl Item {
             ),
         ],
     };
-    pub const TRIAL_KEY: Item = Item {
+    pub const TRIAL_KEY: Self = Self {
         id: 1502,
         registry_key: "trial_key",
         components: &[
@@ -29701,7 +29775,7 @@ impl Item {
             ),
         ],
     };
-    pub const TRIAL_SPAWNER: Item = Item {
+    pub const TRIAL_SPAWNER: Self = Self {
         id: 1501,
         registry_key: "trial_spawner",
         components: &[
@@ -29720,7 +29794,7 @@ impl Item {
             ),
         ],
     };
-    pub const TRIDENT: Item = Item {
+    pub const TRIDENT: Self = Self {
         id: 1332,
         registry_key: "trident",
         components: &[
@@ -29769,9 +29843,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
-    pub const TRIPWIRE_HOOK: Item = Item {
+    pub const TRIPWIRE_HOOK: Self = Self {
         id: 745,
         registry_key: "tripwire_hook",
         components: &[
@@ -29790,7 +29865,7 @@ impl Item {
             ),
         ],
     };
-    pub const TROPICAL_FISH: Item = Item {
+    pub const TROPICAL_FISH: Self = Self {
         id: 1060,
         registry_key: "tropical_fish",
         components: &[
@@ -29827,7 +29902,7 @@ impl Item {
             ),
         ],
     };
-    pub const TROPICAL_FISH_BUCKET: Item = Item {
+    pub const TROPICAL_FISH_BUCKET: Self = Self {
         id: 1023,
         registry_key: "tropical_fish_bucket",
         components: &[
@@ -29854,7 +29929,7 @@ impl Item {
             ),
         ],
     };
-    pub const TROPICAL_FISH_SPAWN_EGG: Item = Item {
+    pub const TROPICAL_FISH_SPAWN_EGG: Self = Self {
         id: 1162,
         registry_key: "tropical_fish_spawn_egg",
         components: &[
@@ -29873,7 +29948,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUBE_CORAL: Item = Item {
+    pub const TUBE_CORAL: Self = Self {
         id: 660,
         registry_key: "tube_coral",
         components: &[
@@ -29892,7 +29967,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUBE_CORAL_BLOCK: Item = Item {
+    pub const TUBE_CORAL_BLOCK: Self = Self {
         id: 655,
         registry_key: "tube_coral_block",
         components: &[
@@ -29911,7 +29986,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUBE_CORAL_FAN: Item = Item {
+    pub const TUBE_CORAL_FAN: Self = Self {
         id: 670,
         registry_key: "tube_coral_fan",
         components: &[
@@ -29930,7 +30005,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF: Item = Item {
+    pub const TUFF: Self = Self {
         id: 12,
         registry_key: "tuff",
         components: &[
@@ -29949,7 +30024,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_BRICK_SLAB: Item = Item {
+    pub const TUFF_BRICK_SLAB: Self = Self {
         id: 22,
         registry_key: "tuff_brick_slab",
         components: &[
@@ -29968,7 +30043,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_BRICK_STAIRS: Item = Item {
+    pub const TUFF_BRICK_STAIRS: Self = Self {
         id: 23,
         registry_key: "tuff_brick_stairs",
         components: &[
@@ -29987,7 +30062,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_BRICK_WALL: Item = Item {
+    pub const TUFF_BRICK_WALL: Self = Self {
         id: 24,
         registry_key: "tuff_brick_wall",
         components: &[
@@ -30006,7 +30081,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_BRICKS: Item = Item {
+    pub const TUFF_BRICKS: Self = Self {
         id: 21,
         registry_key: "tuff_bricks",
         components: &[
@@ -30025,7 +30100,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_SLAB: Item = Item {
+    pub const TUFF_SLAB: Self = Self {
         id: 13,
         registry_key: "tuff_slab",
         components: &[
@@ -30044,7 +30119,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_STAIRS: Item = Item {
+    pub const TUFF_STAIRS: Self = Self {
         id: 14,
         registry_key: "tuff_stairs",
         components: &[
@@ -30063,7 +30138,7 @@ impl Item {
             ),
         ],
     };
-    pub const TUFF_WALL: Item = Item {
+    pub const TUFF_WALL: Self = Self {
         id: 15,
         registry_key: "tuff_wall",
         components: &[
@@ -30082,7 +30157,7 @@ impl Item {
             ),
         ],
     };
-    pub const TURTLE_EGG: Item = Item {
+    pub const TURTLE_EGG: Self = Self {
         id: 647,
         registry_key: "turtle_egg",
         components: &[
@@ -30101,7 +30176,7 @@ impl Item {
             ),
         ],
     };
-    pub const TURTLE_HELMET: Item = Item {
+    pub const TURTLE_HELMET: Self = Self {
         id: 888,
         registry_key: "turtle_helmet",
         components: &[
@@ -30151,9 +30226,10 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
-    pub const TURTLE_SCUTE: Item = Item {
+    pub const TURTLE_SCUTE: Self = Self {
         id: 889,
         registry_key: "turtle_scute",
         components: &[
@@ -30172,7 +30248,7 @@ impl Item {
             ),
         ],
     };
-    pub const TURTLE_SPAWN_EGG: Item = Item {
+    pub const TURTLE_SPAWN_EGG: Self = Self {
         id: 1163,
         registry_key: "turtle_spawn_egg",
         components: &[
@@ -30191,7 +30267,7 @@ impl Item {
             ),
         ],
     };
-    pub const TWISTING_VINES: Item = Item {
+    pub const TWISTING_VINES: Self = Self {
         id: 256,
         registry_key: "twisting_vines",
         components: &[
@@ -30210,7 +30286,7 @@ impl Item {
             ),
         ],
     };
-    pub const VAULT: Item = Item {
+    pub const VAULT: Self = Self {
         id: 1504,
         registry_key: "vault",
         components: &[
@@ -30229,7 +30305,7 @@ impl Item {
             ),
         ],
     };
-    pub const VERDANT_FROGLIGHT: Item = Item {
+    pub const VERDANT_FROGLIGHT: Self = Self {
         id: 1422,
         registry_key: "verdant_froglight",
         components: &[
@@ -30248,7 +30324,7 @@ impl Item {
             ),
         ],
     };
-    pub const VEX_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const VEX_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1434,
         registry_key: "vex_armor_trim_smithing_template",
         components: &[
@@ -30267,7 +30343,7 @@ impl Item {
             ),
         ],
     };
-    pub const VEX_SPAWN_EGG: Item = Item {
+    pub const VEX_SPAWN_EGG: Self = Self {
         id: 1203,
         registry_key: "vex_spawn_egg",
         components: &[
@@ -30286,7 +30362,7 @@ impl Item {
             ),
         ],
     };
-    pub const VILLAGER_SPAWN_EGG: Item = Item {
+    pub const VILLAGER_SPAWN_EGG: Self = Self {
         id: 1171,
         registry_key: "villager_spawn_egg",
         components: &[
@@ -30305,7 +30381,7 @@ impl Item {
             ),
         ],
     };
-    pub const VINDICATOR_SPAWN_EGG: Item = Item {
+    pub const VINDICATOR_SPAWN_EGG: Self = Self {
         id: 1202,
         registry_key: "vindicator_spawn_egg",
         components: &[
@@ -30324,7 +30400,7 @@ impl Item {
             ),
         ],
     };
-    pub const VINE: Item = Item {
+    pub const VINE: Self = Self {
         id: 411,
         registry_key: "vine",
         components: &[
@@ -30343,7 +30419,7 @@ impl Item {
             ),
         ],
     };
-    pub const WANDERING_TRADER_SPAWN_EGG: Item = Item {
+    pub const WANDERING_TRADER_SPAWN_EGG: Self = Self {
         id: 1172,
         registry_key: "wandering_trader_spawn_egg",
         components: &[
@@ -30362,7 +30438,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARD_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const WARD_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1432,
         registry_key: "ward_armor_trim_smithing_template",
         components: &[
@@ -30381,7 +30457,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARDEN_SPAWN_EGG: Item = Item {
+    pub const WARDEN_SPAWN_EGG: Self = Self {
         id: 1197,
         registry_key: "warden_spawn_egg",
         components: &[
@@ -30400,7 +30476,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_BUTTON: Item = Item {
+    pub const WARPED_BUTTON: Self = Self {
         id: 763,
         registry_key: "warped_button",
         components: &[
@@ -30419,7 +30495,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_DOOR: Item = Item {
+    pub const WARPED_DOOR: Self = Self {
         id: 792,
         registry_key: "warped_door",
         components: &[
@@ -30438,7 +30514,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_FENCE: Item = Item {
+    pub const WARPED_FENCE: Self = Self {
         id: 356,
         registry_key: "warped_fence",
         components: &[
@@ -30457,7 +30533,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_FENCE_GATE: Item = Item {
+    pub const WARPED_FENCE_GATE: Self = Self {
         id: 833,
         registry_key: "warped_fence_gate",
         components: &[
@@ -30476,7 +30552,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_FUNGUS: Item = Item {
+    pub const WARPED_FUNGUS: Self = Self {
         id: 251,
         registry_key: "warped_fungus",
         components: &[
@@ -30495,7 +30571,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_FUNGUS_ON_A_STICK: Item = Item {
+    pub const WARPED_FUNGUS_ON_A_STICK: Self = Self {
         id: 861,
         registry_key: "warped_fungus_on_a_stick",
         components: &[
@@ -30516,7 +30592,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_HANGING_SIGN: Item = Item {
+    pub const WARPED_HANGING_SIGN: Self = Self {
         id: 1012,
         registry_key: "warped_hanging_sign",
         components: &[
@@ -30535,7 +30611,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_HYPHAE: Item = Item {
+    pub const WARPED_HYPHAE: Self = Self {
         id: 181,
         registry_key: "warped_hyphae",
         components: &[
@@ -30554,7 +30630,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_NYLIUM: Item = Item {
+    pub const WARPED_NYLIUM: Self = Self {
         id: 34,
         registry_key: "warped_nylium",
         components: &[
@@ -30573,7 +30649,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_PLANKS: Item = Item {
+    pub const WARPED_PLANKS: Self = Self {
         id: 47,
         registry_key: "warped_planks",
         components: &[
@@ -30592,7 +30668,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_PRESSURE_PLATE: Item = Item {
+    pub const WARPED_PRESSURE_PLATE: Self = Self {
         id: 779,
         registry_key: "warped_pressure_plate",
         components: &[
@@ -30611,7 +30687,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_ROOTS: Item = Item {
+    pub const WARPED_ROOTS: Self = Self {
         id: 253,
         registry_key: "warped_roots",
         components: &[
@@ -30630,7 +30706,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_SHELF: Item = Item {
+    pub const WARPED_SHELF: Self = Self {
         id: 317,
         registry_key: "warped_shelf",
         components: &[
@@ -30649,7 +30725,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_SIGN: Item = Item {
+    pub const WARPED_SIGN: Self = Self {
         id: 1000,
         registry_key: "warped_sign",
         components: &[
@@ -30668,7 +30744,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_SLAB: Item = Item {
+    pub const WARPED_SLAB: Self = Self {
         id: 283,
         registry_key: "warped_slab",
         components: &[
@@ -30687,7 +30763,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_STAIRS: Item = Item {
+    pub const WARPED_STAIRS: Self = Self {
         id: 454,
         registry_key: "warped_stairs",
         components: &[
@@ -30706,7 +30782,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_STEM: Item = Item {
+    pub const WARPED_STEM: Self = Self {
         id: 146,
         registry_key: "warped_stem",
         components: &[
@@ -30725,7 +30801,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_TRAPDOOR: Item = Item {
+    pub const WARPED_TRAPDOOR: Self = Self {
         id: 813,
         registry_key: "warped_trapdoor",
         components: &[
@@ -30744,7 +30820,7 @@ impl Item {
             ),
         ],
     };
-    pub const WARPED_WART_BLOCK: Item = Item {
+    pub const WARPED_WART_BLOCK: Self = Self {
         id: 578,
         registry_key: "warped_wart_block",
         components: &[
@@ -30763,7 +30839,7 @@ impl Item {
             ),
         ],
     };
-    pub const WATER_BUCKET: Item = Item {
+    pub const WATER_BUCKET: Self = Self {
         id: 1014,
         registry_key: "water_bucket",
         components: &[
@@ -30782,7 +30858,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_CHISELED_COPPER: Item = Item {
+    pub const WAXED_CHISELED_COPPER: Self = Self {
         id: 118,
         registry_key: "waxed_chiseled_copper",
         components: &[
@@ -30801,7 +30877,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_BARS: Item = Item {
+    pub const WAXED_COPPER_BARS: Self = Self {
         id: 396,
         registry_key: "waxed_copper_bars",
         components: &[
@@ -30820,7 +30896,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_BLOCK: Item = Item {
+    pub const WAXED_COPPER_BLOCK: Self = Self {
         id: 114,
         registry_key: "waxed_copper_block",
         components: &[
@@ -30839,7 +30915,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_BULB: Item = Item {
+    pub const WAXED_COPPER_BULB: Self = Self {
         id: 1481,
         registry_key: "waxed_copper_bulb",
         components: &[
@@ -30858,7 +30934,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_CHAIN: Item = Item {
+    pub const WAXED_COPPER_CHAIN: Self = Self {
         id: 405,
         registry_key: "waxed_copper_chain",
         components: &[
@@ -30877,7 +30953,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_CHEST: Item = Item {
+    pub const WAXED_COPPER_CHEST: Self = Self {
         id: 1489,
         registry_key: "waxed_copper_chest",
         components: &[
@@ -30896,7 +30972,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_DOOR: Item = Item {
+    pub const WAXED_COPPER_DOOR: Self = Self {
         id: 797,
         registry_key: "waxed_copper_door",
         components: &[
@@ -30915,7 +30991,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const WAXED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1497,
         registry_key: "waxed_copper_golem_statue",
         components: &[
@@ -30934,7 +31010,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_GRATE: Item = Item {
+    pub const WAXED_COPPER_GRATE: Self = Self {
         id: 1473,
         registry_key: "waxed_copper_grate",
         components: &[
@@ -30953,7 +31029,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_LANTERN: Item = Item {
+    pub const WAXED_COPPER_LANTERN: Self = Self {
         id: 1370,
         registry_key: "waxed_copper_lantern",
         components: &[
@@ -30972,7 +31048,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_COPPER_TRAPDOOR: Item = Item {
+    pub const WAXED_COPPER_TRAPDOOR: Self = Self {
         id: 818,
         registry_key: "waxed_copper_trapdoor",
         components: &[
@@ -30991,7 +31067,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_CUT_COPPER: Item = Item {
+    pub const WAXED_CUT_COPPER: Self = Self {
         id: 122,
         registry_key: "waxed_cut_copper",
         components: &[
@@ -31010,7 +31086,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_CUT_COPPER_SLAB: Item = Item {
+    pub const WAXED_CUT_COPPER_SLAB: Self = Self {
         id: 130,
         registry_key: "waxed_cut_copper_slab",
         components: &[
@@ -31029,7 +31105,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_CUT_COPPER_STAIRS: Item = Item {
+    pub const WAXED_CUT_COPPER_STAIRS: Self = Self {
         id: 126,
         registry_key: "waxed_cut_copper_stairs",
         components: &[
@@ -31048,7 +31124,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_CHISELED_COPPER: Item = Item {
+    pub const WAXED_EXPOSED_CHISELED_COPPER: Self = Self {
         id: 119,
         registry_key: "waxed_exposed_chiseled_copper",
         components: &[
@@ -31067,7 +31143,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER: Item = Item {
+    pub const WAXED_EXPOSED_COPPER: Self = Self {
         id: 115,
         registry_key: "waxed_exposed_copper",
         components: &[
@@ -31086,7 +31162,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_BARS: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_BARS: Self = Self {
         id: 397,
         registry_key: "waxed_exposed_copper_bars",
         components: &[
@@ -31105,7 +31181,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_BULB: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_BULB: Self = Self {
         id: 1482,
         registry_key: "waxed_exposed_copper_bulb",
         components: &[
@@ -31124,7 +31200,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_CHAIN: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_CHAIN: Self = Self {
         id: 406,
         registry_key: "waxed_exposed_copper_chain",
         components: &[
@@ -31143,7 +31219,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_CHEST: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_CHEST: Self = Self {
         id: 1490,
         registry_key: "waxed_exposed_copper_chest",
         components: &[
@@ -31162,7 +31238,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_DOOR: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_DOOR: Self = Self {
         id: 798,
         registry_key: "waxed_exposed_copper_door",
         components: &[
@@ -31181,7 +31257,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1498,
         registry_key: "waxed_exposed_copper_golem_statue",
         components: &[
@@ -31200,7 +31276,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_GRATE: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_GRATE: Self = Self {
         id: 1474,
         registry_key: "waxed_exposed_copper_grate",
         components: &[
@@ -31219,7 +31295,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_LANTERN: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_LANTERN: Self = Self {
         id: 1371,
         registry_key: "waxed_exposed_copper_lantern",
         components: &[
@@ -31238,7 +31314,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_COPPER_TRAPDOOR: Item = Item {
+    pub const WAXED_EXPOSED_COPPER_TRAPDOOR: Self = Self {
         id: 819,
         registry_key: "waxed_exposed_copper_trapdoor",
         components: &[
@@ -31257,7 +31333,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_CUT_COPPER: Item = Item {
+    pub const WAXED_EXPOSED_CUT_COPPER: Self = Self {
         id: 123,
         registry_key: "waxed_exposed_cut_copper",
         components: &[
@@ -31276,7 +31352,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_CUT_COPPER_SLAB: Item = Item {
+    pub const WAXED_EXPOSED_CUT_COPPER_SLAB: Self = Self {
         id: 131,
         registry_key: "waxed_exposed_cut_copper_slab",
         components: &[
@@ -31295,7 +31371,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_CUT_COPPER_STAIRS: Item = Item {
+    pub const WAXED_EXPOSED_CUT_COPPER_STAIRS: Self = Self {
         id: 127,
         registry_key: "waxed_exposed_cut_copper_stairs",
         components: &[
@@ -31314,7 +31390,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_EXPOSED_LIGHTNING_ROD: Item = Item {
+    pub const WAXED_EXPOSED_LIGHTNING_ROD: Self = Self {
         id: 739,
         registry_key: "waxed_exposed_lightning_rod",
         components: &[
@@ -31333,7 +31409,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_LIGHTNING_ROD: Item = Item {
+    pub const WAXED_LIGHTNING_ROD: Self = Self {
         id: 738,
         registry_key: "waxed_lightning_rod",
         components: &[
@@ -31352,7 +31428,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_CHISELED_COPPER: Item = Item {
+    pub const WAXED_OXIDIZED_CHISELED_COPPER: Self = Self {
         id: 121,
         registry_key: "waxed_oxidized_chiseled_copper",
         components: &[
@@ -31371,7 +31447,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER: Self = Self {
         id: 117,
         registry_key: "waxed_oxidized_copper",
         components: &[
@@ -31390,7 +31466,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_BARS: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_BARS: Self = Self {
         id: 399,
         registry_key: "waxed_oxidized_copper_bars",
         components: &[
@@ -31409,7 +31485,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_BULB: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_BULB: Self = Self {
         id: 1484,
         registry_key: "waxed_oxidized_copper_bulb",
         components: &[
@@ -31428,7 +31504,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_CHAIN: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_CHAIN: Self = Self {
         id: 408,
         registry_key: "waxed_oxidized_copper_chain",
         components: &[
@@ -31447,7 +31523,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_CHEST: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_CHEST: Self = Self {
         id: 1492,
         registry_key: "waxed_oxidized_copper_chest",
         components: &[
@@ -31466,7 +31542,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_DOOR: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_DOOR: Self = Self {
         id: 800,
         registry_key: "waxed_oxidized_copper_door",
         components: &[
@@ -31485,7 +31561,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1500,
         registry_key: "waxed_oxidized_copper_golem_statue",
         components: &[
@@ -31504,7 +31580,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_GRATE: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_GRATE: Self = Self {
         id: 1476,
         registry_key: "waxed_oxidized_copper_grate",
         components: &[
@@ -31523,7 +31599,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_LANTERN: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_LANTERN: Self = Self {
         id: 1373,
         registry_key: "waxed_oxidized_copper_lantern",
         components: &[
@@ -31542,7 +31618,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_COPPER_TRAPDOOR: Item = Item {
+    pub const WAXED_OXIDIZED_COPPER_TRAPDOOR: Self = Self {
         id: 821,
         registry_key: "waxed_oxidized_copper_trapdoor",
         components: &[
@@ -31561,7 +31637,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_CUT_COPPER: Item = Item {
+    pub const WAXED_OXIDIZED_CUT_COPPER: Self = Self {
         id: 125,
         registry_key: "waxed_oxidized_cut_copper",
         components: &[
@@ -31580,7 +31656,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_CUT_COPPER_SLAB: Item = Item {
+    pub const WAXED_OXIDIZED_CUT_COPPER_SLAB: Self = Self {
         id: 133,
         registry_key: "waxed_oxidized_cut_copper_slab",
         components: &[
@@ -31599,7 +31675,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_CUT_COPPER_STAIRS: Item = Item {
+    pub const WAXED_OXIDIZED_CUT_COPPER_STAIRS: Self = Self {
         id: 129,
         registry_key: "waxed_oxidized_cut_copper_stairs",
         components: &[
@@ -31618,7 +31694,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_OXIDIZED_LIGHTNING_ROD: Item = Item {
+    pub const WAXED_OXIDIZED_LIGHTNING_ROD: Self = Self {
         id: 741,
         registry_key: "waxed_oxidized_lightning_rod",
         components: &[
@@ -31637,7 +31713,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_CHISELED_COPPER: Item = Item {
+    pub const WAXED_WEATHERED_CHISELED_COPPER: Self = Self {
         id: 120,
         registry_key: "waxed_weathered_chiseled_copper",
         components: &[
@@ -31656,7 +31732,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER: Item = Item {
+    pub const WAXED_WEATHERED_COPPER: Self = Self {
         id: 116,
         registry_key: "waxed_weathered_copper",
         components: &[
@@ -31675,7 +31751,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_BARS: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_BARS: Self = Self {
         id: 398,
         registry_key: "waxed_weathered_copper_bars",
         components: &[
@@ -31694,7 +31770,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_BULB: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_BULB: Self = Self {
         id: 1483,
         registry_key: "waxed_weathered_copper_bulb",
         components: &[
@@ -31713,7 +31789,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_CHAIN: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_CHAIN: Self = Self {
         id: 407,
         registry_key: "waxed_weathered_copper_chain",
         components: &[
@@ -31732,7 +31808,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_CHEST: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_CHEST: Self = Self {
         id: 1491,
         registry_key: "waxed_weathered_copper_chest",
         components: &[
@@ -31751,7 +31827,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_DOOR: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_DOOR: Self = Self {
         id: 799,
         registry_key: "waxed_weathered_copper_door",
         components: &[
@@ -31770,7 +31846,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1499,
         registry_key: "waxed_weathered_copper_golem_statue",
         components: &[
@@ -31789,7 +31865,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_GRATE: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_GRATE: Self = Self {
         id: 1475,
         registry_key: "waxed_weathered_copper_grate",
         components: &[
@@ -31808,7 +31884,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_LANTERN: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_LANTERN: Self = Self {
         id: 1372,
         registry_key: "waxed_weathered_copper_lantern",
         components: &[
@@ -31827,7 +31903,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_COPPER_TRAPDOOR: Item = Item {
+    pub const WAXED_WEATHERED_COPPER_TRAPDOOR: Self = Self {
         id: 820,
         registry_key: "waxed_weathered_copper_trapdoor",
         components: &[
@@ -31846,7 +31922,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_CUT_COPPER: Item = Item {
+    pub const WAXED_WEATHERED_CUT_COPPER: Self = Self {
         id: 124,
         registry_key: "waxed_weathered_cut_copper",
         components: &[
@@ -31865,7 +31941,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_CUT_COPPER_SLAB: Item = Item {
+    pub const WAXED_WEATHERED_CUT_COPPER_SLAB: Self = Self {
         id: 132,
         registry_key: "waxed_weathered_cut_copper_slab",
         components: &[
@@ -31884,7 +31960,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_CUT_COPPER_STAIRS: Item = Item {
+    pub const WAXED_WEATHERED_CUT_COPPER_STAIRS: Self = Self {
         id: 128,
         registry_key: "waxed_weathered_cut_copper_stairs",
         components: &[
@@ -31903,7 +31979,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAXED_WEATHERED_LIGHTNING_ROD: Item = Item {
+    pub const WAXED_WEATHERED_LIGHTNING_ROD: Self = Self {
         id: 740,
         registry_key: "waxed_weathered_lightning_rod",
         components: &[
@@ -31922,7 +31998,7 @@ impl Item {
             ),
         ],
     };
-    pub const WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1439,
         registry_key: "wayfinder_armor_trim_smithing_template",
         components: &[
@@ -31941,7 +32017,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_CHISELED_COPPER: Item = Item {
+    pub const WEATHERED_CHISELED_COPPER: Self = Self {
         id: 100,
         registry_key: "weathered_chiseled_copper",
         components: &[
@@ -31960,7 +32036,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER: Item = Item {
+    pub const WEATHERED_COPPER: Self = Self {
         id: 96,
         registry_key: "weathered_copper",
         components: &[
@@ -31979,7 +32055,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_BARS: Item = Item {
+    pub const WEATHERED_COPPER_BARS: Self = Self {
         id: 394,
         registry_key: "weathered_copper_bars",
         components: &[
@@ -31998,7 +32074,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_BULB: Item = Item {
+    pub const WEATHERED_COPPER_BULB: Self = Self {
         id: 1479,
         registry_key: "weathered_copper_bulb",
         components: &[
@@ -32017,7 +32093,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_CHAIN: Item = Item {
+    pub const WEATHERED_COPPER_CHAIN: Self = Self {
         id: 403,
         registry_key: "weathered_copper_chain",
         components: &[
@@ -32036,7 +32112,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_CHEST: Item = Item {
+    pub const WEATHERED_COPPER_CHEST: Self = Self {
         id: 1487,
         registry_key: "weathered_copper_chest",
         components: &[
@@ -32055,7 +32131,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_DOOR: Item = Item {
+    pub const WEATHERED_COPPER_DOOR: Self = Self {
         id: 795,
         registry_key: "weathered_copper_door",
         components: &[
@@ -32074,7 +32150,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_GOLEM_STATUE: Item = Item {
+    pub const WEATHERED_COPPER_GOLEM_STATUE: Self = Self {
         id: 1495,
         registry_key: "weathered_copper_golem_statue",
         components: &[
@@ -32093,7 +32169,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_GRATE: Item = Item {
+    pub const WEATHERED_COPPER_GRATE: Self = Self {
         id: 1471,
         registry_key: "weathered_copper_grate",
         components: &[
@@ -32112,7 +32188,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_LANTERN: Item = Item {
+    pub const WEATHERED_COPPER_LANTERN: Self = Self {
         id: 1368,
         registry_key: "weathered_copper_lantern",
         components: &[
@@ -32131,7 +32207,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_COPPER_TRAPDOOR: Item = Item {
+    pub const WEATHERED_COPPER_TRAPDOOR: Self = Self {
         id: 816,
         registry_key: "weathered_copper_trapdoor",
         components: &[
@@ -32150,7 +32226,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_CUT_COPPER: Item = Item {
+    pub const WEATHERED_CUT_COPPER: Self = Self {
         id: 104,
         registry_key: "weathered_cut_copper",
         components: &[
@@ -32169,7 +32245,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_CUT_COPPER_SLAB: Item = Item {
+    pub const WEATHERED_CUT_COPPER_SLAB: Self = Self {
         id: 112,
         registry_key: "weathered_cut_copper_slab",
         components: &[
@@ -32188,7 +32264,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_CUT_COPPER_STAIRS: Item = Item {
+    pub const WEATHERED_CUT_COPPER_STAIRS: Self = Self {
         id: 108,
         registry_key: "weathered_cut_copper_stairs",
         components: &[
@@ -32207,7 +32283,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEATHERED_LIGHTNING_ROD: Item = Item {
+    pub const WEATHERED_LIGHTNING_ROD: Self = Self {
         id: 736,
         registry_key: "weathered_lightning_rod",
         components: &[
@@ -32226,7 +32302,7 @@ impl Item {
             ),
         ],
     };
-    pub const WEEPING_VINES: Item = Item {
+    pub const WEEPING_VINES: Self = Self {
         id: 255,
         registry_key: "weeping_vines",
         components: &[
@@ -32245,7 +32321,7 @@ impl Item {
             ),
         ],
     };
-    pub const WET_SPONGE: Item = Item {
+    pub const WET_SPONGE: Self = Self {
         id: 194,
         registry_key: "wet_sponge",
         components: &[
@@ -32264,7 +32340,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHEAT: Item = Item {
+    pub const WHEAT: Self = Self {
         id: 953,
         registry_key: "wheat",
         components: &[
@@ -32283,7 +32359,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHEAT_SEEDS: Item = Item {
+    pub const WHEAT_SEEDS: Self = Self {
         id: 952,
         registry_key: "wheat_seeds",
         components: &[
@@ -32302,7 +32378,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_BANNER: Item = Item {
+    pub const WHITE_BANNER: Self = Self {
         id: 1267,
         registry_key: "white_banner",
         components: &[
@@ -32321,7 +32397,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_BED: Item = Item {
+    pub const WHITE_BED: Self = Self {
         id: 1087,
         registry_key: "white_bed",
         components: &[
@@ -32340,7 +32416,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_BUNDLE: Item = Item {
+    pub const WHITE_BUNDLE: Self = Self {
         id: 1038,
         registry_key: "white_bundle",
         components: &[
@@ -32359,7 +32435,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_CANDLE: Item = Item {
+    pub const WHITE_CANDLE: Self = Self {
         id: 1400,
         registry_key: "white_candle",
         components: &[
@@ -32378,7 +32454,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_CARPET: Item = Item {
+    pub const WHITE_CARPET: Self = Self {
         id: 506,
         registry_key: "white_carpet",
         components: &[
@@ -32416,7 +32492,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_CONCRETE: Item = Item {
+    pub const WHITE_CONCRETE: Self = Self {
         id: 615,
         registry_key: "white_concrete",
         components: &[
@@ -32435,7 +32511,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_CONCRETE_POWDER: Item = Item {
+    pub const WHITE_CONCRETE_POWDER: Self = Self {
         id: 631,
         registry_key: "white_concrete_powder",
         components: &[
@@ -32454,7 +32530,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_DYE: Item = Item {
+    pub const WHITE_DYE: Self = Self {
         id: 1067,
         registry_key: "white_dye",
         components: &[
@@ -32473,7 +32549,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_GLAZED_TERRACOTTA: Item = Item {
+    pub const WHITE_GLAZED_TERRACOTTA: Self = Self {
         id: 599,
         registry_key: "white_glazed_terracotta",
         components: &[
@@ -32492,7 +32568,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_HARNESS: Item = Item {
+    pub const WHITE_HARNESS: Self = Self {
         id: 839,
         registry_key: "white_harness",
         components: &[
@@ -32527,7 +32603,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_SHULKER_BOX: Item = Item {
+    pub const WHITE_SHULKER_BOX: Self = Self {
         id: 583,
         registry_key: "white_shulker_box",
         components: &[
@@ -32546,7 +32622,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_STAINED_GLASS: Item = Item {
+    pub const WHITE_STAINED_GLASS: Self = Self {
         id: 531,
         registry_key: "white_stained_glass",
         components: &[
@@ -32565,7 +32641,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_STAINED_GLASS_PANE: Item = Item {
+    pub const WHITE_STAINED_GLASS_PANE: Self = Self {
         id: 547,
         registry_key: "white_stained_glass_pane",
         components: &[
@@ -32584,7 +32660,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_TERRACOTTA: Item = Item {
+    pub const WHITE_TERRACOTTA: Self = Self {
         id: 487,
         registry_key: "white_terracotta",
         components: &[
@@ -32603,7 +32679,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_TULIP: Item = Item {
+    pub const WHITE_TULIP: Self = Self {
         id: 239,
         registry_key: "white_tulip",
         components: &[
@@ -32622,7 +32698,7 @@ impl Item {
             ),
         ],
     };
-    pub const WHITE_WOOL: Item = Item {
+    pub const WHITE_WOOL: Self = Self {
         id: 213,
         registry_key: "white_wool",
         components: &[
@@ -32641,7 +32717,7 @@ impl Item {
             ),
         ],
     };
-    pub const WILD_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
+    pub const WILD_ARMOR_TRIM_SMITHING_TEMPLATE: Self = Self {
         id: 1431,
         registry_key: "wild_armor_trim_smithing_template",
         components: &[
@@ -32660,7 +32736,7 @@ impl Item {
             ),
         ],
     };
-    pub const WILDFLOWERS: Item = Item {
+    pub const WILDFLOWERS: Self = Self {
         id: 260,
         registry_key: "wildflowers",
         components: &[
@@ -32679,7 +32755,7 @@ impl Item {
             ),
         ],
     };
-    pub const WIND_CHARGE: Item = Item {
+    pub const WIND_CHARGE: Self = Self {
         id: 1220,
         registry_key: "wind_charge",
         components: &[
@@ -32698,7 +32774,7 @@ impl Item {
             ),
         ],
     };
-    pub const WITCH_SPAWN_EGG: Item = Item {
+    pub const WITCH_SPAWN_EGG: Self = Self {
         id: 1198,
         registry_key: "witch_spawn_egg",
         components: &[
@@ -32717,7 +32793,7 @@ impl Item {
             ),
         ],
     };
-    pub const WITHER_ROSE: Item = Item {
+    pub const WITHER_ROSE: Self = Self {
         id: 244,
         registry_key: "wither_rose",
         components: &[
@@ -32736,7 +32812,7 @@ impl Item {
             ),
         ],
     };
-    pub const WITHER_SKELETON_SKULL: Item = Item {
+    pub const WITHER_SKELETON_SKULL: Self = Self {
         id: 1235,
         registry_key: "wither_skeleton_skull",
         components: &[
@@ -32777,7 +32853,7 @@ impl Item {
             ),
         ],
     };
-    pub const WITHER_SKELETON_SPAWN_EGG: Item = Item {
+    pub const WITHER_SKELETON_SPAWN_EGG: Self = Self {
         id: 1182,
         registry_key: "wither_skeleton_spawn_egg",
         components: &[
@@ -32796,7 +32872,7 @@ impl Item {
             ),
         ],
     };
-    pub const WITHER_SPAWN_EGG: Item = Item {
+    pub const WITHER_SPAWN_EGG: Self = Self {
         id: 1181,
         registry_key: "wither_spawn_egg",
         components: &[
@@ -32815,7 +32891,7 @@ impl Item {
             ),
         ],
     };
-    pub const WOLF_ARMOR: Item = Item {
+    pub const WOLF_ARMOR: Self = Self {
         id: 891,
         registry_key: "wolf_armor",
         components: &[
@@ -32869,7 +32945,7 @@ impl Item {
             ),
         ],
     };
-    pub const WOLF_SPAWN_EGG: Item = Item {
+    pub const WOLF_SPAWN_EGG: Self = Self {
         id: 1141,
         registry_key: "wolf_spawn_egg",
         components: &[
@@ -32888,7 +32964,7 @@ impl Item {
             ),
         ],
     };
-    pub const WOODEN_AXE: Item = Item {
+    pub const WOODEN_AXE: Self = Self {
         id: 915,
         registry_key: "wooden_axe",
         components: &[
@@ -32948,9 +33024,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const WOODEN_HOE: Item = Item {
+    pub const WOODEN_HOE: Self = Self {
         id: 916,
         registry_key: "wooden_hoe",
         components: &[
@@ -33010,9 +33087,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const WOODEN_PICKAXE: Item = Item {
+    pub const WOODEN_PICKAXE: Self = Self {
         id: 914,
         registry_key: "wooden_pickaxe",
         components: &[
@@ -33072,9 +33150,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const WOODEN_SHOVEL: Item = Item {
+    pub const WOODEN_SHOVEL: Self = Self {
         id: 913,
         registry_key: "wooden_shovel",
         components: &[
@@ -33134,9 +33213,10 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const WOODEN_SPEAR: Item = Item {
+    pub const WOODEN_SPEAR: Self = Self {
         id: 1297,
         registry_key: "wooden_spear",
         components: &[
@@ -33176,9 +33256,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const WOODEN_SWORD: Item = Item {
+    pub const WOODEN_SWORD: Self = Self {
         id: 912,
         registry_key: "wooden_sword",
         components: &[
@@ -33243,9 +33324,10 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
-    pub const WRITABLE_BOOK: Item = Item {
+    pub const WRITABLE_BOOK: Self = Self {
         id: 1221,
         registry_key: "writable_book",
         components: &[
@@ -33264,7 +33346,7 @@ impl Item {
             ),
         ],
     };
-    pub const WRITTEN_BOOK: Item = Item {
+    pub const WRITTEN_BOOK: Self = Self {
         id: 1222,
         registry_key: "written_book",
         components: &[
@@ -33283,7 +33365,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_BANNER: Item = Item {
+    pub const YELLOW_BANNER: Self = Self {
         id: 1271,
         registry_key: "yellow_banner",
         components: &[
@@ -33302,7 +33384,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_BED: Item = Item {
+    pub const YELLOW_BED: Self = Self {
         id: 1091,
         registry_key: "yellow_bed",
         components: &[
@@ -33321,7 +33403,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_BUNDLE: Item = Item {
+    pub const YELLOW_BUNDLE: Self = Self {
         id: 1042,
         registry_key: "yellow_bundle",
         components: &[
@@ -33340,7 +33422,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_CANDLE: Item = Item {
+    pub const YELLOW_CANDLE: Self = Self {
         id: 1404,
         registry_key: "yellow_candle",
         components: &[
@@ -33359,7 +33441,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_CARPET: Item = Item {
+    pub const YELLOW_CARPET: Self = Self {
         id: 510,
         registry_key: "yellow_carpet",
         components: &[
@@ -33397,7 +33479,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_CONCRETE: Item = Item {
+    pub const YELLOW_CONCRETE: Self = Self {
         id: 619,
         registry_key: "yellow_concrete",
         components: &[
@@ -33416,7 +33498,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_CONCRETE_POWDER: Item = Item {
+    pub const YELLOW_CONCRETE_POWDER: Self = Self {
         id: 635,
         registry_key: "yellow_concrete_powder",
         components: &[
@@ -33435,7 +33517,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_DYE: Item = Item {
+    pub const YELLOW_DYE: Self = Self {
         id: 1071,
         registry_key: "yellow_dye",
         components: &[
@@ -33454,7 +33536,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_GLAZED_TERRACOTTA: Item = Item {
+    pub const YELLOW_GLAZED_TERRACOTTA: Self = Self {
         id: 603,
         registry_key: "yellow_glazed_terracotta",
         components: &[
@@ -33473,7 +33555,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_HARNESS: Item = Item {
+    pub const YELLOW_HARNESS: Self = Self {
         id: 843,
         registry_key: "yellow_harness",
         components: &[
@@ -33508,7 +33590,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_SHULKER_BOX: Item = Item {
+    pub const YELLOW_SHULKER_BOX: Self = Self {
         id: 587,
         registry_key: "yellow_shulker_box",
         components: &[
@@ -33527,7 +33609,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_STAINED_GLASS: Item = Item {
+    pub const YELLOW_STAINED_GLASS: Self = Self {
         id: 535,
         registry_key: "yellow_stained_glass",
         components: &[
@@ -33546,7 +33628,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_STAINED_GLASS_PANE: Item = Item {
+    pub const YELLOW_STAINED_GLASS_PANE: Self = Self {
         id: 551,
         registry_key: "yellow_stained_glass_pane",
         components: &[
@@ -33565,7 +33647,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_TERRACOTTA: Item = Item {
+    pub const YELLOW_TERRACOTTA: Self = Self {
         id: 491,
         registry_key: "yellow_terracotta",
         components: &[
@@ -33584,7 +33666,7 @@ impl Item {
             ),
         ],
     };
-    pub const YELLOW_WOOL: Item = Item {
+    pub const YELLOW_WOOL: Self = Self {
         id: 217,
         registry_key: "yellow_wool",
         components: &[
@@ -33603,7 +33685,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOGLIN_SPAWN_EGG: Item = Item {
+    pub const ZOGLIN_SPAWN_EGG: Self = Self {
         id: 1212,
         registry_key: "zoglin_spawn_egg",
         components: &[
@@ -33622,7 +33704,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOMBIE_HEAD: Item = Item {
+    pub const ZOMBIE_HEAD: Self = Self {
         id: 1237,
         registry_key: "zombie_head",
         components: &[
@@ -33663,7 +33745,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOMBIE_HORSE_SPAWN_EGG: Item = Item {
+    pub const ZOMBIE_HORSE_SPAWN_EGG: Self = Self {
         id: 1184,
         registry_key: "zombie_horse_spawn_egg",
         components: &[
@@ -33682,7 +33764,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOMBIE_NAUTILUS_SPAWN_EGG: Item = Item {
+    pub const ZOMBIE_NAUTILUS_SPAWN_EGG: Self = Self {
         id: 1185,
         registry_key: "zombie_nautilus_spawn_egg",
         components: &[
@@ -33701,7 +33783,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOMBIE_SPAWN_EGG: Item = Item {
+    pub const ZOMBIE_SPAWN_EGG: Self = Self {
         id: 1183,
         registry_key: "zombie_spawn_egg",
         components: &[
@@ -33720,7 +33802,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOMBIE_VILLAGER_SPAWN_EGG: Item = Item {
+    pub const ZOMBIE_VILLAGER_SPAWN_EGG: Self = Self {
         id: 1186,
         registry_key: "zombie_villager_spawn_egg",
         components: &[
@@ -33739,7 +33821,7 @@ impl Item {
             ),
         ],
     };
-    pub const ZOMBIFIED_PIGLIN_SPAWN_EGG: Item = Item {
+    pub const ZOMBIFIED_PIGLIN_SPAWN_EGG: Self = Self {
         id: 1213,
         registry_key: "zombified_piglin_spawn_egg",
         components: &[
@@ -33758,22 +33840,21 @@ impl Item {
             ),
         ],
     };
+    #[must_use]
     pub fn translated_name(&self) -> TextComponent {
         TextComponent::translate(
             self.components
                 .iter()
                 .find_map(|(id, data)| {
-                    if id == &ItemName {
-                        Some(data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)
-                    } else {
-                        None
-                    }
+                    (id == &ItemName)
+                        .then(|| data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)
                 })
                 .unwrap(),
             &[],
         )
     }
     #[doc = "Try to parse an item from a resource location string."]
+    #[must_use]
     pub fn from_registry_key(name: &str) -> Option<&'static Self> {
         let name = name.strip_prefix("minecraft:").unwrap_or(name);
         match name {
@@ -35301,6 +35382,7 @@ impl Item {
         }
     }
     #[doc = "Try to parse an item from a raw id."]
+    #[must_use]
     pub const fn from_id(id: u16) -> Option<&'static Self> {
         match id {
             872 => Some(&Self::ACACIA_BOAT),

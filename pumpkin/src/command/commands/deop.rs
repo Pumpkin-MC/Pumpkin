@@ -51,7 +51,8 @@ impl CommandExecutor for Executor {
                             .await;
                     }
 
-                    let msg = TextComponent::translate(
+                    let msg = TextComponent::translate_cross(
+                        "commands.deop.success",
                         "commands.deop.success",
                         [TextComponent::text(profile.name.clone())],
                     );
@@ -64,7 +65,8 @@ impl CommandExecutor for Executor {
             }
 
             if succeeded_deops == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.deop.failed",
                     "commands.deop.failed",
                     [],
                 )))

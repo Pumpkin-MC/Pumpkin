@@ -2,100 +2,99 @@ use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 
 use crate::remap::{MappingNode, ParsedMappings, Remapper};
-use crate::version::MinecraftVersion;
-
-/// Computes the inverse of an item ID mapping table, mapping new IDs back to old IDs.
-///
-/// # Arguments
-/// - `mapping` – Forward mapping slice where index is the old ID and value is the new ID.
-/// - `mapped_size` – Length of the output table (number of IDs in the new version).
-///
-/// # Returns
-/// A `Vec<u16>` of length `mapped_size` where index is the new ID and value is the old ID.
-fn reverse_mapping(mapping: &[u16], mapped_size: usize) -> Vec<u16> {
-    let mut result = vec![0; mapped_size];
-    for i in 0..mapped_size {
-        result[mapping.get(i).copied().unwrap_or(i as u16) as usize] = i as u16;
-    }
-    result
-}
+use crate::version::JavaMinecraftVersion;
 
 /// Generates the `TokenStream` for per-version item ID remap tables and the
 /// `remap_item_id_for_version`/`remap_item_id_from_version` functions.
 pub fn build() -> TokenStream {
-    let node_1_21 = MappingNode {
-        version: MinecraftVersion::V_1_21,
-        value: "../assets/viaversion/data/mappings-1.21to1.21.2.nbt",
+    // ViaBackwards mappings go new → old (26.1 → 1.21.11 → ... → 1.20.5)
+    // This is the correct direction for a new server sending to old clients.
+    let node_1_20_5 = MappingNode {
+        version: JavaMinecraftVersion::V_1_20_5,
+        value: "../assets/viabackwards/data/mappings-1.21to1.20.5.nbt",
         child: None,
     };
+    let node_1_21 = MappingNode {
+        version: JavaMinecraftVersion::V_1_21,
+        value: "../assets/viabackwards/data/mappings-1.21.2to1.21.nbt",
+        child: Some(&node_1_20_5),
+    };
     let node_1_21_2 = MappingNode {
-        version: MinecraftVersion::V_1_21_2,
-        value: "../assets/viaversion/data/mappings-1.21.2to1.21.4.nbt",
+        version: JavaMinecraftVersion::V_1_21_2,
+        value: "../assets/viabackwards/data/mappings-1.21.4to1.21.2.nbt",
         child: Some(&node_1_21),
     };
     let node_1_21_4 = MappingNode {
-        version: MinecraftVersion::V_1_21_4,
-        value: "../assets/viaversion/data/mappings-1.21.4to1.21.5.nbt",
+        version: JavaMinecraftVersion::V_1_21_4,
+        value: "../assets/viabackwards/data/mappings-1.21.5to1.21.4.nbt",
         child: Some(&node_1_21_2),
     };
     let node_1_21_5 = MappingNode {
-        version: MinecraftVersion::V_1_21_5,
-        value: "../assets/viaversion/data/mappings-1.21.5to1.21.6.nbt",
+        version: JavaMinecraftVersion::V_1_21_5,
+        value: "../assets/viabackwards/data/mappings-1.21.6to1.21.5.nbt",
         child: Some(&node_1_21_4),
     };
     let node_1_21_6 = MappingNode {
-        version: MinecraftVersion::V_1_21_6,
-        value: "../assets/viaversion/data/mappings-1.21.6to1.21.7.nbt",
+        version: JavaMinecraftVersion::V_1_21_6,
+        value: "../assets/viabackwards/data/mappings-1.21.7to1.21.6.nbt",
         child: Some(&node_1_21_5),
     };
     let node_1_21_7 = MappingNode {
-        version: MinecraftVersion::V_1_21_7,
-        value: "../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt",
+        version: JavaMinecraftVersion::V_1_21_7,
+        value: "../assets/viabackwards/data/mappings-1.21.9to1.21.7.nbt",
         child: Some(&node_1_21_6),
     };
     let node_1_21_9 = MappingNode {
-        version: MinecraftVersion::V_1_21_9,
-        value: "../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt",
+        version: JavaMinecraftVersion::V_1_21_9,
+        value: "../assets/viabackwards/data/mappings-1.21.11to1.21.9.nbt",
         child: Some(&node_1_21_7),
     };
     let node_1_21_11 = MappingNode {
-        version: MinecraftVersion::V_1_21_11,
-        value: "../assets/viaversion/data/mappings-1.21.11to26.1.nbt",
+        version: JavaMinecraftVersion::V_1_21_11,
+        value: "../assets/viabackwards/data/mappings-26.1to1.21.11.nbt",
         child: Some(&node_1_21_9),
     };
+
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
-        version: MinecraftVersion::V_26_1,
+        version: JavaMinecraftVersion::V_26_1,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first
                     .iter()
-                    .map(|id| second.get(usize::from(*id)).copied().unwrap_or(*id))
+                    .map(|id| second.get(usize::from(*id)).copied().unwrap_or(0))
                     .collect(),
             ),
             (None, Some(second)) => Some(
                 (0..second.len())
-                    .map(|id| second.get(id).copied().unwrap_or(id as u16))
+                    .map(|id| second.get(id).copied().unwrap_or(0))
                     .collect(),
             ),
             (Some(first), None) => Some(first.clone()),
             _ => None,
         },
         serializer: |&file| {
-            ParsedMappings::parse_mapping_file(file, "items")
-                .map(|mappings| mappings.invert_with_default_to_u16(file))
+            ParsedMappings::parse_mapping_file(file, "items").map(|mappings| mappings.to_u16(file))
         },
     };
 
     let all_mappings = remapper.process(&node_1_21_11);
     let mapping_size = all_mappings
         .iter()
-        .map(|(_, mapping)| mapping.as_ref().map(|x| x.len()).unwrap_or(0))
+        .flat_map(|(_, mapping)| {
+            mapping
+                .as_ref()
+                .map(|m| m.iter().copied().max().unwrap_or(0))
+        })
         .max()
-        .unwrap_or(0);
+        .unwrap_or(0) as usize
+        + 1;
+
     let mut static_values = TokenStream::new();
     let mut match_arms_id_for_ver = TokenStream::new();
     let mut match_arms_id_from_ver = TokenStream::new();
+
     for (ver, mapping) in &all_mappings {
+        // Forward: 26.1 → old version (for sending to old clients)
         {
             let ident = format_ident!(
                 "{}",
@@ -118,6 +117,7 @@ pub fn build() -> TokenStream {
                     .unwrap_or(item_id),
             });
         }
+        // Reverse: old version → 26.1 (for receiving from old clients)
         {
             let reversed = reverse_mapping(mapping.as_ref().unwrap(), mapping_size);
             let ident = format_ident!(
@@ -139,12 +139,12 @@ pub fn build() -> TokenStream {
     }
 
     quote! {
-        use pumpkin_util::version::MinecraftVersion;
+        use pumpkin_util::version::JavaMinecraftVersion;
 
         #static_values
 
         #[must_use]
-        pub fn remap_item_id_for_version(item_id: u16, version: MinecraftVersion) -> u16 {
+        pub fn remap_item_id_for_version(item_id: u16, version: JavaMinecraftVersion) -> u16 {
             match version {
                 #match_arms_id_for_ver
                 _ => item_id,
@@ -152,11 +152,22 @@ pub fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub fn remap_item_id_from_version(item_id: u16, version: MinecraftVersion) -> u16 {
+        pub fn remap_item_id_from_version(item_id: u16, version: JavaMinecraftVersion) -> u16 {
             match version {
                 #match_arms_id_from_ver
                 _ => item_id,
             }
         }
     }
+}
+
+fn reverse_mapping(mapping: &[u16], mapped_size: usize) -> Vec<u16> {
+    let mut result = vec![0u16; mapped_size];
+    for (new_id, old_id) in mapping.iter().enumerate() {
+        let old_id = *old_id as usize;
+        if old_id != 0 && old_id < mapped_size {
+            result[old_id] = new_id as u16;
+        }
+    }
+    result
 }

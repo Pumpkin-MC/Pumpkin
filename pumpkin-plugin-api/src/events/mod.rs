@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-pub use crate::wit::pumpkin::plugin::event::{Event, EventPriority};
+pub use crate::wit::pumpkin::plugin::event::{Event, EventPriority, InteractAction};
 use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 pub mod block;

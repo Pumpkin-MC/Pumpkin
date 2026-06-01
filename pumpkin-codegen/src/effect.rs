@@ -157,12 +157,15 @@ pub fn build() -> TokenStream {
         impl StatusEffect {
             #variants
 
+            #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #name_to_type
                     _ => None
                 }
             }
+
+            #[must_use]
             pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #minecraft_name_to_type
@@ -183,7 +186,7 @@ pub fn build() -> TokenStream {
             }
 
             fn from_str(name: &str) -> Option<&'static Self> {
-                StatusEffect::from_minecraft_name(name)
+                Self::from_minecraft_name(name)
             }
 
             fn to_string(&self) -> String {

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use pumpkin_data::tag;
-use pumpkin_util::GameMode;
-use pumpkin_world::block::entities::{
+use crate::block::entities::{
     BlockEntity,
     sign::{DyeColor, Text},
 };
+use pumpkin_data::tag;
+use pumpkin_util::GameMode;
 
 use crate::{
     block::{UseWithItemArgs, registry::BlockActionResult},
@@ -17,7 +17,7 @@ pub struct DyeItem;
 
 impl ItemMetadata for DyeItem {
     fn ids() -> Box<[u16]> {
-        tag::Item::C_DYES.1.to_vec().into_boxed_slice()
+        tag::Item::C_DYES.1.into()
     }
 }
 
@@ -32,7 +32,7 @@ impl ItemBehaviour for DyeItem {
 }
 
 impl DyeItem {
-    pub async fn apply_to_sign(
+    pub fn apply_to_sign(
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
@@ -43,14 +43,12 @@ impl DyeItem {
 
         text.set_color(dye_color);
 
-        args.world.update_block_entity(block_entity).await;
-        args.world
-            .play_block_sound(
-                pumpkin_data::sound::Sound::ItemDyeUse,
-                pumpkin_data::sound::SoundCategory::Blocks,
-                *args.position,
-            )
-            .await;
+        args.world.update_block_entity(block_entity);
+        args.world.play_block_sound(
+            pumpkin_data::sound::Sound::ItemDyeUse,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            *args.position,
+        );
         BlockActionResult::Success
     }
 }

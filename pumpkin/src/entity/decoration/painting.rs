@@ -21,14 +21,16 @@ impl PaintingEntity {
 impl NBTStorage for PaintingEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.entity.write_nbt(nbt).await;
             nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            // TODO
-            self.entity.data.store(3, Ordering::Relaxed);
+            self.entity.read_nbt_non_mut(nbt).await;
+            let facing = nbt.get_byte("facing").unwrap_or(3);
+            self.entity.data.store(facing as i32, Ordering::Relaxed);
         })
     }
 }
@@ -59,6 +61,10 @@ impl EntityBase for PaintingEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

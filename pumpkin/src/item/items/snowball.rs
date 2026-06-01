@@ -28,15 +28,13 @@ impl ItemBehaviour for SnowBallItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntitySnowballThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntitySnowballThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
             let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
-            let snowball = SnowballEntity::new_shot(entity, &player.living_entity.entity).await;
+            let snowball = SnowballEntity::new_shot(entity, &player.living_entity.entity);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
             snowball.thrown.set_velocity_from(
@@ -48,6 +46,26 @@ impl ItemBehaviour for SnowBallItem {
                 1.0,
             );
             world.spawn_entity(Arc::new(snowball)).await;
+
+            // Consume item
+            let held_item = player.inventory.held_item();
+            let consumed = {
+                let mut main_hand = held_item.lock().await;
+                if !main_hand.is_empty() && main_hand.item.id == Item::SNOWBALL.id {
+                    main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !consumed {
+                let off_hand_item = player.inventory.off_hand_item().await;
+                let mut off_hand = off_hand_item.lock().await;
+                if !off_hand.is_empty() && off_hand.item.id == Item::SNOWBALL.id {
+                    off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                }
+            }
         })
     }
 

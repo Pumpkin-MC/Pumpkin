@@ -3,15 +3,17 @@ use foliage::FoliagePlacer;
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use root::RootPlacer;
 
 use trunk::TrunkPlacer;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub mod decorator;
 pub mod foliage;
+pub mod root;
 pub mod trunk;
 
 pub struct TreeFeature {
@@ -23,6 +25,7 @@ pub struct TreeFeature {
     pub ignore_vines: bool,
     pub decorators: Vec<TreeDecorator>,
     pub below_trunk_provider: BlockStateProvider,
+    pub root_placer: Option<RootPlacer>,
 }
 
 pub struct TreeNode {
@@ -35,16 +38,15 @@ impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         min_y: i8,
         height: u16,
-        feature_name: &str, // This placed feature
+        feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        // TODO
-        let log_positions = self.generate_main(
+        let (log_positions, root_positions, foliage_positions) = self.generate_main(
             block_registry,
             chunk,
             min_y,
@@ -55,7 +57,13 @@ impl TreeFeature {
         );
 
         for decorator in &self.decorators {
-            decorator.generate(chunk, random, &[], &log_positions);
+            decorator.generate(
+                chunk,
+                random,
+                &root_positions,
+                &log_positions,
+                &foliage_positions,
+            );
         }
         true
     }
@@ -78,27 +86,42 @@ impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
-        _feature_name: &str, // This placed feature
+        _feature_name: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
-    ) -> Vec<BlockPos> {
+    ) -> (Vec<BlockPos>, Vec<BlockPos>, Vec<BlockPos>) {
         let height = self.trunk_placer.get_height(random);
 
+        let trunk_start = self
+            .root_placer
+            .as_ref()
+            .map_or(pos, |placer| placer.trunk_offset(pos, random));
+
         let clipped_height = self.minimum_size.min_clipped_height;
-        let top = self.get_top(height, chunk, pos); // TODO: roots   
+        let top = self.get_top(height, chunk, trunk_start);
         if top < height && top < clipped_height.map_or(u32::MAX, |h| h as u32) {
-            return vec![];
+            return (vec![], vec![], vec![]);
         }
+
+        let root_positions = if let Some(placer) = &self.root_placer {
+            match placer.generate(chunk, random, pos, trunk_start) {
+                Some(positions) => positions,
+                None => return (vec![], vec![], vec![]),
+            }
+        } else {
+            Vec::new()
+        };
+
         let trunk_state = self.trunk_provider.get(random, pos);
 
         let (nodes, logs) = self.trunk_placer.generate(
             block_registry,
             top,
-            pos,
+            trunk_start,
             chunk,
             random,
             &self.below_trunk_provider,
@@ -112,17 +135,18 @@ impl TreeFeature {
         let base_height = height as i32 - foliage_height;
         let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
         let foliage_state = self.foliage_provider.get(random, pos);
+        let mut foliage_positions = Vec::new();
         for node in nodes {
-            self.foliage_placer.generate(
+            foliage_positions.extend(self.foliage_placer.generate(
                 chunk,
                 random,
                 &node,
                 foliage_height,
                 foliage_radius,
                 foliage_state,
-            );
+            ));
         }
-        logs
+        (logs, root_positions, foliage_positions)
     }
 
     fn get_top<T: GenerationCache>(&self, height: u32, chunk: &T, init_pos: BlockPos) -> u32 {

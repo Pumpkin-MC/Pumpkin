@@ -22,7 +22,7 @@ pub(crate) trait PressurePlate {
     }
 
     async fn on_scheduled_tick_pp(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.position).await;
+        let state = args.world.get_block_state(args.position);
         let output = self.get_redstone_output(args.block, state.id);
         if output > 0 {
             self.update_plate_state(args.world, args.position, args.block, state, output)
@@ -74,14 +74,12 @@ pub(crate) trait PressurePlate {
             world.update_neighbors(&pos.down(), None).await;
         }
         if has_output {
-            world
-                .schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal)
-                .await;
+            world.schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal);
         }
     }
 
-    async fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
-        let floor = world.get_block_state(&block_pos.down()).await;
+    fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
+        let floor = world.get_block_state(&block_pos.down());
         floor.is_side_solid(BlockDirection::Up)
     }
 
