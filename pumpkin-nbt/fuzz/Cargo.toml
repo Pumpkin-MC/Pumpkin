@@ -1,0 +1,67 @@
+[package]
+name = "pumpkin-nbt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+arbitrary = { version = "1.3", features = ["derive"] }
+
+[dependencies.pumpkin-nbt]
+path = ".."
+
+[[bin]]
+name = "deserialize_java"
+path = "fuzz_targets/deserialize_java.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_bedrock"
+path = "fuzz_targets/deserialize_bedrock.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_serde_java"
+path = "fuzz_targets/deserialize_serde_java.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_serde_bedrock"
+path = "fuzz_targets/deserialize_serde_bedrock.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decompress_gzip"
+path = "fuzz_targets/decompress_gzip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip_java"
+path = "fuzz_targets/roundtrip_java.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip_bedrock"
+path = "fuzz_targets/roundtrip_bedrock.rs"
+test = false
+doc = false
+bench = false

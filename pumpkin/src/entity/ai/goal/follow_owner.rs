@@ -50,7 +50,7 @@ impl FollowOwnerGoal {
         mob_pos.squared_distance_to_vec(&owner_pos)
     }
 
-    async fn try_teleport_to_owner(mob: &dyn Mob, owner: &Player) {
+    fn try_teleport_to_owner(mob: &dyn Mob, owner: &Player) {
         let owner_pos = owner.living_entity.entity.pos.load();
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
         let world = mob_entity.world.load_full();
@@ -76,33 +76,31 @@ impl FollowOwnerGoal {
             let target_z = owner_pos.z.floor() as i32 + dz;
 
             let below = BlockPos(Vector3::new(target_x, target_y - 1, target_z));
-            let block_below = world.get_block_state(&below).await;
+            let block_below = world.get_block_state(&below);
             if !block_below.is_solid() {
                 continue;
             }
 
             let at = BlockPos(Vector3::new(target_x, target_y, target_z));
             let above = BlockPos(Vector3::new(target_x, target_y + 1, target_z));
-            let block_at = world.get_block_state(&at).await;
-            let block_above = world.get_block_state(&above).await;
+            let block_at = world.get_block_state(&at);
+            let block_above = world.get_block_state(&above);
             if !block_at.is_air() || !block_above.is_air() {
                 continue;
             }
 
-            mob_entity
-                .teleport(
-                    Vector3::new(
-                        target_x as f64 + 0.5,
-                        target_y as f64,
-                        target_z as f64 + 0.5,
-                    ),
-                    None,
-                    None,
-                    world.clone(),
-                )
-                .await;
+            mob_entity.teleport(
+                Vector3::new(
+                    target_x as f64 + 0.5,
+                    target_y as f64,
+                    target_z as f64 + 0.5,
+                ),
+                None,
+                None,
+                world.clone(),
+            );
 
-            let mut navigator = mob.get_mob_entity().navigator.lock().await;
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
             navigator.stop();
             return;
         }
@@ -149,7 +147,7 @@ impl Goal for FollowOwnerGoal {
                 return false;
             }
 
-            let navigator = mob.get_mob_entity().navigator.lock().await;
+            let navigator = mob.get_mob_entity().navigator.lock().unwrap();
             !navigator.is_idle()
         })
     }
@@ -172,7 +170,7 @@ impl Goal for FollowOwnerGoal {
             if !should_teleport {
                 let mob_entity = mob.get_mob_entity();
                 let owner_eye_pos = owner.living_entity.entity.get_eye_pos();
-                let mut look_control = mob_entity.look_control.lock().await;
+                let mut look_control = mob_entity.look_control.lock().unwrap();
                 look_control.look_at_with_range(
                     owner_eye_pos.x,
                     owner_eye_pos.y,
@@ -188,11 +186,11 @@ impl Goal for FollowOwnerGoal {
                 self.update_countdown = to_goal_ticks(10);
 
                 if should_teleport {
-                    Self::try_teleport_to_owner(mob, owner).await;
+                    Self::try_teleport_to_owner(mob, owner);
                 } else {
                     let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
                     let owner_pos = owner.living_entity.entity.pos.load();
-                    let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                    let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                     navigator.set_progress(NavigatorGoal::new(mob_pos, owner_pos, self.speed));
                 }
             }
@@ -202,7 +200,7 @@ impl Goal for FollowOwnerGoal {
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             self.owner = None;
-            let mut navigator = mob.get_mob_entity().navigator.lock().await;
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
             navigator.stop();
         })
     }

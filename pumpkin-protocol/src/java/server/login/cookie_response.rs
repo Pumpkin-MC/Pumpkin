@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::MinecraftVersion};
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 use crate::{
@@ -12,15 +12,15 @@ use crate::{
 /// Response to a `CCookieRequest` (login) from the server.
 /// The Notchian server only accepts responses of up to 5 kiB in size.
 pub struct SLoginCookieResponse {
-    pub key: ResourceLocation,
+    pub key: Box<str>,
     pub payload: Option<Box<[u8]>>, // 5120,
 }
 
 const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl ServerPacket for SLoginCookieResponse {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
-        let key = read.get_string()?;
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let key = read.get_str()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {

@@ -10,30 +10,30 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
 
+const GRAVITY: f64 = 0.03;
+
 pub struct EnderPearlEntity {
     pub thrown: ThrownItemEntity,
 }
 
 impl EnderPearlEntity {
-    pub async fn new(entity: Entity) -> Self {
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
+    pub fn new(entity: Entity) -> Self {
+        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
         let thrown = ThrownItemEntity {
             entity,
             owner_id: None,
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
+            gravity: GRAVITY,
         };
 
         Self { thrown }
     }
 
-    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter);
-        thrown
-            .entity
-            .set_velocity(Vector3::new(0.0, 0.1, 0.0))
-            .await;
+    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
+        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         Self { thrown }
     }
 }
@@ -84,15 +84,13 @@ impl EntityBase for EnderPearlEntity {
                     rand::random::<f64>() - 0.5,
                 );
 
-                world
-                    .spawn_particle(
-                        hit_pos.add(&offset),
-                        Vector3::new(speed.x as f32, speed.y as f32, speed.z as f32),
-                        1.0,
-                        1,
-                        Particle::Portal,
-                    )
-                    .await;
+                world.spawn_particle(
+                    hit_pos.add(&offset),
+                    Vector3::new(speed.x as f32, speed.y as f32, speed.z as f32),
+                    1.0,
+                    1,
+                    Particle::Portal,
+                );
             }
 
             if let Some(owner_id) = self.thrown.owner_id
@@ -113,13 +111,11 @@ impl EntityBase for EnderPearlEntity {
                     .await;
 
                 // Play teleport sound at new position
-                world
-                    .play_sound(
-                        Sound::EntityPlayerTeleport,
-                        SoundCategory::Players,
-                        &teleport_pos,
-                    )
-                    .await;
+                world.play_sound(
+                    Sound::EntityPlayerTeleport,
+                    SoundCategory::Players,
+                    &teleport_pos,
+                );
 
                 // Deal 5 damage to owner
                 owner
@@ -131,7 +127,7 @@ impl EntityBase for EnderPearlEntity {
                     .await;
             }
 
-            world.send_entity_status(entity, EntityStatus::Death).await;
+            world.send_entity_status(entity, EntityStatus::Death);
         })
     }
 }

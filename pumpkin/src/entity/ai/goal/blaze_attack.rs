@@ -161,8 +161,7 @@ impl Goal for BlazeShootFireballGoal {
                                 blaze.entity.living_entity.entity.block_pos.load(),
                                 0,
                                 false,
-                            ))
-                            .await;
+                            ));
 
                         for _ in 0..1 {
                             // Vanilla loops 1 time
@@ -206,7 +205,7 @@ impl Goal for BlazeShootFireballGoal {
                     .entity
                     .look_control
                     .lock()
-                    .await
+                    .unwrap()
                     .look_at_entity(&*blaze, &target);
             } else if self.last_seen < 5 {
                 // TODO: set wanted position to target

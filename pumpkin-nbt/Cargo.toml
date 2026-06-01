@@ -10,7 +10,6 @@ pumpkin-codecs.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
-uuid.workspace = true
 
 cesu8.workspace = true
 flate2.workspace = true
@@ -19,9 +18,10 @@ tracing.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 criterion.workspace = true
+serde = { version = "1.0", features = ["derive"] }
 
 [[bench]]
-name = "nbt_bench"
+name = "nbt"
 harness = false
 
 [lints]

@@ -3,14 +3,13 @@ use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
     MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut,
-    read_data, read_data_pnbt,
+    read_data,
 };
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
 use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::pnbt::PNbtCompound;
 use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
@@ -94,16 +93,54 @@ impl ItemStack {
         }
         None
     }
+    #[must_use]
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
-        let to_get_id = &T::get_enum();
-        for (id, component) in &mut self.patch {
-            if id == to_get_id {
-                return component
-                    .as_mut()
-                    .map(|component| get_mut::<T>(component.as_mut()));
+        let to_get_id = T::get_enum();
+        if let Some(index) = self.patch.iter().position(|(id, _)| *id == to_get_id) {
+            return self.patch[index]
+                .1
+                .as_mut()
+                .map(|component| get_mut::<T>(component.as_mut()));
+        }
+
+        // If not in patch, clone from item to patch and return mut
+        let mut cloned = None;
+        for (id, component) in self.item.components {
+            if *id == to_get_id {
+                cloned = Some((*id, Some(component.clone_dyn())));
+                break;
             }
         }
+        if let Some((id, component)) = cloned {
+            self.patch.push((id, component));
+            return self
+                .patch
+                .last_mut()
+                .unwrap()
+                .1
+                .as_mut()
+                .map(|c| get_mut::<T>(c.as_mut()));
+        }
         None
+    }
+
+    pub fn has_enchantments(&self) -> bool {
+        self.get_data_component::<EnchantmentsImpl>()
+            .is_some_and(|e| !e.enchantment.is_empty())
+    }
+
+    pub fn add_enchantment(&mut self, enchantment: &'static Enchantment, level: u16) {
+        if let Some(enchantments) = self.get_data_component_mut::<EnchantmentsImpl>() {
+            let mut new_vec = enchantments.enchantment.to_vec();
+            new_vec.push((enchantment, level as i32));
+            enchantments.enchantment = Cow::Owned(new_vec);
+        } else {
+            let enchantments = EnchantmentsImpl {
+                enchantment: Cow::Owned(vec![(enchantment, level as i32)]),
+            };
+            self.patch
+                .push((DataComponent::Enchantments, Some(Box::new(enchantments))));
+        }
     }
 
     pub const EMPTY: &'static Self = &Self {
@@ -112,6 +149,7 @@ impl ItemStack {
         patch: Vec::new(),
     };
 
+    #[must_use]
     pub fn split_off(&mut self, amount: u8) -> Self {
         let count = amount.min(self.item_count);
         let result = self.copy_with_count(count);
@@ -199,7 +237,7 @@ impl ItemStack {
     /// Core logic: apply Unbreaking chance with precomputed armor category and level.
     /// Extracted for use in damage_item where these values are hoisted outside the loop.
     /// Private to prevent incorrect usage; only call through damage_item.
-    fn should_apply_durability_damage_with(&self, is_armor: bool, unbreaking_level: i32) -> bool {
+    fn should_apply_durability_damage_with(is_armor: bool, unbreaking_level: i32) -> bool {
         if unbreaking_level <= 0 {
             return true;
         }
@@ -215,8 +253,8 @@ impl ItemStack {
 
     /// Apply durability damage to this item and return the outcome.
     /// Callers must check the return value to handle break broadcasts and item stack updates.
-    /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
-    /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
+    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
+    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
     /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
     #[must_use]
     pub fn damage_item(&mut self, amount: i32) -> DamageResult {
@@ -236,7 +274,7 @@ impl ItemStack {
         // TODO: Short-circuit once applied >= (max_damage - current_damage) to avoid
         // iterating the full amount for high-damage hits on high-durability items.
         for _ in 0..amount {
-            if self.should_apply_durability_damage_with(is_armor, unbreaking_level) {
+            if Self::should_apply_durability_damage_with(is_armor, unbreaking_level) {
                 applied += 1;
             }
         }
@@ -500,25 +538,6 @@ impl ItemStack {
         compound.put_compound("components", tag);
     }
 
-    pub fn write_item_stack_pnbt(&self, nbt: &mut PNbtCompound) {
-        // Positional: write ID as string, then count as u8
-        nbt.put_string(&format!("minecraft:{}", self.item.registry_key));
-        nbt.put_u8(self.item_count);
-
-        // Positional: write number of components
-        nbt.put_u32(self.patch.len() as u32);
-        for (id, data) in &self.patch {
-            // Write component ID as u8 (matching DataComponent enum)
-            nbt.put_u8(*id as u8);
-            if let Some(data) = data {
-                nbt.put_bool(true); // Is presence
-                data.write_data_pnbt(nbt);
-            } else {
-                nbt.put_bool(false); // Is deletion (!)
-            }
-        }
-    }
-
     #[must_use]
     pub fn read_item_stack(compound: &NbtCompound) -> Option<Self> {
         // Get ID, which is a string like "minecraft:diamond_sword"
@@ -546,35 +565,6 @@ impl ItemStack {
                     let id = DataComponent::try_from_name(name)?;
                     item_stack.patch.push((id, Some(read_data(id, data)?)));
                 }
-            }
-        }
-
-        Some(item_stack)
-    }
-
-    #[must_use]
-    pub fn read_item_stack_pnbt(nbt: &mut PNbtCompound) -> Option<Self> {
-        // Read ID as string
-        let full_id = nbt.get_string().ok()?;
-        let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(&full_id);
-        let item = Item::from_registry_key(registry_key)?;
-
-        // Read count as u8
-        let count = nbt.get_u8().ok()?;
-
-        let mut item_stack = Self::new(count, item);
-
-        // Read components
-        let patch_len = nbt.get_u32().ok()? as usize;
-        for _ in 0..patch_len {
-            let component_id_raw = nbt.get_u8().ok()?;
-            let id = DataComponent::try_from_id(component_id_raw)?;
-            let is_present = nbt.get_bool().ok()?;
-
-            if is_present {
-                item_stack.patch.push((id, Some(read_data_pnbt(id, nbt)?)));
-            } else {
-                item_stack.patch.push((id, None));
             }
         }
 

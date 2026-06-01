@@ -18,6 +18,19 @@ pub struct Enchantment {
     pub exclusive_set: Option<&'static Tag>,
     pub max_level: i32,
     pub slots: &'static [AttributeModifierSlot],
+    pub weight: i32,
+    pub min_cost: Cost,
+    pub max_cost: Cost,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct Cost {
+    pub base: i32,
+    pub per_level_above_first: i32,
+}
+impl Cost {
+    pub fn calculate(&self, level: i32) -> i32 {
+        self.base + self.per_level_above_first * (level - 1)
+    }
 }
 impl Taggable for Enchantment {
     #[inline]
@@ -59,6 +72,54 @@ pub enum AttributeModifierSlot {
     Saddle,
 }
 impl Enchantment {
+    pub const ALL: &'static [&'static Self] = &[
+        &Self::AQUA_AFFINITY,
+        &Self::BANE_OF_ARTHROPODS,
+        &Self::BINDING_CURSE,
+        &Self::BLAST_PROTECTION,
+        &Self::BREACH,
+        &Self::CHANNELING,
+        &Self::DENSITY,
+        &Self::DEPTH_STRIDER,
+        &Self::EFFICIENCY,
+        &Self::FEATHER_FALLING,
+        &Self::FIRE_ASPECT,
+        &Self::FIRE_PROTECTION,
+        &Self::FLAME,
+        &Self::FORTUNE,
+        &Self::FROST_WALKER,
+        &Self::IMPALING,
+        &Self::INFINITY,
+        &Self::KNOCKBACK,
+        &Self::LOOTING,
+        &Self::LOYALTY,
+        &Self::LUCK_OF_THE_SEA,
+        &Self::LUNGE,
+        &Self::LURE,
+        &Self::MENDING,
+        &Self::MULTISHOT,
+        &Self::PIERCING,
+        &Self::POWER,
+        &Self::PROJECTILE_PROTECTION,
+        &Self::PROTECTION,
+        &Self::PUNCH,
+        &Self::QUICK_CHARGE,
+        &Self::RESPIRATION,
+        &Self::RIPTIDE,
+        &Self::SHARPNESS,
+        &Self::SILK_TOUCH,
+        &Self::SMITE,
+        &Self::SOUL_SPEED,
+        &Self::SWEEPING_EDGE,
+        &Self::SWIFT_SNEAK,
+        &Self::THORNS,
+        &Self::UNBREAKING,
+        &Self::VANISHING_CURSE,
+        &Self::WIND_BURST,
+    ];
+    pub fn all() -> Iter<'static, &'static Self> {
+        Self::ALL.iter()
+    }
     pub const AQUA_AFFINITY: Self = Self {
         id: 0u8,
         name: "minecraft:aqua_affinity",
@@ -69,6 +130,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Head],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 41i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const BANE_OF_ARTHROPODS: Self = Self {
         id: 1u8,
@@ -80,6 +150,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const BINDING_CURSE: Self = Self {
         id: 2u8,
@@ -91,6 +170,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Armor],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const BLAST_PROTECTION: Self = Self {
         id: 3u8,
@@ -102,6 +190,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 13i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const BREACH: Self = Self {
         id: 4u8,
@@ -113,6 +210,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub const CHANNELING: Self = Self {
         id: 5u8,
@@ -124,6 +230,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const DENSITY: Self = Self {
         id: 6u8,
@@ -135,6 +250,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const DEPTH_STRIDER: Self = Self {
         id: 7u8,
@@ -146,6 +270,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOOTS),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Feet],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 10i32,
+        },
     };
     pub const EFFICIENCY: Self = Self {
         id: 8u8,
@@ -157,6 +290,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 10i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 51i32,
+            per_level_above_first: 10i32,
+        },
     };
     pub const FEATHER_FALLING: Self = Self {
         id: 9u8,
@@ -168,6 +310,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 6i32,
+        },
+        max_cost: Cost {
+            base: 11i32,
+            per_level_above_first: 6i32,
+        },
     };
     pub const FIRE_ASPECT: Self = Self {
         id: 10u8,
@@ -179,6 +330,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 20i32,
+        },
+        max_cost: Cost {
+            base: 60i32,
+            per_level_above_first: 20i32,
+        },
     };
     pub const FIRE_PROTECTION: Self = Self {
         id: 11u8,
@@ -190,6 +350,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 18i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const FLAME: Self = Self {
         id: 12u8,
@@ -201,6 +370,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 20i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const FORTUNE: Self = Self {
         id: 13u8,
@@ -212,6 +390,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_MINING),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub const FROST_WALKER: Self = Self {
         id: 14u8,
@@ -223,6 +410,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOOTS),
         max_level: 2i32,
         slots: &[AttributeModifierSlot::Feet],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 10i32,
+        },
     };
     pub const IMPALING: Self = Self {
         id: 15u8,
@@ -234,6 +430,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 21i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const INFINITY: Self = Self {
         id: 16u8,
@@ -245,6 +450,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOW),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 20i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const KNOCKBACK: Self = Self {
         id: 17u8,
@@ -256,6 +470,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 20i32,
+        },
+        max_cost: Cost {
+            base: 55i32,
+            per_level_above_first: 20i32,
+        },
     };
     pub const LOOTING: Self = Self {
         id: 18u8,
@@ -267,6 +490,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub const LOYALTY: Self = Self {
         id: 19u8,
@@ -278,6 +510,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 12i32,
+            per_level_above_first: 7i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const LUCK_OF_THE_SEA: Self = Self {
         id: 20u8,
@@ -289,6 +530,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub const LUNGE: Self = Self {
         id: 21u8,
@@ -300,6 +550,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Hand],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const LURE: Self = Self {
         id: 22u8,
@@ -311,6 +570,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub const MENDING: Self = Self {
         id: 23u8,
@@ -322,6 +590,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Any],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 25i32,
+        },
+        max_cost: Cost {
+            base: 75i32,
+            per_level_above_first: 25i32,
+        },
     };
     pub const MULTISHOT: Self = Self {
         id: 24u8,
@@ -333,6 +610,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_CROSSBOW),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 20i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const PIERCING: Self = Self {
         id: 25u8,
@@ -344,6 +630,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_CROSSBOW),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 10i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const POWER: Self = Self {
         id: 26u8,
@@ -355,6 +650,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 10i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 16i32,
+            per_level_above_first: 10i32,
+        },
     };
     pub const PROJECTILE_PROTECTION: Self = Self {
         id: 27u8,
@@ -366,6 +670,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 3i32,
+            per_level_above_first: 6i32,
+        },
+        max_cost: Cost {
+            base: 9i32,
+            per_level_above_first: 6i32,
+        },
     };
     pub const PROTECTION: Self = Self {
         id: 28u8,
@@ -377,6 +690,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
+        weight: 10i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 11i32,
+        },
+        max_cost: Cost {
+            base: 12i32,
+            per_level_above_first: 11i32,
+        },
     };
     pub const PUNCH: Self = Self {
         id: 29u8,
@@ -388,6 +710,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 12i32,
+            per_level_above_first: 20i32,
+        },
+        max_cost: Cost {
+            base: 37i32,
+            per_level_above_first: 20i32,
+        },
     };
     pub const QUICK_CHARGE: Self = Self {
         id: 30u8,
@@ -402,6 +733,15 @@ impl Enchantment {
             AttributeModifierSlot::MainHand,
             AttributeModifierSlot::OffHand,
         ],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 12i32,
+            per_level_above_first: 20i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const RESPIRATION: Self = Self {
         id: 31u8,
@@ -413,6 +753,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Head],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 40i32,
+            per_level_above_first: 10i32,
+        },
     };
     pub const RIPTIDE: Self = Self {
         id: 32u8,
@@ -424,6 +773,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_RIPTIDE),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Hand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 17i32,
+            per_level_above_first: 7i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const SHARPNESS: Self = Self {
         id: 33u8,
@@ -435,6 +793,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 10i32,
+        min_cost: Cost {
+            base: 1i32,
+            per_level_above_first: 11i32,
+        },
+        max_cost: Cost {
+            base: 21i32,
+            per_level_above_first: 11i32,
+        },
     };
     pub const SILK_TOUCH: Self = Self {
         id: 34u8,
@@ -446,6 +813,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_MINING),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const SMITE: Self = Self {
         id: 35u8,
@@ -457,6 +833,15 @@ impl Enchantment {
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const SOUL_SPEED: Self = Self {
         id: 36u8,
@@ -468,6 +853,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Feet],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 10i32,
+        },
+        max_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 10i32,
+        },
     };
     pub const SWEEPING_EDGE: Self = Self {
         id: 37u8,
@@ -479,6 +873,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 20i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub const SWIFT_SNEAK: Self = Self {
         id: 38u8,
@@ -490,6 +893,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Legs],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 25i32,
+        },
+        max_cost: Cost {
+            base: 75i32,
+            per_level_above_first: 25i32,
+        },
     };
     pub const THORNS: Self = Self {
         id: 39u8,
@@ -501,6 +913,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Any],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 10i32,
+            per_level_above_first: 20i32,
+        },
+        max_cost: Cost {
+            base: 60i32,
+            per_level_above_first: 20i32,
+        },
     };
     pub const UNBREAKING: Self = Self {
         id: 40u8,
@@ -512,6 +933,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Any],
+        weight: 5i32,
+        min_cost: Cost {
+            base: 5i32,
+            per_level_above_first: 8i32,
+        },
+        max_cost: Cost {
+            base: 55i32,
+            per_level_above_first: 8i32,
+        },
     };
     pub const VANISHING_CURSE: Self = Self {
         id: 41u8,
@@ -523,6 +953,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Any],
+        weight: 1i32,
+        min_cost: Cost {
+            base: 25i32,
+            per_level_above_first: 0i32,
+        },
+        max_cost: Cost {
+            base: 50i32,
+            per_level_above_first: 0i32,
+        },
     };
     pub const WIND_BURST: Self = Self {
         id: 42u8,
@@ -534,6 +973,15 @@ impl Enchantment {
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
+        weight: 2i32,
+        min_cost: Cost {
+            base: 15i32,
+            per_level_above_first: 9i32,
+        },
+        max_cost: Cost {
+            base: 65i32,
+            per_level_above_first: 9i32,
+        },
     };
     pub fn from_name(name: &str) -> Option<&'static Self> {
         match name {

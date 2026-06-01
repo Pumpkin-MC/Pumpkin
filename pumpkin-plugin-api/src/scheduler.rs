@@ -95,14 +95,14 @@ impl SchedulerExt for crate::Context {
 impl SchedulerExt for crate::Server {
     fn schedule_delayed_task<F>(&self, delay_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Server) + Send + 'static,
+        F: FnMut(Self) + Send + 'static,
     {
         schedule_delayed_task(delay_ticks, handler)
     }
 
     fn schedule_repeating_task<F>(&self, delay_ticks: u64, period_ticks: u64, handler: F) -> u32
     where
-        F: FnMut(Server) + Send + 'static,
+        F: FnMut(Self) + Send + 'static,
     {
         schedule_repeating_task(delay_ticks, period_ticks, handler)
     }

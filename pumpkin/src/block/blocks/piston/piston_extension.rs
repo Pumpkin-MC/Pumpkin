@@ -20,7 +20,7 @@ impl BlockBehaviour for PistonExtensionBlock {
             let pos = args
                 .position
                 .offset(props.facing.opposite().to_block_direction().to_offset());
-            let (new_block, new_state) = args.world.get_block_and_state_id(&pos).await;
+            let (new_block, new_state) = args.world.get_block_and_state_id(&pos);
             if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
                 let props = PistonProps::from_state_id(new_state, new_block);
                 if props.extended {

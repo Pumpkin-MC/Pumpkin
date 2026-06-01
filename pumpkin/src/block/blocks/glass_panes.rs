@@ -26,7 +26,7 @@ impl BlockBehaviour for GlassPaneBlock {
             let mut pane_props = GlassPaneProperties::default(args.block);
             pane_props.waterlogged = args.replacing.water_source();
 
-            compute_pane_state(pane_props, args.world, args.block, args.position).await
+            compute_pane_state(pane_props, args.world, args.block, args.position)
         })
     }
 
@@ -36,12 +36,12 @@ impl BlockBehaviour for GlassPaneBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let pane_props = GlassPaneProperties::from_state_id(args.state_id, args.block);
-            compute_pane_state(pane_props, args.world, args.block, args.position).await
+            compute_pane_state(pane_props, args.world, args.block, args.position)
         })
     }
 }
 
-pub async fn compute_pane_state(
+pub fn compute_pane_state(
     mut pane_props: GlassPaneProperties,
     world: &World,
     block: &Block,
@@ -49,7 +49,7 @@ pub async fn compute_pane_state(
 ) -> u16 {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos).await;
+        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
         let connected = other_block == block
             || other_block_state.is_side_solid(direction.opposite())

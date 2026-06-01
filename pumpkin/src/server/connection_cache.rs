@@ -2,7 +2,7 @@ use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_data::packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION};
 use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     codec::var_int::VarInt,
@@ -37,9 +37,6 @@ fn load_icon_from_bytes(png_data: &[u8]) -> String {
 
 pub struct CachedStatus {
     pub status_response: StatusResponse,
-    // We cache the json response here so we don't parse it every time someone makes a status request.
-    // Keep in mind that we must parse this again when the StatusResponse changes, which usually happen when a player joins or leaves.
-    status_response_json: String,
     player_samples: Vec<(Uuid, String)>,
 }
 
@@ -73,18 +70,29 @@ impl CachedStatus {
     #[must_use]
     pub fn new(config: &BasicConfiguration) -> Self {
         let status_response = Self::build_response(config);
-        let status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse status response into JSON");
 
         Self {
             status_response,
-            status_response_json,
             player_samples: Vec::new(),
         }
     }
 
-    pub fn get_status(&self) -> CStatusResponse {
-        CStatusResponse::new(self.status_response_json.clone())
+    pub fn get_status_packet(&self, client_protocol: i32) -> CStatusResponse {
+        let mut response = self.status_response.clone();
+
+        let supported_min = LOWEST_SUPPORTED_MC_VERSION.protocol_version();
+        let supported_max = CURRENT_MC_VERSION.protocol_version();
+
+        if client_protocol >= supported_min
+            && client_protocol <= supported_max
+            && let Some(version) = &mut response.version
+        {
+            version.protocol = client_protocol as u32;
+        }
+
+        let json = serde_json::to_string(&response).expect("Failed to serialize status response");
+
+        CStatusResponse::new(json)
     }
 
     fn build_sample_list(&self) -> Vec<Sample> {
@@ -102,38 +110,28 @@ impl CachedStatus {
         let player_id = player.gameprofile.id;
         let player_name = player.gameprofile.name.clone();
 
-        // Only add if player is not already in the list
         if !self.player_samples.iter().any(|(id, _)| *id == player_id) {
             self.player_samples.push((player_id, player_name));
             let sample = self.build_sample_list();
 
-            let status_response = &mut self.status_response;
-            if let Some(players) = &mut status_response.players {
+            if let Some(players) = &mut self.status_response.players {
                 players.online = players.online.saturating_add(1);
                 players.sample = sample;
             }
-
-            self.status_response_json = serde_json::to_string(&status_response)
-                .expect("Failed to parse status response into JSON");
         }
     }
 
     pub fn remove_player(&mut self, player: &Player) {
         let player_id = player.gameprofile.id;
 
-        // Only decrement if player was actually in the list
         if self.player_samples.iter().any(|(id, _)| *id == player_id) {
             self.player_samples.retain(|(id, _)| *id != player_id);
             let sample = self.build_sample_list();
 
-            let status_response = &mut self.status_response;
-            if let Some(players) = &mut status_response.players {
+            if let Some(players) = &mut self.status_response.players {
                 players.online = players.online.saturating_sub(1);
                 players.sample = sample;
             }
-
-            self.status_response_json = serde_json::to_string(&status_response)
-                .expect("Failed to parse status response into JSON");
         }
     }
 
@@ -183,8 +181,8 @@ impl CachedStatus {
 
         StatusResponse {
             version: Some(Version {
-                name: CURRENT_MC_VERSION.to_string(),
-                protocol: CURRENT_MC_VERSION.protocol_version() as u32,
+                name: format!("{LOWEST_SUPPORTED_MC_VERSION}-{CURRENT_MC_VERSION}"),
+                protocol: LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {
                 max: config.max_players,

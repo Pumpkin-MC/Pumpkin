@@ -34,7 +34,7 @@ impl PlaceOnGroundTreeDecorator {
         let mut l = pos.0.z;
         let mut m = pos.0.z;
 
-        for block_pos_2 in list {
+        for block_pos_2 in list.iter() {
             if block_pos_2.0.y != i {
                 continue;
             }

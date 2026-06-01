@@ -1,6 +1,8 @@
+use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
@@ -339,7 +341,7 @@ fn profile_from_uuid_name(uuid: Uuid, name: String) -> GameProfile {
     GameProfile {
         id: uuid,
         name,
-        properties: vec![],
+        properties: ArcSwap::new(Arc::from(vec![])),
         profile_actions: None,
     }
 }
@@ -421,6 +423,6 @@ mod test {
             _ => "",
         };
         assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_UNKNOWN);
-        assert_eq!(error.context.unwrap().cursor, 4);
+        assert_eq!(error.context.expect("Error should have context").cursor, 4);
     }
 }

@@ -1,4 +1,3 @@
-use crate::block::entities::block_entity_from_nbt;
 use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -30,9 +29,11 @@ pub enum StagedChunkEnum {
     /// Chunk with carvers applied, ready for features and structures
     Carvers,
     /// Chunk with features and structures, ready for lighting
-    Features, // FEATURES SPAWN
-    /// Chunk with lighting calculated, ready for finalization
+    Features, // FEATURES
+    /// Chunk with lighting calculated, ready for spawning
     Lighting, // INITIALIZE LIGHT
+    /// Chunk with mobs spawned, ready for finalization
+    Spawn, // SPAWN
     /// Fully generated chunk
     Full,
 }
@@ -49,7 +50,8 @@ impl From<u8> for StagedChunkEnum {
             7 => Self::Carvers,
             8 => Self::Features,
             9 => Self::Lighting,
-            10 => Self::Full,
+            10 => Self::Spawn,
+            11 => Self::Full,
             _ => panic!(),
         }
     }
@@ -66,9 +68,9 @@ impl From<ChunkStatus> for StagedChunkEnum {
             ChunkStatus::Surface => Self::Surface,
             ChunkStatus::Carvers => Self::Carvers,
             ChunkStatus::Features => Self::Features,
-            ChunkStatus::Spawn => Self::Features,
             ChunkStatus::InitializeLight => Self::Lighting,
             ChunkStatus::Light => Self::Lighting,
+            ChunkStatus::Spawn => Self::Spawn,
             ChunkStatus::Full => Self::Full,
         }
     }
@@ -86,6 +88,7 @@ impl From<StagedChunkEnum> for ChunkStatus {
             StagedChunkEnum::Carvers => Self::Carvers,
             StagedChunkEnum::Features => Self::Features,
             StagedChunkEnum::Lighting => Self::Light,
+            StagedChunkEnum::Spawn => Self::Spawn,
             StagedChunkEnum::Full => Self::Full,
             _ => panic!(),
         }
@@ -98,22 +101,25 @@ impl StagedChunkEnum {
         if level <= 43 {
             Self::Full
         } else if level <= 44 {
-            Self::Lighting
+            Self::Spawn
         } else if level <= 45 {
-            Self::Features
+            Self::Lighting
         } else if level <= 46 {
-            Self::Carvers
+            Self::Features
         } else if level <= 47 {
+            Self::Carvers
+        } else if level <= 48 {
             Self::Surface
         } else {
             Self::None
         }
     }
 
-    /// Total number of state values (0 = None … 10 = Full).
+    /// Total number of state values (0 = None … 11 = Full).
     pub const COUNT: usize = Self::Full as usize + 1;
     pub const FULL_DEPENDENCIES: &'static [Self] = &[
         Self::Full,
+        Self::Spawn,
         Self::Lighting,
         Self::Features,
         Self::Carvers,
@@ -133,6 +139,7 @@ impl StagedChunkEnum {
             Self::Carvers => 0,
             Self::Features => 1,
             Self::Lighting => 1,
+            Self::Spawn => 1,
             Self::Full => 1,
             _ => panic!(),
         }
@@ -150,6 +157,7 @@ impl StagedChunkEnum {
             Self::Carvers => 0,
             Self::Features => 1,
             Self::Lighting => 1,
+            Self::Spawn => 1,
             Self::Full => 0,
             _ => panic!(),
         }
@@ -177,7 +185,8 @@ impl StagedChunkEnum {
             Self::Carvers => &[Self::Surface],
             Self::Features => &[Self::Carvers, Self::Carvers],
             Self::Lighting => &[Self::Features, Self::Features],
-            Self::Full => &[Self::Lighting, Self::Lighting],
+            Self::Spawn => &[Self::Lighting, Self::Lighting],
+            Self::Full => &[Self::Spawn, Self::Spawn],
             _ => panic!(),
         }
     }
@@ -225,7 +234,7 @@ impl Chunk {
                 z: 0,
                 block_ticks: Default::default(),
                 fluid_ticks: Default::default(),
-                block_entities: Default::default(),
+                pending_block_entities: Default::default(),
                 light_engine: Mutex::new(ChunkLight::default()),
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
@@ -298,11 +307,14 @@ impl Chunk {
             && *lighting_config == LightingEngineConfig::Default;
 
         // Convert pending block entities from structure generation to actual block entities
-        let mut block_entities = FxHashMap::default();
+        let mut pending_block_entities = FxHashMap::default();
         for nbt in proto_chunk.pending_block_entities {
-            if let Some(block_entity) = block_entity_from_nbt(&nbt) {
-                let pos = block_entity.get_position();
-                block_entities.insert(pos, block_entity);
+            if let Some(x) = nbt.get_int("x")
+                && let Some(y) = nbt.get_int("y")
+                && let Some(z) = nbt.get_int("z")
+            {
+                pending_block_entities
+                    .insert(pumpkin_util::math::position::BlockPos::new(x, y, z), nbt);
             }
         }
 
@@ -316,9 +328,9 @@ impl Chunk {
             dirty: AtomicBool::new(true),
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
-            block_entities: Mutex::new(block_entities),
+            pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
-            blending_data: proto_chunk.blending_data.clone(),
+            blending_data: proto_chunk.blending_data,
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());

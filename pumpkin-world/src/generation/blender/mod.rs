@@ -30,6 +30,7 @@ const DENSITY_BLENDING_RANGE_CELLS: i32 = 2;
 const DENSITY_BLENDING_RANGE_CHUNKS: i32 = 5 >> 2; // QuartPos.toSection(5)
 
 impl Blender {
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             height_and_biome_blending_data: FxHashMap::default(),
@@ -79,16 +80,22 @@ impl Blender {
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.height_and_biome_blending_data.is_empty() && self.density_blending_data.is_empty()
     }
 
+    #[must_use]
     pub fn blend_offset_and_factor(&self, block_x: i32, block_z: i32) -> BlendingOutput {
         let cell_x = biome_coords::from_block(block_x);
         let cell_z = biome_coords::from_block(block_z);
 
-        let fixed_height = self
-            .get_blending_data_value(cell_x, 0, cell_z, |data, x, y, z| data.get_height(x, y, z));
+        let fixed_height = self.get_blending_data_value(
+            cell_x,
+            0,
+            cell_z,
+            blending_data::BlendingData::get_height,
+        );
 
         if fixed_height != f64::MAX {
             return BlendingOutput {
@@ -111,7 +118,7 @@ impl Blender {
                 |test_cell_x, test_cell_z, height| {
                     let dx = (cell_x - test_cell_x) as f64;
                     let dz = (cell_z - test_cell_z) as f64;
-                    let distance = (dx * dx + dz * dz).sqrt();
+                    let distance = dx.hypot(dz);
 
                     if distance <= HEIGHT_BLENDING_RANGE_CELLS as f64 {
                         if distance < closest_distance {
@@ -151,6 +158,7 @@ impl Blender {
             / (128.0 * (32.0 - 3.0 * target_y_mod))
     }
 
+    #[must_use]
     pub fn blend_density(&self, block_x: i32, block_y: i32, block_z: i32, noise_value: f64) -> f64 {
         let cell_x = biome_coords::from_block(block_x);
         let cell_y = block_y / 8;
@@ -263,6 +271,7 @@ impl Blender {
         }
     }
 
+    #[must_use]
     pub fn blend_biome(
         &self,
         quart_x: i32,
@@ -284,7 +293,7 @@ impl Blender {
                 |test_cell_x, test_cell_z, biome| {
                     let dx = (quart_x - test_cell_x) as f64;
                     let dz = (quart_z - test_cell_z) as f64;
-                    let distance = (dx * dx + dz * dz).sqrt();
+                    let distance = dx.hypot(dz);
 
                     if distance <= HEIGHT_BLENDING_RANGE_CELLS as f64 && distance < closest_distance
                     {

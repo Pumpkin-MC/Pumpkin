@@ -9,7 +9,7 @@ use pumpkin_util::{
 
 use crate::generation::feature::features::spring_feature::BlockWrapper;
 use crate::{
-    block::BlockStateCodec, generation::proto_chunk::GenerationCache, world::BlockRegistryExt,
+    block::BlockStateCodec, generation::proto_chunk::GenerationCache, world::WorldPortalExt,
 };
 use pumpkin_util::random::RandomImpl;
 use std::cmp::Ordering;
@@ -102,10 +102,10 @@ impl GeodeFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
-        _feature_name: &str,
+        _feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

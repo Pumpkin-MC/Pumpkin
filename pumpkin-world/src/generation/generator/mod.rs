@@ -48,7 +48,8 @@ impl GeneratorInit for VanillaGenerator {
         } else if dimension == Dimension::THE_END {
             END_BASE_NOISE_ROUTER
         } else {
-            unreachable!()
+            tracing::error!("Unsupported dimension for noise router: {:?}", dimension);
+            OVERWORLD_BASE_NOISE_ROUTER
         };
         let terrain_cache = TerrainCache::from_random(&random_config);
 

@@ -24,6 +24,18 @@ pub struct Enchantment {
     pub max_level: i32,
     /// Equipment slots this enchantment's attribute modifiers apply to.
     pub slots: Vec<AttributeModifierSlot>, // TODO: add more
+    /// The weight of this enchantment (used for random selection).
+    pub weight: i32,
+    /// The minimum cost to get this enchantment.
+    pub min_cost: Cost,
+    /// The maximum cost to get this enchantment.
+    pub max_cost: Cost,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+pub struct Cost {
+    pub base: i32,
+    pub per_level_above_first: i32,
 }
 
 /// Equipment slot category that an enchantment's attribute modifier applies to.
@@ -81,6 +93,7 @@ pub fn build() -> TokenStream {
             .expect("Failed to parse enchantments.json");
 
     let mut variants = TokenStream::new();
+    let mut all_variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
@@ -88,6 +101,7 @@ pub fn build() -> TokenStream {
         let id = enchantment.id;
         let raw_name = name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
+        all_variants.extend(quote! { &Self::#format_name, });
         let anvil_cost = enchantment.anvil_cost;
         let supported_items = format_ident!(
             "{}",
@@ -99,9 +113,20 @@ pub fn build() -> TokenStream {
                 .to_uppercase()
         );
         let max_level = enchantment.max_level;
+        let weight = enchantment.weight;
+        let min_cost_base = enchantment.min_cost.base;
+        let min_cost_per_level = enchantment.min_cost.per_level_above_first;
+        let max_cost_base = enchantment.max_cost.base;
+        let max_cost_per_level = enchantment.max_cost.per_level_above_first;
+
         let slots = enchantment.slots;
         let slots = slots.iter().map(AttributeModifierSlot::to_tokens);
-        let Translate { translate, bedrock_translate: _, with: _ } = &*enchantment.description.0.content else {
+        let Translate {
+            translate,
+            bedrock_translate: _,
+            with: _,
+        } = &*enchantment.description.0.content
+        else {
             panic!()
         };
         let translate = translate.to_string();
@@ -125,7 +150,16 @@ pub fn build() -> TokenStream {
                     supported_items: &ItemTag::#supported_items,
                     exclusive_set: Some(&EnchantmentTag::#exclusive_set),
                     max_level: #max_level,
-                    slots: &[#(#slots),*]
+                    slots: &[#(#slots),*],
+                    weight: #weight,
+                    min_cost: Cost {
+                        base: #min_cost_base,
+                        per_level_above_first: #min_cost_per_level,
+                    },
+                    max_cost: Cost {
+                        base: #max_cost_base,
+                        per_level_above_first: #max_cost_per_level,
+                    },
                 };
             }]);
         } else {
@@ -139,7 +173,16 @@ pub fn build() -> TokenStream {
                     supported_items: &ItemTag::#supported_items,
                     exclusive_set: None,
                     max_level: #max_level,
-                    slots: &[#(#slots),*]
+                    slots: &[#(#slots),*],
+                    weight: #weight,
+                    min_cost: Cost {
+                        base: #min_cost_base,
+                        per_level_above_first: #min_cost_per_level,
+                    },
+                    max_cost: Cost {
+                        base: #max_cost_base,
+                        per_level_above_first: #max_cost_per_level,
+                    },
                 };
             }]);
         }
@@ -168,8 +211,23 @@ pub fn build() -> TokenStream {
             pub supported_items: &'static Tag,
             pub exclusive_set: Option<&'static Tag>,
             pub max_level: i32,
-            pub slots: &'static [AttributeModifierSlot]
+            pub slots: &'static [AttributeModifierSlot],
+            pub weight: i32,
+            pub min_cost: Cost,
+            pub max_cost: Cost,
             // TODO: add more
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct Cost {
+            pub base: i32,
+            pub per_level_above_first: i32,
+        }
+
+        impl Cost {
+            pub fn calculate(&self, level: i32) -> i32 {
+                self.base + self.per_level_above_first * (level - 1)
+            }
         }
         impl Taggable for Enchantment {
             #[inline]
@@ -212,6 +270,12 @@ pub fn build() -> TokenStream {
         }
 
         impl Enchantment {
+            pub const ALL: &'static [&'static Self] = &[#all_variants];
+
+            pub fn all() -> Iter<'static, &'static Self> {
+                Self::ALL.iter()
+            }
+
             #variants
 
             pub fn from_name(name: &str) -> Option<&'static Self> {

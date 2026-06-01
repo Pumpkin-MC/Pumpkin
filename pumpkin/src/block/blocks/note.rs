@@ -26,7 +26,7 @@ pub struct NoteBlock;
 
 impl NoteBlock {
     pub async fn play_note(props: &NoteBlockLikeProperties, world: &World, pos: &BlockPos) {
-        if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).await.is_air() {
+        if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).is_air() {
             world.add_synced_block_event(*pos, 0, 0).await;
         }
     }
@@ -34,20 +34,20 @@ impl NoteBlock {
         ((f32::from(note) - 12.0) / 12.0).exp2()
     }
 
-    async fn get_state_with_instrument(
+    fn get_state_with_instrument(
         world: &World,
         pos: &BlockPos,
         state: BlockStateId,
         block: &Block,
     ) -> BlockStateId {
-        let upper_instrument = world.get_block_state(&pos.up()).await.instrument;
+        let upper_instrument = world.get_block_state(&pos.up()).instrument;
 
         let mut note_props = NoteBlockLikeProperties::from_state_id(state, block);
         if !is_base_block(upper_instrument) {
             note_props.instrument = upper_instrument;
             return note_props.to_state_id(block);
         }
-        let below_instrument = world.get_block_state(&pos.down()).await.instrument;
+        let below_instrument = world.get_block_state(&pos.down()).instrument;
         let below_instrument = if is_base_block(below_instrument) {
             below_instrument
         } else {
@@ -61,7 +61,7 @@ impl NoteBlock {
 impl BlockBehaviour for NoteBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let block_state = args.world.get_block_state(args.position).await;
+            let block_state = args.world.get_block_state(args.position);
             let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
             let powered = block_receives_redstone_power(args.world, args.position).await;
             // check if powered state changed
@@ -83,7 +83,7 @@ impl BlockBehaviour for NoteBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let block_state = args.world.get_block_state(args.position).await;
+            let block_state = args.world.get_block_state(args.position);
             let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
             note_props.note = (note_props.note + 1) % 25;
             args.world
@@ -114,7 +114,7 @@ impl BlockBehaviour for NoteBlock {
         args: OnSyncedBlockEventArgs<'a>,
     ) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            let block_state = args.world.get_block_state(args.position).await;
+            let block_state = args.world.get_block_state(args.position);
             let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
             let instrument = note_props.instrument;
             let pitch = if is_base_block(instrument) {
@@ -124,15 +124,13 @@ impl BlockBehaviour for NoteBlock {
                 1.0 // default pitch
             };
             // check hasCustomSound
-            args.world
-                .play_sound_raw(
-                    convert_instrument_to_sound(instrument) as u16,
-                    SoundCategory::Records,
-                    &args.position.to_f64(),
-                    3.0,
-                    pitch,
-                )
-                .await;
+            args.world.play_sound_raw(
+                convert_instrument_to_sound(instrument) as u16,
+                SoundCategory::Records,
+                &args.position.to_f64(),
+                3.0,
+                pitch,
+            );
             true
         })
     }
@@ -145,7 +143,6 @@ impl BlockBehaviour for NoteBlock {
                 Block::NOTE_BLOCK.default_state.id,
                 args.block,
             )
-            .await
         })
     }
 
@@ -160,8 +157,7 @@ impl BlockBehaviour for NoteBlock {
                     args.position,
                     args.state_id,
                     args.block,
-                )
-                .await;
+                );
             }
             args.state_id
         })

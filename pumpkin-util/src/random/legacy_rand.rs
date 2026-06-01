@@ -373,14 +373,15 @@ mod test {
 
         let mut original_rand = LegacyRand::from_seed(0);
         {
-            let RandomDeriver::Legacy(splitter) = original_rand.next_splitter() else {
-                unreachable!()
-            };
-            assert_eq!(splitter.seed, (-4962768465676381896i64) as u64);
+            if let RandomDeriver::Legacy(splitter) = original_rand.next_splitter() {
+                assert_eq!(splitter.seed, (-4962768465676381896i64) as u64);
 
-            let mut rand = splitter.split_string("minecraft:offset");
-            assert_eq!(rand.next_i32(), 103436829);
-        };
+                let mut rand = splitter.split_string("minecraft:offset");
+                assert_eq!(rand.next_i32(), 103436829);
+            } else {
+                panic!("Expected RandomDeriver::Legacy");
+            }
+        }
 
         let mut original_rand = LegacyRand::from_seed(0);
         let mut new_rand = original_rand.split();

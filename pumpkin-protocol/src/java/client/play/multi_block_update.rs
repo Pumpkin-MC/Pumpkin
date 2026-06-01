@@ -4,7 +4,7 @@ use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
     vector3::{self},
 };
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use pumpkin_macros::java_packet;
 use std::io::Write;
@@ -55,7 +55,7 @@ impl ClientPacket for CMultiBlockUpdate {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i64_be(self.chunk_section)?;

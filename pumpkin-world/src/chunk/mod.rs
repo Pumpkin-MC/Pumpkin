@@ -1,5 +1,4 @@
 use crate::BlockStateId;
-use crate::block::entities::BlockEntity;
 use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette, has_random_ticking_fluid};
@@ -8,12 +7,13 @@ use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::{Block, BlockState};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::atomic::AtomicBool;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -30,7 +30,7 @@ pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
 #[derive(Error, Debug)]
 pub enum ChunkReadingError {
     #[error("Io error: {0}")]
-    IoError(std::io::ErrorKind),
+    IoError(std::io::Error),
     #[error("Invalid header")]
     InvalidHeader,
     #[error("Region is invalid")]
@@ -46,7 +46,7 @@ pub enum ChunkReadingError {
 #[derive(Error, Debug)]
 pub enum ChunkWritingError {
     #[error("Io error: {0}")]
-    IoError(std::io::ErrorKind),
+    IoError(std::io::Error),
     #[error("Compression error {0}")]
     Compression(CompressionError),
     #[error("Chunk serializing error: {0}")]
@@ -76,7 +76,7 @@ pub struct ChunkData {
     pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
-    pub block_entities: std::sync::Mutex<FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    pub pending_block_entities: std::sync::Mutex<FxHashMap<BlockPos, NbtCompound>>,
     pub light_engine: std::sync::Mutex<ChunkLight>,
     pub light_populated: AtomicBool,
     pub status: ChunkStatus,
@@ -84,14 +84,12 @@ pub struct ChunkData {
     pub dirty: AtomicBool,
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 pub struct ChunkEntityData {
     /// Chunk X
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: Mutex<FxHashMap<uuid::Uuid, PNbtCompound>>,
+    pub data: Mutex<FxHashMap<uuid::Uuid, NbtCompound>>,
 
     pub dirty: AtomicBool,
 }
@@ -174,6 +172,7 @@ impl TryFrom<usize> for ChunkHeightmapType {
 }
 
 impl ChunkHeightmapType {
+    #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
         let block = Block::get_raw_id_from_state_id(block_state.id);
         match self {
@@ -516,8 +515,6 @@ impl ChunkSections {
                 }
                 self.randomly_ticking_mask
                     .store(mask, std::sync::atomic::Ordering::Relaxed);
-
-                // If no more ticking sections, we could potentially deallocate, but that might be overkill and cause jitter.
             }
 
             return replaced_block_state_id;

@@ -1,16 +1,19 @@
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
     SAttack, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle,
-    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
-    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SContainerButtonClick, SCookieResponse as SPCookieResponse, SCustomPayload, SInteract,
+    SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
     SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
     SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
@@ -39,7 +42,7 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -60,22 +63,23 @@ pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod play;
+pub mod recipe_helper;
 pub mod status;
 
 use crate::entity::player::Player;
-use crate::net::{GameProfile, PlayerConfig};
+use crate::net::{GameProfile, PacketHandlerResult, PlayerConfig};
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
-    pub version: AtomicCell<MinecraftVersion>,
+    pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
     /// The Address used to connect to the Server, Send in the Handshake
-    pub server_address: Mutex<String>,
+    pub server_address: Mutex<Box<str>>,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
     pub connection_state: AtomicCell<ConnectionState>,
     /// The client's IP address.
@@ -98,12 +102,19 @@ pub struct JavaClient {
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
+    /// Keep Alive:
+    ///
+    /// Whether we are waiting for a response after sending a keep alive packet.
+    pub wait_for_keep_alive: AtomicBool,
+    /// The keep alive packet payload we send. The client should respond with the same id.
+    pub keep_alive_id: AtomicCell<i64>,
+    /// The last time we sent a keep alive packet.
+    pub last_keep_alive_time: AtomicCell<Instant>,
 }
 
-pub enum PacketHandlerResult {
-    Stop,
-    // Signal to spawn the player
-    ReadyToPlay(GameProfile, PlayerConfig),
+pub enum OutgoingPacketType {
+    Normal,
+    HighPriority,
 }
 
 struct OutgoingPacket {
@@ -137,7 +148,7 @@ impl JavaClient {
             id,
             gameprofile: Mutex::new(None),
             config: Mutex::new(None),
-            server_address: Mutex::new(String::new()),
+            server_address: Mutex::new("".into()),
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             close_token: CancellationToken::new(),
@@ -150,6 +161,9 @@ impl JavaClient {
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
+            wait_for_keep_alive: AtomicBool::new(false),
+            keep_alive_id: AtomicCell::new(0),
+            last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
         }
     }
     pub async fn set_encryption(
@@ -223,21 +237,55 @@ impl JavaClient {
     }
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
-        while let Some(packet) = self.get_packet().await {
-            match self.handle_play_packet(player, server, &packet).await {
-                Ok(()) => {}
-                Err(e) => {
-                    if e.is_kick() {
-                        if let Some(kick_reason) = e.client_kick_reason() {
-                            self.kick(TextComponent::text(kick_reason)).await;
-                        } else {
-                            self.kick(TextComponent::text(format!(
-                                "Error while handling incoming packet {e}"
-                            )))
-                            .await;
+        let mut keep_alive_interval = tokio::time::interval(std::time::Duration::from_secs(15));
+
+        // Skip the immediate first tick so we don't send a keep-alive the exact millisecond they join
+        keep_alive_interval.tick().await;
+
+        loop {
+            tokio::select! {
+                // KEEP-ALIVE TIMER
+                _ = keep_alive_interval.tick() => {
+                    // If the client never responded to the LAST keep-alive, they timed out.
+                    if self.wait_for_keep_alive.load(Ordering::Relaxed) {
+                        self.kick(TextComponent::translate(translation::java::DISCONNECT_TIMEOUT, [])).await;
+                        break;
+                    }
+
+                    // Generate a unique ID (current timestamp in ms)
+                    let keep_alive_id = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64;
+
+                    self.keep_alive_id.store(keep_alive_id);
+                    self.wait_for_keep_alive.store(true, Ordering::Relaxed);
+                    self.last_keep_alive_time.store(Instant::now());
+                    self.enqueue_packet(&pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id)).await;
+                }
+
+                // INCOMING PACKETS
+                packet_opt = self.get_packet() => {
+                    let Some(packet) = packet_opt else {
+                        break;
+                    };
+
+                    match self.handle_play_packet(player, server, &packet).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            if e.is_kick() {
+                                if let Some(kick_reason) = e.client_kick_reason() {
+                                    self.kick(TextComponent::text(kick_reason)).await;
+                                } else {
+                                    self.kick(TextComponent::text(format!(
+                                        "Error while handling incoming packet {e}"
+                                    )))
+                                    .await;
+                                }
+                            }
+                            e.log();
                         }
                     }
-                    e.log();
                 }
             }
         }
@@ -272,6 +320,13 @@ impl JavaClient {
         self.enqueue_packet_data(buf.into()).await;
     }
 
+    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        let mut buf = Vec::new();
+        let writer = &mut buf;
+        self.write_packet(packet, writer).unwrap();
+        self.try_enqueue_packet_data(buf.into());
+    }
+
     /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
     /// in-order to the client
     ///
@@ -290,6 +345,30 @@ impl JavaClient {
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id, err
                 );
+            }
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self
+            .outgoing_packet_queue_send
+            .try_send(OutgoingPacket::normal(packet_data))
+        {
+            match err {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    debug!(
+                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
+                        self.id
+                    );
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    if !self.close_token.is_cancelled() {
+                        error!(
+                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                            self.id
+                        );
+                    }
+                }
             }
         }
     }
@@ -377,7 +456,7 @@ impl JavaClient {
 
     pub fn write_packet_for_version<P: ClientPacket>(
         packet: &P,
-        version: MinecraftVersion,
+        version: JavaMinecraftVersion,
         mut write: impl Write,
     ) -> Result<(), WritingError> {
         let version_number = P::to_id(version);
@@ -394,7 +473,7 @@ impl JavaClient {
 
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
-        version: MinecraftVersion,
+        version: JavaMinecraftVersion,
     ) -> Result<Bytes, WritingError> {
         let mut packet_buf = Vec::new();
 
@@ -657,6 +736,14 @@ impl JavaClient {
                 self.handle_plugin_message(SPluginMessage::read(payload, &version)?)
                     .await;
             }
+            id if id
+                == pumpkin_protocol::java::server::config::SCustomClickAction::to_id(version) =>
+            {
+                let _packet = pumpkin_protocol::java::server::config::SCustomClickAction::read(
+                    payload, &version,
+                )?;
+                warn!("CustomClickAction in config state not yet supported");
+            }
             id if id == SAcknowledgeFinishConfig::to_id(version) => {
                 return Ok(Some(self.handle_config_acknowledged(server).await));
             }
@@ -667,6 +754,12 @@ impl JavaClient {
                 {
                     return Ok(Some(i));
                 }
+            }
+            id if id == pumpkin_protocol::java::server::config::SKeepAlive::to_id(version) => {
+                self.handle_config_keep_alive(
+                    pumpkin_protocol::java::server::config::SKeepAlive::read(payload, &version)?,
+                )
+                .await;
             }
             id if id == SConfigCookieResponse::to_id(version) => {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(
@@ -748,9 +841,12 @@ impl JavaClient {
                 self.handle_attack(player, SAttack::read(payload, &version)?, server)
                     .await;
             }
-            id if id == SKeepAlive::to_id(version) => {
-                self.handle_keep_alive(player, SKeepAlive::read(payload, &version)?)
-                    .await;
+            id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
+                self.handle_keep_alive(
+                    player,
+                    pumpkin_protocol::java::server::play::SKeepAlive::read(payload, &version)?,
+                )
+                .await;
             }
             id if id == SClientTickEnd::to_id(version) => {
                 // TODO
@@ -817,6 +913,11 @@ impl JavaClient {
                     .on_slot_click(SClickSlot::read(payload, &version)?, server)
                     .await;
             }
+            id if id == SContainerButtonClick::to_id(version) => {
+                player
+                    .on_container_button_click(SContainerButtonClick::read(payload, &version)?)
+                    .await;
+            }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(player, SSetHeldItem::read(payload, &version)?)
                     .await;
@@ -876,7 +977,7 @@ impl JavaClient {
                 let payload = SCustomPayload::read(payload, &version)?;
                 let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
-                    payload.channel,
+                    payload.channel.to_string(),
                     Bytes::from(payload.data),
                 );
                 server.plugin_manager.fire(event).await;
@@ -901,8 +1002,21 @@ impl JavaClient {
                     .await;
             }
             id if id == SPlaceRecipe::to_id(version) => {
-                self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)
-                    .await;
+                let packet = SPlaceRecipe::read(payload, &version)?;
+                self.handle_place_recipe(server, player, packet).await;
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SCustomClickAction::to_id(version) =>
+            {
+                let packet = pumpkin_protocol::java::server::play::SCustomClickAction::read(
+                    payload, &version,
+                )?;
+                let event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
+                    player.clone(),
+                    packet.action_id.clone(),
+                    packet.payload.map(Bytes::from),
+                );
+                server.plugin_manager.fire(event).await;
             }
             id if id == SSelectTrade::to_id(version) => {
                 self.handle_select_trade(player, SSelectTrade::read(payload, &version)?)

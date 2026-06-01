@@ -177,7 +177,7 @@ impl CanyonCarver {
         let vertical_multiplier = 1.0 - (0.5 - current_step / distance).abs() * 2.0;
         let factor = canyon_config.shape.vertical_radius_default_factor
             + canyon_config.shape.vertical_radius_center_factor * vertical_multiplier;
-        factor as f64 * vertical_radius * (random.next_inbetween_i32(75, 100) as f64 / 100.0)
+        factor as f64 * vertical_radius * random.next_inbetween_f32(0.75, 1.0) as f64
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -256,7 +256,7 @@ impl CanyonCarver {
                         ) && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            self.carve_block(chunk, config, world_x, world_y, world_z);
+                            Self::carve_block(chunk, config, world_x, world_y, world_z);
                         }
                     }
                 }
@@ -280,14 +280,7 @@ impl CanyonCarver {
         (xd * xd + zd * zd) * width_factor_per_height[y_index - 1] as f64 + yd * yd / 6.0 >= 1.0
     }
 
-    fn carve_block(
-        &self,
-        chunk: &mut ProtoChunk,
-        config: &CarverConfig,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) -> bool {
+    fn carve_block(chunk: &mut ProtoChunk, config: &CarverConfig, x: i32, y: i32, z: i32) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);

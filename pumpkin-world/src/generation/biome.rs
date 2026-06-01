@@ -21,9 +21,9 @@ pub fn get_biome_blend(
     // &'ing 3 gives values of 0-3, it is also the data we removed when converting to biome coords
     // This is effectively "quarters" into the biome
     // Original was "/ 4.0" but we use "* 0.25" as multiplication can be faster
-    let biome_x_quarters = (offset_x & 0b11) as f64 * 0.25;
-    let biome_y_quarters = (offset_y & 0b11) as f64 * 0.25;
-    let biome_z_quarters = (offset_z & 0b11) as f64 * 0.25;
+    let quarters_x = (offset_x & 0b11) as f64 * 0.25;
+    let quarters_y = (offset_y & 0b11) as f64 * 0.25;
+    let quarters_z = (offset_z & 0b11) as f64 * 0.25;
 
     let mut best_permutation = 0;
     let mut best_score = f64::INFINITY;
@@ -50,20 +50,20 @@ pub fn get_biome_blend(
         };
 
         // And reflect the "quarters" across the shift
-        let shifted_biome_x_quarters = if should_maintain_x {
-            biome_x_quarters
+        let shifted_quarters_x = if should_maintain_x {
+            quarters_x
         } else {
-            biome_x_quarters - 1.0
+            quarters_x - 1.0
         };
-        let shifted_biome_y_quarters = if should_maintain_y {
-            biome_y_quarters
+        let shifted_quarters_y = if should_maintain_y {
+            quarters_y
         } else {
-            biome_y_quarters - 1.0
+            quarters_y - 1.0
         };
-        let shifted_biome_z_quarters = if should_maintain_z {
-            biome_z_quarters
+        let shifted_quarters_z = if should_maintain_z {
+            quarters_z
         } else {
-            biome_z_quarters - 1.0
+            quarters_z - 1.0
         };
 
         let permutation_score = score_permutation(
@@ -71,9 +71,9 @@ pub fn get_biome_blend(
             shifted_biome_x,
             shifted_biome_y,
             shifted_biome_z,
-            shifted_biome_x_quarters,
-            shifted_biome_y_quarters,
-            shifted_biome_z_quarters,
+            shifted_quarters_x,
+            shifted_quarters_y,
+            shifted_quarters_z,
         );
 
         if best_score > permutation_score {

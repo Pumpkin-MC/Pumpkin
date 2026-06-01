@@ -39,10 +39,10 @@ struct UpdateNode {
 }
 
 impl UpdateNode {
-    async fn new(world: &World, pos: BlockPos) -> Self {
+    fn new(world: &World, pos: BlockPos) -> Self {
         Self {
             pos,
-            state: world.get_block_state(&pos).await,
+            state: world.get_block_state(&pos),
             visited: false,
             neighbors: None,
             xbias: 0,
@@ -118,7 +118,10 @@ impl RedstoneWireTurbo {
             2 | 5 => Self::EAST,
             3 | 4 => Self::WEST,
             6..=8 => Self::SOUTH,
-            _ => unreachable!(),
+            _ => {
+                tracing::error!("Invalid turbo heading code: {}", code);
+                Self::NORTH
+            }
         }
     }
 
@@ -129,7 +132,7 @@ impl RedstoneWireTurbo {
     //     true, false, true, true, false, false   // 18 to 23
     // ];
 
-    async fn identify_neighbors(&mut self, world: &World, upd1: NodeId) {
+    fn identify_neighbors(&mut self, world: &World, upd1: NodeId) {
         let pos = self.nodes[upd1.index].pos;
         let neighbors = Self::compute_all_neighbors(pos);
         let mut neighbors_visited = Vec::with_capacity(24);
@@ -143,7 +146,7 @@ impl RedstoneWireTurbo {
                     index: self.nodes.len(),
                 };
                 self.node_cache.insert(*neighbor_pos, node_id);
-                self.nodes.push(UpdateNode::new(world, *neighbor_pos).await);
+                self.nodes.push(UpdateNode::new(world, *neighbor_pos));
                 node_id
             };
 
@@ -245,18 +248,18 @@ impl RedstoneWireTurbo {
     /// This is the start of a great adventure
     pub async fn update_surrounding_neighbors(world: &Arc<World>, pos: BlockPos) {
         let mut turbo = Self::new();
-        let mut root_node = UpdateNode::new(world, pos).await;
+        let mut root_node = UpdateNode::new(world, pos);
         root_node.visited = true;
         let node_id = NodeId { index: 0 };
         turbo.node_cache.insert(pos, node_id);
         turbo.nodes.push(root_node);
-        turbo.propagate_changes(world, node_id, 0).await;
+        turbo.propagate_changes(world, node_id, 0);
         turbo.breadth_first_walk(world).await;
     }
 
-    async fn propagate_changes(&mut self, world: &World, upd1: NodeId, layer: u32) {
+    fn propagate_changes(&mut self, world: &World, upd1: NodeId, layer: u32) {
         if self.nodes[upd1.index].neighbors.is_none() {
-            self.identify_neighbors(world, upd1).await;
+            self.identify_neighbors(world, upd1);
         }
 
         let neighbors: [NodeId; 24] = self.nodes[upd1.index].neighbors.as_ref().unwrap()[0..24]
@@ -337,7 +340,7 @@ impl RedstoneWireTurbo {
             wire.power = new_wire.power;
             node.state = BlockState::from_id(wire.to_state_id(&Block::REDSTONE_WIRE));
 
-            self.propagate_changes(world, upd1, layer).await;
+            self.propagate_changes(world, upd1, layer);
         }
     }
 
@@ -355,7 +358,7 @@ impl RedstoneWireTurbo {
         let mut block_power = 0;
 
         if self.nodes[upd.index].neighbors.is_none() {
-            self.identify_neighbors(world, upd).await;
+            self.identify_neighbors(world, upd);
         }
 
         let pos = self.nodes[upd.index].pos;

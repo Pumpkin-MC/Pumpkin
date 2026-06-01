@@ -13,7 +13,6 @@ const fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<us
     Some((rel_x * cache.size + rel_z) as usize)
 }
 
-#[inline(always)]
 fn get_section_y(cache: &Cache, pos_y: i32) -> Option<usize> {
     let bottom = cache.bottom_y() as i32;
     if pos_y < bottom {
@@ -58,7 +57,6 @@ pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     }
 }
 
-#[inline(always)]
 pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -76,7 +74,10 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
 
     match &mut cache.chunks[idx] {
         Chunk::Level(c) => {
-            let mut light_engine = c.light_engine.lock().unwrap_or_else(|e| e.into_inner());
+            let mut light_engine = c
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if section_y < light_engine.block_light.len() {
                 light_engine.block_light[section_y].set(x, y, z, level);
                 c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -90,7 +91,6 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     }
 }
 
-#[inline(always)]
 #[must_use]
 pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
@@ -125,7 +125,6 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     }
 }
 
-#[inline(always)]
 pub fn set_sky_light(cache: &mut Cache, pos: BlockPos, level: u8) {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -143,7 +142,10 @@ pub fn set_sky_light(cache: &mut Cache, pos: BlockPos, level: u8) {
 
     match &mut cache.chunks[idx] {
         Chunk::Level(c) => {
-            let mut light_engine = c.light_engine.lock().unwrap_or_else(|e| e.into_inner());
+            let mut light_engine = c
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if section_y < light_engine.sky_light.len() {
                 light_engine.sky_light[section_y].set(x, y, z, level);
                 c.dirty.store(true, std::sync::atomic::Ordering::Relaxed);

@@ -25,7 +25,10 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         let next_offset = (current_offset + 1) % MAX_TICK_DELAY;
         self.offset.store(next_offset, Ordering::SeqCst);
 
-        let mut inner_guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner_guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(inner) = inner_guard.as_mut() else {
             return Vec::new();
         };
@@ -38,12 +41,18 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
                     .queued_ticks
                     .remove(&(next_tick.position, next_tick.value));
             }
+            if inner.queued_ticks.is_empty() {
+                *inner_guard = None;
+            }
         }
         res
     }
 
     pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: u64) {
-        let mut inner_guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner_guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let inner = inner_guard.get_or_insert_with(|| {
             Box::new(ChunkTickSchedulerInner {
                 tick_queue: std::array::from_fn(|_| Vec::new()),
@@ -67,7 +76,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     pub fn is_scheduled(&self, pos: BlockPos, value: &T) -> bool {
         self.inner
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
             .is_some_and(|inner| inner.queued_ticks.contains(&(pos, value)))
     }
@@ -75,7 +84,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     pub fn has_ticks(&self) -> bool {
         self.inner
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
             .is_some_and(|inner| !inner.queued_ticks.is_empty())
     }
@@ -83,7 +92,10 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let offset = self.offset.load(Ordering::SeqCst);
-        let inner_guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let inner_guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(inner) = inner_guard.as_ref() else {
             return Vec::new();
         };
@@ -112,7 +124,10 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
 
         let (lower, _) = iter.size_hint();
         if lower > 0 {
-            let mut inner_guard = scheduler.inner.lock().unwrap_or_else(|e| e.into_inner());
+            let mut inner_guard = scheduler
+                .inner
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let inner = inner_guard.get_or_insert_with(|| {
                 Box::new(ChunkTickSchedulerInner {
                     tick_queue: std::array::from_fn(|_| Vec::new()),

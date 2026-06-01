@@ -11,13 +11,14 @@ use crate::{
     world::World,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttackType {
     Knockback,
     Critical,
     Sweeping,
     Strong,
     Weak,
+    MaceSmash,
 }
 
 impl AttackType {
@@ -27,22 +28,31 @@ impl AttackType {
         let sprinting = entity.sprinting.load(Ordering::Relaxed);
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let fall_distance = player.living_entity.fall_distance.load();
-        let sword = player.inventory().held_item().lock().await.is_sword();
+        let held_item = player.inventory().held_item();
+        let is_mace = {
+            let stack = held_item.lock().await;
+            stack.item.id == pumpkin_data::item::Item::MACE.id
+        };
+
+        if is_mace && !on_ground && fall_distance > 1.5 {
+            return Self::MaceSmash;
+        }
+
+        let sword = {
+            let stack = held_item.lock().await;
+            stack.is_sword()
+        };
 
         let is_strong = attack_cooldown_progress > 0.9;
         if sprinting && is_strong {
             return Self::Knockback;
         }
 
-        // TODO: even more checks
         if is_strong && !on_ground && fall_distance > 0.0 {
-            // !sprinting omitted
             return Self::Critical;
         }
 
-        // TODO: movement speed check
         if sword && is_strong {
-            // !is_crit, !is_knockback_hit, on_ground omitted
             return Self::Sweeping;
         }
 
@@ -62,7 +72,7 @@ pub fn handle_knockback(attacker: &Entity, victim: &Entity, strength: f64) {
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 }
 
-pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
+pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
     let yaw = attacker_entity.yaw.load();
     let d = -f64::from((yaw.to_radians()).sin());
     let e = f64::from((yaw.to_radians()).cos());
@@ -70,47 +80,38 @@ pub async fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: 
     let scale = 0.5;
     let body_y = f64::from(attacker_entity.height()).mul_add(scale, pos.y);
 
-    world
-        .spawn_particle(
-            Vector3::new(pos.x + d, body_y, pos.z + e),
-            Vector3::new(0.0, 0.0, 0.0),
-            0.0,
-            0,
-            Particle::SweepAttack,
-        )
-        .await;
+    world.spawn_particle(
+        Vector3::new(pos.x + d, body_y, pos.z + e),
+        Vector3::new(0.0, 0.0, 0.0),
+        0.0,
+        0,
+        Particle::SweepAttack,
+    );
 }
 
 pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
     match attack_type {
         AttackType::Knockback => {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackKnockback,
-                    SoundCategory::Players,
-                    pos,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityPlayerAttackKnockback,
+                SoundCategory::Players,
+                pos,
+            );
         }
         AttackType::Critical => {
-            world
-                .play_sound(Sound::EntityPlayerAttackCrit, SoundCategory::Players, pos)
-                .await;
+            world.play_sound(Sound::EntityPlayerAttackCrit, SoundCategory::Players, pos);
         }
         AttackType::Sweeping => {
-            world
-                .play_sound(Sound::EntityPlayerAttackSweep, SoundCategory::Players, pos)
-                .await;
+            world.play_sound(Sound::EntityPlayerAttackSweep, SoundCategory::Players, pos);
         }
         AttackType::Strong => {
-            world
-                .play_sound(Sound::EntityPlayerAttackStrong, SoundCategory::Players, pos)
-                .await;
+            world.play_sound(Sound::EntityPlayerAttackStrong, SoundCategory::Players, pos);
         }
         AttackType::Weak => {
-            world
-                .play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos)
-                .await;
+            world.play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos);
+        }
+        AttackType::MaceSmash => {
+            world.play_sound(Sound::ItemMaceSmashAir, SoundCategory::Players, pos);
         }
     }
 }

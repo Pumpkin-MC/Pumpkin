@@ -111,7 +111,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
                 trace!("File not found, using default for: {}", self.path.display());
                 Ok(S::default())
             }
-            Err(err) => Err(ChunkReadingError::IoError(err.kind())),
+            Err(err) => Err(ChunkReadingError::IoError(err)),
         }
     }
 }
@@ -268,7 +268,7 @@ where
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(s) => s,
                         Err(ChunkReadingError::ChunkNotExist) => {
-                            unreachable!("get_serializer always returns a default serializer")
+                            return;
                         }
                         Err(err) => {
                             // Best-effort: report the error for the first coord in the batch.
@@ -332,14 +332,18 @@ where
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(s) => s,
                         Err(ChunkReadingError::ChunkNotExist) => {
-                            unreachable!("get_serializer always returns a default serializer")
+                            return Err(ChunkWritingError::IoError(std::io::Error::other(
+                                "get_serializer returned ChunkNotExist",
+                            )));
                         }
                         Err(ChunkReadingError::IoError(err)) => {
                             error!("I/O error reading region before write: {err}");
                             return Err(ChunkWritingError::IoError(err));
                         }
-                        Err(_) => {
-                            return Err(ChunkWritingError::IoError(std::io::ErrorKind::Other));
+                        Err(err) => {
+                            return Err(ChunkWritingError::IoError(std::io::Error::other(
+                                err.to_string(),
+                            )));
                         }
                     };
 
@@ -377,9 +381,9 @@ where
                             serializer
                                 .write(&path)
                                 .await
-                                .map_err(|e| ChunkWritingError::IoError(e.kind()))?;
+                                .map_err(ChunkWritingError::IoError)?;
                             // Read-lock released here.
-                        }
+                        };
 
                         // Drop our handle so `can_remove` may succeed.
                         drop(chunk_serializer);

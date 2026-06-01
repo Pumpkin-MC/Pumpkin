@@ -32,6 +32,7 @@ pub fn build() -> TokenStream {
         ];
 
         #[must_use]
+        #[allow(clippy::too_many_lines, clippy::match_same_arms)]
         pub const fn get_item_burn_ticks(item_id: u16) -> Option<u16> {
             match item_id {
                 #(#burn_tick_list_tokens)*

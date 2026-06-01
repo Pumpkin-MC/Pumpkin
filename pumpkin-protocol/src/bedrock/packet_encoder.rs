@@ -107,11 +107,6 @@ impl UDPNetworkEncoder {
         &mut self,
         _key: &[u8; 16],
     ) -> Result<(), crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError> {
-        // if matches!(self.writer, EncryptionWriter::Encrypt(_)) {
-        //     return Err(crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError);
-        // }
-        // let cipher = Aes128Cfb8Enc::new_from_slices(key, key).map_err(|_| ());
-        // take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
         Ok(())
     }
 

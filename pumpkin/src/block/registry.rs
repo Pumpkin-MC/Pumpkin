@@ -1,8 +1,9 @@
+use crate::block::blocks::amethyst::AmethystBlock;
 use crate::block::blocks::anvil::AnvilBlock;
-
 use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
+use crate::block::blocks::beacon::BeaconBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::cake::CakeBlock;
@@ -16,6 +17,9 @@ use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::conduit::ConduitBlock;
+use crate::block::blocks::coral::coral_block::CoralBlock;
+use crate::block::blocks::coral::coral_fan::CoralFanBlock;
+use crate::block::blocks::coral::coral_plant::CoralPlantBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
@@ -31,6 +35,7 @@ use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
+use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
 use crate::block::blocks::infested::InfestedBlock;
@@ -139,7 +144,7 @@ use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -160,6 +165,7 @@ use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::dragon_egg::DragonEggBlock;
+use crate::block::blocks::enchanting_table::EnchantingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
 use crate::block::blocks::hopper::HopperBlock;
@@ -170,6 +176,7 @@ use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
+use crate::block::blocks::stonecutter::StonecutterBlock;
 
 #[must_use]
 #[expect(clippy::too_many_lines)]
@@ -178,6 +185,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Blocks
     manager.register(AnvilBlock);
+    manager.register(BeaconBlock);
     manager.register(BedBlock);
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
@@ -194,6 +202,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CopperChestBlock);
     manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
+    manager.register(EnchantingTableBlock);
     manager.register(DirtPathBlock);
     manager.register(DoorBlock);
     manager.register(FarmlandBlock);
@@ -219,6 +228,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SlabBlock);
     manager.register(SlimeBlock);
     manager.register(StairBlock);
+    manager.register(StonecutterBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
@@ -288,6 +298,11 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SmallDripleafBlock);
     manager.register(BigDripleafStemBlock);
     manager.register(BigDripleafBlock);
+    manager.register(CoralFanBlock);
+    manager.register(CoralPlantBlock);
+    manager.register(CoralBlock);
+    manager.register(AmethystBlock);
+    manager.register(GrassBlock);
 
     manager.register(FallingBlock);
 
@@ -365,31 +380,6 @@ impl BlockActionResult {
 pub struct BlockRegistry {
     blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
-}
-
-impl BlockRegistryExt for BlockRegistry {
-    fn can_place_at(
-        &self,
-        block: &pumpkin_data::Block,
-        state: &BlockState,
-        block_accessor: &dyn BlockAccessor,
-        block_pos: &BlockPos,
-    ) -> bool {
-        futures::executor::block_on(async move {
-            self.can_place_at(
-                None,
-                None,
-                block_accessor,
-                None,
-                block,
-                state,
-                block_pos,
-                None,
-                None,
-            )
-            .await
-        })
-    }
 }
 
 impl BlockRegistry {
@@ -491,7 +481,7 @@ impl BlockRegistry {
     pub async fn on_use(
         &self,
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         position: &BlockPos,
         hit: &BlockHitResult<'_>,
         server: &Server,
@@ -530,7 +520,7 @@ impl BlockRegistry {
     pub async fn use_with_item(
         &self,
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         position: &BlockPos,
         hit: &BlockHitResult<'_>,
         item_stack: &Arc<Mutex<ItemStack>>,
@@ -557,7 +547,7 @@ impl BlockRegistry {
     pub async fn use_with_item_fluid(
         &self,
         fluid: &Fluid,
-        player: &Player,
+        player: &Arc<Player>,
         position: BlockPos,
         item: &Item,
         server: &Server,
@@ -573,7 +563,7 @@ impl BlockRegistry {
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn can_place_at(
+    pub fn can_place_at(
         &self,
         server: Option<&Server>,
         world: Option<&World>,
@@ -587,25 +577,23 @@ impl BlockRegistry {
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_place_at(CanPlaceAtArgs {
-                    server,
-                    world,
-                    block_accessor,
-                    block,
-                    state,
-                    position,
-                    direction,
-                    player,
-                    use_item_on,
-                })
-                .await;
+            return pumpkin_block.can_place_at(CanPlaceAtArgs {
+                server,
+                world,
+                block_accessor,
+                block,
+                state,
+                position,
+                direction,
+                player,
+                use_item_on,
+            });
         }
         true
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn can_update_at(
+    pub fn can_update_at(
         &self,
         world: &World,
         block: &Block,
@@ -617,17 +605,15 @@ impl BlockRegistry {
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_update_at(CanUpdateAtArgs {
-                    world,
-                    block,
-                    state_id,
-                    position,
-                    direction,
-                    player,
-                    use_item_on,
-                })
-                .await;
+            return pumpkin_block.can_update_at(CanUpdateAtArgs {
+                world,
+                block,
+                state_id,
+                position,
+                direction,
+                player,
+                use_item_on,
+            });
         }
         false
     }
@@ -816,10 +802,10 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state_id = world.get_block_state_id(position).await;
+        let state_id = world.get_block_state_id(position);
         for direction in BlockDirection::all() {
             let neighbor_pos = position.offset(direction.to_offset());
-            let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
+            let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
             let pumpkin_block = self.get_pumpkin_block(block.id);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block

@@ -23,7 +23,8 @@ impl MegaPineFoliagePlacer {
         radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
         let pos = node.center;
         let mut current = 0;
         for y in pos.0.y - foliage_height + offset..pos.0.y + offset {
@@ -37,6 +38,7 @@ impl MegaPineFoliagePlacer {
                 radius
             };
             FoliagePlacer::generate_square(
+                &mut foliage_positions,
                 self,
                 chunk,
                 random,
@@ -48,6 +50,7 @@ impl MegaPineFoliagePlacer {
             );
             current = rad;
         }
+        foliage_positions
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
         self.crown_height.get(random)

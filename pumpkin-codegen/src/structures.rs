@@ -305,7 +305,7 @@ pub fn build() -> TokenStream {
         let key_variant = structure_key_to_token(name);
 
         structure_const_defs.extend(quote!(
-            pub const #const_name: Structure = #structure;
+            pub const #const_name: Self = #structure;
         ));
 
         structure_lookup_arms.extend(quote!(
@@ -323,7 +323,7 @@ pub fn build() -> TokenStream {
         let const_name = format_ident!("{}", upper_name);
 
         structure_set_const_defs.extend(quote!(
-            pub const #const_name: StructureSet = #structure_set;
+            pub const #const_name: Self = #structure_set;
         ));
 
         structure_set_lookup_arms.extend(quote!(

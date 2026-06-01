@@ -178,7 +178,7 @@ impl StructureTemplate {
                     .iter()
                     .filter_map(|(key, value)| {
                         if let NbtTag::String(v) = value {
-                            Some((key.clone(), v.clone()))
+                            Some((key.to_string(), v.to_string()))
                         } else {
                             None
                         }

@@ -111,7 +111,7 @@ impl Goal for MeleeAttackGoal {
 
             let target = mob.get_mob_entity().target.lock().await.clone();
             if let Some(target) = target {
-                let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                 let target_pos = target.get_entity().pos.load();
                 navigator.set_progress(NavigatorGoal {
                     current_progress: mob.get_entity().pos.load(),
@@ -143,7 +143,7 @@ impl Goal for MeleeAttackGoal {
             }
 
             // Vanilla: this.mob.getNavigation().stop()
-            mob.get_mob_entity().navigator.lock().await.stop();
+            mob.get_mob_entity().navigator.lock().unwrap().stop();
             self.last_target_position = None;
         })
     }
@@ -158,7 +158,7 @@ impl Goal for MeleeAttackGoal {
             mob.get_mob_entity()
                 .look_control
                 .lock()
-                .await
+                .unwrap()
                 .look_at_entity_with_range(&target, 30.0, 30.0);
 
             self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
@@ -172,7 +172,7 @@ impl Goal for MeleeAttackGoal {
             if should_update_nav {
                 let mob_pos = mob.get_entity().pos.load();
                 let dist_sq = mob_pos.squared_distance_to_vec(&current_target_pos);
-                let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                 navigator.set_progress(NavigatorGoal {
                     current_progress: mob_pos,
                     destination: current_target_pos,

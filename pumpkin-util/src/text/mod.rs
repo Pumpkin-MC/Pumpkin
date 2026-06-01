@@ -7,7 +7,7 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use pumpkin_nbt::serializer::Serializer;
+use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
@@ -102,6 +102,10 @@ impl TextComponentBase {
     /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
+        fn osc8_link(url: &str, text: &str) -> String {
+            format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
+        }
+
         let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate {
@@ -133,6 +137,13 @@ impl TextComponentBase {
         if style.strikethrough.is_some() {
             text = text.strikethrough().to_string();
         }
+        if let Some(ClickEvent::OpenUrl { url }) = style.click_event.as_ref() {
+            text = osc8_link(url, &text);
+        }
+        if let Some(ClickEvent::OpenFile { path }) = style.click_event.as_ref() {
+            text = osc8_link(&format!("file://{path}"), &text);
+        }
+
         for child in self.extra {
             text += &*child.to_pretty_console();
         }
@@ -679,8 +690,9 @@ impl TextComponent {
     #[must_use]
     pub fn encode(&self) -> Box<[u8]> {
         let mut buf = Vec::new();
+        let writer = NbtWriteHelperJava::new(&mut buf);
         // TODO: Properly handle errors
-        let mut serializer = Serializer::new(&mut buf, None);
+        let mut serializer = Serializer::new(writer, None);
         self.0
             .clone()
             .to_translated()

@@ -19,7 +19,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct ChestCorridorPiece {
     pub piece: StrongholdPiece,
     pub chest_generated: bool,
@@ -158,9 +157,5 @@ impl StructurePieceBase for ChestCorridorPiece {
         //         // chunk.set_loot_table(chest_pos, "minecraft:chests/stronghold_corridor");
         //     }
         // }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

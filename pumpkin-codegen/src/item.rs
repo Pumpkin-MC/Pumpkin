@@ -62,6 +62,13 @@ pub struct ItemComponents {
     pub damage_resistant: Option<DamageResistantComponent>,
     #[serde(rename = "minecraft:weapon")]
     pub weapon: Option<WeaponComponent>,
+    #[serde(rename = "minecraft:enchantable")]
+    pub enchantable: Option<EnchantableComponent>,
+}
+
+#[derive(Deserialize)]
+pub struct EnchantableComponent {
+    pub value: i32,
 }
 
 impl ToTokens for ItemComponents {
@@ -573,6 +580,11 @@ impl ToTokens for ItemComponents {
                 shearing_sound: #shearing_sound
             }), });
         }
+
+        if let Some(enchantable) = &self.enchantable {
+            let value = LitInt::new(&enchantable.value.to_string(), Span::call_site());
+            tokens.extend(quote! { (Enchantable, &EnchantableImpl { value: #value }), });
+        }
     }
 }
 
@@ -784,7 +796,7 @@ pub fn build() -> TokenStream {
         let id_lit = LitInt::new(&item.id.to_string(), Span::call_site());
 
         constants.extend(quote! {
-            pub const #const_ident: Item = Item {
+            pub const #const_ident: Self = Self {
                 id: #id_lit,
                 registry_key: #name,
                 components: &[#components_tokens],
@@ -801,6 +813,7 @@ pub fn build() -> TokenStream {
     }
 
     quote! {
+        #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines)]
         use crate::data_component::DataComponent::*;
         use crate::data_component_impl::*;
         use crate::tag::{RegistryKey, Taggable};
@@ -839,21 +852,18 @@ pub fn build() -> TokenStream {
         impl Item {
             #constants
 
+            #[must_use]
             pub fn translated_name(&self) -> TextComponent {
                 TextComponent::translate(
                     self.components
                         .iter()
-                        .find_map(|(id, data)| if id == &ItemName {
-                            Some(data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)
-                        } else {
-                            None
-                        }
-                    ).unwrap(),
+                        .find_map(|(id, data)| (id == &ItemName).then(|| data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)).unwrap(),
                     &[],
                 )
             }
 
             #[doc = "Try to parse an item from a resource location string."]
+            #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 let name = name.strip_prefix("minecraft:").unwrap_or(name);
                 match name {
@@ -863,6 +873,7 @@ pub fn build() -> TokenStream {
             }
 
             #[doc = "Try to parse an item from a raw id."]
+            #[must_use]
             pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms

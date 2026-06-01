@@ -5,12 +5,12 @@ use crate::serial::PacketWrite;
 #[derive(PacketWrite)]
 #[packet(143)]
 pub struct CNetworkSettings {
-    compression_threshold: u16,
+    pub compression_threshold: u16,
     /// `ZLib` = 0, Snappy = 1, None = 255
-    compression_method: u16,
-    client_throttle_enabled: bool,
-    client_throttle_threshold: i8,
-    client_throttle_scalar: f32,
+    pub compression_method: u16,
+    pub client_throttle_enabled: bool,
+    pub client_throttle_threshold: i8,
+    pub client_throttle_scalar: f32,
 }
 
 impl CNetworkSettings {

@@ -7,7 +7,7 @@ use super::TrunkPlacer;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 use pumpkin_data::block_properties::Axis;
 
 pub struct CherryTrunkPlacer {
@@ -21,7 +21,7 @@ impl CherryTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
@@ -143,8 +143,8 @@ impl CherryTrunkPlacer {
             tree_height as i32 - 1 + self.branch_end_offset_from_top.get(random);
         let extend_branch_away_from_trunk =
             middle_continues_upwards || branch_end_pos_offset < offset_from_origin;
-        let distance_to_trunk = self.branch_horizontal_length.get(random)
-            + if extend_branch_away_from_trunk { 1 } else { 0 };
+        let distance_to_trunk =
+            self.branch_horizontal_length.get(random) + i32::from(extend_branch_away_from_trunk);
 
         let branch_end_pos = origin
             .add(

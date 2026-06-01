@@ -17,7 +17,7 @@ pub struct SilverfishEntity {
 }
 
 impl SilverfishEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let entity = Arc::new(MobEntity::new(entity));
         let silverfish = Self { entity };
         let mob_arc = Arc::new(silverfish);
@@ -27,8 +27,8 @@ impl SilverfishEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));

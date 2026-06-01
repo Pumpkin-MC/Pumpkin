@@ -24,6 +24,7 @@ pub struct Block {
     pub hardness: f32,
     /// The block's resistance to explosions.
     pub blast_resistance: f32,
+    pub map_color: u8,
     /// The friction coefficient. Default is 0.6; Ice is 0.98.
     pub slipperiness: f32,
     /// How much this block affects the speed of an entity walking on it (e.g., Soul Sand).

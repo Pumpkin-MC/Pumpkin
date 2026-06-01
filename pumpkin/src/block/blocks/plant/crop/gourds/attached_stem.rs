@@ -45,10 +45,8 @@ impl AttachedStemBlock {
 }
 
 impl BlockBehaviour for AttachedStemBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -76,8 +74,8 @@ impl BlockBehaviour for AttachedStemBlock {
 }
 
 impl PlantBlockBase for AttachedStemBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos);
         if block == &Block::ATTACHED_PUMPKIN_STEM {
             block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
         } else {

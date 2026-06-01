@@ -159,7 +159,7 @@ mod test {
     fn encoding() {
         assert_encode_success!(3, JsonOps, json!(3));
         assert_encode_success!(-68i8, JsonOps, json!(-68));
-        assert_encode_success!(-913813743, JsonOps, json!(-913813743));
+        assert_encode_success!(-913_813_743, JsonOps, json!(-913_813_743));
         assert_encode_success!("Hello, world!".to_string(), JsonOps, json!("Hello, world!"));
         assert_encode_success!(String::new(), JsonOps, json!(""));
         assert_encode_success!(ByteBuffer::from(vec![1, 2, 3]), JsonOps, json!([1, 2, 3]));
@@ -175,7 +175,7 @@ mod test {
         );
 
         assert_encode_success!(3u8, JsonOps, json!(3));
-        assert_encode_success!(923482312u64, JsonOps, json!(923482312));
+        assert_encode_success!(923_482_312u64, JsonOps, json!(923_482_312));
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod test {
         assert_decode!(String, json!(1), JsonOps, is_error);
 
         assert_decode!(u32, json!(-45), JsonOps, is_error);
-        assert_decode!(u64, json!(-132541235), JsonOps, is_error);
-        assert_decode!(u64, json!(132541235), JsonOps, is_success);
+        assert_decode!(u64, json!(-132_541_235), JsonOps, is_error);
+        assert_decode!(u64, json!(132_541_235), JsonOps, is_success);
     }
 }

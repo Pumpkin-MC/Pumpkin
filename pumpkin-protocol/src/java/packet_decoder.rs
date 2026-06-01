@@ -74,7 +74,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 /// Supports `ZLib` decoding/decompression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
-    reader: DecryptionReader<R>,
+    reader: Option<DecryptionReader<R>>,
     compression: Option<CompressionThreshold>,
     payload_scratch: BytesMut,
 }
@@ -82,7 +82,7 @@ pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
 impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
     pub fn new(reader: R) -> Self {
         Self {
-            reader: DecryptionReader::None(reader),
+            reader: Some(DecryptionReader::None(reader)),
             compression: None,
             payload_scratch: BytesMut::new(),
         }
@@ -94,19 +94,27 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketDecodeError> {
-        if matches!(self.reader, DecryptionReader::Decrypt(_)) {
+        if matches!(self.reader, Some(DecryptionReader::Decrypt(_))) {
             return Err(PacketDecodeError::Message(
                 "Encryption already enabled".into(),
             ));
         }
         let cipher = Aes128Cfb8Dec::new_from_slices(key, key)
             .map_err(|_| PacketDecodeError::Message("Invalid key".into()))?;
-        take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
+
+        if let Some(reader) = self.reader.take() {
+            self.reader = Some(reader.upgrade(cipher));
+        }
         Ok(())
     }
 
     pub async fn get_raw_packet(&mut self) -> Result<RawPacket, PacketDecodeError> {
-        let packet_len = VarInt::decode_async(&mut self.reader)
+        let reader = self
+            .reader
+            .as_mut()
+            .ok_or_else(|| PacketDecodeError::Message("Reader missing".into()))?;
+
+        let packet_len = VarInt::decode_async(reader)
             .await
             .map_err(|err| match err {
                 ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
@@ -119,7 +127,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             Err(PacketDecodeError::OutOfBounds)?;
         }
 
-        let mut bounded_reader = (&mut self.reader).take(packet_len);
+        let mut bounded_reader = reader.take(packet_len);
         let mut expected_packet_data_len = packet_len as usize;
         let mut expected_uncompressed_packet_data_len = None;
 

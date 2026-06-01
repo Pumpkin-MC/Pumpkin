@@ -3,7 +3,7 @@ use std::io::Write;
 use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{ClientPacket, Property, WritingError, ser::NetworkWriteExt};
 
@@ -66,7 +66,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

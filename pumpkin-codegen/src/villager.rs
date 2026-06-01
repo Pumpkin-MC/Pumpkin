@@ -70,7 +70,12 @@ pub fn build() -> TokenStream {
     let format_trade = |trade: &TradeJson| {
         let wants_item = format_ident!(
             "{}",
-            trade.wants.id.strip_prefix("minecraft:").unwrap_or(&trade.wants.id).to_shouty_snake_case()
+            trade
+                .wants
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(&trade.wants.id)
+                .to_shouty_snake_case()
         );
         let wants_count = trade.wants.count.unwrap_or(1.0) as i32;
         let wants = quote! { VillagerTradeItem { item: &crate::item::Item::#wants_item, count: #wants_count } };
@@ -78,7 +83,9 @@ pub fn build() -> TokenStream {
         let wants_b = if let Some(b) = &trade.wants_b {
             let item = format_ident!(
                 "{}",
-                b.id.strip_prefix("minecraft:").unwrap_or(&b.id).to_shouty_snake_case()
+                b.id.strip_prefix("minecraft:")
+                    .unwrap_or(&b.id)
+                    .to_shouty_snake_case()
             );
             let count = b.count.unwrap_or(1.0) as i32;
             quote! { Some(VillagerTradeItem { item: &crate::item::Item::#item, count: #count }) }
@@ -88,7 +95,12 @@ pub fn build() -> TokenStream {
 
         let gives_item = format_ident!(
             "{}",
-            trade.gives.id.strip_prefix("minecraft:").unwrap_or(&trade.gives.id).to_shouty_snake_case()
+            trade
+                .gives
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(&trade.gives.id)
+                .to_shouty_snake_case()
         );
         let gives_count = trade.gives.count.unwrap_or(1.0) as i32;
         let gives = quote! { VillagerTradeItem { item: &crate::item::Item::#gives_item, count: #gives_count } };
@@ -110,7 +122,7 @@ pub fn build() -> TokenStream {
     };
 
     // Pre-process all trade sets mentioned in trade_sets map
-    for (set_key, set_data) in &data.trade_sets {
+    for (_set_key, set_data) in &data.trade_sets {
         let tag = &set_data.trades;
         if !tag.starts_with("#minecraft:") {
             continue;
@@ -122,7 +134,7 @@ pub fn build() -> TokenStream {
         }
         let prof = parts[0];
         let level_str = parts[1].strip_prefix("level_").unwrap_or(parts[1]);
-        
+
         let mut matching_trades = Vec::new();
         let prefix = format!("{prof}/{level_str}/");
         for (key, trade) in &data.villager_trades {
@@ -132,7 +144,9 @@ pub fn build() -> TokenStream {
         }
 
         // Fallback for smiths
-        if matching_trades.is_empty() && (prof == "armorer" || prof == "toolsmith" || prof == "weaponsmith") {
+        if matching_trades.is_empty()
+            && (prof == "armorer" || prof == "toolsmith" || prof == "weaponsmith")
+        {
             let smith_prefix = format!("smith/{level_str}/");
             for (key, trade) in &data.villager_trades {
                 if key.starts_with(&smith_prefix) {
@@ -199,19 +213,27 @@ pub fn build() -> TokenStream {
         for (level_str, set_key) in &prof_data.trade_sets {
             let level = level_str.parse::<i32>().unwrap();
             let set_key_clean = set_key.strip_prefix("minecraft:").unwrap_or(set_key);
-            if let Some(set) = data.trade_sets.get(set_key_clean) {
-                if let Some(trades_ident) = generated_trade_sets.get(&set.trades) {
-                    let amount = set.amount as i32;
-                    level_matches.push(quote! { #level => Some(VillagerTradeSet { trades: #trades_ident, amount: #amount }) });
-                }
+            if let Some(trades_ident) = data
+                .trade_sets
+                .get(set_key_clean)
+                .and_then(|set| generated_trade_sets.get(&set.trades))
+            {
+                let set = data.trade_sets.get(set_key_clean).unwrap();
+                let amount = set.amount as i32;
+                level_matches.push(quote! { #level => Some(VillagerTradeSet { trades: #trades_ident, amount: #amount }) });
             }
         }
-        profession_trade_sets.push(quote! {
-            Self::#ident => match level {
-                #(#level_matches,)*
-                _ => None,
+        let profession_trade_set = if level_matches.is_empty() {
+            quote! { Self::#ident => None }
+        } else {
+            quote! {
+                Self::#ident => match level {
+                    #(#level_matches,)*
+                    _ => None,
+                }
             }
-        });
+        };
+        profession_trade_sets.push(profession_trade_set);
     }
 
     for (i, name) in data.types.keys().enumerate() {
@@ -225,7 +247,7 @@ pub fn build() -> TokenStream {
     quote! {
         use serde::Serialize;
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
         pub struct VillagerTradeItem {
             pub item: &'static crate::item::Item,
             pub count: i32,
@@ -257,7 +279,7 @@ pub fn build() -> TokenStream {
 
         impl VillagerProfession {
             #[must_use]
-            pub fn from_i32(id: i32) -> Option<Self> {
+            pub const fn from_i32(id: i32) -> Option<Self> {
                 match id {
                     #(#profession_from_i32,)*
                     _ => None,
@@ -265,28 +287,31 @@ pub fn build() -> TokenStream {
             }
 
             #[must_use]
-            pub fn work_sound(&self) -> Option<crate::sound::Sound> {
+            #[allow(clippy::match_same_arms)]
+            pub const fn work_sound(&self) -> Option<crate::sound::Sound> {
                 match self {
                     #(#work_sounds),*
                 }
             }
 
             #[must_use]
-            pub fn requested_items(&self) -> &'static [&'static crate::item::Item] {
+            #[allow(clippy::match_same_arms)]
+            pub const fn requested_items(&self) -> &'static [&'static crate::item::Item] {
                 match self {
                     #(#requested_items),*
                 }
             }
 
             #[must_use]
-            pub fn translation_key(&self) -> &'static str {
+            pub const fn translation_key(&self) -> &'static str {
                 match self {
                     #(#profession_names),*
                 }
             }
 
             #[must_use]
-            pub fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
+            #[allow(clippy::too_many_lines, clippy::match_same_arms)]
+            pub const fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
                 match self {
                     #(#profession_trade_sets,)*
                 }
@@ -309,7 +334,7 @@ pub fn build() -> TokenStream {
 
         impl VillagerType {
             #[must_use]
-            pub fn from_i32(id: i32) -> Option<Self> {
+            pub const fn from_i32(id: i32) -> Option<Self> {
                 match id {
                     #(#type_from_i32,)*
                     _ => None,

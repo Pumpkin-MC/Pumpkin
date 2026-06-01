@@ -7,11 +7,11 @@ use pumpkin_protocol::ServerPacket;
 use pumpkin_protocol::java::client::play::CPlayerPosition;
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::ClientPacket;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Cursor;
 use tokio::runtime::Runtime;
 
-const TARGET_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_4;
+const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_21_4;
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 20 {

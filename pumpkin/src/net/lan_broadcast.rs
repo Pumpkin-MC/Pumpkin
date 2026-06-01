@@ -60,7 +60,7 @@ impl LANBroadcast {
 
         let mut interval = time::interval(Duration::from_millis(1500));
 
-        let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", &self.motd, bound_addr.port());
+        let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", self.motd, bound_addr.port());
 
         info!(
             "LAN broadcast running on {}",

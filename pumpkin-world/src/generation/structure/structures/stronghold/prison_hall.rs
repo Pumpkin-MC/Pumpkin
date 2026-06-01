@@ -22,7 +22,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct PrisonHallPiece {
     piece: StrongholdPiece,
 }
@@ -221,9 +220,5 @@ impl StructurePieceBase for PrisonHallPiece {
         // // Door 2
         // inner.add_block(chunk, &door_bottom, 4, 1, 8, &box_limit);
         // inner.add_block(chunk, &door_top, 4, 2, 8, &box_limit);
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

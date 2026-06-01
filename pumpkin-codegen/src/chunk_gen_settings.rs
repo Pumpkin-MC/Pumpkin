@@ -12,6 +12,7 @@ pub struct BlockStateCodecStruct {
     pub name: String,
     /// Optional block state properties (e.g., `{"facing": "north"}`).
     #[serde(rename = "Properties")]
+    #[allow(dead_code)]
     pub properties: Option<BTreeMap<String, String>>,
 }
 
@@ -491,6 +492,7 @@ pub fn build() -> TokenStream {
                 }
             }
 
+            #[must_use]
             pub fn trim_height(&self, bottom_y: i8, top_y: u16) -> Self {
                 let new_min = self.min_y.max(bottom_y);
                 let this_top = if self.min_y >= 0 {
@@ -598,6 +600,7 @@ pub fn build() -> TokenStream {
         impl GenerationSettings {
             #const_defs
 
+            #[must_use]
             pub fn from_dimension(dimension: &Dimension) -> &'static Self {
                 if dimension == &Dimension::OVERWORLD {
                     &Self::OVERWORLD

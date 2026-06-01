@@ -5,7 +5,7 @@ use crate::{
 };
 use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
 use std::sync::Arc;
 use std::{
@@ -45,16 +45,16 @@ impl ServerPlayerData {
     /// # Returns
     ///
     /// A Result indicating success or the error that occurred.
-    pub async fn handle_player_leave(&self, player: &Player) -> Result<(), PlayerDataError> {
+    pub async fn handle_player_leave(&self, player: &Arc<Player>) -> Result<(), PlayerDataError> {
         player
             .player_screen_handler
             .lock()
             .await
-            .on_closed(player)
+            .on_closed(player.as_ref())
             .await;
         player.on_handled_screen_closed().await;
 
-        let mut nbt = PNbtCompound::new();
+        let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
 
         let storage = self.storage.clone();
@@ -83,7 +83,7 @@ impl ServerPlayerData {
             // Save all online players periodically across all worlds
             for world in server.worlds.load().iter() {
                 for player in world.players.load().iter() {
-                    let mut nbt = PNbtCompound::new();
+                    let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt).await;
 
                     let storage = self.storage.clone();
@@ -148,7 +148,7 @@ impl ServerPlayerData {
     pub async fn load_data(
         &self,
         uuid: &uuid::Uuid,
-    ) -> Result<Option<PNbtCompound>, PlayerDataError> {
+    ) -> Result<Option<NbtCompound>, PlayerDataError> {
         let storage = self.storage.clone();
         let uuid = *uuid;
         let result = tokio::task::spawn_blocking(move || storage.load_player_data(&uuid))
@@ -197,7 +197,7 @@ impl ServerPlayerData {
         }
 
         let uuid = player.gameprofile.id;
-        let mut nbt = PNbtCompound::new();
+        let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt).await;
 
         let storage = self.storage.clone();
@@ -212,7 +212,7 @@ impl ServerPlayerData {
 #[cfg(test)]
 mod test {
     use crate::data::player_server::ServerPlayerData;
-    use pumpkin_nbt::pnbt::PNbtCompound;
+    use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_world::data::player_data::PlayerDataStorage;
     use std::time::Duration;
     use std::time::Instant;
@@ -254,19 +254,19 @@ mod test {
         let uuid = Uuid::new_v4();
 
         // Create test data
-        let mut nbt = PNbtCompound::new();
-        nbt.put_string("TestValue");
-        nbt.put_i32(42);
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("TestKey", "TestValue".to_string());
+        nbt.put_int("TestInt", 42);
 
         // Save the data
         storage.save_player_data(&uuid, nbt).unwrap();
 
         // Load the data
-        let (load_success, mut loaded_nbt) = storage.load_player_data(&uuid).unwrap();
+        let (load_success, loaded_nbt) = storage.load_player_data(&uuid).unwrap();
 
         assert!(load_success);
-        assert_eq!(loaded_nbt.get_string().unwrap(), "TestValue");
-        assert_eq!(loaded_nbt.get_i32().unwrap(), 42);
+        assert_eq!(loaded_nbt.get_string("TestKey").unwrap(), "TestValue");
+        assert_eq!(loaded_nbt.get_int("TestInt").unwrap(), 42);
     }
 
     #[tokio::test]
@@ -282,7 +282,7 @@ mod test {
         let (load_success, empty_nbt) = storage.load_player_data(&uuid).unwrap();
 
         assert!(!load_success);
-        assert_eq!(empty_nbt.as_bytes().len(), 0);
+        assert_eq!(empty_nbt.child_tags.len(), 0);
     }
 
     #[tokio::test]
@@ -293,8 +293,8 @@ mod test {
         let storage = PlayerDataStorage::new(path, false);
 
         let uuid = Uuid::new_v4();
-        let mut nbt = PNbtCompound::new();
-        nbt.put_string("TestValue");
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("TestKey", "TestValue".to_string());
 
         // Save should succeed but do nothing
         let save_result = storage.save_player_data(&uuid, nbt);
@@ -303,7 +303,7 @@ mod test {
         // Load should return empty data
         let (load_success, empty_nbt) = storage.load_player_data(&uuid).unwrap();
         assert!(!load_success);
-        assert_eq!(empty_nbt.as_bytes().len(), 0);
+        assert_eq!(empty_nbt.child_tags.len(), 0);
     }
 
     #[tokio::test]
@@ -329,9 +329,9 @@ mod test {
         let storage = PlayerDataStorage::new(path, true);
 
         // Create and save player data
-        let mut nbt = PNbtCompound::new();
-        nbt.put_string("TestPlayer");
-        nbt.put_i32(42);
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("name", "TestPlayer".to_string());
+        nbt.put_int("level", 42);
         storage.save_player_data(&uuid, nbt).unwrap();
 
         // Verify the file exists
@@ -339,9 +339,9 @@ mod test {
         assert!(player_data_path.exists());
 
         // Load it again and verify content
-        let (success, mut loaded_data) = storage.load_player_data(&uuid).unwrap();
+        let (success, loaded_data) = storage.load_player_data(&uuid).unwrap();
         assert!(success);
-        assert_eq!(loaded_data.get_string().unwrap(), "TestPlayer");
-        assert_eq!(loaded_data.get_i32().unwrap(), 42);
+        assert_eq!(loaded_data.get_string("name").unwrap(), "TestPlayer");
+        assert_eq!(loaded_data.get_int("level").unwrap(), 42);
     }
 }
