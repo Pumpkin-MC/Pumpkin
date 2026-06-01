@@ -1,5 +1,6 @@
 use std::{borrow::Cow, fmt::Display};
-
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens};
 use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -380,6 +381,14 @@ impl<'de> Deserialize<'de> for Identifier {
     {
         let identifier_string = String::deserialize(deserializer)?;
         Self::parse(&identifier_string).map_err(|error| serde::de::Error::custom(error.to_string()))
+    }
+}
+
+impl ToTokens for Identifier {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(quote! {
+            Identifier::new(#self.namespace, #self.path)
+        })
     }
 }
 

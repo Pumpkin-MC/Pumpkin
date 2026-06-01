@@ -7,7 +7,6 @@ use pumpkin_util::text::TextContent::Translate;
 use quote::{format_ident, quote, ToTokens};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::PartialEq;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::{collections::BTreeMap, fs};
@@ -16,7 +15,7 @@ const fn r#true() -> bool {
     true
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Clone)]
 pub struct AdvancementDisplay {
     pub title: TextComponent,
     pub description: TextComponent,
@@ -110,7 +109,7 @@ impl ToTokens for FrameTypeStruct {
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default,Clone)]
 pub struct AdvancementRewards {
     #[serde(default)]
     experience: i32,
@@ -123,7 +122,7 @@ pub struct AdvancementRewards {
 impl ToTokens for AdvancementRewards {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let experience = self.experience;
-        let recipes = self.recipes.iter().map(|recipe| {
+        let recipes = self.recipes.iter().map(|_recipe| {
             quote! {
                 //TODO implement recipe reward
                 //Recipe::from_id(#recipe)
@@ -140,7 +139,6 @@ impl ToTokens for AdvancementRewards {
 
 pub struct AdvancementNode {
     pub children: Vec<usize>,
-    pub parent: Option<usize>,
     pub value: AdvancementHolder,
 }
 
@@ -150,10 +148,9 @@ impl AdvancementNode {
     }
 
     #[must_use]
-    pub fn new(value:AdvancementHolder, parent: Option<usize>) -> Self {
+    pub fn new(value:AdvancementHolder) -> Self {
         Self {
             value,
-            parent,
             children: Vec::new(),
         }
     }
@@ -211,7 +208,12 @@ pub struct TreePositioner;
 
 impl TreePositioner {
     pub fn run(tree:&mut AdvancementTree ,root_index: usize) {
-        let root_node = tree.nodes_vector[root_index];
+        let root_node = if let Some(node) = tree.nodes_vector.get(root_index){
+            node
+        } else {
+            eprintln!("AdvancementNode index out of bounds");
+            return;
+        };
         if !root_node.has_display() {
             panic!("Can't position children of an invisible root!");
         }
@@ -234,7 +236,7 @@ impl TreePositioner {
         });
 
         let mut previous_idx = None;
-        for child in root_node.children {
+        for child in root_node.children.clone() {
             previous_idx = Self::add_child(&mut nodes,tree, root_idx, child, previous_idx);
         }
 
@@ -257,7 +259,7 @@ impl TreePositioner {
         adv_node_idx: usize,
         mut previous_idx: Option<usize>,
     ) -> Option<usize> {
-        let adv_node = tree.nodes_vector[adv_node_idx];
+        let adv_node = tree.nodes_vector.get(adv_node_idx).unwrap();
         if adv_node.has_display() {
             let child_idx = nodes.len();
             let next_child_index = nodes[parent_idx].children.len() + 1;
@@ -281,14 +283,14 @@ impl TreePositioner {
             nodes[parent_idx].children.push(child_idx);
 
             let mut child_prev = None;
-            for child in adv_node.children {
+            for child in adv_node.children.clone() {
                 child_prev = Self::add_child(nodes,tree, child_idx, child, child_prev);
             }
 
             Some(child_idx)
         } else {
-            for grandchild in adv_node.children {
-                previous_idx = Self::add_child(nodes,tree, parent_idx, grandchild, previous_idx);
+            for grandchild in &adv_node.children.clone() {
+                previous_idx = Self::add_child(nodes,tree, parent_idx, *grandchild, previous_idx);
             }
             previous_idx
         }
@@ -477,7 +479,7 @@ impl TreePositioner {
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default,Clone)]
 pub struct AdvancementStruct {
     pub parent: Option<Identifier>,
     #[serde(default)]
@@ -488,6 +490,7 @@ pub struct AdvancementStruct {
     #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
 }
+#[derive(Clone)]
 pub struct AdvancementHolder(Identifier,AdvancementStruct);
 
 impl PartialEq for AdvancementHolder {
@@ -518,23 +521,27 @@ where
 
 #[derive(Default)]
 pub struct AdvancementTree {
-    pub nodes: HashMap<Identifier, usize>,
+    pub nodes: BTreeMap<Identifier, usize>,
     pub nodes_vector: Vec<AdvancementNode>,
     pub roots: Vec<usize>,
     pub tasks: Vec<usize>
 }
 
 impl AdvancementTree {
-    pub fn add_all(&mut self, advancements: impl IntoIterator<Item = AdvancementHolder>) {
-        let mut advancements_to_add : Vec<AdvancementHolder> = advancements
-            .into_iter()
-            .collect();
+    pub fn add_all(&mut self, advancements: Vec<AdvancementHolder>) {
+        let mut advancements_to_add: Vec<AdvancementHolder> = advancements;
 
         while !advancements_to_add.is_empty() {
             let len_before = advancements_to_add.len();
-            advancements_to_add.retain(|&val| !self.try_insert(val));
-            if len_before == advancements_to_add.len() {
-                eprintln!("Couldn't load advancements: {:?}",
+
+            advancements_to_add = advancements_to_add
+                .into_iter()
+                .filter_map(|advancement| self.try_insert(advancement))
+                .collect();
+
+            if advancements_to_add.len() == len_before && !advancements_to_add.is_empty() {
+                eprintln!(
+                    "Couldn't load advancements: {:?}",
                     advancements_to_add.iter().map(|a| &a.0).collect::<Vec<_>>()
                 );
                 break;
@@ -542,17 +549,17 @@ impl AdvancementTree {
         }
     }
 
-    pub fn try_insert(&mut self, advancement: AdvancementHolder) -> bool {
+    pub fn try_insert(&mut self, advancement: AdvancementHolder) -> Option<AdvancementHolder> {
         let parent_id = &advancement.1.parent;
         let parent_node : Option<usize> = match parent_id {
             Some(id) => match self.nodes.get(id) {
                 Some(node) => Some(*node),
-                None => return false,
+                None => return Some(advancement),
             },
             None => None,
         };
         let id = advancement.0.clone();
-        let node = AdvancementNode::new(advancement, parent_node.clone());
+        let node = AdvancementNode::new(advancement);
         let node_idx = self.nodes_vector.len();
         self.nodes.insert(id, node_idx);
         if let Some(parent)  = self.nodes_vector.get_mut(parent_node.unwrap()) {
@@ -562,7 +569,7 @@ impl AdvancementTree {
             self.roots.push(node_idx);
         }
         self.nodes_vector.push(node);
-        true
+        None
     }
 }
 
@@ -576,8 +583,15 @@ pub(crate) fn build() -> TokenStream {
     let mut minecraft_name_to_type = TokenStream::new();
     let mut minecraft_namespaces = TokenStream::new();
     let capacity = advancements.len();
-    for (minecraft_name, advancement) in advancements {
-        let raw_name = minecraft_name.strip_prefix("minecraft:").unwrap();
+    let mut tree = AdvancementTree::default();
+    tree.add_all(advancements.into_iter().map(
+        |(key,value)| AdvancementHolder(Identifier::parse(&key).unwrap(),value)).collect());
+    for index in tree.roots.clone() {
+        TreePositioner::run(&mut tree,index);
+    }
+    let advancements_holder: Vec<AdvancementHolder> = tree.nodes_vector.into_iter().map(|node| node.value).collect();
+    for AdvancementHolder(identifier, advancement) in advancements_holder {
+        let raw_name = identifier.path();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
 
         let parent = if let Some(parent) = &advancement.parent {
@@ -600,10 +614,10 @@ pub(crate) fn build() -> TokenStream {
                 reward : &#reward,
             };
         }]);
-
+        let minecraft_name = identifier.to_string();
         name_to_type.extend(quote! { #raw_name => Some(Self::#format_name), });
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(Self::#format_name), });
-        minecraft_namespaces.extend(quote! { Identifier::vanilla_static(#raw_name),})
+        minecraft_namespaces.extend(quote! { #identifier,})
     }
 
     quote! {
