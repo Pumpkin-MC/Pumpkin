@@ -11,62 +11,11 @@ use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use tracing::{error, info};
 use uuid::Uuid;
-use crate::advancement::AdvancementNode;
-
-#[derive(Default)]
-pub struct AdvancementTree {
-    pub nodes: HashMap<Identifier, Arc<AdvancementNode>>,
-    pub roots: HashSet<Arc<AdvancementNode>>,
-    pub tasks: HashSet<Arc<AdvancementNode>>,
-}
-
-impl AdvancementTree {
-    pub fn add_all(&mut self, advancements: impl IntoIterator<Item = &'static Advancement>) {
-        let mut advancements_to_add : Vec<&'static Advancement> = advancements
-            .into_iter()
-            .collect();
-
-        while !advancements_to_add.is_empty() {
-            let len_before = advancements_to_add.len();
-            advancements_to_add.retain(|&val| !self.try_insert(val));
-            if len_before == advancements_to_add.len() {
-                error!("Couldn't load advancements: {:?}",
-                    advancements_to_add.iter().map(|a| &a.id).collect::<Vec<_>>()
-                );
-                break;
-            }
-        }
-        info!("Loaded {} advancements", self.nodes.len());
-    }
-
-    pub fn try_insert(&mut self, advancement: &'static Advancement) -> bool {
-        let parent_id = &advancement.parent;
-
-        let parent_node = match parent_id {
-            Some(id) => match self.nodes.get_mut(id) {
-                Some(node) => Some(Arc::clone(node)),
-                None => return false,
-            },
-            None => None,
-        };
-        let node = Arc::new(AdvancementNode::new(advancement, parent_node.clone()));
-        self.nodes.insert(advancement.id.clone(), Arc::clone(&node));
-
-        if let Some(parent) = parent_node {
-            parent.add_child(Arc::clone(&node));
-            self.tasks.insert(node);
-        } else {
-            self.roots.insert(node);
-        }
-        true
-    }
-}
 
 /// Manages player advancements, including data creation and saving.
 pub struct AdvancementManager {
     pub advancement_path: PathBuf,
     pub save_enabled: bool,
-    pub tree: AdvancementTree,
 }
 
 impl AdvancementManager {
@@ -84,7 +33,6 @@ impl AdvancementManager {
         Self {
             advancement_path: path,
             save_enabled,
-            tree: AdvancementTree::default(),
         }
     }
 

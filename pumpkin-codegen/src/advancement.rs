@@ -138,6 +138,7 @@ impl ToTokens for AdvancementRewards {
 
 pub struct AdvancementNode {
     pub children: Vec<usize>,
+    pub parent: Option<usize>,
     pub value: AdvancementHolder,
 }
 
@@ -147,9 +148,10 @@ impl AdvancementNode {
     }
 
     #[must_use]
-    pub fn new(value:AdvancementHolder) -> Self {
+    pub fn new(value:AdvancementHolder,parent:Option<usize>) -> Self {
         Self {
             value,
+            parent,
             children: Vec::new(),
         }
     }
@@ -185,6 +187,21 @@ impl Display for AdvancementNode {
 impl Hash for AdvancementNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.value.hash(state);
+    }
+}
+
+impl ToTokens for AdvancementNode {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let parent = self.parent;
+        let children = self.children;
+        let value = self.value;
+       tokens.extend(quote! {
+           AdvancementNode{
+               parent:#parent,
+               children: vec![#(#children),*]
+               value: #value,
+           }
+       })
     }
 }
 
@@ -504,6 +521,15 @@ impl Hash for AdvancementHolder {
     }
 }
 
+impl ToTokens for AdvancementHolder {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = format_ident!("{}", self.0.path().to_shouty_snake_case());
+        tokens.extend(quote! {
+            #name
+        })
+    }
+}
+
 #[derive(Deserialize)]
 struct DisplayIcon {
     id: ResourceLocation,
@@ -569,6 +595,27 @@ impl AdvancementTree {
         }
         self.nodes_vector.push(node);
         None
+    }
+}
+
+impl ToTokens for AdvancementTree {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let nodes = self.nodes.iter().map(|(k, v)| {
+            quote! {
+                map.insert(#k, #v);
+            }
+        });
+        let nodes_vector = self.nodes_vector;
+        tokens.extend(quote! {
+            let nodes = HashMap::new();
+            #(#nodes)*
+            let nodes_vector = vec![#(#nodes_vector),*];
+            AdvancementTree {
+                nodes,
+                nodes_vector,
+                roots,
+            }
+        })
     }
 }
 
