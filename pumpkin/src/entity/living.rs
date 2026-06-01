@@ -356,8 +356,8 @@ impl LivingEntity {
                 .attributes
                 .iter()
                 .find(|a| a.0.id == attribute.id)
-                .unwrap()
-                .1;
+                .map(|a| a.1)
+                .unwrap_or(attribute.default_value);
             AttributeInstance::new(base)
         });
 
