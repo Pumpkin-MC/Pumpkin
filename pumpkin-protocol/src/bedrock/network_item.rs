@@ -1,5 +1,8 @@
 use std::io::{Error, Write};
+use std::num::NonZeroI32;
 
+use pumpkin_data::item::{BedrockItem, JavaToBedrockItemMapping};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::Nbt;
 
 use crate::{
@@ -20,35 +23,56 @@ pub struct NetworkItemDescriptor {
     pub nbt_data: Nbt,
     pub place_on_blocks: Vec<String>,
     pub destroy_blocks: Vec<String>,
+
+    pub shield_blocking_tick: i64,
 }
 
 impl PacketWrite for NetworkItemDescriptor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.write_with_net_id(writer, None)
+    }
+}
+
+impl NetworkItemDescriptor {
+    fn write_with_net_id<W: Write>(
+        &self,
+        writer: &mut W,
+        net_id: Option<Option<VarInt>>,
+    ) -> Result<(), Error> {
         self.id.write(writer)?;
         if self.id.0 != 0 {
             self.stack_size.write(writer)?;
             self.aux_value.write(writer)?;
+
+            if let Some(id) = net_id {
+                id.write(writer)?;
+            }
+
             self.block_runtime_id.write(writer)?;
 
             let mut buf = Vec::new();
-            {
-                if self.nbt_data.is_empty() {
-                    (0i16).write(&mut buf)?;
-                } else {
-                    (-1i16).write(&mut buf)?;
-                    (1i8).write(&mut buf)?;
 
-                    self.nbt_data.clone().write_to_writer_bedrock(&mut buf)?;
-                }
+            if self.nbt_data.is_empty() {
+                (0i16).write(&mut buf)?;
+            } else {
+                (-1i16).write(&mut buf)?;
+                (1i8).write(&mut buf)?;
 
-                (self.place_on_blocks.len() as u32).write(&mut buf)?;
-                self.place_on_blocks.write(&mut buf)?;
-
-                (self.destroy_blocks.len() as u32).write(&mut buf)?;
-                self.destroy_blocks.write(&mut buf)?;
+                self.nbt_data.clone().write_to_writer_bedrock(&mut buf)?;
             }
+
+            (self.place_on_blocks.len() as u32).write(&mut buf)?;
+            self.place_on_blocks.write(&mut buf)?;
+
+            (self.destroy_blocks.len() as u32).write(&mut buf)?;
+            self.destroy_blocks.write(&mut buf)?;
+
+            if self.id.0 == (BedrockItem::SHIELD.id as i32) {
+                self.shield_blocking_tick.write(&mut buf)?;
+            }
+
             VarUInt(buf.len() as u32).write(writer)?;
-            writer.write_all(&buf)?
+            writer.write_all(&buf)?;
         }
         Ok(())
     }
@@ -59,49 +83,38 @@ pub struct NetworkItemStackDescriptor {
     // I hate mojang
     // https://mojang.github.io/bedrock-protocol-docs/html/cerealizer_NetworkItemStackDescriptor___SerializedData.html
     pub item: NetworkItemDescriptor,
-    pub net_id: i32,
+    pub net_id: Option<NonZeroI32>,
 }
 
 impl PacketWrite for NetworkItemStackDescriptor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.item.id.write(writer)?;
-        if self.item.id.0 != 0 {
-            self.item.stack_size.write(writer)?;
-            self.item.aux_value.write(writer)?;
+        self.item
+            .write_with_net_id(writer, Some(self.net_id.map(|id| VarInt(id.get()))))
+    }
+}
 
-            if self.net_id == 0 {
-                None
-            } else {
-                Some(VarInt(self.net_id))
-            }
-            .write(writer)?; // the only difference from NetworkItemDescriptor
-
-            self.item.block_runtime_id.write(writer)?;
-
-            let mut buf = Vec::new();
-            {
-                if self.item.nbt_data.is_empty() {
-                    (0i16).write(&mut buf)?;
-                } else {
-                    (-1i16).write(&mut buf)?;
-                    (1i8).write(&mut buf)?;
-
-                    self.item
-                        .nbt_data
-                        .clone()
-                        .write_to_writer_bedrock(&mut buf)?;
-                }
-
-                (self.item.place_on_blocks.len() as u32).write(&mut buf)?;
-                self.item.place_on_blocks.write(&mut buf)?;
-
-                (self.item.destroy_blocks.len() as u32).write(&mut buf)?;
-                self.item.destroy_blocks.write(&mut buf)?;
-            }
-            VarUInt(buf.len() as u32).write(writer)?;
-            writer.write_all(&buf)?
+impl From<&ItemStack> for NetworkItemStackDescriptor {
+    fn from(stack: &ItemStack) -> Self {
+        if stack.is_empty() {
+            Self::default()
+        } else {
+            JavaToBedrockItemMapping::from_java_item_id(stack.get_item().id).map_or(
+                Self::default(),
+                |mapping| Self {
+                    item: NetworkItemDescriptor {
+                        id: VarInt::from(mapping.bedrock_item.id),
+                        stack_size: stack.item_count as u16,
+                        aux_value: VarUInt(mapping.bedrock_data),
+                        block_runtime_id: VarInt::from(mapping.bedrock_block_state),
+                        nbt_data: Nbt::default(),
+                        place_on_blocks: Vec::default(),
+                        destroy_blocks: Vec::default(),
+                        shield_blocking_tick: 0,
+                    },
+                    net_id: Some(stack.uid),
+                },
+            )
         }
-        Ok(())
     }
 }
 

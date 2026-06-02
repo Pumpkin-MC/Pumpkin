@@ -3,8 +3,6 @@ use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
-use pumpkin_nbt::Nbt;
-use pumpkin_protocol::bedrock::client::EntityProperties;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::client::{CInventoryContent, EntityProperties};
@@ -1880,18 +1878,14 @@ impl World {
         client
             .send_game_packet(&CInventoryContent {
                 container_id: VarUInt(0), // player inventory,
-                slots: vec![NetworkItemStackDescriptor {
-                    item: NetworkItemDescriptor {
-                        id: VarInt::from(BedrockItem::STICK.id),
-                        stack_size: 17,
-                        aux_value: VarUInt(0),
-                        block_runtime_id: VarInt(0),
-                        nbt_data: Nbt::default(),
-                        place_on_blocks: Vec::default(),
-                        destroy_blocks: Vec::default(),
+                slots: futures::future::join_all(player.inventory.main_inventory.iter().map(
+                    async |s| {
+                        let stack = s.lock().await;
+
+                        NetworkItemStackDescriptor::from(&*stack)
                     },
-                    net_id: 0,
-                }],
+                ))
+                .await,
                 full_container_name: FullContainerName {
                     container_name: ContainerName::Inventory,
                     dynamic_id: None,
