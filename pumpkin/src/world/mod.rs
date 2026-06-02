@@ -125,6 +125,7 @@ use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use pumpkin_world::generation::generator::WorldGenerator;
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
@@ -230,6 +231,14 @@ impl PartialEq for World {
 impl Eq for World {}
 
 impl World {
+    /// Returns true if this world uses a flat world generator.
+    /// Used to set the `is_flat` field on Join/Respawn packets, which fixes
+    /// black sky rendering below Y=61 (caves/underground).
+    #[must_use]
+    pub(crate) fn is_flat_world(&self) -> bool {
+        matches!(*self.level.world_gen, WorldGenerator::Flat(_))
+    }
+
     #[must_use]
     pub fn load(
         level: Arc<Level>,
@@ -2180,7 +2189,7 @@ impl World {
                     .load()
                     .map_or(-1, |gamemode| gamemode as i8),
                 false,
-                false,
+                self.is_flat_world(),
                 None,
                 VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                 self.sea_level.into(),
@@ -2964,7 +2973,7 @@ impl World {
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,
                 false,
-                false,
+                target_world.is_flat_world(),
                 Some((death_dimension, death_location)),
                 VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                 target_world.sea_level.into(),

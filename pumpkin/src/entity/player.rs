@@ -25,6 +25,7 @@ use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
+use pumpkin_world::generation::generator::WorldGenerator;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -2268,7 +2269,7 @@ impl Player {
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
                         false,
-                        false,
+                        matches!(*new_world.level.world_gen, WorldGenerator::Flat(_)),
                         Some((death_dimension, death_location)),
                         VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                         new_world.sea_level.into(),
