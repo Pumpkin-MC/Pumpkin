@@ -1040,7 +1040,7 @@ pub fn build() -> TokenStream {
             .unwrap();
 
         be_item_remaps.insert(
-            "minecraft:".to_owned() + name,
+            name,
             BedrockRemapEntry {
                 identifier: be_identifier,
                 data: *be_item_data_overrides.get(name).unwrap_or(&0), // TODO: figure out how to get this
@@ -1157,10 +1157,14 @@ pub fn build() -> TokenStream {
 
     let mut constants = TokenStream::new();
     let mut bedrock_constants = TokenStream::new();
+    let mut mapping_constants = TokenStream::new();
 
     let mut all_bedrock_items = Vec::new();
 
-    for (name, item) in items {
+    let mut all_java_items = Vec::new();
+    let mut all_java_item_ids = Vec::new();
+
+    for (name, item) in &items {
         let const_ident = format_ident!("{}", name.to_shouty_snake_case());
 
         let components = &item.components;
@@ -1183,6 +1187,9 @@ pub fn build() -> TokenStream {
         type_from_name.extend(quote! {
             #name => Some(&Self::#const_ident),
         });
+
+        all_java_items.push(const_ident);
+        all_java_item_ids.push(id_lit);
     }
 
     for item in bedrock_item_definitions {
@@ -1221,6 +1228,33 @@ pub fn build() -> TokenStream {
         });
 
         all_bedrock_items.push(const_ident);
+    }
+    let all_bedrock_items_count_lit =
+        LitInt::new(&all_bedrock_items.len().to_string(), Span::call_site());
+
+    for (java_name, mapping) in &be_item_remaps {
+        let java_const_ident = format_ident!("{}", java_name.to_shouty_snake_case());
+        let bedrock_const_ident = format_ident!(
+            "{}",
+            mapping
+                .identifier
+                .split(':')
+                .next_back()
+                .unwrap()
+                .to_shouty_snake_case()
+        );
+
+        let data_lit = LitInt::new(&mapping.data.to_string(), Span::call_site());
+
+        mapping_constants.extend(quote! {
+            pub const #java_const_ident: Self = Self {
+                java_item: &Item::#java_const_ident,
+
+                bedrock_item: &BedrockItem::#bedrock_const_ident,
+                bedrock_data: #data_lit,
+                bedrock_block_state: 0
+            };
+        });
     }
 
     quote! {
@@ -1292,6 +1326,29 @@ pub fn build() -> TokenStream {
             }
         }
 
+        #[derive(Clone)]
+        pub struct JavaToBedrockItemMapping {
+            pub java_item: &'static Item,
+
+            pub bedrock_item: &'static BedrockItem,
+            pub bedrock_data: u32,
+            pub bedrock_block_state: u16
+        }
+
+        impl Eq for JavaToBedrockItemMapping {}
+
+        impl Hash for JavaToBedrockItemMapping {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.java_item.id.hash(state);
+            }
+        }
+
+        impl PartialEq for JavaToBedrockItemMapping {
+            fn eq(&self, other: &Self) -> bool {
+                self.java_item.id == other.java_item.id
+            }
+        }
+
         impl Item {
             #constants
 
@@ -1345,9 +1402,21 @@ pub fn build() -> TokenStream {
         impl BedrockItem {
             #bedrock_constants
 
-            pub const ALL_BEDROCK_ITMES: &'static [&'static Self] = &[
+            pub const ALL_BEDROCK_ITEMS: [&'static Self; #all_bedrock_items_count_lit] = [
                 #( &Self::#all_bedrock_items, )*
             ];
+        }
+
+        impl JavaToBedrockItemMapping {
+            #mapping_constants
+
+            #[must_use]
+            pub const fn from_java_item_id(item_id: u16) -> Option<&'static Self> {
+                match item_id {
+                    #( #all_java_item_ids => Some(&Self::#all_java_items), )*
+                    _ => None,
+                }
+            }
         }
     }
 }
