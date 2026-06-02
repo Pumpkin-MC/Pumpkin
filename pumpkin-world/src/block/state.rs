@@ -23,6 +23,15 @@ impl RawBlockState {
 
     #[inline]
     #[must_use]
+    pub fn is_air(&self) -> bool {
+        self.0 == 0
+            || self.to_block().id == pumpkin_data::Block::AIR.id
+            || self.to_block().id == pumpkin_data::Block::CAVE_AIR.id
+            || self.to_block().id == pumpkin_data::Block::VOID_AIR.id
+    }
+
+    #[inline]
+    #[must_use]
     pub fn to_block_id(&self) -> u16 {
         Block::get_raw_id_from_state_id(self.0)
     }
