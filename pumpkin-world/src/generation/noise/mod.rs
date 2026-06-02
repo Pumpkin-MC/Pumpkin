@@ -54,7 +54,7 @@ impl BlockStateSampler {
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
-            Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
+            Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator).0,
             Self::Ore(ore) => ore.sample(router, ore_random_deriver, pos, sample_options),
         }
     }

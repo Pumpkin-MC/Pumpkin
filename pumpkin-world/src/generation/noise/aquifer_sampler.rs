@@ -449,9 +449,9 @@ impl WorldAquiferSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
-    ) -> Option<&'static BlockState> {
+    ) -> (Option<&'static BlockState>, bool) {
         if density > 0f64 {
-            return None;
+            return (None, false);
         }
 
         let sample_x = pos.x;
@@ -462,7 +462,7 @@ impl WorldAquiferSampler {
             .fluid_level_sampler
             .get_fluid_level(sample_x, sample_y, sample_z);
         if fluid_level.get_block(sample_y) == &LAVA_BLOCK {
-            return Some(LAVA_BLOCK.default_state);
+            return (Some(LAVA_BLOCK.default_state), false);
         }
 
         let scaled_x = local_xz!(sample_x - 5);
@@ -482,7 +482,7 @@ impl WorldAquiferSampler {
         // i11 + 2 is the largest index we ever access; all others are strictly smaller.
         assert!(i11 + 2 < p.len(), "Index out of bounds");
 
-        let mut nearest = [(0i64, i32::MAX); 3];
+        let mut nearest = [(0i64, i32::MAX); 4];
 
         // SAFETY: every index passed to this macro is <= i11 + 2, checked by the assert above.
         macro_rules! process {
@@ -492,7 +492,11 @@ impl WorldAquiferSampler {
                 let dy = block_pos::unpack_y(packed) - sample_y;
                 let dz = block_pos::unpack_z(packed) - sample_z;
                 let h = dx * dx + dy * dy + dz * dz;
+                if nearest[3].1 > h {
+                    nearest[3] = (packed, h);
+                }
                 if nearest[2].1 > h {
+                    nearest[3] = nearest[2];
                     nearest[2] = (packed, h);
                 }
                 if nearest[1].1 > h {
@@ -520,20 +524,22 @@ impl WorldAquiferSampler {
         process!(i01);
         process!(i00);
 
-        // Precompute all three pairwise distances before fetching any water levels so we
-        // can skip the third get_water_level call entirely when neither f nor g_dist > 0.
-        let d = Self::max_distance(nearest[0].1, nearest[1].1);
-        let f = Self::max_distance(nearest[0].1, nearest[2].1);
-        let g_dist = Self::max_distance(nearest[1].1, nearest[2].1);
-
         let fluid_level2 = self
             .get_water_level(nearest[0].0, router, height_estimator, sample_options)
             .clone();
         let block_state = fluid_level2.get_block(sample_y);
+        let sim12 = Self::max_distance(nearest[0].1, nearest[1].1);
 
-        if d <= 0f64 {
-            // TODO: Handle fluid tick
-            return Some(block_state.default_state);
+        if sim12 <= 0f64 {
+            let should_schedule = if sim12 >= -0.12f64 {
+                // FLOWING_UPDATE_SIMILARITY
+                let fluid_level3 =
+                    self.get_water_level(nearest[1].0, router, height_estimator, sample_options);
+                fluid_level2.block != fluid_level3.block || fluid_level2.max_y != fluid_level3.max_y
+            } else {
+                false
+            };
+            return (Some(block_state.default_state), should_schedule);
         }
 
         if block_state == &WATER_BLOCK
@@ -543,67 +549,85 @@ impl WorldAquiferSampler {
                 .get_block(sample_y - 1)
                 == &LAVA_BLOCK
         {
-            return Some(block_state.default_state);
+            return (Some(block_state.default_state), true);
         }
 
         let mut barrier_sample = None;
         let fluid_level3 = self
             .get_water_level(nearest[1].0, router, height_estimator, sample_options)
             .clone();
-        let e = d * Self::calculate_density(
-            &mut barrier_sample,
-            pos,
-            router,
-            sample_options,
-            &fluid_level2,
-            &fluid_level3,
-        );
+        let barrier12 = sim12
+            * Self::calculate_density(
+                &mut barrier_sample,
+                pos,
+                router,
+                sample_options,
+                &fluid_level2,
+                &fluid_level3,
+            );
 
-        if density + e > 0f64 {
-            return None;
+        if density + barrier12 > 0f64 {
+            return (None, false);
         }
 
-        // Only pay for the cache/noise lookup when at least one distance weight is positive;
-        // when both are <= 0 the third centre cannot affect the result.
-        if f > 0f64 || g_dist > 0f64 {
-            let fluid_level4 =
-                self.get_water_level(nearest[2].0, router, height_estimator, sample_options);
-
-            if f > 0f64 {
-                let contrib = d
-                    * f
-                    * Self::calculate_density(
-                        &mut barrier_sample,
-                        pos,
-                        router,
-                        sample_options,
-                        &fluid_level2,
-                        fluid_level4,
-                    );
-                if density + contrib > 0f64 {
-                    return None;
-                }
-            }
-
-            if g_dist > 0f64 {
-                let contrib = d
-                    * g_dist
-                    * Self::calculate_density(
-                        &mut barrier_sample,
-                        pos,
-                        router,
-                        sample_options,
-                        &fluid_level3,
-                        fluid_level4,
-                    );
-                if density + contrib > 0f64 {
-                    return None;
-                }
+        let fluid_level4 = self
+            .get_water_level(nearest[2].0, router, height_estimator, sample_options)
+            .clone();
+        let sim13 = Self::max_distance(nearest[0].1, nearest[2].1);
+        if sim13 > 0f64 {
+            let barrier13 = sim12
+                * sim13
+                * Self::calculate_density(
+                    &mut barrier_sample,
+                    pos,
+                    router,
+                    sample_options,
+                    &fluid_level2,
+                    &fluid_level4,
+                );
+            if density + barrier13 > 0f64 {
+                return (None, false);
             }
         }
 
-        // TODO: Handle fluid tick
-        Some(block_state.default_state)
+        let sim23 = Self::max_distance(nearest[1].1, nearest[2].1);
+        if sim23 > 0f64 {
+            let barrier23 = sim12
+                * sim23
+                * Self::calculate_density(
+                    &mut barrier_sample,
+                    pos,
+                    router,
+                    sample_options,
+                    &fluid_level3,
+                    &fluid_level4,
+                );
+            if density + barrier23 > 0f64 {
+                return (None, false);
+            }
+        }
+
+        let may_flow12 =
+            fluid_level2.block != fluid_level3.block || fluid_level2.max_y != fluid_level3.max_y;
+        let may_flow23 = sim23 >= -0.12f64
+            && (fluid_level3.block != fluid_level4.block
+                || fluid_level3.max_y != fluid_level4.max_y);
+        let may_flow13 = sim13 >= -0.12f64
+            && (fluid_level2.block != fluid_level4.block
+                || fluid_level2.max_y != fluid_level4.max_y);
+
+        let should_schedule = if may_flow12 || may_flow23 || may_flow13 {
+            true
+        } else {
+            let fluid_level5 =
+                self.get_water_level(nearest[3].0, router, height_estimator, sample_options);
+            sim13 >= -0.12f64
+                && Self::max_distance(nearest[0].1, nearest[3].1) >= -0.12f64
+                && (fluid_level2.block != fluid_level5.block
+                    || fluid_level2.max_y != fluid_level5.max_y)
+        };
+
+        (Some(block_state.default_state), should_schedule)
     }
 }
 
@@ -615,7 +639,7 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<&'static BlockState> {
+    ) -> (Option<&'static BlockState>, bool) {
         let density = router.final_density(pos, sample_options);
         self.apply_internal(router, pos, sample_options, height_estimator, density)
     }
@@ -639,17 +663,19 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<&'static BlockState> {
+    ) -> (Option<&'static BlockState>, bool) {
         let sample = router.final_density(pos, sample_options);
-        //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
         if sample > 0f64 {
-            None
+            (None, false)
         } else {
-            Some(
-                self.level_sampler
-                    .get_fluid_level(pos.x, pos.y, pos.z)
-                    .get_block(pos.y)
-                    .default_state,
+            (
+                Some(
+                    self.level_sampler
+                        .get_fluid_level(pos.x, pos.y, pos.z)
+                        .get_block(pos.y)
+                        .default_state,
+                ),
+                false,
             )
         }
     }
@@ -663,7 +689,7 @@ pub trait AquiferSamplerImpl {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<&'static BlockState>;
+    ) -> (Option<&'static BlockState>, bool);
 }
 
 #[cfg(test)]
@@ -2631,7 +2657,9 @@ mod random_positions_and_hypot {
         for ((x, y, z, sample), result) in values {
             let pos = Vector3::new(x, y, z);
             assert_eq!(
-                aquifer.apply_internal(&mut router, &pos, &env, &mut height_estimator, sample),
+                aquifer
+                    .apply_internal(&mut router, &pos, &env, &mut height_estimator, sample)
+                    .0,
                 result.map(|r| r.to_state())
             );
         }
