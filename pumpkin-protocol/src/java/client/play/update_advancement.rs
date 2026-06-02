@@ -6,6 +6,7 @@ use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
+use pumpkin_util::identifier::Identifier;
 
 #[derive(Serialize)]
 pub struct AdvancementProgress {
@@ -90,8 +91,8 @@ impl Serialize for DisplaySerializer<'_> {
 pub struct CUpdateAdvancements {
     pub reset: bool,
     #[serde(serialize_with = "serialize_advancements")]
-    pub advancement: Vec<Advancement>,
-    pub identifiers: Vec<ResourceLocation>,
+    pub added: Vec<&'static Advancement>,
+    pub removed: Vec<Identifier>,
     pub progress: Vec<AdvancementProgress>,
     pub show_advancements: bool,
 }
@@ -101,15 +102,15 @@ impl CUpdateAdvancements {
     #[allow(unused)]
     pub const fn new(
         reset: bool,
-        advancement: Vec<Advancement>,
+        added: Vec<&Advancement>,
         progress: Vec<AdvancementProgress>,
-        identifiers: Vec<ResourceLocation>,
+        removed: Vec<Identifier>,
         show_advancements: bool,
     ) -> Self {
         Self {
             reset,
-            advancement,
-            identifiers,
+            added,
+            removed,
             progress,
             show_advancements,
         }

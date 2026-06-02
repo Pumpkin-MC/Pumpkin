@@ -20649,6 +20649,9 @@ impl Advancement {
             Identifier::from_static("minecraft", "story/enter_the_end"),
         ]
     }
+    pub const fn is_root(&self) -> bool {
+        self.parent.is_empty()
+    }
 }
 pub static ADVANCEMENT_TREE: AdvancementTree = {
     let mut nodes = HashMap::new();

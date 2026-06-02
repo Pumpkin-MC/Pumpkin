@@ -761,6 +761,11 @@ pub(crate) fn build() -> TokenStream {
             pub const fn get_list() -> [Identifier;#capacity] {
                 [#minecraft_namespaces]
             }
+
+            pub const fn is_root(&self) -> bool{
+                self.parent.is_empty()
+            }
+
         }
         #advancement_tree
     }

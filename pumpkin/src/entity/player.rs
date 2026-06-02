@@ -1920,6 +1920,7 @@ impl Player {
 
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
+        self.advancements.lock().await.flush_dirty(self, true).await;
 
         // Idle timeout handling
         let now = Instant::now();

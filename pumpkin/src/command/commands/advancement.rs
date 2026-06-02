@@ -9,11 +9,12 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use pumpkin_data::{Advancement, translation};
+use pumpkin_data::{Advancement, translation, ADVANCEMENT_TREE};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
+use pumpkin_data::advancement_data::AdvancementNode;
 
 const NAME: &str = "advancement";
 const DESCRIPTION: &str = "manage advancement of the player";
@@ -152,21 +153,36 @@ impl Mode {
     }
 }
 
-fn get_advancement<'a>(
-    _context: &CommandContext,
-    advancement: &'a Advancement,
+fn get_advancements(
+    target: &Advancement,
     mode: Mode,
-) -> Vec<&'a Advancement> {
-    //TODO Advancement Tree
-    let mut result = Vec::new();
-    if mode.parents() {
-        todo!()
+) -> Vec<&Advancement> {
+    let tree = ADVANCEMENT_TREE;
+    let target_node = tree.get_node_from_id(&target.id);
+    if let Some(target_node) = target_node {
+        let mut advancements = Vec::new();
+        if mode.parents() {
+            let parent = target_node.parent;
+            while let Some(parent) = parent {
+                advancements.push(tree.nodes_vector[parent].value);
+            }
+        }
+        advancements.push(target);
+        if mode.children() {
+            add_children(target_node,&mut advancements);
+        }
+        advancements
+    }else {
+        vec![target]
     }
-    result.push(advancement);
-    if mode.children() {
-        todo!()
+}
+
+fn add_children(parent: &AdvancementNode, output:&mut Vec<&Advancement>) {
+    for child in parent.children {
+        let node = &ADVANCEMENT_TREE.nodes_vector[child];
+        output.push(node.value);
+        add_children(node, output);
     }
-    result
 }
 
 async fn perform_everything(
@@ -315,8 +331,7 @@ impl CommandExecutor for AdvancementExecutor {
                 context.source.clone(),
                 EntityArgumentType::get_players(context, ARG_TARGETS).await?,
                 action,
-                get_advancement(
-                    context,
+                get_advancements(
                     ResourceKeyArgument::get_advancement(context, ARG_ADVANCEMENT)?,
                     Mode::Only,
                 ),

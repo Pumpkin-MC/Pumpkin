@@ -4,7 +4,7 @@ use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
-use pumpkin_data::Advancement;
+use pumpkin_data::{Advancement, ADVANCEMENT_TREE};
 use pumpkin_data::advancement_data::{AdvancementNode, AdvancementReward, AdvancementTree};
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
@@ -16,6 +16,7 @@ use std::sync::{Arc, Weak};
 use serde_json::{from_reader, to_writer_pretty};
 use tracing::{error, warn};
 use uuid::Uuid;
+use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
 use pumpkin_util::identifier::Identifier;
 
 /// Represents the progress of a given advancement for a player.
@@ -46,9 +47,8 @@ impl AdvancementProgress {
 ///
 /// This handles saving, loading, and tracking the state of granted / revoked advancements.
 pub struct PlayerAdvancement {
-    advancements: IndexMap<&'static Advancement, AdvancementProgress>,
+    progress: IndexMap<&'static Advancement, AdvancementProgress>,
     is_first_packet: bool,
-    to_update: HashSet<&'static Advancement>,
     roots_to_update: HashSet<&'_ AdvancementNode>,
     visible: HashSet<&'static Advancement>,
     progress_changed: HashSet<&'static Advancement>,
@@ -73,15 +73,15 @@ impl PlayerAdvancement {
     /// Creates a new instance of `PlayerAdvancement`.
     pub(crate) fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
         Self {
-            advancements: IndexMap::new(),
+            progress: IndexMap::new(),
             path: manager.advancement_path.join(format!("{}.json", &uuid)),
             manager,
             player: Weak::new(),
             is_first_packet: true,
-            to_update: Default::default(),
             roots_to_update: Default::default(),
             visible: Default::default(),
             progress_changed: Default::default(),
+            last_selected_tab: None,
         }
     }
 
@@ -99,7 +99,7 @@ impl PlayerAdvancement {
     ///reload the advancements from the file
     pub fn reload(&mut self) -> Result<(), AdvancementDataError> {
         self.stopListening();
-        self.advancements.clear();
+        self.progress.clear();
         self.visible.clear();
         self.roots_to_update.clear();
         self.progress_changed.clear();
@@ -145,15 +145,22 @@ impl PlayerAdvancement {
         let loaded_data: HashMap<String, AdvancementProgress> =
             from_reader(file).map_err(AdvancementDataError::Json)?;
 
-        self.advancements.clear();
+        self.progress.clear();
         for (advancement_id, progress) in loaded_data {
             if let Some(advancement_ref) = Advancement::from_name(&advancement_id) {
-                self.advancements.insert(advancement_ref, progress);
+                self.progress.insert(advancement_ref, progress);
             } else {
                 warn!("The Advancement name {} is invalid", advancement_id);
             }
         }
         Ok(())
+    }
+
+    fn mark_for_visibility_update(&mut self, advancement:&'static Advancement) {
+        let node = ADVANCEMENT_TREE.get_node_from_id(&advancement.id);
+        if let Some(node) = node {
+            self.roots_to_update.insert(node.root());
+        }
     }
 
     fn update_tree_visibility(&mut self,root:&AdvancementNode,added:&mut Vec<&'static Advancement>,removed:&mut Vec<Identifier>){
@@ -164,7 +171,7 @@ impl PlayerAdvancement {
             if should_be_visible {
                 if self.visible.insert(advancement) {
                     added.add(advancement);
-                    if self.advancements.containsKey(advancement) {
+                    if self.progress.containsKey(advancement) {
                         self.progress_changed.add(advancement);
                     }
                 }
@@ -175,13 +182,23 @@ impl PlayerAdvancement {
     }
 
     /// Flushes any pending advancement state down to the client.
-    pub fn flush_dirty(&mut self, _flag: bool) {
-        if self.is_first_packet || !self.to_update.is_empty() {
+    pub async fn flush_dirty(&mut self,player: &Arc<Player>, show_advancement: bool) {
+        if self.is_first_packet || !self.roots_to_update.is_empty() {
             let mut progress: HashMap<Identifier,AdvancementProgress> = HashMap::new();
             let mut added : Vec<&Advancement> = Vec::new();
             let mut removed : Vec<Identifier> = Vec::new();
             for root in self.roots_to_update {
                 self.update_tree_visibility(root, &mut added, &mut removed);
+            }
+            self.roots_to_update.clear();
+            for advancement in self.progress_changed {
+                if self.visible.contains(advancement) {
+                    progress.insert(advancement.id.clone(), self.progress[advancement]);
+                }
+            }
+            self.progress_changed.clear();
+            if !progress.is_empty() || !added.is_empty() || !removed.is_empty() {
+                player.client.send_packet_now(&CUpdateAdvancements::new(self.is_first_packet, added, vec![], removed,  show_advancement)).await;
             }
         }
         self.is_first_packet = false;
@@ -200,7 +217,7 @@ impl PlayerAdvancement {
         &mut self,
         advancement: &'static Advancement,
     ) -> &mut AdvancementProgress {
-        self.advancements.entry(advancement).or_default()
+        self.progress.entry(advancement).or_default()
     }
 
     /// Grants the rewards (like experience) associated with completing an advancement.
@@ -231,15 +248,32 @@ impl PlayerAdvancement {
             }
         }
         if !is_done && progress.is_done() {
-            //TODO update to_update with the advancement
+            self.mark_for_visibility_update(advancement);
         }
     }
 
     /// Revokes a previously awarded advancement, clearing its progress state.
     pub fn revoke(&mut self, advancement: &'static Advancement) {
         let progress = self.get_mut_or_start_progress(advancement);
+        let was_done = progress.is_done();
         if progress.is_done() {
             progress.complete = false;
+        }
+
+        if was_done && !progress.isDone() {
+            self.mark_for_visibility_update(advancement);
+        }
+    }
+
+    pub async fn set_selected_tab(&mut self,advancement: Option<&Advancement>) {
+        let old = self.last_selected_tab;
+        if let Some(value) = advancement && value.is_root() && value.display.is_some() {
+            self.last_selected_tab = advancement;
+        } else {
+            self.last_selected_tab = None;
+        }
+        if old != self.last_selected_tab && let Some(player) = self.player.upgrade() {
+            player.client.send_packet_now(&CSelectAdvancementsTab::new(self.last_selected_tab.map(|adv| adv.id.clone()))).await;
         }
     }
 }
@@ -249,9 +283,9 @@ impl Serialize for PlayerAdvancement {
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(self.advancements.len()))?;
+        let mut map = serializer.serialize_map(Some(self.progress.len()))?;
 
-        for (advancement, progress) in &self.advancements {
+        for (advancement, progress) in &self.progress {
             map.serialize_entry(&advancement.id, progress)?;
         }
         map.end()
@@ -284,8 +318,8 @@ mod tests {
         let pa = PlayerAdvancement::new(manager, id);
         assert!(pa.is_save_enabled());
         assert!(pa.is_first_packet);
-        assert!(pa.to_update.is_empty());
-        assert!(pa.advancements.is_empty());
+        assert!(pa.roots_to_update.is_empty());
+        assert!(pa.progress.is_empty());
     }
 
     #[test]
@@ -383,7 +417,7 @@ mod tests {
             "Loading from nonexistent file should return Ok"
         );
         assert!(
-            pa.advancements.is_empty(),
+            pa.progress.is_empty(),
             "Advancements should remain empty"
         );
     }
@@ -439,8 +473,8 @@ mod tests {
             "Loaded progress should match saved progress"
         );
         assert_eq!(
-            pa_loaded.advancements.len(),
-            pa.advancements.len(),
+            pa_loaded.progress.len(),
+            pa.progress.len(),
             "Loaded advancements count should match"
         );
     }
@@ -465,7 +499,7 @@ mod tests {
             "Load should succeed even with invalid IDs"
         );
         assert!(
-            pa.advancements.is_empty(),
+            pa.progress.is_empty(),
             "Invalid advancements should be skipped"
         );
     }
