@@ -34,6 +34,7 @@ impl PacketWrite for NetworkItemDescriptor {
 }
 
 impl NetworkItemDescriptor {
+    #[allow(clippy::option_option)]
     fn write_with_net_id<W: Write>(
         &self,
         writer: &mut W,
