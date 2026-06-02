@@ -1,9 +1,17 @@
-use crate::chunk::format::linear::LinearV2File;
-use crate::chunk::format::pump::PumpFile;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
-use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
-use crate::{
+use arc_swap::ArcSwap;
+use dashmap::{DashMap, Entry};
+use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
+use pumpkin_data::biome::Biome;
+use pumpkin_data::dimension::Dimension;
+use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::world_seed::Seed;
+use pumpkin_world::chunk::format::linear::LinearV2File;
+use pumpkin_world::chunk::format::pump::PumpFile;
+use pumpkin_world::generation::generator::VanillaGenerator;
+use pumpkin_world::{
     BlockStateId,
     block::RawBlockState,
     chunk::{
@@ -16,14 +24,6 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::WorldPortalExt,
 };
-use arc_swap::ArcSwap;
-use dashmap::{DashMap, Entry};
-use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
-use pumpkin_data::biome::Biome;
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use pumpkin_util::world_seed::Seed;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
@@ -45,6 +45,8 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
+
+pub use pumpkin_world::chunk_system_data::LevelFolder;
 
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
@@ -115,12 +117,6 @@ pub struct RandomTickSample {
     pub position: BlockPos,
     pub tick_block: bool,
     pub tick_fluid: bool,
-}
-
-pub struct LevelFolder {
-    pub root_folder: PathBuf,
-    pub region_folder: PathBuf,
-    pub entities_folder: PathBuf,
 }
 
 impl Level {

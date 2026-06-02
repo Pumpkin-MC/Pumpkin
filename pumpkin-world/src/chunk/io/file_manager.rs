@@ -17,7 +17,7 @@ use crate::{
         ChunkReadingError, ChunkWritingError,
         io::{BoxFuture, Dirtiable},
     },
-    level::LevelFolder,
+    chunk_system_data::LevelFolder,
 };
 
 use super::{ChunkSerializer, FileIO, LoadedData};

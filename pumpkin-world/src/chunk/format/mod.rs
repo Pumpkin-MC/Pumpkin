@@ -21,8 +21,8 @@ use crate::{
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
         io::{Dirtiable, file_manager::PathFromLevelFolder},
     },
+    chunk_system_data::LevelFolder,
     generation::section_coords,
-    level::LevelFolder,
     tick::{ScheduledTick, scheduler::ChunkTickScheduler},
 };
 use pumpkin_util::math::position::BlockPos;

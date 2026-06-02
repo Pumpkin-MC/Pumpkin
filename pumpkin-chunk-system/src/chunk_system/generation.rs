@@ -1,9 +1,9 @@
 use pumpkin_data::dimension::Dimension;
 
-use crate::ProtoChunk;
-use crate::generation::generator::VanillaGenerator;
-use crate::world::WorldPortalExt;
 use pumpkin_config::lighting::LightingEngineConfig;
+use pumpkin_world::ProtoChunk;
+use pumpkin_world::generation::generator::VanillaGenerator;
+use pumpkin_world::world::WorldPortalExt;
 
 use super::{Cache, Chunk, StagedChunkEnum};
 
@@ -63,12 +63,14 @@ pub fn generate_single_chunk(
 
 #[cfg(test)]
 mod tests {
-    use crate::biome::hash_seed;
     use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
-    use crate::generation::get_world_gen;
-    use crate::world::WorldPortalExt;
     use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::world_seed::Seed;
+    use pumpkin_world::biome::hash_seed;
+    use pumpkin_world::generation::get_world_gen;
+    use pumpkin_world::generation::proto_chunk::GenerationCache;
+    use pumpkin_world::world::{BlockAccessor, WorldPortalExt};
     use std::sync::Arc;
 
     struct BlockRegistry;
@@ -77,15 +79,15 @@ mod tests {
             &self,
             _block: &pumpkin_data::Block,
             _state: &pumpkin_data::BlockState,
-            _block_accessor: &dyn crate::world::BlockAccessor,
-            _block_pos: &pumpkin_util::math::position::BlockPos,
+            _block_accessor: &dyn BlockAccessor,
+            _block_pos: &BlockPos,
         ) -> bool {
             true
         }
 
         fn spawn_mobs_for_chunk_generation(
             &self,
-            _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,
+            _cache: &mut dyn GenerationCache,
             _biome: &'static pumpkin_data::chunk::Biome,
             _chunk_x: i32,
             _chunk_z: i32,

@@ -1,11 +1,4 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
-use crate::block::RawBlockState;
-use crate::chunk::ChunkHeightmapType;
-use crate::generation::generator;
-use crate::generation::height_limit::HeightLimitView;
-use crate::generation::proto_chunk::GenerationCache;
-use crate::world::{BlockAccessor, WorldPortalExt};
-use crate::{BlockStateId, ProtoChunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::is_air;
@@ -15,6 +8,14 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::block::RawBlockState;
+use pumpkin_world::chunk::ChunkHeightmapType;
+use pumpkin_world::generation::blender::blending_data::BlendingData;
+use pumpkin_world::generation::generator;
+use pumpkin_world::generation::height_limit::HeightLimitView;
+use pumpkin_world::generation::proto_chunk::GenerationCache;
+use pumpkin_world::world::{BlockAccessor, WorldPortalExt};
+use pumpkin_world::{BlockStateId, ProtoChunk};
 use tracing::debug;
 
 pub struct Cache {
@@ -307,11 +308,7 @@ impl GenerationCache for Cache {
         }
     }
 
-    fn get_blending_data(
-        &self,
-        chunk_x: i32,
-        chunk_z: i32,
-    ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
+    fn get_blending_data(&self, chunk_x: i32, chunk_z: i32) -> Option<&BlendingData> {
         let dx = chunk_x - self.x;
         let dz = chunk_z - self.z;
 

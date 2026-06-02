@@ -2682,6 +2682,7 @@ dependencies = [
  "num-bigint",
  "ordered-float",
  "postcard",
+ "pumpkin-chunk-system",
  "pumpkin-codecs",
  "pumpkin-config",
  "pumpkin-data",
@@ -2726,6 +2727,30 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "pumpkin-chunk-system"
+version = "0.1.0-dev+26.1"
+dependencies = [
+ "arc-swap",
+ "criterion",
+ "crossbeam",
+ "crossfire",
+ "dashmap",
+ "itertools 0.14.0",
+ "pumpkin-config",
+ "pumpkin-data",
+ "pumpkin-nbt",
+ "pumpkin-util",
+ "pumpkin-world",
+ "rand",
+ "rayon",
+ "rustc-hash",
+ "slotmap",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -2866,12 +2891,9 @@ dependencies = [
 name = "pumpkin-world"
 version = "0.1.0-dev+26.1"
 dependencies = [
- "arc-swap",
  "bitflags",
  "bytes",
  "criterion",
- "crossbeam",
- "crossfire",
  "dashmap",
  "enum_dispatch",
  "flate2",
@@ -2882,18 +2904,14 @@ dependencies = [
  "pumpkin-data",
  "pumpkin-nbt",
  "pumpkin-util",
- "rand",
- "rayon",
  "rustc-hash",
  "ruzstd",
  "serde",
  "serde_json5",
  "sha2 0.11.0",
- "slotmap",
  "temp-dir",
  "thiserror 2.0.18",
  "tokio",
- "tokio-util",
  "tracing",
  "uuid",
  "xxhash-rust",

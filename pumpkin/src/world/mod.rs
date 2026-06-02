@@ -46,6 +46,7 @@ use arc_swap::ArcSwap;
 use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
+use pumpkin_chunk_system::level::Level;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
@@ -126,12 +127,12 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::inventory::Clearable;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{level::Level, tick::TickPriority};
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};

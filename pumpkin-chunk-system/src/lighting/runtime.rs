@@ -1,10 +1,10 @@
-use crate::chunk::io::Dirtiable;
-use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use crossbeam::queue::SegQueue;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::chunk::io::Dirtiable;
+use pumpkin_world::chunk::palette::BlockPalette;
 use std::sync::Arc;
 
 pub struct DynamicLightEngine {

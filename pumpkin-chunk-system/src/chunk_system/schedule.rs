@@ -8,12 +8,13 @@ use super::{
     ChunkLevel, ChunkListener, ChunkLoading, ChunkPos, HashMapType, HashSetType, IOLock,
     LevelChannel,
 };
-use crate::chunk::io::Dirtiable;
+
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_world::chunk::io::Dirtiable;
 use slotmap::Key;
 use std::cmp::{Ordering, max};
 use std::collections::{BinaryHeap, HashMap};
