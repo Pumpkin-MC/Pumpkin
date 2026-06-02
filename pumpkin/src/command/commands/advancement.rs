@@ -77,7 +77,7 @@ impl Action {
         let mut count = 0;
 
         if !grant_everything {
-            player.advancements.lock().await.flush_dirty(true);
+            player.advancements.lock().await.flush_dirty(player,true).await;
         }
 
         for advancement in advancements {
@@ -87,7 +87,7 @@ impl Action {
         }
 
         if !grant_everything {
-            player.advancements.lock().await.flush_dirty(false);
+            player.advancements.lock().await.flush_dirty(player,false).await;
         }
         count
     }
