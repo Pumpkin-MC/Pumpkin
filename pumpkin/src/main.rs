@@ -1,4 +1,6 @@
-// Don't warn on event sending macros
+#![feature(unboxed_closures)]#![feature(unboxed_closures)]// Don't
+ warn on event sending macros
+
 #![recursion_limit = "512"]
 #![expect(unused_labels)]
 

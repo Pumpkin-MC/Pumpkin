@@ -192,13 +192,13 @@ impl Hash for AdvancementNode {
 
 impl ToTokens for AdvancementNode {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let parent = self.parent;
-        let children = self.children;
-        let value = self.value;
+        let parent = token_option(&self.parent);
+        let children = &self.children;
+        let value = &self.value;
        tokens.extend(quote! {
            AdvancementNode{
                parent:#parent,
-               children: vec![#(#children),*]
+               children: vec![#(#children),*],
                value: #value,
            }
        })
@@ -525,7 +525,7 @@ impl ToTokens for AdvancementHolder {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = format_ident!("{}", self.0.path().to_shouty_snake_case());
         tokens.extend(quote! {
-            #name
+            Advancement::#name
         })
     }
 }
@@ -583,7 +583,7 @@ impl AdvancementTree {
             None => None,
         };
         let id = advancement.0.clone();
-        let node = AdvancementNode::new(advancement);
+        let node = AdvancementNode::new(advancement,parent_idx);
         let node_idx = self.nodes_vector.len();
         self.nodes.insert(id, node_idx);
         if let Some(parent)  = parent_idx {
@@ -602,18 +602,25 @@ impl ToTokens for AdvancementTree {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let nodes = self.nodes.iter().map(|(k, v)| {
             quote! {
-                map.insert(#k, #v);
+                nodes.insert(#k, #v);
             }
         });
-        let nodes_vector = self.nodes_vector;
+        let nodes_vector = &self.nodes_vector;
+        let roots = &self.roots;
+        let tasks = &self.tasks;
         tokens.extend(quote! {
-            let nodes = HashMap::new();
-            #(#nodes)*
-            let nodes_vector = vec![#(#nodes_vector),*];
-            AdvancementTree {
-                nodes,
-                nodes_vector,
-                roots,
+            {
+                let mut nodes = HashMap::new();
+                #(#nodes)*
+                let nodes_vector = vec![#(#nodes_vector),*];
+                let roots = vec![#(#roots),*];
+                let tasks = vec![#(#tasks),*];
+                AdvancementTree {
+                    nodes,
+                    nodes_vector,
+                    roots,
+                    tasks,
+                }
             }
         })
     }
@@ -637,6 +644,9 @@ pub(crate) fn build() -> TokenStream {
             TreePositioner::run(&mut tree,index);
         }
     }
+    let advancement_tree = quote! {
+        pub static ADVANCEMENT_TREE : AdvancementTree = #tree;
+    };
     let advancements_holder: Vec<AdvancementHolder> = tree.nodes_vector.into_iter().map(|node| node.value).collect();
     for AdvancementHolder(identifier, advancement) in advancements_holder {
         let raw_name = identifier.path();
@@ -681,6 +691,7 @@ pub(crate) fn build() -> TokenStream {
             color::Color};
         use std::hash::{Hash,Hasher};
         use std::fmt::Display;
+        use std::collections::HashMap;
 
         pub struct Advancement {
             pub id : Identifier,
@@ -751,5 +762,6 @@ pub(crate) fn build() -> TokenStream {
                 [#minecraft_namespaces]
             }
         }
+        #advancement_tree
     }
 }

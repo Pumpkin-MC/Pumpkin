@@ -1,4 +1,5 @@
 pub mod advancement;
+pub mod visibility_evaluator;
 
 use core::f32;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};

@@ -1,9 +1,11 @@
+mod visibility_evaluator;
+
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
 use pumpkin_data::Advancement;
-use pumpkin_data::advancement_data::AdvancementReward;
+use pumpkin_data::advancement_data::{AdvancementNode, AdvancementReward, AdvancementTree};
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
@@ -14,6 +16,7 @@ use std::sync::{Arc, Weak};
 use serde_json::{from_reader, to_writer_pretty};
 use tracing::{error, warn};
 use uuid::Uuid;
+use pumpkin_util::identifier::Identifier;
 
 /// Represents the progress of a given advancement for a player.
 ///
@@ -46,10 +49,15 @@ pub struct PlayerAdvancement {
     advancements: IndexMap<&'static Advancement, AdvancementProgress>,
     is_first_packet: bool,
     to_update: HashSet<&'static Advancement>,
+    roots_to_update: HashSet<&'_ AdvancementNode>,
+    visible: HashSet<&'static Advancement>,
+    progress_changed: HashSet<&'static Advancement>,
     manager: Arc<AdvancementManager>,
     path: PathBuf,
+    last_selected_tab : Option<&'static Advancement>,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
+
 }
 
 /// Errors that can occur when saving or loading advancement data.
@@ -70,7 +78,10 @@ impl PlayerAdvancement {
             manager,
             player: Weak::new(),
             is_first_packet: true,
-            to_update: HashSet::default(),
+            to_update: Default::default(),
+            roots_to_update: Default::default(),
+            visible: Default::default(),
+            progress_changed: Default::default(),
         }
     }
 
@@ -83,6 +94,18 @@ impl PlayerAdvancement {
     #[must_use]
     pub fn is_save_enabled(&self) -> bool {
         self.manager.save_enabled
+    }
+
+    ///reload the advancements from the file
+    pub fn reload(&mut self) -> Result<(), AdvancementDataError> {
+        self.stopListening();
+        self.advancements.clear();
+        self.visible.clear();
+        self.roots_to_update.clear();
+        self.progress_changed.clear();
+        self.is_first_packet = true;
+        self.last_selected_tab = None;
+        self.load()?;
     }
 
     /// Saves the player's advancement progress to disk as JSON.
@@ -133,10 +156,33 @@ impl PlayerAdvancement {
         Ok(())
     }
 
-    /// Flushes any pending (dirty) advancement state down to the client.
+    fn update_tree_visibility(&mut self,root:&AdvancementNode,added:&mut Vec<&'static Advancement>,removed:&mut Vec<Identifier>){
+        visibility_evaluator::evaluate_visibility(root,
+        &|node: &AdvancementNode| self.get_or_start_progress(node.value).is_done(),
+        &|node, should_be_visible| {
+            let advancement = node.value;
+            if should_be_visible {
+                if self.visible.insert(advancement) {
+                    added.add(advancement);
+                    if self.advancements.containsKey(advancement) {
+                        self.progress_changed.add(advancement);
+                    }
+                }
+            } else if self.visible.remove(advancement) {
+                removed.add(advancement.id.clone());
+            }
+        });
+    }
+
+    /// Flushes any pending advancement state down to the client.
     pub fn flush_dirty(&mut self, _flag: bool) {
         if self.is_first_packet || !self.to_update.is_empty() {
-            todo!("send advancement tree with the complete ones");
+            let mut progress: HashMap<Identifier,AdvancementProgress> = HashMap::new();
+            let mut added : Vec<&Advancement> = Vec::new();
+            let mut removed : Vec<Identifier> = Vec::new();
+            for root in self.roots_to_update {
+                self.update_tree_visibility(root, &mut added, &mut removed);
+            }
         }
         self.is_first_packet = false;
     }

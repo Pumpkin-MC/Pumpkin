@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use crate::Advancement;
+use crate::{Advancement, ADVANCEMENT_TREE};
 use crate::item_stack::ItemStack;
 use crate::potion_brewing::ItemRecipe;
 use pumpkin_util::resource_location::ResourceLocation;
@@ -103,7 +103,7 @@ pub struct AdvancementReward {
 pub struct AdvancementNode {
     pub children: Vec<usize>,
     pub parent: Option<usize>,
-    pub value: Advancement,
+    pub value: &'static Advancement,
 }
 
 impl AdvancementNode {
@@ -112,7 +112,7 @@ impl AdvancementNode {
     }
 
     #[must_use]
-    pub fn new(value:Advancement,parent:Option<usize>) -> Self {
+    pub fn new(value:&'static Advancement,parent:Option<usize>) -> Self {
         Self {
             value,
             parent,
@@ -124,6 +124,14 @@ impl AdvancementNode {
     #[must_use]
     pub const fn has_display(&self) -> bool {
         self.value.display.is_some()
+    }
+
+    pub fn root(&self) -> &AdvancementNode {
+        let mut advancement_node = self;
+        while let Some(parent) = &advancement_node.parent {
+            advancement_node = ADVANCEMENT_TREE.nodes_vector[parent];
+        }
+        advancement_node
     }
 }
 
@@ -155,49 +163,20 @@ pub struct AdvancementTree {
 }
 
 impl AdvancementTree {
-    pub fn add_all(&mut self, advancements: Vec<Advancement>) {
-        let mut advancements_to_add: Vec<Advancement> = advancements;
-
-        while !advancements_to_add.is_empty() {
-            let len_before = advancements_to_add.len();
-
-            advancements_to_add = advancements_to_add
-                .into_iter()
-                .filter_map(|advancement| self.try_insert(advancement))
-                .collect();
-
-            if advancements_to_add.len() == len_before && !advancements_to_add.is_empty() {
-                eprintln!(
-                    "Couldn't load advancements: {:?}",
-                    advancements_to_add.iter().map(|a| &a.id).collect::<Vec<_>>()
-                );
-                break;
-            }
+    pub const fn get_node_from_id(&self, id: &Identifier) -> Option<&AdvancementNode> {
+        if let Some(idx) = self.nodes.get(id){
+            self.nodes_vector.get(idx)
+        }else {
+            None
         }
     }
 
-    pub fn try_insert(&mut self, advancement: Advancement) -> Option<Advancement> {
-        let parent_id = &advancement.parent;
-        let parent_idx: Option<usize> = match parent_id {
-            Some(id) => match self.nodes.get(id) {
-                Some(node) => Some(*node),
-                None => return Some(advancement),
-            },
-            None => None,
-        };
-        let id = advancement.id.clone();
-        let node = AdvancementNode::new(advancement);
-        let node_idx = self.nodes_vector.len();
-        self.nodes.insert(id, node_idx);
-        if let Some(parent)  = parent_idx {
-            let parent_node = self.nodes_vector.get_mut(parent).unwrap();
-            parent_node.add_child(node_idx);
-            self.tasks.push(node_idx);
-        } else {
-            self.roots.push(node_idx);
-        }
-        self.nodes_vector.push(node);
-        None
+    pub const fn get_node_from_idx(&self, idx: usize) -> Option<&AdvancementNode> {
+        self.nodes_vector.get(idx)
+    }
+
+    pub const fn get_idx(&self, id: &Identifier) -> Option<usize> {
+        self.nodes.get(id).copied()
     }
 }
 
