@@ -356,8 +356,18 @@ impl LivingEntity {
                 .attributes
                 .iter()
                 .find(|a| a.0.id == attribute.id)
-                .unwrap()
-                .1;
+                .map_or_else(
+                    || {
+                        tracing::warn!(
+                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
+                            self.entity.entity_type,
+                            attribute.id,
+                            attribute.default_value,
+                        );
+                        attribute.default_value
+                    },
+                    |a| a.1,
+                );
             AttributeInstance::new(base)
         });
 
