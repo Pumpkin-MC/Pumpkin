@@ -30,12 +30,12 @@ impl CarverBlockIds {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            air: &pumpkin_data::Block::AIR.default_state,
-            cave_air: &pumpkin_data::Block::CAVE_AIR.default_state,
-            lava: &pumpkin_data::Block::LAVA.default_state,
-            dirt: &pumpkin_data::Block::DIRT.default_state,
-            grass_block: &pumpkin_data::Block::GRASS_BLOCK.default_state,
-            mycelium: &pumpkin_data::Block::MYCELIUM.default_state,
+            air: pumpkin_data::Block::AIR.default_state,
+            cave_air: pumpkin_data::Block::CAVE_AIR.default_state,
+            lava: pumpkin_data::Block::LAVA.default_state,
+            dirt: pumpkin_data::Block::DIRT.default_state,
+            grass_block: pumpkin_data::Block::GRASS_BLOCK.default_state,
+            mycelium: pumpkin_data::Block::MYCELIUM.default_state,
         }
     }
 }
