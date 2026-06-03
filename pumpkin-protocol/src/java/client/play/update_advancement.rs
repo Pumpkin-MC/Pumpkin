@@ -1,24 +1,12 @@
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_data::Advancement;
-use pumpkin_data::advancement_data::AdvancementDisplay;
+use pumpkin_data::advancement_data::{AdvancementDisplay, AdvancementProgress};
 use pumpkin_data::packet::clientbound::PLAY_UPDATE_ADVANCEMENTS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
-
-#[derive(Serialize)]
-pub struct AdvancementProgress {
-    pub id: ResourceLocation,
-    pub progress: Vec<Criteria>,
-}
-
-#[derive(Serialize)]
-pub struct Criteria {
-    pub criterion_id: ResourceLocation,
-    pub achieve_date: Option<i64>,
-}
 
 fn serialize_advancements<S: Serializer>(
     advancements: &[&'static Advancement],
@@ -41,7 +29,7 @@ impl Serialize for AdvancementSer<'_> {
     {
         let adv = self.0;
         let mut state = serializer.serialize_struct("Advancement", 5)?;
-        state.serialize_field("id", &adv.id.to_string())?;
+        state.serialize_field("id",&adv.id)?;
         state.serialize_field("parent", &adv.parent)?;
         if let Some(display) = adv.display {
             state.serialize_field("display", &DisplaySerializer(display))?;
@@ -63,22 +51,21 @@ impl Serialize for DisplaySerializer<'_> {
     {
         let disp = self.0;
         let mut state = serializer.serialize_struct("AdvancementDisplay", 8)?;
+
         state.serialize_field("title", &disp.get_title())?;
         state.serialize_field("description", &disp.get_description())?;
         state.serialize_field(
-            "item_icon",
+            "icon",
             &ItemStackSerializer::from(disp.item_icon.clone()),
         )?;
-        state.serialize_field("frame_type", &(disp.frame_type as i32))?;
         let flags = (disp.has_background() as i32)
             | ((disp.show_toast as i32) << 1)
             | ((disp.hidden as i32) << 2);
         state.serialize_field("flags", &flags)?;
-
+        state.serialize_field("frame_type", &(disp.frame_type as i32))?;
         if let Some(bg) = disp.background_texture {
             state.serialize_field("background_texture", bg)?;
         }
-
         state.serialize_field("x", &disp.x)?;
         state.serialize_field("y", &disp.y)?;
         state.end()

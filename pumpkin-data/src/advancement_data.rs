@@ -179,4 +179,20 @@ impl AdvancementTree {
     }
 }
 
+
+#[derive(Serialize)]
+pub struct AdvancementProgress {
+    pub id: Identifier,
+    pub progress: Vec<Criteria>,
+}
+
+#[derive(Serialize)]
+pub struct Criteria {
+    pub criterion_id: Identifier,
+    pub achieve_date: Option<i64>,
+}
+
+pub struct AdvancementRequirement {
+    pub requirements: Vec<Vec<String>>
+}
 pub trait Criterion {}

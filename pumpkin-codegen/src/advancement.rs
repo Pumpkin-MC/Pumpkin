@@ -504,6 +504,7 @@ pub struct AdvancementStruct {
     pub rewards: AdvancementRewards,
     #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
+    pub requirements: Vec<Vec<String>>
 }
 #[derive(Clone)]
 pub struct AdvancementHolder(Identifier,AdvancementStruct);
@@ -699,6 +700,7 @@ pub(crate) fn build() -> TokenStream {
             pub send_telemetry : bool,
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
+            pub requirements: AdvancementRequirements,
         }
 
         impl Display for Advancement {
