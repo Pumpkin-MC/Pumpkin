@@ -87,7 +87,7 @@ pub async fn default_dispatcher(
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
-    dispatcher.register(tps::init_command_tree(), "pumpkin:command.tps");
+    dispatcher.register(tps::oinit_command_tree(), "pumpkin:command.tps");
     dispatcher.register(fill::init_command_tree(), "minecraft:command.fill");
     dispatcher.register(
         playsound::init_command_tree(),
@@ -156,7 +156,6 @@ pub async fn default_dispatcher(
     setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
     tick::register(&mut dispatcher, registry);
-
     advancement::register(&mut dispatcher, registry);
     dispatcher
 }

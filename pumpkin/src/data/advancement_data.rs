@@ -2,14 +2,10 @@ use crate::entity::player::Player;
 use crate::entity::player::advancement::{AdvancementDataError, PlayerAdvancement};
 use pumpkin_data::Advancement;
 use pumpkin_util::identifier::Identifier;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Display};
 use std::fs::create_dir_all;
-use std::hash::Hash;
 use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::{Arc, RwLock};
-use tracing::{error, info};
+use std::sync::Arc;
+use tracing::error;
 use uuid::Uuid;
 
 /// Manages player advancements, including data creation and saving.
@@ -39,14 +35,14 @@ impl AdvancementManager {
     /// Retrieves the list of all available advancements in the game.
     #[must_use]
     #[inline]
-    pub const fn get_advancements(&self) -> Vec<Identifier> {
+    pub fn get_advancements(&self) -> Vec<Identifier> {
         Advancement::get_list().to_vec()
     }
 
     /// Creates and returns a new instance of `PlayerAdvancement` with the configured path.
     #[inline]
     #[must_use]
-    pub const fn new_player_advancement(self: Arc<Self>, owner: Uuid) -> PlayerAdvancement {
+    pub fn new_player_advancement(self: Arc<Self>, owner: Uuid) -> PlayerAdvancement {
         PlayerAdvancement::new(self, owner)
     }
 

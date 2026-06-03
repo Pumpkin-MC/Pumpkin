@@ -1,8 +1,8 @@
-use std::{borrow::Cow, fmt::Display};
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
 use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
+use quote::{ToTokens, quote};
 use serde::{Deserialize, Serialize};
+use std::{borrow::Cow, fmt::Display};
 use thiserror::Error;
 
 pub const VANILLA_NAMESPACE: &str = "minecraft";

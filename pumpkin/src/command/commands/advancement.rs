@@ -9,12 +9,12 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use pumpkin_data::{Advancement, translation, ADVANCEMENT_TREE};
+use pumpkin_data::advancement_data::AdvancementNode;
+use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
-use pumpkin_data::advancement_data::AdvancementNode;
 
 const NAME: &str = "advancement";
 const DESCRIPTION: &str = "manage advancement of the player";
@@ -77,7 +77,12 @@ impl Action {
         let mut count = 0;
 
         if !grant_everything {
-            player.advancements.lock().await.flush_dirty(player,true).await;
+            player
+                .advancements
+                .lock()
+                .await
+                .flush_dirty(player, true)
+                .await;
         }
 
         for advancement in advancements {
@@ -87,7 +92,12 @@ impl Action {
         }
 
         if !grant_everything {
-            player.advancements.lock().await.flush_dirty(player,false).await;
+            player
+                .advancements
+                .lock()
+                .await
+                .flush_dirty(player, false)
+                .await;
         }
         count
     }
@@ -153,33 +163,31 @@ impl Mode {
     }
 }
 
-fn get_advancements(
-    target: &Advancement,
-    mode: Mode,
-) -> Vec<&Advancement> {
-    let tree = ADVANCEMENT_TREE;
+fn get_advancements(target: &Advancement, mode: Mode) -> Vec<&Advancement> {
+    let tree = &ADVANCEMENT_TREE;
     let target_node = tree.get_node_from_id(&target.id);
-    if let Some(target_node) = target_node {
-        let mut advancements = Vec::new();
-        if mode.parents() {
-            let parent = target_node.parent;
-            while let Some(parent) = parent {
-                advancements.push(tree.nodes_vector[parent].value);
+    target_node.map_or_else(
+        || vec![target],
+        |target_node| {
+            let mut advancements = Vec::new();
+            if mode.parents() {
+                let parent = target_node.parent;
+                while let Some(parent) = parent {
+                    advancements.push(tree.nodes_vector[parent].value);
+                }
             }
-        }
-        advancements.push(target);
-        if mode.children() {
-            add_children(target_node,&mut advancements);
-        }
-        advancements
-    }else {
-        vec![target]
-    }
+            advancements.push(target);
+            if mode.children() {
+                add_children(target_node, &mut advancements);
+            }
+            advancements
+        },
+    )
 }
 
-fn add_children(parent: &AdvancementNode, output:&mut Vec<&Advancement>) {
-    for child in parent.children {
-        let node = &ADVANCEMENT_TREE.nodes_vector[child];
+fn add_children(parent: &AdvancementNode, output: &mut Vec<&Advancement>) {
+    for child in &parent.children {
+        let node = &ADVANCEMENT_TREE.nodes_vector[*child];
         output.push(node.value);
         add_children(node, output);
     }

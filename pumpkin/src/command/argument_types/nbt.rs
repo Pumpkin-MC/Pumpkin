@@ -22,7 +22,7 @@ impl ArgumentType for NbtTagArgumentType {
         SnbtParser::parse_for_commands(reader)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::NbtTag
     }
 
@@ -72,7 +72,7 @@ impl ArgumentType for NbtCompoundArgumentType {
         })
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::NbtCompound
     }
 

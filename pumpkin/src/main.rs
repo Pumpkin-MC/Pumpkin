@@ -1,6 +1,4 @@
-#![feature(unboxed_closures)]#![feature(unboxed_closures)]// Don't
- warn on event sending macros
-
+// Don't warn on event sending macros
 #![recursion_limit = "512"]
 #![expect(unused_labels)]
 
@@ -51,7 +49,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-pub mod advancement;
 
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));

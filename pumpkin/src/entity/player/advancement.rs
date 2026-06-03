@@ -1,23 +1,23 @@
-mod visibility_evaluator;
+pub mod visibility_evaluator;
 
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
-use pumpkin_data::{Advancement, ADVANCEMENT_TREE};
-use pumpkin_data::advancement_data::{AdvancementNode, AdvancementReward, AdvancementTree};
+use pumpkin_data::advancement_data::{AdvancementNode, AdvancementReward};
+use pumpkin_data::{ADVANCEMENT_TREE, Advancement};
+use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::{from_reader, to_writer_pretty};
 use std::collections::{HashMap, HashSet};
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
-use serde_json::{from_reader, to_writer_pretty};
 use tracing::{error, warn};
 use uuid::Uuid;
-use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
-use pumpkin_util::identifier::Identifier;
 
 /// Represents the progress of a given advancement for a player.
 ///
@@ -49,15 +49,14 @@ impl AdvancementProgress {
 pub struct PlayerAdvancement {
     progress: IndexMap<&'static Advancement, AdvancementProgress>,
     is_first_packet: bool,
-    roots_to_update: HashSet<&'_ AdvancementNode>,
+    roots_to_update: HashSet<&'static AdvancementNode>,
     visible: HashSet<&'static Advancement>,
     progress_changed: HashSet<&'static Advancement>,
     manager: Arc<AdvancementManager>,
     path: PathBuf,
-    last_selected_tab : Option<&'static Advancement>,
+    last_selected_tab: Option<&'static Advancement>,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
-
 }
 
 /// Errors that can occur when saving or loading advancement data.
@@ -71,16 +70,17 @@ pub enum AdvancementDataError {
 
 impl PlayerAdvancement {
     /// Creates a new instance of `PlayerAdvancement`.
-    pub(crate) fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
+    #[must_use]
+    pub fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
         Self {
             progress: IndexMap::new(),
             path: manager.advancement_path.join(format!("{}.json", &uuid)),
             manager,
             player: Weak::new(),
             is_first_packet: true,
-            roots_to_update: Default::default(),
-            visible: Default::default(),
-            progress_changed: Default::default(),
+            roots_to_update: HashSet::default(),
+            visible: HashSet::default(),
+            progress_changed: HashSet::default(),
             last_selected_tab: None,
         }
     }
@@ -98,14 +98,14 @@ impl PlayerAdvancement {
 
     ///reload the advancements from the file
     pub fn reload(&mut self) -> Result<(), AdvancementDataError> {
-        self.stopListening();
+        //self.stopListening(); TODO
         self.progress.clear();
         self.visible.clear();
         self.roots_to_update.clear();
         self.progress_changed.clear();
         self.is_first_packet = true;
         self.last_selected_tab = None;
-        self.load()?;
+        self.load()
     }
 
     /// Saves the player's advancement progress to disk as JSON.
@@ -156,49 +156,70 @@ impl PlayerAdvancement {
         Ok(())
     }
 
-    fn mark_for_visibility_update(&mut self, advancement:&'static Advancement) {
+    fn mark_for_visibility_update(&mut self, advancement: &'static Advancement) {
         let node = ADVANCEMENT_TREE.get_node_from_id(&advancement.id);
         if let Some(node) = node {
             self.roots_to_update.insert(node.root());
         }
     }
 
-    fn update_tree_visibility(&mut self,root:&AdvancementNode,added:&mut Vec<&'static Advancement>,removed:&mut Vec<Identifier>){
-        visibility_evaluator::evaluate_visibility(root,
-        &|node: &AdvancementNode| self.get_or_start_progress(node.value).is_done(),
-        &|node, should_be_visible| {
-            let advancement = node.value;
-            if should_be_visible {
-                if self.visible.insert(advancement) {
-                    added.add(advancement);
-                    if self.progress.containsKey(advancement) {
-                        self.progress_changed.add(advancement);
+    fn update_tree_visibility(
+        &mut self,
+        root: &AdvancementNode,
+        added: &mut Vec<&'static Advancement>,
+        removed: &mut Vec<Identifier>,
+    ) {
+        visibility_evaluator::evaluate_visibility(
+            root,
+            self,
+            &mut |player_advancement, node| {
+                player_advancement
+                    .get_or_start_progress(node.value)
+                    .is_done()
+            },
+            &mut move |player_advancement, node, should_be_visible| {
+                let advancement = node.value;
+                if should_be_visible {
+                    if player_advancement.visible.insert(advancement) {
+                        added.push(advancement);
+                        if player_advancement.progress.contains_key(advancement) {
+                            player_advancement.progress_changed.insert(advancement);
+                        }
                     }
+                } else if player_advancement.visible.remove(advancement) {
+                    removed.push(advancement.id.clone());
                 }
-            } else if self.visible.remove(advancement) {
-                removed.add(advancement.id.clone());
-            }
-        });
+            },
+        );
     }
 
     /// Flushes any pending advancement state down to the client.
-    pub async fn flush_dirty(&mut self,player: &Arc<Player>, show_advancement: bool) {
+    pub async fn flush_dirty(&mut self, player: &Arc<Player>, show_advancement: bool) {
         if self.is_first_packet || !self.roots_to_update.is_empty() {
-            let mut progress: HashMap<Identifier,AdvancementProgress> = HashMap::new();
-            let mut added : Vec<&Advancement> = Vec::new();
-            let mut removed : Vec<Identifier> = Vec::new();
-            for root in self.roots_to_update {
+            let mut progress: HashMap<Identifier, AdvancementProgress> = HashMap::new();
+            let mut added: Vec<&Advancement> = Vec::new();
+            let mut removed: Vec<Identifier> = Vec::new();
+            for root in self.roots_to_update.clone() {
                 self.update_tree_visibility(root, &mut added, &mut removed);
             }
             self.roots_to_update.clear();
-            for advancement in self.progress_changed {
+            for advancement in &self.progress_changed {
                 if self.visible.contains(advancement) {
                     progress.insert(advancement.id.clone(), self.progress[advancement]);
                 }
             }
             self.progress_changed.clear();
             if !progress.is_empty() || !added.is_empty() || !removed.is_empty() {
-                player.client.send_packet_now(&CUpdateAdvancements::new(self.is_first_packet, added, vec![], removed,  show_advancement)).await;
+                player
+                    .client
+                    .send_packet_now(&CUpdateAdvancements::new(
+                        self.is_first_packet,
+                        added,
+                        vec![],
+                        removed,
+                        show_advancement,
+                    ))
+                    .await;
             }
         }
         self.is_first_packet = false;
@@ -241,10 +262,7 @@ impl PlayerAdvancement {
                     format!("chat.type.advancement.{}", display.frame_type.get_name()),
                     [player.get_display_name().await, advancement.name()],
                 );
-                player
-                    .world()
-                    .broadcast_system_message(&component, false)
-                    .await;
+                player.world().broadcast_system_message(&component, false);
             }
         }
         if !is_done && progress.is_done() {
@@ -260,20 +278,30 @@ impl PlayerAdvancement {
             progress.complete = false;
         }
 
-        if was_done && !progress.isDone() {
+        if was_done && !progress.is_done() {
             self.mark_for_visibility_update(advancement);
         }
     }
 
-    pub async fn set_selected_tab(&mut self,advancement: Option<&Advancement>) {
+    pub async fn set_selected_tab(&mut self, advancement: Option<&'static Advancement>) {
         let old = self.last_selected_tab;
-        if let Some(value) = advancement && value.is_root() && value.display.is_some() {
+        if let Some(value) = advancement
+            && value.is_root()
+            && value.display.is_some()
+        {
             self.last_selected_tab = advancement;
         } else {
             self.last_selected_tab = None;
         }
-        if old != self.last_selected_tab && let Some(player) = self.player.upgrade() {
-            player.client.send_packet_now(&CSelectAdvancementsTab::new(self.last_selected_tab.map(|adv| adv.id.clone()))).await;
+        if old != self.last_selected_tab
+            && let Some(player) = self.player.upgrade()
+        {
+            player
+                .client
+                .send_packet_now(&CSelectAdvancementsTab::new(
+                    self.last_selected_tab.map(|adv| adv.id.clone()),
+                ))
+                .await;
         }
     }
 }
@@ -416,10 +444,7 @@ mod tests {
             pa.load().is_ok(),
             "Loading from nonexistent file should return Ok"
         );
-        assert!(
-            pa.progress.is_empty(),
-            "Advancements should remain empty"
-        );
+        assert!(pa.progress.is_empty(), "Advancements should remain empty");
     }
 
     #[test]

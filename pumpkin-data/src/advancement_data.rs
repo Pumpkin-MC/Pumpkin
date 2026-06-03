@@ -1,16 +1,16 @@
-use std::collections::{BTreeMap};
-use std::fmt::Display;
-use std::hash::{Hash, Hasher};
-use crate::{Advancement, ADVANCEMENT_TREE};
 use crate::item_stack::ItemStack;
 use crate::potion_brewing::ItemRecipe;
+use crate::{ADVANCEMENT_TREE, Advancement};
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
+use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use pumpkin_util::identifier::Identifier;
 
 #[derive(Clone)]
 pub struct AdvancementDisplay {
@@ -38,7 +38,6 @@ impl AdvancementDisplay {
     pub fn has_background(&self) -> bool {
         self.background_texture.is_some()
     }
-
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
         title: &'static str,
@@ -62,7 +61,7 @@ impl AdvancementDisplay {
             hidden,
             announce_to_chat,
             x,
-            y
+            y,
         }
     }
 }
@@ -112,7 +111,7 @@ impl AdvancementNode {
     }
 
     #[must_use]
-    pub fn new(value:&'static Advancement,parent:Option<usize>) -> Self {
+    pub fn new(value: &'static Advancement, parent: Option<usize>) -> Self {
         Self {
             value,
             parent,
@@ -159,14 +158,14 @@ pub struct AdvancementTree {
     pub nodes: BTreeMap<Identifier, usize>,
     pub nodes_vector: Vec<AdvancementNode>,
     pub roots: Vec<usize>,
-    pub tasks: Vec<usize>
+    pub tasks: Vec<usize>,
 }
 
 impl AdvancementTree {
     pub fn get_node_from_id(&self, id: &Identifier) -> Option<&AdvancementNode> {
-        if let Some(idx) = self.nodes.get(id){
+        if let Some(idx) = self.nodes.get(id) {
             self.nodes_vector.get(*idx)
-        }else {
+        } else {
             None
         }
     }
