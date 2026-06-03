@@ -1,7 +1,5 @@
-use super::Carver;
+use super::{Carver, CarveRun};
 use super::cave::get_height;
-use crate::ProtoChunk;
-use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -13,7 +11,7 @@ impl Carver for CanyonCarver {
     fn carve(
         &self,
         config: &CarverConfig,
-        chunk: &mut ProtoChunk,
+        run: &mut CarveRun,
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
@@ -23,8 +21,8 @@ impl Carver for CanyonCarver {
             return;
         };
 
-        let min_y = chunk.bottom_y() as i32;
-        let height = chunk.height();
+        let min_y = run.chunk.bottom_y() as i32;
+        let height = run.chunk.height();
 
         let max_distance = (4 * 2 - 1) * 16;
 
@@ -41,7 +39,7 @@ impl Carver for CanyonCarver {
 
         self.do_carve(
             config,
-            chunk,
+            run,
             random.next_i64(),
             x as f64,
             y as f64,
@@ -62,7 +60,7 @@ impl CanyonCarver {
     fn do_carve(
         &self,
         config: &CarverConfig,
-        chunk: &mut ProtoChunk,
+        run: &mut CarveRun,
         tunnel_seed: i64,
         mut x: f64,
         mut y: f64,
@@ -85,7 +83,7 @@ impl CanyonCarver {
             ))
         };
         let width_factor_per_height =
-            self.init_width_factors(chunk.height() as usize, config, &mut random);
+            self.init_width_factors(run.chunk.height() as usize, config, &mut random);
         let mut y_rota = 0.0f32;
         let mut x_rota = 0.0f32;
 
@@ -125,12 +123,12 @@ impl CanyonCarver {
             y_rota += (random.next_f32() - random.next_f32()) * random.next_f32() * 4.0;
 
             if random.next_bounded_i32(4) != 0 {
-                if !self.can_reach(chunk.x, chunk.z, x, z, current_step, distance, thickness) {
+                if !self.can_reach(run.chunk.x, run.chunk.z, x, z, current_step, distance, thickness) {
                     return;
                 }
 
                 self.carve_ellipsoid(
-                    chunk,
+                    run,
                     config,
                     x,
                     y,
@@ -204,7 +202,7 @@ impl CanyonCarver {
     #[allow(clippy::too_many_arguments)]
     fn carve_ellipsoid(
         &self,
-        chunk: &mut ProtoChunk,
+        run: &mut CarveRun,
         config: &CarverConfig,
         x: f64,
         y: f64,
@@ -213,24 +211,25 @@ impl CanyonCarver {
         vertical_radius: f64,
         width_factor_per_height: &[f32],
     ) {
-        let center_x = (chunk.x << 4) as f64 + 8.0;
-        let center_z = (chunk.z << 4) as f64 + 8.0;
+        let center_x = (run.chunk.x << 4) as f64 + 8.0;
+        let center_z = (run.chunk.z << 4) as f64 + 8.0;
         let max_delta = 16.0 + horizontal_radius * 2.0;
 
         if (x - center_x).abs() > max_delta || (z - center_z).abs() > max_delta {
             return;
         }
 
-        let chunk_min_x = chunk.x << 4;
-        let chunk_min_z = chunk.z << 4;
+        let chunk_min_x = run.chunk.x << 4;
+        let chunk_min_z = run.chunk.z << 4;
 
         let min_x_index = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
         let max_x_index = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
-        let min_y = ((y - vertical_radius).floor() as i32 - 1).max(chunk.bottom_y() as i32 + 1);
+        let min_y = ((y - vertical_radius).floor() as i32 - 1).max(run.chunk.bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
-        let max_y = ((y + vertical_radius).floor() as i32 + 1)
-            .min(chunk.bottom_y() as i32 + chunk.height() as i32 - 1 - protected_blocks_on_top);
+        let max_y = ((y + vertical_radius).floor() as i32 + 1).min(
+            run.chunk.bottom_y() as i32 + run.chunk.height() as i32 - 1 - protected_blocks_on_top,
+        );
 
         let min_z_index = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
         let max_z_index = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
@@ -253,11 +252,11 @@ impl CanyonCarver {
                             yd,
                             zd,
                             world_y,
-                            chunk.bottom_y() as i32,
-                        ) && !chunk.carving_mask.get(world_x, world_y, world_z)
+                            run.chunk.bottom_y() as i32,
+                        ) && !run.chunk.carving_mask.get(world_x, world_y, world_z)
                         {
-                            chunk.carving_mask.set(world_x, world_y, world_z);
-                            Self::carve_block(chunk, config, world_x, world_y, world_z);
+                            run.chunk.carving_mask.set(world_x, world_y, world_z);
+                            Self::carve_block(run, config, world_x, world_y, world_z);
                         }
                     }
                 }
@@ -281,9 +280,9 @@ impl CanyonCarver {
         (xd * xd + zd * zd) * width_factor_per_height[y_index - 1] as f64 + yd * yd / 6.0 >= 1.0
     }
 
-    fn carve_block(chunk: &mut ProtoChunk, config: &CarverConfig, x: i32, y: i32, z: i32) -> bool {
-        let local_y = y - chunk.bottom_y() as i32;
-        let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
+    fn carve_block(run: &mut CarveRun, config: &CarverConfig, x: i32, y: i32, z: i32) -> bool {
+        let local_y = y - run.chunk.bottom_y() as i32;
+        let state_id = run.chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
 
         if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
@@ -291,17 +290,14 @@ impl CanyonCarver {
         }
 
         if config.replaceable.1.contains(&block.id) {
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
-
             let lava_y = config
                 .lava_level
-                .get_y(chunk.bottom_y() as i16, chunk.height());
+                .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
 
             if y <= lava_y {
-                chunk.set_block_state(x & 15, local_y, z & 15, lava);
+                run.chunk.set_block_state(x & 15, local_y, z & 15, run.ids.lava);
             } else {
-                chunk.set_block_state(x & 15, local_y, z & 15, air);
+                run.chunk.set_block_state(x & 15, local_y, z & 15, run.ids.air);
             }
 
             return true;
