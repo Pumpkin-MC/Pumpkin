@@ -79,7 +79,6 @@ fn setup_cache(
 }
 
 /// Full pipeline
-
 fn bench_full_chunk_generation(c: &mut Criterion) {
     let dimension = Dimension::OVERWORLD;
     let world_gen = get_world_gen(SEED, dimension.clone());
@@ -101,7 +100,6 @@ fn bench_full_chunk_generation(c: &mut Criterion) {
 }
 
 /// Per-phase benchmarks
-
 fn bench_biomes_generation(c: &mut Criterion) {
     let world_gen = get_world_gen(SEED, Dimension::OVERWORLD);
     let block_registry = Arc::new(BlockRegistry);
