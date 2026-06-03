@@ -16,7 +16,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_protocol::java::client::play::CSoundEffect;
-use pumpkin_protocol::java::client::play::CTakeItemEntity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -454,14 +453,7 @@ impl EntityBase for ArrowEntity {
             // Try to insert an arrow into the player's inventory
             let mut stack = ItemStack::new(1, &Item::ARROW);
             if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack).await {
-                player
-                    .client
-                    .enqueue_packet(&CTakeItemEntity::new(
-                        self.entity.entity_id.into(),
-                        player.entity_id().into(),
-                        1u8.into(),
-                    ))
-                    .await;
+                player.living_entity.pickup(&self.entity, 1);
 
                 // Remove arrow entity after pickup
                 self.get_entity().remove().await;
