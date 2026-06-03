@@ -1,4 +1,4 @@
-use super::{Carver, CarveRun};
+use super::{CarveRun, Carver};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -228,7 +228,15 @@ impl CaveCarver {
             }
 
             if random.next_bounded_i32(4) != 0 {
-                if !Self::can_reach(run.chunk.x, run.chunk.z, x, z, current_step, dist, thickness) {
+                if !Self::can_reach(
+                    run.chunk.x,
+                    run.chunk.z,
+                    x,
+                    z,
+                    current_step,
+                    dist,
+                    thickness,
+                ) {
                     return;
                 }
 
@@ -380,7 +388,8 @@ impl CaveCarver {
                 // TODO: Aquifer logic goes here.
                 // BlockState state = aquifer.computeSubstance(...)
                 // return state (or debug barrier if null)
-                if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id
+                if block.id == pumpkin_data::Block::WATER.id
+                    || block.id == pumpkin_data::Block::LAVA.id
                 {
                     None
                 } else if is_nether {

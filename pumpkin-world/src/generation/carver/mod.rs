@@ -3,13 +3,13 @@ pub mod cave;
 pub mod mask;
 
 use crate::ProtoChunk;
+use crate::generation::GlobalRandomConfig;
 use crate::generation::generator::VanillaGenerator;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::{
     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
 };
 use crate::generation::surface::terrain::SurfaceTerrainBuilder;
-use crate::generation::GlobalRandomConfig;
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};

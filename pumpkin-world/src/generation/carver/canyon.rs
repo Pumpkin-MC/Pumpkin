@@ -1,5 +1,5 @@
-use super::{Carver, CarveRun};
 use super::cave::get_height;
+use super::{CarveRun, Carver};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -123,7 +123,15 @@ impl CanyonCarver {
             y_rota += (random.next_f32() - random.next_f32()) * random.next_f32() * 4.0;
 
             if random.next_bounded_i32(4) != 0 {
-                if !self.can_reach(run.chunk.x, run.chunk.z, x, z, current_step, distance, thickness) {
+                if !self.can_reach(
+                    run.chunk.x,
+                    run.chunk.z,
+                    x,
+                    z,
+                    current_step,
+                    distance,
+                    thickness,
+                ) {
                     return;
                 }
 
@@ -295,9 +303,11 @@ impl CanyonCarver {
                 .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
 
             if y <= lava_y {
-                run.chunk.set_block_state(x & 15, local_y, z & 15, run.ids.lava);
+                run.chunk
+                    .set_block_state(x & 15, local_y, z & 15, run.ids.lava);
             } else {
-                run.chunk.set_block_state(x & 15, local_y, z & 15, run.ids.air);
+                run.chunk
+                    .set_block_state(x & 15, local_y, z & 15, run.ids.air);
             }
 
             return true;
