@@ -26,6 +26,12 @@ pub struct CarverBlockIds {
     pub mycelium: &'static BlockState,
 }
 
+impl Default for CarverBlockIds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CarverBlockIds {
     #[must_use]
     pub fn new() -> Self {
