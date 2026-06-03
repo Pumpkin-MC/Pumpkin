@@ -5,7 +5,7 @@ use crate::item_stack::ItemStack;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::{color::Color, color::NamedColor, hover::HoverEvent, style::Style};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
@@ -20650,11 +20650,11 @@ impl Advancement {
         ]
     }
     pub const fn is_root(&self) -> bool {
-        self.parent.is_empty()
+        self.parent.is_none()
     }
 }
-pub static ADVANCEMENT_TREE: AdvancementTree = {
-    let mut nodes = HashMap::new();
+pub static ADVANCEMENT_TREE: LazyLock<AdvancementTree> = LazyLock::new(|| {
+    let mut nodes = BTreeMap::new();
     nodes.insert(
         Identifier::from_static("minecraft", "adventure/adventuring_time"),
         106usize,
@@ -28435,4 +28435,4 @@ pub static ADVANCEMENT_TREE: AdvancementTree = {
         roots,
         tasks,
     }
-};
+});

@@ -609,8 +609,8 @@ impl ToTokens for AdvancementTree {
         let roots = &self.roots;
         let tasks = &self.tasks;
         tokens.extend(quote! {
-            {
-                let mut nodes = HashMap::new();
+            LazyLock::new(|| {
+                let mut nodes = BTreeMap::new();
                 #(#nodes)*
                 let nodes_vector = vec![#(#nodes_vector),*];
                 let roots = vec![#(#roots),*];
@@ -621,7 +621,7 @@ impl ToTokens for AdvancementTree {
                     roots,
                     tasks,
                 }
-            }
+            })
         })
     }
 }
@@ -645,7 +645,7 @@ pub(crate) fn build() -> TokenStream {
         }
     }
     let advancement_tree = quote! {
-        pub static ADVANCEMENT_TREE : AdvancementTree = #tree;
+        pub static ADVANCEMENT_TREE : LazyLock<AdvancementTree> = #tree;
     };
     let advancements_holder: Vec<AdvancementHolder> = tree.nodes_vector.into_iter().map(|node| node.value).collect();
     for AdvancementHolder(identifier, advancement) in advancements_holder {
@@ -691,7 +691,7 @@ pub(crate) fn build() -> TokenStream {
             color::Color};
         use std::hash::{Hash,Hasher};
         use std::fmt::Display;
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
 
         pub struct Advancement {
             pub id : Identifier,
@@ -763,7 +763,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             pub const fn is_root(&self) -> bool{
-                self.parent.is_empty()
+                self.parent.is_none()
             }
 
         }

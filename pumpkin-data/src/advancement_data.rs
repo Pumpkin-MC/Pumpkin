@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use crate::{Advancement, ADVANCEMENT_TREE};
@@ -129,7 +129,7 @@ impl AdvancementNode {
     pub fn root(&self) -> &AdvancementNode {
         let mut advancement_node = self;
         while let Some(parent) = &advancement_node.parent {
-            advancement_node = ADVANCEMENT_TREE.nodes_vector[parent];
+            advancement_node = &ADVANCEMENT_TREE.nodes_vector[*parent];
         }
         advancement_node
     }
@@ -156,26 +156,26 @@ impl Hash for AdvancementNode {
 
 #[derive(Default)]
 pub struct AdvancementTree {
-    pub nodes: HashMap<Identifier, usize>,
+    pub nodes: BTreeMap<Identifier, usize>,
     pub nodes_vector: Vec<AdvancementNode>,
     pub roots: Vec<usize>,
     pub tasks: Vec<usize>
 }
 
 impl AdvancementTree {
-    pub const fn get_node_from_id(&self, id: &Identifier) -> Option<&AdvancementNode> {
+    pub fn get_node_from_id(&self, id: &Identifier) -> Option<&AdvancementNode> {
         if let Some(idx) = self.nodes.get(id){
-            self.nodes_vector.get(idx)
+            self.nodes_vector.get(*idx)
         }else {
             None
         }
     }
 
-    pub const fn get_node_from_idx(&self, idx: usize) -> Option<&AdvancementNode> {
+    pub fn get_node_from_idx(&self, idx: usize) -> Option<&AdvancementNode> {
         self.nodes_vector.get(idx)
     }
 
-    pub const fn get_idx(&self, id: &Identifier) -> Option<usize> {
+    pub fn get_idx(&self, id: &Identifier) -> Option<usize> {
         self.nodes.get(id).copied()
     }
 }

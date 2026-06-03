@@ -390,7 +390,7 @@ impl ToTokens for Identifier {
         let path = self.path();
         tokens.extend(quote! {
             Identifier::from_static(#namespace, #path)
-        })
+        });
     }
 }
 
