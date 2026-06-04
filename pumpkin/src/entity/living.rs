@@ -1316,12 +1316,12 @@ impl LivingEntity {
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
         // Sync visual properties downstream cleanly via primitive types
-        // FIXED: Pulled the uppercase POSE constant from the TrackedData struct definition
+        // FIXED: Uses uppercase BYTE metadata type, structural POSE tracker, and direct enum primitive
         self.entity
             .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::POSE,
                 pumpkin_data::meta_data_type::MetaDataType::BYTE,
-                vec![EntityPose::Dying as u8],
+                EntityPose::Dying as u8,
             )]);
 
         let entity_type = self.entity.entity_type;
