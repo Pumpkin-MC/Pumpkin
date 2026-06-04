@@ -34,6 +34,7 @@ const SWAMP_SURFACE_SPAWN_CHANCE: f64 = 0.5;
 ///
 /// Computes the same polynomial Mojang seeds a `RandomSource` with, then
 /// returns whether `result % 10 == 0`. Roughly 1/10 chunks are slime chunks.
+#[must_use]
 pub fn is_slime_chunk(world_seed: u64, chunk_x: i32, chunk_z: i32) -> bool {
     let cx = i64::from(chunk_x);
     let cz = i64::from(chunk_z);
@@ -45,7 +46,7 @@ pub fn is_slime_chunk(world_seed: u64, chunk_x: i32, chunk_z: i32) -> bool {
             .wrapping_add(cz.wrapping_mul(0x5f24f)),
     );
     // Mirror the Java LCG truncation to 48 bits before taking the modulo.
-    ((k as u64) & 0x0000_FFFF_FFFF_FFFF) % 10 == 0
+    ((k as u64) & 0x0000_FFFF_FFFF_FFFF).is_multiple_of(10)
 }
 
 fn is_swamp_biome(biome: &'static Biome) -> bool {
