@@ -10,7 +10,6 @@ use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
-use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
@@ -1304,8 +1303,14 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
-            // Plays the death sound
+            // Synchronize health tracking to 0.0 alongside the pose change.
+            // The server's tick loop processes these mutations natively.
+            self.health.store(0.0);
+            self.entity.pose.store(EntityPose::Dying);
+
+            // Plays the death sound and handles existing status workflows
             world.send_entity_status(&self.entity, EntityStatus::Death);
+
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 this_entity: Some(self.entity.entity_type),
@@ -1329,11 +1334,10 @@ impl LivingEntity {
                     ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
                 }
             }
-            self.entity.pose.store(EntityPose::Dying);
 
             let block_pos = self.entity.block_pos.load();
 
-            let armor_slots: Vec<Arc<Mutex<ItemStack>>> = {
+            let armor_slots: Vec<std::sync::Arc<tokio::sync::Mutex<ItemStack>>> = {
                 let equipment_lock = self.entity_equipment.lock().await;
                 self.equipment_slots
                     .values()
@@ -1344,7 +1348,7 @@ impl LivingEntity {
             for equipment in armor_slots {
                 let item = {
                     let mut item_lock = equipment.lock().await;
-                    mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
+                    std::mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
                 };
                 world.drop_stack(&block_pos, item).await;
             }
@@ -1352,7 +1356,6 @@ impl LivingEntity {
             // Broadcast death message if it's a player and the gamerule is enabled
             let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
             if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
-                //TODO: KillCredit
                 let death_message =
                     Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
                 if let Some(server) = world.server.upgrade() {
