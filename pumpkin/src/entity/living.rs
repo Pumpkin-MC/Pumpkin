@@ -1295,78 +1295,96 @@ impl LivingEntity {
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
             .expect("Entity not found in world");
+
+        // Atomic guard to prevent double-death logic execution
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
-            .is_ok()
+            .is_err()
         {
-            self.movement_input.store(Vector3::default());
-            self.jumping.store(false, Relaxed);
-
-            // Synchronize health tracking to 0.0 alongside the pose change.
-            // The server's tick loop processes these mutations natively.
-            self.health.store(0.0);
-            self.entity.pose.store(EntityPose::Dying);
-
-            // Plays the death sound and handles existing status workflows
-            world.send_entity_status(&self.entity, EntityStatus::Death);
-
-            let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
-                this_entity: Some(self.entity.entity_type),
-                killer_entity: cause.map(|c| c.get_entity().entity_type),
-                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
-                position: Some(self.entity.pos.load()),
-                world_time: world.level_info.load().day_time as u64,
-                damage_type: Some(damage_type),
-                ..Default::default()
-            };
-
-            // Drop loot
-            self.drop_loot(params).await;
-
-            // Award experience
-            if params.killed_by_player.unwrap_or(false)
-                && world.level_info.load().game_rules.mob_drops
-            {
-                let amount = dyn_self.get_experience_reward(cause);
-                if amount > 0 {
-                    ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
-                }
-            }
-
-            let block_pos = self.entity.block_pos.load();
-
-            let armor_slots: Vec<std::sync::Arc<tokio::sync::Mutex<ItemStack>>> = {
-                let equipment_lock = self.entity_equipment.lock().await;
-                self.equipment_slots
-                    .values()
-                    .map(|slot| equipment_lock.get(slot))
-                    .collect()
-            };
-
-            for equipment in armor_slots {
-                let item = {
-                    let mut item_lock = equipment.lock().await;
-                    std::mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
-                };
-                world.drop_stack(&block_pos, item).await;
-            }
-
-            // Broadcast death message if it's a player and the gamerule is enabled
-            let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
-            if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
-                let death_message =
-                    Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
-                if let Some(server) = world.server.upgrade() {
-                    for player in server.get_all_players() {
-                        player.send_system_message(&death_message).await;
-                    }
-                }
-            }
-
-            self.reset_effects_and_attributes().await;
+            return;
         }
+
+        self.movement_input.store(Vector3::default());
+        self.jumping.store(false, Relaxed);
+
+        // Update health and pose server-side
+        self.health.store(0.0);
+        self.entity.pose.store(EntityPose::Dying);
+
+        // Send Entity Status packet
+        world.send_entity_status(&self.entity, EntityStatus::Death);
+
+        // Sync visual properties downstream cleanly via primitive types
+        // FIXED: Pulled the uppercase POSE constant from the TrackedData struct definition
+        self.entity
+            .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::TrackedData::POSE,
+                pumpkin_data::meta_data_type::MetaDataType::BYTE,
+                vec![EntityPose::Dying as u8],
+            )]);
+
+        let entity_type = self.entity.entity_type;
+        let cause_type = cause.map(|c| c.get_entity().entity_type);
+
+        let params = LootContextParameters {
+            killed_by_player: Some(cause_type == Some(&EntityType::PLAYER)),
+            this_entity: Some(entity_type),
+            killer_entity: cause_type,
+            direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+            position: Some(self.entity.pos.load()),
+            world_time: world.level_info.load().day_time as u64,
+            damage_type: Some(damage_type),
+            ..Default::default()
+        };
+
+        // Drop loot
+        self.drop_loot(params).await;
+
+        // Award experience
+        let level_info = world.level_info.load();
+        if params.killed_by_player == Some(true) && level_info.game_rules.mob_drops {
+            let amount = dyn_self.get_experience_reward(cause);
+            if amount > 0 {
+                ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
+            }
+        }
+
+        let block_pos = self.entity.block_pos.load();
+
+        // Extract items safely to prevent holding locks over async drop boundaries
+        let mut items_to_drop = Vec::new();
+        {
+            let equipment_lock = self.entity_equipment.lock().await;
+            for slot in self.equipment_slots.values() {
+                let equipment = equipment_lock.get(slot);
+                let mut item_lock = equipment.lock().await;
+                let item = std::mem::replace(&mut *item_lock, ItemStack::EMPTY.clone());
+
+                if !item.is_empty() {
+                    items_to_drop.push(item);
+                }
+            }
+        }
+
+        // Process all drops concurrently
+        let drop_futures = items_to_drop
+            .into_iter()
+            .map(|item| world.drop_stack(&block_pos, item));
+        futures::future::join_all(drop_futures).await;
+
+        // Broadcast death message if it's a player and the gamerule is enabled
+        if *entity_type == EntityType::PLAYER && level_info.game_rules.show_death_messages {
+            let death_message =
+                Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
+            if let Some(server) = world.server.upgrade() {
+                for player in server.get_all_players() {
+                    player.send_system_message(&death_message).await;
+                }
+            }
+        }
+
+        self.reset_effects_and_attributes().await;
     }
 
     async fn drop_loot(&self, params: LootContextParameters) {
