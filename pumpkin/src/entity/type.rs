@@ -29,7 +29,7 @@ use crate::entity::mob::giant::GiantEntity;
 use crate::entity::mob::guardian::GuardianEntity;
 use crate::entity::mob::hoglin::HoglinEntity;
 use crate::entity::mob::illusioner::IllusionerEntity;
-use crate::entity::mob::magma_cube::MagmaCubeEntity;
+use crate::entity::mob::magma_cube::{self, MagmaCubeEntity};
 use crate::entity::mob::phantom::PhantomEntity;
 use crate::entity::mob::piglin::PiglinEntity;
 use crate::entity::mob::piglin_brute::PiglinBruteEntity;
@@ -41,7 +41,7 @@ use crate::entity::mob::skeleton::{
     bogged::BoggedSkeletonEntity, parched::ParchedSkeletonEntity, skeleton::SkeletonEntity,
     stray::StraySkeletonEntity, wither::WitherSkeletonEntity,
 };
-use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::mob::slime::{self, SlimeEntity};
 use crate::entity::mob::spider::SpiderEntity;
 use crate::entity::mob::vex::VexEntity;
 use crate::entity::mob::vindicator::VindicatorEntity;
@@ -337,6 +337,12 @@ pub fn check_spawn_rules(
     }
     if id == EntityType::BAT.id {
         return bat::BatEntity::check_bat_spawn_rules(world, pos);
+    }
+    if id == EntityType::SLIME.id {
+        return slime::SlimeEntity::check_spawn_rules(world, pos);
+    }
+    if id == EntityType::MAGMA_CUBE.id {
+        return magma_cube::MagmaCubeEntity::check_spawn_rules(world, pos);
     }
 
     // TODO
