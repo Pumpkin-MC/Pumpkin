@@ -20,13 +20,14 @@ use crate::entity::{
 };
 use crate::world::World;
 
-// Vanilla slime spawn rules (Minecraft 1.18+).
-/// Maximum sky-light level that still allows a slime to spawn.
-const SLIME_SPAWN_MAX_SKY_LIGHT: u8 = 7;
-/// Below this Y, slime chunks may spawn slimes.
+// Vanilla slime spawn rules (Mojang 1.21+). See Slime.java in Mojang mappings
+// (mirrored in Paper's patches/sources/net/minecraft/world/entity/monster/Slime.java.patch).
+/// Below this Y (exclusive), slime chunks may spawn slimes.
 const SLIME_SPAWN_MAX_Y_SLIME_CHUNK: i32 = 40;
-/// Below this Y (overworld sea level 63 + 10), swamp biomes may spawn slimes.
-const SLIME_SPAWN_MAX_Y_SWAMP: i32 = 73;
+/// Lower Y bound (exclusive) for swamp surface slime spawns.
+const SLIME_SPAWN_MIN_Y_SWAMP: i32 = 50;
+/// Upper Y bound (exclusive) for swamp surface slime spawns.
+const SLIME_SPAWN_MAX_Y_SWAMP: i32 = 70;
 /// Vanilla `random.nextFloat() < 0.5F` gate for swamp surface spawns.
 const SWAMP_SURFACE_SPAWN_CHANCE: f64 = 0.5;
 
@@ -98,16 +99,26 @@ impl SlimeEntity {
         }
     }
 
-    /// Vanilla slime spawn rules (1.18+).
+    /// Vanilla slime spawn rules (Mojang 1.21+).
     ///
-    /// Slimes spawn in the overworld if either:
-    /// - the position is in a slime chunk below `SLIME_SPAWN_MAX_Y_SLIME_CHUNK`, or
-    /// - the position is in a swamp biome below `SLIME_SPAWN_MAX_Y_SWAMP`,
-    ///   gated by a 50% random roll.
+    /// Slimes spawn in the overworld via two independent paths, each
+    /// matching a separate `if` branch in Mojang's `Slime.checkSlimeSpawnRules`:
     ///
-    /// In both paths the spawn position must be dark enough
-    /// (sky light ≤ `SLIME_SPAWN_MAX_SKY_LIGHT`). Slimes never spawn in the
-    /// nether or the end via natural spawning.
+    /// - **Slime chunk**: position Y is strictly below
+    ///   [`SLIME_SPAWN_MAX_Y_SLIME_CHUNK`], the chunk is a slime chunk
+    ///   (~1/10 of chunks, derived from the world seed via the same
+    ///   polynomial Mojang uses for `WorldgenRandom.seedSlimeChunk`), and
+    ///   a `random.nextInt(10) == 0` roll must pass. No light, biome, or
+    ///   difficulty-gating beyond the overworld check.
+    /// - **Swamp surface**: biome is in
+    ///   `BiomeTags.ALLOWS_SURFACE_SLIME_SPAWNS` (vanilla: `minecraft:swamp`
+    ///   and `minecraft:mangrove_swamp`), Y is strictly between
+    ///   [`SLIME_SPAWN_MIN_Y_SWAMP`] and [`SLIME_SPAWN_MAX_Y_SWAMP`], a
+    ///   `nextFloat() < 0.5` roll must pass, and the Mojang light check
+    ///   `getMaxLocalRawBrightness(pos) <= nextInt(8)` must hold.
+    ///
+    /// Slimes never spawn in the nether or the end via natural spawning,
+    /// and the world difficulty must not be peaceful.
     pub fn check_spawn_rules(world: &World, pos: &BlockPos) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
@@ -117,21 +128,24 @@ impl SlimeEntity {
             return false;
         }
 
-        if world.get_sky_light_level(pos) > SLIME_SPAWN_MAX_SKY_LIGHT {
-            return false;
-        }
-
-        if pos.0.y < SLIME_SPAWN_MAX_Y_SLIME_CHUNK {
-            let chunk_x = get_section_cord(pos.0.x);
-            let chunk_z = get_section_cord(pos.0.z);
-            if is_slime_chunk(world.level.seed.0, chunk_x, chunk_z) {
-                return true;
-            }
-        }
-
-        if pos.0.y < SLIME_SPAWN_MAX_Y_SWAMP
-            && is_swamp_biome(world.get_biome(pos))
+        // Swamp surface spawn.
+        if is_swamp_biome(world.get_biome(pos))
+            && pos.0.y > SLIME_SPAWN_MIN_Y_SWAMP
+            && pos.0.y < SLIME_SPAWN_MAX_Y_SWAMP
             && rand::random_bool(SWAMP_SURFACE_SPAWN_CHANCE)
+            && world.get_max_local_raw_brightness(pos) <= rand::random_range(0..8)
+        {
+            return true;
+        }
+
+        // Slime chunk spawn.
+        if pos.0.y < SLIME_SPAWN_MAX_Y_SLIME_CHUNK
+            && rand::random_range(0..10) == 0
+            && is_slime_chunk(
+                world.level.seed.0,
+                get_section_cord(pos.0.x),
+                get_section_cord(pos.0.z),
+            )
         {
             return true;
         }
