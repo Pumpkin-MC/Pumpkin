@@ -34,6 +34,7 @@ pub mod set_player_gamemode;
 pub mod set_time;
 pub mod set_title;
 pub mod start_game;
+pub mod take_item_actor;
 pub mod transfer;
 pub mod update_abilities;
 pub mod update_attributes;
