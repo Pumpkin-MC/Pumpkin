@@ -18,24 +18,22 @@ pub fn map_type(ty: &Type) -> WitType {
                 "u16" | "i16" => WitType::S32,
                 "Option" => {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments
-                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
-                    {
-                        return WitType::option(map_type(inner_ty));
-                    }
+                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                            return WitType::option(map_type(inner_ty));
+                        }
                     WitType::String
                 }
                 "Vec" | "Box" => {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments
-                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
-                    {
-                        // Check if the inner type is u8
-                        if let Type::Path(tp) = inner_ty
-                            && tp.path.segments.last().unwrap().ident == "u8"
-                        {
-                            return WitType::list(WitType::U8);
+                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                            // Check if the inner type is u8
+                            if let Type::Path(tp) = inner_ty
+                                && tp.path.segments.last().unwrap().ident == "u8"
+                            {
+                                return WitType::list(WitType::U8);
+                            }
+                            return WitType::list(map_type(inner_ty));
                         }
-                        return WitType::list(map_type(inner_ty));
-                    }
                     WitType::String
                 }
                 "Vector3" | "BlockPos" => {
