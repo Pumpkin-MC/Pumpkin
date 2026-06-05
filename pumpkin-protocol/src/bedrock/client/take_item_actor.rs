@@ -9,7 +9,8 @@ pub struct CTakeItemActor {
     pub actor_runtime_id: VarULong,
 }
 impl CTakeItemActor {
-    pub fn new(item_runtime_id: VarULong, actor_runtime_id: VarULong) -> Self {
+    #[must_use]
+    pub const fn new(item_runtime_id: VarULong, actor_runtime_id: VarULong) -> Self {
         Self {
             item_runtime_id,
             actor_runtime_id,
