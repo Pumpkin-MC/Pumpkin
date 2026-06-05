@@ -73,7 +73,7 @@ impl ArgumentType for ColumnPosArgumentType {
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!("0 0", "~ ~", "^ ^", "^0 ^1", "~-1 ~2")
+        examples!("0 0", "~ ~", "~-1 ~2")
     }
 }
 
