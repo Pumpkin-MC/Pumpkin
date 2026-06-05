@@ -1315,37 +1315,8 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet (Triggers native visual indicators, sounds, and particles)
+        // Send Entity Status packet (Natively handles red flash, tilt, sounds, and the "POOF" particle smoke)
         world.send_entity_status(&self.entity, EntityStatus::Death);
-
-        // ============================================
-        // SPAWN VANILLA DEATH "POOF" SMOKE PARTICLES
-        // ============================================
-        let feet_pos = self.entity.pos.load();
-
-        // Offset Y axis by +1.2 blocks to spawn particles out of the chest/head area
-        let visual_death_pos = Vector3::new(feet_pos.x, feet_pos.y + 1.2, feet_pos.z);
-
-        // FIX: Construct BlockPos manually using integer casting
-        let item_spawn_block_pos = BlockPos::new(
-            visual_death_pos.x.floor() as i32,
-            visual_death_pos.y.floor() as i32,
-            visual_death_pos.z.floor() as i32,
-        );
-
-        let death_particle_packet = CParticle::new(
-            true,
-            false,
-            visual_death_pos,
-            Vector3::new(0.3f32, 0.3f32, 0.3f32),
-            0.05f32,
-            20,
-            VarInt(Particle::Poof as i32),
-            &[],
-        );
-
-        world.broadcast_packet_all(&death_particle_packet);
-        // ============================================
 
         // Sync visual properties downstream cleanly via primitive types
         self.entity
@@ -1364,19 +1335,20 @@ impl LivingEntity {
 
         let entity_type = self.entity.entity_type;
         let cause_type = cause.map(|c| c.get_entity().entity_type);
+        let feet_pos = self.entity.pos.load();
 
         let params = LootContextParameters {
             killed_by_player: Some(cause_type == Some(&EntityType::PLAYER)),
             this_entity: Some(entity_type),
             killer_entity: cause_type,
             direct_killer_entity: source.map(|s| s.get_entity().entity_type),
-            position: Some(self.entity.pos.load()),
+            position: Some(feet_pos),
             world_time: world.level_info.load().day_time as u64,
             damage_type: Some(damage_type),
             ..Default::default()
         };
 
-        // Drop loot using local method reference
+        // Drop loot table items via fluid vector spaces
         self.drop_loot(params).await;
 
         // Award experience
@@ -1384,7 +1356,7 @@ impl LivingEntity {
         if params.killed_by_player == Some(true) && level_info.game_rules.mob_drops {
             let amount = dyn_self.get_experience_reward(cause);
             if amount > 0 {
-                ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
+                ExperienceOrbEntity::spawn(&world, feet_pos, amount).await;
             }
         }
 
@@ -1403,7 +1375,17 @@ impl LivingEntity {
             }
         }
 
-        // Process all drops concurrently out of the elevated head/chest block height position
+        // VANILLA EXACT POSITION FIX: Spawn items at standard eye/head level (+1.62 Y).
+        // Using explicit Vector3 math allows items to stay trapped in cobwebs natively.
+        let head_drop_pos = Vector3::new(feet_pos.x, feet_pos.y + 1.62, feet_pos.z);
+
+        // Convert the fluid position directly into BlockPos coordinates expected by drop_stack
+        let item_spawn_block_pos = BlockPos::new(
+            head_drop_pos.x.floor() as i32,
+            head_drop_pos.y.floor() as i32,
+            head_drop_pos.z.floor() as i32,
+        );
+
         let drop_futures = items_to_drop
             .into_iter()
             .map(|item| world.drop_stack(&item_spawn_block_pos, item));
@@ -1439,12 +1421,12 @@ impl LivingEntity {
     async fn drop_loot(&self, params: LootContextParameters) {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
             let feet_pos = self.entity.pos.load();
+            let head_drop_pos = Vector3::new(feet_pos.x, feet_pos.y + 1.62, feet_pos.z);
 
-            // FIX: Construct BlockPos manually for the loot table drop loop
             let pos = BlockPos::new(
-                feet_pos.x.floor() as i32,
-                (feet_pos.y + 1.2).floor() as i32,
-                feet_pos.z.floor() as i32,
+                head_drop_pos.x.floor() as i32,
+                head_drop_pos.y.floor() as i32,
+                head_drop_pos.z.floor() as i32,
             );
 
             for stack in loot_table.get_loot(params) {
@@ -1460,7 +1442,6 @@ impl LivingEntity {
         {
             let mut effects = self.active_effects.lock().await;
             for effect in effects.values_mut() {
-                // A duration below 0 means the effect is infinite
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
                     continue;
@@ -1473,7 +1454,6 @@ impl LivingEntity {
             }
         }
 
-        // Call the central removal function for each expired effect
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
