@@ -17,7 +17,7 @@ use std::sync::atomic::{
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
-use tracing::warn;
+use tracing::warn; // inside pumpkin_protocol
 
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
@@ -1316,12 +1316,12 @@ impl LivingEntity {
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
         // Sync visual properties downstream cleanly via primitive types
-        // FIXED: Uses uppercase BYTE metadata type, structural POSE tracker, and direct enum primitive
+        // FIXED: Used the direct constructor path for VarInt to bypass the visibility rule
         self.entity
             .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::POSE,
-                pumpkin_data::meta_data_type::MetaDataType::BYTE,
-                EntityPose::Dying as u8,
+                pumpkin_data::meta_data_type::MetaDataType::POSE,
+                pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
             )]);
 
         let entity_type = self.entity.entity_type;
