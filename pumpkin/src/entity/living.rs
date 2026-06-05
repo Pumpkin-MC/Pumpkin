@@ -1312,8 +1312,24 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet (Triggers the side-tilt animation, sound, and smoke)
+        // Send Entity Status packet (Triggers native visual indicators, sounds, and particles)
         world.send_entity_status(&self.entity, EntityStatus::Death);
+
+        // Sync visual properties downstream cleanly via primitive types
+        // FIXES #2205: Explicitly broadcasts Health = 0 via VarInt metadata layer
+        // FIXED: Wrapped payload inside VarInt and adjusted float literal to satisfy the linter
+        self.entity.send_meta_data(&[
+            pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::TrackedData::POSE,
+                pumpkin_data::meta_data_type::MetaDataType::POSE,
+                pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
+            ),
+            pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::TrackedData::HEALTH,
+                pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                pumpkin_protocol::codec::var_int::VarInt(0),
+            ),
+        ]);
 
         let entity_type = self.entity.entity_type;
         let cause_type = cause.map(|c| c.get_entity().entity_type);
@@ -1371,7 +1387,6 @@ impl LivingEntity {
 
             if let Some(server) = world.server.upgrade() {
                 if let Some(player) = server.get_player_by_uuid(self.entity.entity_uuid) {
-                    // FIXED: Removed the redundant `as i32` cast to satisfy Clippy
                     let combat_death_packet =
                         pumpkin_protocol::java::client::play::CCombatDeath::new(
                             pumpkin_protocol::codec::var_int::VarInt(self.entity.entity_id),
