@@ -90,8 +90,8 @@ impl ItemEntity {
         }
     }
 
-    /// Creates an ItemEntity for restoring from NBT without random velocity.
-    /// The velocity and position will be set by Entity::read_nbt_non_mut.
+    /// Creates an `ItemEntity` for restoring from NBT without random velocity.
+    /// The velocity and position will be set by `Entity::read_nbt_non_mut`.
     pub fn new_for_restore(entity: Entity) -> Self {
         Self {
             entity,
@@ -400,10 +400,10 @@ impl NBTStorage for ItemEntity {
             self.entity.read_nbt_non_mut(nbt).await;
 
             // Restore the item stack from the "Item" compound
-            if let Some(item_compound) = nbt.get_compound("Item") {
-                if let Some(stack) = ItemStack::read_item_stack(item_compound) {
-                    *self.item_stack.lock().await = stack;
-                }
+            if let Some(item_compound) = nbt.get_compound("Item")
+                && let Some(stack) = ItemStack::read_item_stack(item_compound)
+            {
+                *self.item_stack.lock().await = stack;
             }
 
             // Vanilla stores Age as a short
