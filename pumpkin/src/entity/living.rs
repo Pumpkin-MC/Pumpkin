@@ -1312,7 +1312,7 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet (Triggers the exact vanilla Java death tilt, sound, and smoke)
+        // Send Entity Status packet (Triggers the side-tilt animation, sound, and smoke)
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
         let entity_type = self.entity.entity_type;
@@ -1364,13 +1364,27 @@ impl LivingEntity {
             .map(|item| world.drop_stack(&block_pos, item));
         futures::future::join_all(drop_futures).await;
 
-        // Broadcast death message if it's a player and the gamerule is enabled
-        if *entity_type == EntityType::PLAYER && level_info.game_rules.show_death_messages {
+        // Broadcast death message and trigger the client death screen if it's a player
+        if *entity_type == EntityType::PLAYER {
             let death_message =
                 Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
+
             if let Some(server) = world.server.upgrade() {
-                for player in server.get_all_players() {
-                    player.send_system_message(&death_message).await;
+                if let Some(player) = server.get_player_by_uuid(self.entity.entity_uuid) {
+                    // FIXED: Removed the redundant `as i32` cast to satisfy Clippy
+                    let combat_death_packet =
+                        pumpkin_protocol::java::client::play::CCombatDeath::new(
+                            pumpkin_protocol::codec::var_int::VarInt(self.entity.entity_id),
+                            &death_message,
+                        );
+                    player.client.send_packet_now(&combat_death_packet).await;
+                }
+
+                // Chat broadcast to all other active server players
+                if level_info.game_rules.show_death_messages {
+                    for player in server.get_all_players() {
+                        player.send_system_message(&death_message).await;
+                    }
                 }
             }
         }
@@ -1714,7 +1728,7 @@ impl LivingEntity {
 
         // If this LivingEntity corresponds to a Player, reset their hunger manager
         let world = self.entity.world.load();
-        if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
+        if let Some(player) = world.get_player_by_uuid(self.entity.entity_uuid) {
             player.hunger_manager.restart();
         }
 
@@ -1780,7 +1794,7 @@ impl LivingEntity {
 
     pub fn is_player(&self) -> bool {
         let world = self.entity.world.load();
-        world.get_player_by_id(self.entity.entity_id).is_some()
+        world.get_player_by_uuid(self.entity.entity_uuid).is_some()
     }
 
     pub fn get_movement(&self) -> Vector3<f64> {
