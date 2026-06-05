@@ -1,5 +1,6 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::{TrackedData, TrackedId};
@@ -7,6 +8,7 @@ use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+use pumpkin_protocol::java::client::play::CParticle;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -1312,15 +1314,32 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet (Triggers native visual indicators, sounds, and particles)
+        // Send Entity Status packet (Triggers native visual indicators, sounds, and red tilt animation)
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
-        // Sync visual properties downstream cleanly via primitive types
-        // FIXES #2205 & METTY CRASH: Satisfies array type constraints by encoding
-        // the f32 health bit-layout into a safe integer representation.
+        // ==========================================
+        // SPAWN VANILLA DEATH "POOF" SMOKE PARTICLES
+        // ==========================================
+        let current_pos = self.entity.pos.load();
+
+        // We target Particle::POOF (which represents minecraft:poof)
+        // Adjust offset to spread across the typical bounding box of a mob
+        let death_particle_packet = CParticle::new(
+            true,                                 // force_spawn: renders on minimal client settings
+            false,                                // important: standard visibility range
+            current_pos,                          // exact coordinate center vector
+            Vector3::new(0.2f32, 0.2f32, 0.2f32), // visual spread radius offset
+            0.02f32,                              // particle drifting speed velocity
+            20,                                   // cluster count
+            VarInt(Particle::Poof as i32),        // Changed to Particle::Poof
+            &[],                                  // extra raw byte configuration data
+        );
+
+        // Broadcast the packet to all players in rendering distance
+        world.broadcast_packet_all(&death_particle_packet);
+        // ==========================================
+
         // Sync visual properties downstream cleanly without type inference conflicts
-        // FIXES #2205 & NETTY CRASH: Separate calls decouple array homogeneity bounds.
-        // This allows TrackedData::HEALTH to serialize as a valid 4-byte f32 payload.
         self.entity
             .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::POSE,
@@ -1332,7 +1351,7 @@ impl LivingEntity {
             .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::HEALTH,
                 pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                0.0f32, // Preserved cleanly as a raw float literal without an underscore separator
+                0.0f32,
             )]);
 
         let entity_type = self.entity.entity_type;

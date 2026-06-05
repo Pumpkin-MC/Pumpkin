@@ -1,14 +1,5 @@
-use core::f32;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
-use std::f64::consts::TAU;
-use std::mem;
-use std::num::NonZeroU8;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
-use std::sync::{Arc, Weak};
-use std::time::{Duration, Instant};
-
 use arc_swap::ArcSwap;
+use core::f32;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use pumpkin_data::dimension::Dimension;
@@ -26,6 +17,14 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::f64::consts::TAU;
+use std::mem;
+use std::num::NonZeroU8;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
@@ -2575,7 +2574,7 @@ impl Player {
                 self.world()
                     .drop_stack(
                         &block_pos,
-                        mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
+                        std::mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
                     )
                     .await;
             }
