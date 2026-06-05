@@ -86,7 +86,7 @@ impl SlimeEntity {
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
             );
-        }
+ };
 
         mob_arc
     }
