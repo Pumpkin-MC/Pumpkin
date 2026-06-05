@@ -758,6 +758,23 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::CUpdateBlock(data) => {
+            let p = pumpkin_protocol::bedrock::client::CUpdateBlock {
+                position: pumpkin_util::math::position::BlockPos::new(
+                    data.position.0,
+                    data.position.1,
+                    data.position.2,
+                ),
+                block_runtime_id: pumpkin_protocol::codec::var_uint::VarUInt(
+                    data.block_runtime_id.try_into().unwrap(),
+                ),
+                flags: pumpkin_protocol::codec::var_uint::VarUInt(data.flags.try_into().unwrap()),
+                layer: pumpkin_protocol::codec::var_uint::VarUInt(data.layer.try_into().unwrap()),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         _ => None,
     }
 }
