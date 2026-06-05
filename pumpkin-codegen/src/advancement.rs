@@ -363,6 +363,15 @@ impl ToTokens for AdvancementTree {
     }
 }
 
+///Convert a identifier to its token form
+fn identifier_to_tokens(identifier: &Identifier) -> TokenStream {
+    let namespace = identifier.namespace();
+    let path = identifier.path();
+    quote! {
+        Identifier::from_static(#namespace, #path)
+    }
+}
+
 pub(crate) fn build() -> TokenStream {
     let advancements_path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/advancements.json");
@@ -397,7 +406,8 @@ pub(crate) fn build() -> TokenStream {
         let raw_name = identifier.path();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
 
-        let parent = if let Some(parent) = &advancement.parent {
+        let parent = if let Some(identifier) = &advancement.parent {
+            let parent = identifier_to_tokens(identifier);
             quote! {Some(#parent)}
         } else {
             quote! { None }

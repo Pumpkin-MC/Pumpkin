@@ -384,16 +384,6 @@ impl<'de> Deserialize<'de> for Identifier {
     }
 }
 
-impl ToTokens for Identifier {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let namespace = self.namespace();
-        let path = self.path();
-        tokens.extend(quote! {
-            Identifier::from_static(#namespace, #path)
-        });
-    }
-}
-
 comap_flat_map_codec_impl!(String => Identifier, Identifier::flat_try_from, ToString::to_string);
 
 impl FlatTryFrom<String> for Identifier {
