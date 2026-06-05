@@ -1287,6 +1287,7 @@ impl LivingEntity {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn on_death(
         &self,
         damage_type: DamageType,
@@ -1314,32 +1315,39 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet (Triggers native visual indicators, sounds, and red tilt animation)
+        // Send Entity Status packet (Triggers native visual indicators, sounds, and particles)
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
-        // ==========================================
+        // ============================================
         // SPAWN VANILLA DEATH "POOF" SMOKE PARTICLES
-        // ==========================================
-        let current_pos = self.entity.pos.load();
+        // ============================================
+        let feet_pos = self.entity.pos.load();
 
-        // We target Particle::POOF (which represents minecraft:poof)
-        // Adjust offset to spread across the typical bounding box of a mob
-        let death_particle_packet = CParticle::new(
-            true,                                 // force_spawn: renders on minimal client settings
-            false,                                // important: standard visibility range
-            current_pos,                          // exact coordinate center vector
-            Vector3::new(0.2f32, 0.2f32, 0.2f32), // visual spread radius offset
-            0.02f32,                              // particle drifting speed velocity
-            20,                                   // cluster count
-            VarInt(Particle::Poof as i32),        // Changed to Particle::Poof
-            &[],                                  // extra raw byte configuration data
+        // Offset Y axis by +1.2 blocks to spawn particles out of the chest/head area
+        let visual_death_pos = Vector3::new(feet_pos.x, feet_pos.y + 1.2, feet_pos.z);
+
+        // FIX: Construct BlockPos manually using integer casting
+        let item_spawn_block_pos = BlockPos::new(
+            visual_death_pos.x.floor() as i32,
+            visual_death_pos.y.floor() as i32,
+            visual_death_pos.z.floor() as i32,
         );
 
-        // Broadcast the packet to all players in rendering distance
-        world.broadcast_packet_all(&death_particle_packet);
-        // ==========================================
+        let death_particle_packet = CParticle::new(
+            true,
+            false,
+            visual_death_pos,
+            Vector3::new(0.3f32, 0.3f32, 0.3f32),
+            0.05f32,
+            20,
+            VarInt(Particle::Poof as i32),
+            &[],
+        );
 
-        // Sync visual properties downstream cleanly without type inference conflicts
+        world.broadcast_packet_all(&death_particle_packet);
+        // ============================================
+
+        // Sync visual properties downstream cleanly via primitive types
         self.entity
             .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::POSE,
@@ -1368,7 +1376,7 @@ impl LivingEntity {
             ..Default::default()
         };
 
-        // Drop loot
+        // Drop loot using local method reference
         self.drop_loot(params).await;
 
         // Award experience
@@ -1379,8 +1387,6 @@ impl LivingEntity {
                 ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
             }
         }
-
-        let block_pos = self.entity.block_pos.load();
 
         // Extract items safely to prevent holding locks over async drop boundaries
         let mut items_to_drop = Vec::new();
@@ -1397,10 +1403,10 @@ impl LivingEntity {
             }
         }
 
-        // Process all drops concurrently
+        // Process all drops concurrently out of the elevated head/chest block height position
         let drop_futures = items_to_drop
             .into_iter()
-            .map(|item| world.drop_stack(&block_pos, item));
+            .map(|item| world.drop_stack(&item_spawn_block_pos, item));
         futures::future::join_all(drop_futures).await;
 
         // Broadcast death message and trigger the client death screen if it's a player
@@ -1432,7 +1438,15 @@ impl LivingEntity {
 
     async fn drop_loot(&self, params: LootContextParameters) {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
-            let pos = self.entity.block_pos.load();
+            let feet_pos = self.entity.pos.load();
+
+            // FIX: Construct BlockPos manually for the loot table drop loop
+            let pos = BlockPos::new(
+                feet_pos.x.floor() as i32,
+                (feet_pos.y + 1.2).floor() as i32,
+                feet_pos.z.floor() as i32,
+            );
+
             for stack in loot_table.get_loot(params) {
                 self.entity.world.load().drop_stack(&pos, stack).await;
             }
@@ -1460,7 +1474,6 @@ impl LivingEntity {
         }
 
         // Call the central removal function for each expired effect
-        // This will now trigger your logs and absorption resets!
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
