@@ -4,7 +4,7 @@ use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::Translate;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::PartialEq;
 use std::fmt::Display;
@@ -15,7 +15,7 @@ const fn r#true() -> bool {
     true
 }
 
-#[derive(Deserialize,Clone)]
+#[derive(Deserialize, Clone)]
 pub struct AdvancementDisplay {
     pub title: TextComponent,
     pub description: TextComponent,
@@ -32,13 +32,18 @@ pub struct AdvancementDisplay {
     #[serde(default = "r#true")]
     pub announce_to_chat: bool,
     #[serde(skip)]
-    pub x:f32,
+    pub x: f32,
     #[serde(skip)]
-    pub y:f32,
+    pub y: f32,
 }
 
 fn as_translate(text: &TextComponent) -> TokenStream {
-    let Translate { translate, bedrock_translate : _ , with: _ } = text.0.content.as_ref() else {
+    let Translate {
+        translate,
+        bedrock_translate: _,
+        with: _,
+    } = text.0.content.as_ref()
+    else {
         panic!()
     };
     quote! { #translate }
@@ -108,7 +113,7 @@ impl ToTokens for FrameTypeStruct {
     }
 }
 
-#[derive(Deserialize, Default,Clone)]
+#[derive(Deserialize, Default, Clone)]
 pub struct AdvancementRewards {
     #[serde(default)]
     experience: i32,
@@ -148,7 +153,7 @@ impl AdvancementNode {
     }
 
     #[must_use]
-    pub fn new(value:AdvancementHolder,parent:Option<usize>) -> Self {
+    pub fn new(value: AdvancementHolder, parent: Option<usize>) -> Self {
         Self {
             value,
             parent,
@@ -163,10 +168,10 @@ impl AdvancementNode {
     }
 
     #[inline]
-    pub const fn set_location(&mut self,x:f32,y:f32) {
+    pub const fn set_location(&mut self, x: f32, y: f32) {
         if let Some(val) = self.value.1.display.as_mut() {
-            val.x=x;
-            val.y=y;
+            val.x = x;
+            val.y = y;
         };
     }
 }
@@ -195,13 +200,13 @@ impl ToTokens for AdvancementNode {
         let parent = token_option(&self.parent);
         let children = &self.children;
         let value = &self.value;
-       tokens.extend(quote! {
-           AdvancementNode{
-               parent:#parent,
-               children: vec![#(#children),*],
-               value: #value,
-           }
-       })
+        tokens.extend(quote! {
+            AdvancementNode{
+                parent:#parent,
+                children: vec![#(#children),*],
+                value: #value,
+            }
+        })
     }
 }
 
@@ -223,8 +228,8 @@ struct LayoutNode {
 pub struct TreePositioner;
 
 impl TreePositioner {
-    pub fn run(tree:&mut AdvancementTree ,root_index: usize) {
-        let root_node = if let Some(node) = tree.nodes_vector.get(root_index){
+    pub fn run(tree: &mut AdvancementTree, root_index: usize) {
+        let root_node = if let Some(node) = tree.nodes_vector.get(root_index) {
             node
         } else {
             eprintln!("AdvancementNode index out of bounds");
@@ -252,7 +257,7 @@ impl TreePositioner {
 
         let mut previous_idx = None;
         for child in root_node.children.clone() {
-            previous_idx = Self::add_child(&mut nodes,tree, root_idx, child, previous_idx);
+            previous_idx = Self::add_child(&mut nodes, tree, root_idx, child, previous_idx);
         }
 
         Self::first_walk(&mut nodes, root_idx);
@@ -264,7 +269,7 @@ impl TreePositioner {
             Self::third_walk(&mut nodes, root_idx, -min);
         }
 
-        Self::finalize_position(tree,&nodes, root_idx);
+        Self::finalize_position(tree, &nodes, root_idx);
     }
 
     fn add_child(
@@ -299,13 +304,13 @@ impl TreePositioner {
 
             let mut child_prev = None;
             for child in adv_node.children.clone() {
-                child_prev = Self::add_child(nodes,tree, child_idx, child, child_prev);
+                child_prev = Self::add_child(nodes, tree, child_idx, child, child_prev);
             }
 
             Some(child_idx)
         } else {
             for grandchild in &adv_node.children.clone() {
-                previous_idx = Self::add_child(nodes,tree, parent_idx, *grandchild, previous_idx);
+                previous_idx = Self::add_child(nodes, tree, parent_idx, *grandchild, previous_idx);
             }
             previous_idx
         }
@@ -344,7 +349,7 @@ impl TreePositioner {
         }
     }
 
-    fn second_walk<>(
+    fn second_walk(
         nodes: &mut Vec<LayoutNode>,
         idx: usize,
         mod_sum: f32,
@@ -393,19 +398,19 @@ impl TreePositioner {
 
     #[inline]
     fn previous_or_thread(nodes: &[LayoutNode], idx: usize) -> Option<usize> {
-        nodes[idx].thread.or_else(|| nodes[idx].children.first().copied())
+        nodes[idx]
+            .thread
+            .or_else(|| nodes[idx].children.first().copied())
     }
 
     #[inline]
     fn next_or_thread(nodes: &[LayoutNode], idx: usize) -> Option<usize> {
-        nodes[idx].thread.or_else(|| nodes[idx].children.last().copied())
+        nodes[idx]
+            .thread
+            .or_else(|| nodes[idx].children.last().copied())
     }
 
-    fn apportion(
-        nodes: &mut [LayoutNode],
-        idx: usize,
-        mut default_ancestor: usize,
-    ) -> usize {
+    fn apportion(nodes: &mut [LayoutNode], idx: usize, mut default_ancestor: usize) -> usize {
         let prev_sib = match nodes[idx].previous_sibling {
             Some(p) => p,
             None => return default_ancestor,
@@ -423,7 +428,10 @@ impl TreePositioner {
         let mut sil = nodes[vil].mod_field;
         let mut sol = nodes[vol].mod_field;
 
-        while let (Some(next_vil), Some(next_vir)) = (Self::next_or_thread(nodes, vil), Self::previous_or_thread(nodes, vir)) {
+        while let (Some(next_vil), Some(next_vir)) = (
+            Self::next_or_thread(nodes, vil),
+            Self::previous_or_thread(nodes, vir),
+        ) {
             vil = next_vil;
             vir = next_vir;
             vol = Self::previous_or_thread(nodes, vol).expect("Tree invariant broken");
@@ -445,11 +453,14 @@ impl TreePositioner {
             sor += nodes[vor].mod_field;
         }
 
-        if Self::next_or_thread(nodes, vil).is_some() && Self::next_or_thread(nodes, vor).is_none() {
+        if Self::next_or_thread(nodes, vil).is_some() && Self::next_or_thread(nodes, vor).is_none()
+        {
             nodes[vor].thread = Self::next_or_thread(nodes, vil);
             nodes[vor].mod_field += sil - sor;
         } else {
-            if Self::previous_or_thread(nodes, vir).is_some() && Self::previous_or_thread(nodes, vol).is_none() {
+            if Self::previous_or_thread(nodes, vir).is_some()
+                && Self::previous_or_thread(nodes, vol).is_none()
+            {
                 nodes[vol].thread = Self::previous_or_thread(nodes, vir);
                 nodes[vol].mod_field += sir - sol;
             }
@@ -486,15 +497,15 @@ impl TreePositioner {
         }
     }
 
-    fn finalize_position(tree:&mut AdvancementTree, nodes: &[LayoutNode], idx: usize) {
+    fn finalize_position(tree: &mut AdvancementTree, nodes: &[LayoutNode], idx: usize) {
         tree.nodes_vector[nodes[idx].node].set_location(nodes[idx].x as f32, nodes[idx].y);
         for &child_idx in &nodes[idx].children {
-            Self::finalize_position(tree,nodes, child_idx);
+            Self::finalize_position(tree, nodes, child_idx);
         }
     }
 }
 
-#[derive(Deserialize, Default,Clone)]
+#[derive(Deserialize, Default, Clone)]
 pub struct AdvancementStruct {
     pub parent: Option<Identifier>,
     #[serde(default)]
@@ -504,10 +515,10 @@ pub struct AdvancementStruct {
     pub rewards: AdvancementRewards,
     #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
-    pub requirements: Vec<Vec<String>>
+    pub requirements: Vec<Vec<String>>,
 }
 #[derive(Clone)]
-pub struct AdvancementHolder(Identifier,AdvancementStruct);
+pub struct AdvancementHolder(Identifier, AdvancementStruct);
 
 impl PartialEq for AdvancementHolder {
     fn eq(&self, other: &Self) -> bool {
@@ -549,7 +560,7 @@ pub struct AdvancementTree {
     pub nodes: BTreeMap<Identifier, usize>,
     pub nodes_vector: Vec<AdvancementNode>,
     pub roots: Vec<usize>,
-    pub tasks: Vec<usize>
+    pub tasks: Vec<usize>,
 }
 
 impl AdvancementTree {
@@ -584,10 +595,10 @@ impl AdvancementTree {
             None => None,
         };
         let id = advancement.0.clone();
-        let node = AdvancementNode::new(advancement,parent_idx);
+        let node = AdvancementNode::new(advancement, parent_idx);
         let node_idx = self.nodes_vector.len();
         self.nodes.insert(id, node_idx);
-        if let Some(parent)  = parent_idx {
+        if let Some(parent) = parent_idx {
             let parent_node = self.nodes_vector.get_mut(parent).unwrap();
             parent_node.add_child(node_idx);
             self.tasks.push(node_idx);
@@ -638,25 +649,33 @@ pub(crate) fn build() -> TokenStream {
     let mut minecraft_namespaces = TokenStream::new();
     let capacity = advancements.len();
     let mut tree = AdvancementTree::default();
-    tree.add_all(advancements.into_iter().map(
-        |(key,value)| AdvancementHolder(Identifier::parse(&key).unwrap(),value)).collect());
+    tree.add_all(
+        advancements
+            .into_iter()
+            .map(|(key, value)| AdvancementHolder(Identifier::parse(&key).unwrap(), value))
+            .collect(),
+    );
     for index in tree.roots.clone() {
         if tree.nodes_vector.get(index).unwrap().has_display() {
-            TreePositioner::run(&mut tree,index);
+            TreePositioner::run(&mut tree, index);
         }
     }
     let advancement_tree = quote! {
         pub static ADVANCEMENT_TREE : LazyLock<AdvancementTree> = #tree;
     };
-    let advancements_holder: Vec<AdvancementHolder> = tree.nodes_vector.into_iter().map(|node| node.value).collect();
+    let advancements_holder: Vec<AdvancementHolder> = tree
+        .nodes_vector
+        .into_iter()
+        .map(|node| node.value)
+        .collect();
     for AdvancementHolder(identifier, advancement) in advancements_holder {
         let raw_name = identifier.path();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
 
         let parent = if let Some(parent) = &advancement.parent {
-            quote!{Some(#parent)}
+            quote! {Some(#parent)}
         } else {
-            quote!{ None }
+            quote! { None }
         };
         let send_telemetry = advancement.sends_telemetry;
         let display = match &advancement.display {

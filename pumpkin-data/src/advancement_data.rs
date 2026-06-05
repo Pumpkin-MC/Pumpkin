@@ -179,7 +179,6 @@ impl AdvancementTree {
     }
 }
 
-
 #[derive(Serialize)]
 pub struct AdvancementProgress {
     pub id: Identifier,
@@ -193,6 +192,6 @@ pub struct Criteria {
 }
 
 pub struct AdvancementRequirement {
-    pub requirements: &'static [&'static [&'static str]]
+    pub requirements: &'static [&'static [&'static str]],
 }
 pub trait Criterion {}
