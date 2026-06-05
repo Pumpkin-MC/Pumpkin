@@ -9,9 +9,9 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
 
 pub mod block_pos;
+pub mod column_pos;
 pub mod rotation;
 pub mod vec3;
-pub mod column_pos;
 
 pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_POS_MIXED,
