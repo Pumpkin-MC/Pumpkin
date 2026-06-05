@@ -1318,18 +1318,22 @@ impl LivingEntity {
         // Sync visual properties downstream cleanly via primitive types
         // FIXES #2205 & METTY CRASH: Satisfies array type constraints by encoding
         // the f32 health bit-layout into a safe integer representation.
-        self.entity.send_meta_data(&[
-            pumpkin_protocol::java::client::play::Metadata::new(
+        // Sync visual properties downstream cleanly without type inference conflicts
+        // FIXES #2205 & NETTY CRASH: Separate calls decouple array homogeneity bounds.
+        // This allows TrackedData::HEALTH to serialize as a valid 4-byte f32 payload.
+        self.entity
+            .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::POSE,
                 pumpkin_data::meta_data_type::MetaDataType::POSE,
                 pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
-            ),
-            pumpkin_protocol::java::client::play::Metadata::new(
+            )]);
+
+        self.entity
+            .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::HEALTH,
                 pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                pumpkin_protocol::codec::var_int::VarInt(0.0f32.to_bits() as i32),
-            ),
-        ]);
+                0.0f32, // Preserved cleanly as a raw float literal without an underscore separator
+            )]);
 
         let entity_type = self.entity.entity_type;
         let cause_type = cause.map(|c| c.get_entity().entity_type);
