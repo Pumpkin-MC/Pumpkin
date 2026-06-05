@@ -5,7 +5,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::Translate;
 use quote::{ToTokens, format_ident, quote};
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use std::cmp::PartialEq;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
@@ -67,12 +67,12 @@ impl ToTokens for AdvancementDisplay {
             "{}",
             self.item_icon
                 .strip_prefix("minecraft:")
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "expected a vanilla Minecraft item icon, got `{}`",
-                            self.item_icon
-                        )
-                    })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "expected a vanilla Minecraft item icon, got `{}`",
+                        self.item_icon
+                    )
+                })
                 .to_uppercase()
         );
         let frame_type = &self.frame_type;
@@ -364,21 +364,13 @@ impl ToTokens for AdvancementTree {
 }
 
 pub(crate) fn build() -> TokenStream {
-    let advancements_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../assets/advancements.json");
-    let advancements_json = fs::read_to_string(&advancements_path).unwrap_or_else(|err| {
-        panic!(
-            "Failed to read {}: {err}",
-            advancements_path.display()
-        )
-    });
-    let advancements: BTreeMap<String, AdvancementStruct> = serde_json::from_str(&advancements_json)
-        .unwrap_or_else(|err| {
-            panic!(
-                "Failed to parse {}: {err}",
-                advancements_path.display()
-            )
-        });
+    let advancements_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/advancements.json");
+    let advancements_json = fs::read_to_string(&advancements_path)
+        .unwrap_or_else(|err| panic!("Failed to read {}: {err}", advancements_path.display()));
+    let advancements: BTreeMap<String, AdvancementStruct> =
+        serde_json::from_str(&advancements_json)
+            .unwrap_or_else(|err| panic!("Failed to parse {}: {err}", advancements_path.display()));
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
