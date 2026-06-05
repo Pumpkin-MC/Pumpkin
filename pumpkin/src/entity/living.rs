@@ -1,6 +1,5 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::{TrackedData, TrackedId};
@@ -8,7 +7,6 @@ use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
-use pumpkin_protocol::java::client::play::CParticle;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -1315,25 +1313,29 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet (Natively handles red flash, tilt, sounds, and the "POOF" particle smoke)
+        // ALWAYS broadcast entity status first so the client updates its targeting matrix
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
-        // Sync visual properties downstream cleanly via primitive types
-        self.entity
-            .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::TrackedData::POSE,
-                pumpkin_data::meta_data_type::MetaDataType::POSE,
-                pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
-            )]);
-
-        self.entity
-            .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::TrackedData::HEALTH,
-                pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                0.0f32,
-            )]);
-
         let entity_type = self.entity.entity_type;
+
+        // FIX #2205 & #1621: Only sync structural pose/health metadata down to actual players.
+        // Mobs and Armor stands are destroyed instantly on the client side via entity status.
+        if *entity_type == EntityType::PLAYER {
+            self.entity
+                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                    pumpkin_data::tracked_data::TrackedData::POSE,
+                    pumpkin_data::meta_data_type::MetaDataType::POSE,
+                    pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
+                )]);
+
+            self.entity
+                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                    pumpkin_data::tracked_data::TrackedData::HEALTH,
+                    pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                    0.0f32,
+                )]);
+        }
+
         let cause_type = cause.map(|c| c.get_entity().entity_type);
         let feet_pos = self.entity.pos.load();
 
