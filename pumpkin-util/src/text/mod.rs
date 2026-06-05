@@ -150,6 +150,36 @@ impl TextComponentBase {
         text
     }
 
+    /// Converts this component into a raw Bedrock string, specifically for translation parameters.
+    /// Translations are emitted as `%translation.key` so Bedrock evaluates them natively.
+    #[must_use]
+    pub fn to_bedrock_string(&self) -> String {
+        let mut text = String::new();
+
+        match &*self.content {
+            TextContent::Text { text: t } => text.push_str(t),
+            TextContent::Translate {
+                translate,
+                bedrock_translate,
+                with: _,
+            } => {
+                let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
+                let _ = write!(text, "%{key}");
+            }
+            TextContent::EntityNames { selector, .. } => text.push_str(selector),
+            TextContent::Keybind { keybind } => text.push_str(keybind),
+            TextContent::Custom { key, .. } => {
+                let _ = write!(text, "%{key}");
+            }
+        }
+
+        for child in &self.extra {
+            text.push_str(&child.to_bedrock_string());
+        }
+
+        text
+    }
+
     #[must_use]
     pub fn to_bedrock_legacy(&self, locale: Locale) -> String {
         let mut text = String::new();

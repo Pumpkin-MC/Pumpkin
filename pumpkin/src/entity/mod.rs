@@ -674,6 +674,58 @@ impl Entity {
         self.world.store(world);
     }
 
+    pub fn bedrock_metadata(&self) -> EntityMetadata {
+        if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
+            self.bedrock_flags.fetch_or(
+                (1i64 << entity_data_flag::HAS_GRAVITY)
+                    | (1i64 << entity_data_flag::CLIMB)
+                    | (1i64 << entity_data_flag::HAS_COLLISION)
+                    | (1i64 << entity_data_flag::BREATHING),
+                Ordering::Relaxed,
+            );
+        }
+
+        let mut metadata = EntityMetadata::new();
+        metadata.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(self.entity_type.dimension[0]),
+        );
+        metadata.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(self.entity_type.dimension[1]),
+        );
+        metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+
+        if let Some(name) = &**self.custom_name.load() {
+            metadata.set(
+                entity_data_key::NAME,
+                MetadataValue::String(name.clone().get_text()),
+            );
+            if self.custom_name_visible.load(Ordering::Relaxed) {
+                metadata.set_flag(
+                    entity_data_key::FLAGS,
+                    entity_data_flag::SHOW_NAME as u8,
+                    true,
+                );
+                metadata.set_flag(
+                    entity_data_key::FLAGS,
+                    entity_data_flag::ALWAYS_SHOW_NAME as u8,
+                    true,
+                );
+            }
+        }
+
+        metadata
+    }
+
     /// Sets the entity's age in ticks.
     /// Negative values indicate that the entity is a baby.
     pub fn set_age(&self, age: i32) {
