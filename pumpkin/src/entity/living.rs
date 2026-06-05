@@ -1316,8 +1316,8 @@ impl LivingEntity {
         world.send_entity_status(&self.entity, EntityStatus::Death);
 
         // Sync visual properties downstream cleanly via primitive types
-        // FIXES #2205: Explicitly broadcasts Health = 0 via VarInt metadata layer
-        // FIXED: Wrapped payload inside VarInt and adjusted float literal to satisfy the linter
+        // FIXES #2205 & METTY CRASH: Satisfies array type constraints by encoding
+        // the f32 health bit-layout into a safe integer representation.
         self.entity.send_meta_data(&[
             pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::POSE,
@@ -1327,7 +1327,7 @@ impl LivingEntity {
             pumpkin_protocol::java::client::play::Metadata::new(
                 pumpkin_data::tracked_data::TrackedData::HEALTH,
                 pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                pumpkin_protocol::codec::var_int::VarInt(0),
+                pumpkin_protocol::codec::var_int::VarInt(0.0f32.to_bits() as i32),
             ),
         ]);
 
