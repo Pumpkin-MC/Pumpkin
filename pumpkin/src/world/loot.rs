@@ -461,7 +461,7 @@ impl LootConditionExt for LootCondition {
             | Self::EnchantmentActiveCheck { .. }
             | Self::LocationCheck { .. } => {
                 // TODO: Implement these
-                true
+                false
             }
             Self::TimeCheck { range, period } => {
                 let mut time = params.world_time;

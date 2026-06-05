@@ -475,7 +475,7 @@ impl EntitySelectorParserSuggestions {
         match self {
             Self::Nothing => {}
             Self::Selector => {
-                let mut sub = builder.create_offset(builder.start - 1);
+                let mut sub = builder.create_offset(builder.start.saturating_sub(1));
                 sub = Self::fill_selector_suggestions(sub);
                 builder = builder.append(sub);
             }
