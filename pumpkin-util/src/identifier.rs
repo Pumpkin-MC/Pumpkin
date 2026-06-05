@@ -1,6 +1,4 @@
-use proc_macro2::TokenStream;
 use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
-use quote::{ToTokens, quote};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Display};
 use thiserror::Error;
