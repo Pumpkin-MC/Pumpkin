@@ -1312,17 +1312,8 @@ impl LivingEntity {
         self.health.store(0.0);
         self.entity.pose.store(EntityPose::Dying);
 
-        // Send Entity Status packet
+        // Send Entity Status packet (Triggers the exact vanilla Java death tilt, sound, and smoke)
         world.send_entity_status(&self.entity, EntityStatus::Death);
-
-        // Sync visual properties downstream cleanly via primitive types
-        // FIXED: Used the direct constructor path for VarInt to bypass the visibility rule
-        self.entity
-            .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::TrackedData::POSE,
-                pumpkin_data::meta_data_type::MetaDataType::POSE,
-                pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
-            )]);
 
         let entity_type = self.entity.entity_type;
         let cause_type = cause.map(|c| c.get_entity().entity_type);
