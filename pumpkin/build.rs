@@ -33,7 +33,7 @@ fn main() {
                 }
             }
             Err(err) => {
-                println!("cargo:warning=Failed to run git submodule update: {}", err);
+                println!("cargo:warning=Failed to run git submodule update: {err}";
             }
         }
     } else {
