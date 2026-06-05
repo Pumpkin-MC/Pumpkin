@@ -20,7 +20,6 @@ use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
-use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
@@ -179,6 +178,11 @@ impl ChunkManager {
     #[must_use]
     pub const fn world(&self) -> &Arc<World> {
         &self.world
+    }
+
+    #[must_use]
+    pub fn sent_chunks_count(&self) -> usize {
+        self.chunk_sent.len()
     }
 
     fn should_enqueue_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) -> bool {
@@ -1805,10 +1809,10 @@ impl Player {
             }
         }
 
-        let chunk_of_chunks = {
+        let (chunk_of_chunks, total_sent_chunks) = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            if let ClientPlatform::Java(_) = self.client {
+            let chunks = if let ClientPlatform::Java(_) = self.client {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
                 chunk_manager
@@ -1816,7 +1820,8 @@ impl Player {
                     .then(|| chunk_manager.next_chunk())
             } else {
                 Some(chunk_manager.next_chunk())
-            }
+            };
+            (chunks, chunk_manager.sent_chunks_count())
         };
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
@@ -1837,7 +1842,7 @@ impl Player {
                 ClientPlatform::Bedrock(bedrock_client) => {
                     for chunk in chunk_of_chunks {
                         bedrock_client
-                            .send_game_packet(&CLevelChunk {
+                            .enqueue_packet(&CLevelChunk {
                                 dimension: 0,
                                 cache_enabled: false,
                                 chunk: &chunk,
@@ -1845,13 +1850,10 @@ impl Player {
                             .await;
                     }
 
-                    if !self.bedrock_spawned.load(Ordering::Relaxed) && chunk_count > 4 {
-                        let mut frame_set = FrameSet::default();
-
+                    if !self.bedrock_spawned.load(Ordering::Relaxed) && total_sent_chunks > 4 {
                         bedrock_client
-                            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+                            .enqueue_packet(&CPlayStatus::PlayerSpawn)
                             .await;
-                        bedrock_client.send_frame_set(frame_set, 0x84).await;
                         self.bedrock_spawned.store(true, Ordering::Relaxed);
                     }
                 }
@@ -2866,11 +2868,23 @@ impl Player {
                     .await;
             }
             ClientPlatform::Bedrock(client) => {
-                client
-                    .send_game_packet(&SText::system_message(text.clone().0.to_bedrock_legacy(
-                        Locale::from_str(&self.config.load().locale).unwrap_or(Locale::EnUs),
-                    )))
-                    .await;
+                let locale = Locale::from_str(&self.config.load().locale).unwrap_or(Locale::EnUs);
+                let packet = match &*text.0.content {
+                    pumpkin_util::text::TextContent::Translate {
+                        translate,
+                        bedrock_translate,
+                        with,
+                    } => {
+                        let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
+                        let parameters = with
+                            .iter()
+                            .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
+                            .collect();
+                        SText::translation(key.to_string(), parameters)
+                    }
+                    _ => SText::system_message(text.0.to_bedrock_legacy(locale)),
+                };
+                client.enqueue_packet(&packet).await;
             }
         }
     }

@@ -621,6 +621,7 @@ fn setup_stdin_console(server: Arc<Server>) {
 
 fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let (tx_reply, mut rx_reply) = tokio::sync::mpsc::channel(1);
 
     if let Some(helper) = rl.helper_mut() {
         if let Ok(mut server_lock) = helper.server.write() {
@@ -638,6 +639,9 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     if tx.blocking_send(line).is_err() {
                         break;
                     }
+
+                    // Wait for the command to be fully processed before continuing
+                    let _ = rx_reply.blocking_recv();
                 }
                 Err(ReadlineError::Interrupted) => {
                     info!("CTRL-C");
@@ -679,6 +683,8 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                         server.command_dispatcher.read().await
                             .handle_command(&command::CommandSender::Console.into_source(&server).await, &line)
                             .await;
+
+                        let _ = tx_reply.send(1).await;
                     }
                 }}
             } else {

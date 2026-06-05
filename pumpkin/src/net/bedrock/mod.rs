@@ -31,6 +31,7 @@ use pumpkin_protocol::{
             client_cache_status::SClientCacheStatus,
             command_request::SCommandRequest,
             container_close::SContainerClose,
+            emote::SEmote,
             interaction::SInteraction,
             inventory_transaction::SInventoryTransaction,
             loading_screen::SLoadingScreen,
@@ -59,9 +60,10 @@ use std::net::SocketAddr;
 use tokio::{
     net::UdpSocket,
     sync::mpsc::{Receiver, Sender},
-    sync::{Mutex, oneshot},
+    sync::{Mutex, RwLock, oneshot},
     task::JoinHandle,
 };
+
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 pub mod connection;
@@ -118,7 +120,7 @@ pub struct BedrockClient {
     outgoing_packet_priority_recv: Mutex<Option<Receiver<OutgoingPacket>>>,
 
     /// The packet encoder for outgoing packets.
-    network_writer: Arc<Mutex<UDPNetworkEncoder>>,
+    network_writer: Arc<RwLock<UDPNetworkEncoder>>,
     /// The packet decoder for incoming packets.
     network_reader: Mutex<UDPNetworkDecoder>,
 
@@ -154,9 +156,9 @@ impl BedrockClient {
         address: SocketAddr,
         be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::channel(128);
-        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(128);
-        let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(128);
+        let (send, recv) = tokio::sync::mpsc::channel(4096);
+        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
+        let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
         Self {
             socket,
             player: Mutex::new(None),
@@ -164,7 +166,7 @@ impl BedrockClient {
             version: AtomicCell::new(BedrockMinecraftVersion::Unknown),
             client_data: ArcSwap::new(Arc::new(None)),
             be_clients,
-            network_writer: Arc::new(Mutex::new(UDPNetworkEncoder::new())),
+            network_writer: Arc::new(RwLock::new(UDPNetworkEncoder::new())),
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
@@ -220,16 +222,19 @@ impl BedrockClient {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
             while !client.close_token.is_cancelled() {
-                let recv_result = tokio::select! {
+                let packet = tokio::select! {
                     biased;
-                    () = client.close_token.cancelled() => None,
-                    res = priority_packet_receiver.recv() => res,
+                    () = client.close_token.cancelled() => break,
+                    res = priority_packet_receiver.recv() => match res {
+                        Some(p) => p,
+                        None => break,
+                    },
                     _ = interval.tick() => {
                         // Check for timeout (10 seconds)
                         if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
                             debug!("Bedrock client {} timed out", client.address);
                             client.close().await;
-                            return;
+                            break;
                         }
 
                         // Flush ACKs
@@ -244,31 +249,35 @@ impl BedrockClient {
                         let now = std::time::Instant::now();
                         let mut resend = Vec::new();
                         {
-                            let unacked = client.unacked_outgoing_frames.lock().await;
-                            for (seq, (id, data, timestamp)) in unacked.iter() {
+                            let mut unacked = client.unacked_outgoing_frames.lock().await;
+                            for (seq, (id, data, timestamp)) in unacked.iter_mut() {
                                 if now.duration_since(*timestamp) > std::time::Duration::from_secs(1) {
                                     resend.push((*seq, *id, data.clone()));
+                                    // Update timestamp
+                                    *timestamp = now;
+                                    // Limit resends per tick to avoid starvation
+                                    if resend.len() >= 50 {
+                                        break;
+                                    }
                                 }
                             }
                         }
 
-                        for (seq, id, data) in resend {
-                             debug!("Resending reliable sequence {} (ID: {})", seq, id);
-                             // Update timestamp
-                             if let Some(entry) = client.unacked_outgoing_frames.lock().await.get_mut(&seq) {
-                                 entry.2 = now;
-                             }
-                             if let Err(err) = client.network_writer.lock().await.write_packet(&data, client.address, &client.socket).await {
-                                 warn!("Failed to resend packet for sequence {}: {}", seq, err);
-                             }
+                        if !resend.is_empty() {
+                            let encoder = client.network_writer.read().await;
+                            for (seq, id, data) in resend {
+                                debug!("Resending reliable sequence {} (ID: {})", seq, id);
+                                if let Err(err) = encoder.write_packet(&data, client.address, &client.socket).await {
+                                    warn!("Failed to resend packet for sequence {}: {}", seq, err);
+                                }
+                            }
                         }
                         continue;
                     }
-                    res = packet_receiver.recv() => res,
-                };
-
-                let Some(packet) = recv_result else {
-                    break;
+                    res = packet_receiver.recv() => match res {
+                        Some(p) => p,
+                        None => break,
+                    },
                 };
 
                 client
@@ -301,7 +310,7 @@ impl BedrockClient {
             .set_compression(compression.threshold as usize);
 
         self.network_writer
-            .lock()
+            .write()
             .await
             .set_compression((compression.threshold as usize, compression.level));
     }
@@ -329,7 +338,7 @@ impl BedrockClient {
         }
 
         {
-            let Ok(mut network_writer) = self.network_writer.try_lock() else {
+            let Ok(network_writer) = self.network_writer.try_read() else {
                 debug!("Failed to lock network writer for try_enqueue_packet");
                 return;
             };
@@ -406,7 +415,7 @@ impl BedrockClient {
         let mut packet_payload = Vec::new();
         packet.write_packet(&mut packet_payload)?;
 
-        let mut encoder = self.network_writer.lock().await;
+        let encoder = self.network_writer.read().await;
         encoder.write_game_packet(
             P::PACKET_ID as u16,
             SubClient::Main,
@@ -500,7 +509,7 @@ impl BedrockClient {
         }
 
         for i in 0..count {
-            let end = if i + 1 == count {
+            let end = if i + 1 == count && !packet_buf.len().is_multiple_of(MTU) {
                 packet_buf.len() % MTU
             } else {
                 MTU
@@ -558,7 +567,7 @@ impl BedrockClient {
 
         if let Err(err) = self
             .network_writer
-            .lock()
+            .read()
             .await
             .write_packet(&frame_set_buf, self.address, &self.socket)
             .await
@@ -593,7 +602,7 @@ impl BedrockClient {
 
         if let Err(err) = self
             .network_writer
-            .lock()
+            .read()
             .await
             .write_packet(&packet_buf, self.address, &self.socket)
             .await
@@ -639,17 +648,25 @@ impl BedrockClient {
 
     async fn handle_nack(&self, nack: &Acknowledge) {
         debug!("Received NACK for sequences: {:?}", nack.sequences);
-        let unacked = self.unacked_outgoing_frames.lock().await;
-        for seq in &nack.sequences {
-            if let Some((_id, data, _timestamp)) = unacked.get(seq)
-                && let Err(err) = self
-                    .network_writer
-                    .lock()
-                    .await
-                    .write_packet(data, self.address, &self.socket)
-                    .await
+        let mut resend_data = Vec::new();
+        {
+            let unacked = self.unacked_outgoing_frames.lock().await;
+            for seq in &nack.sequences {
+                if let Some((_id, data, _timestamp)) = unacked.get(seq) {
+                    resend_data.push(data.clone());
+                }
+            }
+        }
+
+        for data in resend_data {
+            if let Err(err) = self
+                .network_writer
+                .read()
+                .await
+                .write_packet(&data, self.address, &self.socket)
+                .await
             {
-                warn!("Failed to resend packet for sequence {}: {}", seq, err);
+                warn!("Failed to resend packet from NACK: {}", err);
             }
         }
     }
@@ -849,13 +866,15 @@ impl BedrockClient {
                         Ok(p) => p,
                         Err(err) => {
                             error!("Failed to read SLogin: {err}");
-                            continue;
+                            self.kick(DisconnectReason::BadPacket, err.to_string())
+                                .await;
+                            return PacketHandlerResult::Stop;
                         }
                     };
                     match self.handle_login(packet, server).await {
                         Ok(result) => return result,
                         Err(err) => {
-                            warn!("Bedrock login failed: {err}");
+                            self.kick(DisconnectReason::Unknown, err.to_string()).await;
                             return PacketHandlerResult::Stop;
                         }
                     }
@@ -939,6 +958,12 @@ impl BedrockClient {
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;
             }
+            SEmote::PACKET_ID => {
+                self.handle_emote(player, server, SEmote::read(reader)?).await;
+            }
+            // SEmoteList::PACKET_ID => {
+            //     self.handle_emote_list(player, server, SEmoteList::read(reader)?);
+            // }
             pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::PACKET_ID => {
                 self.handle_modal_form_response(
                     player,

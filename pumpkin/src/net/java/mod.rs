@@ -142,8 +142,8 @@ impl JavaClient {
     #[must_use]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
-        let (send, recv) = tokio::sync::mpsc::channel(128);
-        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(128);
+        let (send, recv) = tokio::sync::mpsc::channel(4096);
+        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
         Self {
             id,
             gameprofile: Mutex::new(None),

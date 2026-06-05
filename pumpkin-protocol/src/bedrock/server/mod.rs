@@ -3,6 +3,8 @@ pub mod animate;
 pub mod client_cache_status;
 pub mod command_request;
 pub mod container_close;
+pub mod emote;
+pub mod emote_list;
 pub mod interaction;
 pub mod inventory_transaction;
 pub mod loading_screen;
