@@ -1,7 +1,8 @@
-use std::{borrow::Cow, fmt::Display};
-
+use proc_macro2::TokenStream;
 use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
+use quote::{ToTokens, quote};
 use serde::{Deserialize, Serialize};
+use std::{borrow::Cow, fmt::Display};
 use thiserror::Error;
 
 pub const VANILLA_NAMESPACE: &str = "minecraft";
@@ -380,6 +381,16 @@ impl<'de> Deserialize<'de> for Identifier {
     {
         let identifier_string = String::deserialize(deserializer)?;
         Self::parse(&identifier_string).map_err(|error| serde::de::Error::custom(error.to_string()))
+    }
+}
+
+impl ToTokens for Identifier {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let namespace = self.namespace();
+        let path = self.path();
+        tokens.extend(quote! {
+            Identifier::from_static(#namespace, #path)
+        });
     }
 }
 
