@@ -119,7 +119,7 @@ proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
 async-compression = { version = "0.4.42", default-features = false }
 base64 = { version = "0.22.1", default-features = false, features = ["std"] }
-bitflags = { version = "2.11.1", default-features = false, features = ["std"] }
+bitflags = { version = "2.12.1", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
 colored = { version = "3.1", default-features = false }
@@ -194,7 +194,7 @@ wasmtime = { version = "45.0", default-features = false, features = ["runtime", 
 wasmtime-wasi = { version = "45.0", default-features = false, features = ["p2"] }
 wasmtime-wasi-http = { version = "45.0", default-features = false, features = ["p2", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
-hyper = { version = "^1.9", default-features = false }
+hyper = { version = "^1.10", default-features = false }
 wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }

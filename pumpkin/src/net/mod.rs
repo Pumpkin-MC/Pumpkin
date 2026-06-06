@@ -5,6 +5,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use bytes::Bytes;
+use pumpkin_world::level::SyncChunk;
 use std::{
     net::SocketAddr,
     num::NonZeroU8,
@@ -238,6 +239,13 @@ impl ClientPlatform {
     pub fn try_enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
         if let Self::Bedrock(bedrock) = self {
             bedrock.try_enqueue_packet(packet);
+        }
+    }
+
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+        match self {
+            Self::Java(java) => java.send_chunks(chunks).await,
+            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
         }
     }
 

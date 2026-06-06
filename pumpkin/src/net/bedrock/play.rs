@@ -11,6 +11,7 @@ use pumpkin_protocol::{
             animate::{AnimateAction, SAnimate},
             command_request::SCommandRequest,
             container_close::SContainerClose,
+            emote::SEmote,
             interaction::{Action, SInteraction},
             inventory_transaction::{SInventoryTransaction, TransactionData},
             player_action::{Action as PlayerAction, SPlayerAction},
@@ -337,6 +338,41 @@ impl BedrockClient {
             world.broadcast_editioned(&je_packet, &be_packet).await;
         }
     }
+
+    pub async fn handle_emote(&self, player: &Arc<Player>, _server: &Server, packet: SEmote) {
+        if !player.has_client_loaded() {
+            return;
+        }
+
+        let entity = &player.living_entity.entity;
+        let world = entity.world.load();
+
+        let mut broadcast_packet = packet;
+        broadcast_packet.flags |= pumpkin_protocol::bedrock::server::emote::EMOTE_FLAG_SERVER_SIDE;
+
+        world
+            .broadcast_packet_except_editioned(
+                &[player.gameprofile.id],
+                &CEntityAnimation::new(
+                    VarInt(entity.entity_id),
+                    Animation::SwingMainArm, // Fallback for Java? Or just ignore
+                ),
+                &broadcast_packet,
+            )
+            .await;
+    }
+
+    // pub fn handle_emote_list(
+    //     &self,
+    //     player: &Arc<Player>,
+    //     _server: &Server,
+    //     packet: &SEmoteList,
+    // ) {
+    //     debug!(
+    //         "Player {} sent emote list: {:?}",
+    //         player.gameprofile.name, packet.emote_pieces
+    //     );
+    // }
 
     pub async fn handle_inventory_action(
         &self,

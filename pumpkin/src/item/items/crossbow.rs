@@ -82,16 +82,29 @@ impl ItemBehaviour for CrossbowItem {
 
             if use_ticks >= charge_time {
                 let arrow_slot = player.find_arrow().await;
-                if let Some(slot) = arrow_slot {
-                    let inventory = player.inventory();
-                    let mut stack = held.lock().await;
+                let mut stack = held.lock().await;
+                let (arrow_nbt_wrapper, slot) = {
+                    if let Some(slot) = arrow_slot {
+                        let inventory = player.inventory();
 
-                    let arrow_stack_arc = inventory.get_stack(slot).await;
-                    let arrow_stack = arrow_stack_arc.lock().await;
-                    let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
-                    arrow_stack.write_item_stack(&mut arrow_nbt);
-                    drop(arrow_stack);
+                        let arrow_stack_arc = inventory.get_stack(slot).await;
+                        let arrow_stack = arrow_stack_arc.lock().await;
+                        let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                        arrow_stack.write_item_stack(&mut arrow_nbt);
+                        drop(arrow_stack);
+                        (Some(arrow_nbt), slot)
+                    } else if player.gamemode.load() == GameMode::Creative {
+                        let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                        let arrow_stack = ItemStack::new(1, &Item::ARROW);
+                        arrow_stack.write_item_stack(&mut arrow_nbt);
+                        drop(arrow_stack);
 
+                        (Some(arrow_nbt), 0)
+                    } else {
+                        (None, 0)
+                    }
+                };
+                if let Some(arrow_nbt) = arrow_nbt_wrapper {
                     stack.patch.push((
                         DataComponent::ChargedProjectiles,
                         Some(Box::new(ChargedProjectilesImpl {

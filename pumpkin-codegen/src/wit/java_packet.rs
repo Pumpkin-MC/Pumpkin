@@ -35,6 +35,10 @@ pub fn build() -> String {
         &mut clientbound_variant,
     );
 
+    // Add an 'unknown' fallback variant (no payload) — raw payload is carried on the event record
+    serverbound_variant.case(VariantCase::empty("unknown"));
+    clientbound_variant.case(VariantCase::empty("unknown"));
+
     interface.type_def(TypeDef::new(
         "serverbound-packet",
         TypeDefKind::Variant(serverbound_variant),

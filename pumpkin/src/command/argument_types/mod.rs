@@ -223,6 +223,7 @@ pub mod entity;
 pub mod entity_anchor;
 pub mod entity_selector;
 pub mod game_profile;
+pub mod gamemode;
 pub mod identifier;
 pub mod nbt;
 pub mod range;
