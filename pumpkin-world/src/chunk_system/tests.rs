@@ -242,6 +242,56 @@ fn ensure_dependency_chain_early_return_skips_edge() {
 }
 
 #[test]
+fn completed_proto_stage_drops_all_satisfied_tasks() {
+    let mut graph = DAG::default();
+    let mut holder = ChunkHolder {
+        current_stage: StagedChunkEnum::None,
+        target_stage: StagedChunkEnum::StructureStart,
+        ..Default::default()
+    };
+
+    for stage in StagedChunkEnum::Empty as usize..=StagedChunkEnum::StructureStart as usize {
+        holder.tasks[stage] = graph.nodes.insert(Node::new(
+            ChunkPos::new(0, 0),
+            StagedChunkEnum::from(stage as u8),
+        ));
+    }
+
+    for stage in StagedChunkEnum::Empty as usize..StagedChunkEnum::StructureStart as usize {
+        graph.add_edge(holder.tasks[stage], holder.tasks[stage + 1]);
+    }
+
+    let returned_stage = StagedChunkEnum::Biomes as usize;
+    for task_idx in
+        (holder.current_stage as usize + 1)..=(returned_stage).min(holder.tasks.len() - 1)
+    {
+        if !holder.tasks[task_idx].is_null() {
+            if let Some(old) = graph.nodes.remove(holder.tasks[task_idx]) {
+                let mut edge = old.edge;
+                while !edge.is_null() {
+                    let cur = graph.edges.remove(edge).unwrap();
+                    if let Some(node) = graph.nodes.get_mut(cur.to) {
+                        node.in_degree -= 1;
+                    }
+                    edge = cur.next;
+                }
+            }
+            holder.tasks[task_idx] = NodeKey::null();
+        }
+    }
+
+    assert!(holder.tasks[StagedChunkEnum::Empty as usize].is_null());
+    assert!(holder.tasks[StagedChunkEnum::Biomes as usize].is_null());
+    assert!(!holder.tasks[StagedChunkEnum::StructureStart as usize].is_null());
+    assert!(
+        graph
+            .nodes
+            .get(holder.tasks[StagedChunkEnum::StructureStart as usize])
+            .is_some()
+    );
+}
+
+#[test]
 fn test_cancellation_path_decrements_in_degree() {
     let mut graph = DAG::default();
 

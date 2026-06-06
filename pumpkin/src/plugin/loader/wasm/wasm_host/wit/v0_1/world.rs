@@ -305,7 +305,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let msg = self.get_text_provider(&message)?;
         self.get_world_res(&world)?
             .provider
-            .broadcast_system_message(&msg, overlay);
+            .broadcast_system_message(&msg, overlay)
+            .await;
         Ok(())
     }
 

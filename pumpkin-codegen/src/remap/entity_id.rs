@@ -9,45 +9,49 @@ use crate::version::JavaMinecraftVersion;
 pub fn build() -> TokenStream {
     let node_1_20_5 = MappingNode {
         version: JavaMinecraftVersion::V_1_20_5,
-        value: "../assets/viaversion/data/mappings-1.20.5to1.21.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21to1.20.5.nbt",
         child: None,
     };
     let node_1_21 = MappingNode {
         version: JavaMinecraftVersion::V_1_21,
-        value: "../assets/viaversion/data/mappings-1.21to1.21.2.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.2to1.21.nbt",
         child: Some(&node_1_20_5),
     };
     let node_1_21_2 = MappingNode {
         version: JavaMinecraftVersion::V_1_21_2,
-        value: "../assets/viaversion/data/mappings-1.21.2to1.21.4.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.4to1.21.2.nbt",
         child: Some(&node_1_21),
     };
     let node_1_21_4 = MappingNode {
         version: JavaMinecraftVersion::V_1_21_4,
-        value: "../assets/viaversion/data/mappings-1.21.4to1.21.5.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.5to1.21.4.nbt",
         child: Some(&node_1_21_2),
     };
     let node_1_21_5 = MappingNode {
         version: JavaMinecraftVersion::V_1_21_5,
-        value: "../assets/viaversion/data/mappings-1.21.5to1.21.6.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.6to1.21.5.nbt",
         child: Some(&node_1_21_4),
     };
     let node_1_21_6 = MappingNode {
         version: JavaMinecraftVersion::V_1_21_6,
-        value: "../assets/viaversion/data/mappings-1.21.6to1.21.7.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.7to1.21.6.nbt",
         child: Some(&node_1_21_5),
     };
     let node_1_21_7 = MappingNode {
         version: JavaMinecraftVersion::V_1_21_7,
-        value: "../assets/viaversion/data/mappings-1.21.7to1.21.9.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.9to1.21.7.nbt",
         child: Some(&node_1_21_6),
     };
     let node_1_21_9 = MappingNode {
         version: JavaMinecraftVersion::V_1_21_9,
-        value: "../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt",
+        value: "../assets/viabackwards/data/mappings-1.21.11to1.21.9.nbt",
         child: Some(&node_1_21_7),
     };
-
+    let node_1_21_11 = MappingNode {
+        version: JavaMinecraftVersion::V_1_21_11,
+        value: "../assets/viabackwards/data/mappings-26.1to1.21.11.nbt",
+        child: Some(&node_1_21_9),
+    };
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
         version: JavaMinecraftVersion::V_26_1,
         remapper: |first, second| match (first, second) {
@@ -57,33 +61,31 @@ pub fn build() -> TokenStream {
                     .map(|id| second.get(usize::from(*id)).copied().unwrap_or(0))
                     .collect(),
             ),
-            (None, Some(second)) => Some(
-                (0..second.len())
-                    .map(|id| second.get(id).copied().unwrap_or(0))
-                    .collect(),
-            ),
+            (None, Some(second)) => Some(second.clone()),
             (Some(first), None) => Some(first.clone()),
             _ => None,
         },
         serializer: |&file| {
             ParsedMappings::parse_mapping_file(file, "entities")
-                .map(|mappings| mappings.invert_with_default_to_u16(file))
+                .map(|mappings| mappings.to_u16(file))
         },
     };
 
-    let all_mappings = remapper.process(&node_1_21_9);
+    let all_mappings = remapper.process(&node_1_21_11);
 
     let mut static_values = TokenStream::new();
     let mut match_arms = TokenStream::new();
 
     for (ver, mapping) in &all_mappings {
+        let Some(mapping) = mapping else {
+            continue;
+        };
+
         let ident = format_ident!(
             "{}",
             format!("ENTITY_ID_REMAP_{:?}_TO_{:?}", remapper.version, ver).to_uppercase()
         );
         let mapping_tokens: Vec<_> = mapping
-            .as_ref()
-            .unwrap()
             .iter()
             .copied()
             .map(Literal::u16_unsuffixed)
