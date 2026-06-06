@@ -30,27 +30,27 @@ impl ToFromWasmEvent for PacketReceivedEvent {
         let packet = match &self.player.client {
             ClientPlatform::Java(client) => {
                 let version = client.version.load();
-                let wit_packet = generated_packets::deserialize_java_serverbound_packet(
+                generated_packets::deserialize_java_serverbound_packet(
                     self.packet_id,
                     &self.payload,
                     version,
-                );
-                wit_packet.map(ServerboundPacket::Java)
+                )
+                .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
             }
             ClientPlatform::Bedrock(_) => {
-                let wit_packet = generated_packets::deserialize_bedrock_serverbound_packet(
+                generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
                     &self.payload,
-                );
-                wit_packet.map(ServerboundPacket::Bedrock)
+                )
+                .map_or(ServerboundPacket::Unknown, ServerboundPacket::Bedrock)
             }
         };
-
-        let packet = packet.expect("Failed to deserialize serverbound packet to WIT. Ensure the packet is supported in the WIT API.");
 
         Event::PacketReceivedEvent(PacketReceivedEventData {
             player: player_res,
             packet,
+            packet_id: self.packet_id,
+            raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
         })
     }
@@ -77,22 +77,20 @@ impl ToFromWasmEvent for PacketSentEvent {
 
         let packet = match &self.player.client {
             ClientPlatform::Java(_) => {
-                let wit_packet =
-                    generated_packets::clientbound_java_any_to_wit(self.packet.as_ref());
-                wit_packet.map(ClientboundPacket::Java)
+                generated_packets::clientbound_java_any_to_wit(self.packet.as_ref())
+                    .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java)
             }
             ClientPlatform::Bedrock(_) => {
-                let wit_packet =
-                    generated_packets::clientbound_bedrock_any_to_wit(self.packet.as_ref());
-                wit_packet.map(ClientboundPacket::Bedrock)
+                generated_packets::clientbound_bedrock_any_to_wit(self.packet.as_ref())
+                    .map_or(ClientboundPacket::Unknown, ClientboundPacket::Bedrock)
             }
         };
-
-        let packet = packet.expect("Failed to convert clientbound packet to WIT. Ensure the packet is supported in the WIT API and ToWit is generated.");
 
         Event::PacketSentEvent(PacketSentEventData {
             player: player_res,
             packet,
+            packet_id: self.packet_id,
+            raw_payload: self.payload.iter().copied().collect(),
             cancelled: self.cancelled,
         })
     }

@@ -18,7 +18,8 @@ use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
     BClientPacket, PacketDecodeError, RawPacket,
     bedrock::{
-        MTU, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RakReliability, SubClient,
+        MTU, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RakReliability, SPLIT_FRAME_MAX_CONTENT,
+        SubClient, UDP_HEADER_SIZE,
         ack::Acknowledge,
         client::{
             disconnect_player::CDisconnectPlayer, level_chunk::CLevelChunk,
@@ -556,10 +557,14 @@ impl BedrockClient {
         let mut split_id = 0;
         let mut order_index = 0;
 
-        let count = if packet_buf.len() > MTU {
+        let mut max_content_len =
+            MTU - UDP_HEADER_SIZE - 12 - if reliability.is_ordered() { 4 } else { 0 };
+
+        let count = if packet_buf.len() > max_content_len {
             reliability = RakReliability::ReliableOrdered;
             split_id = self.output_split_number.fetch_add(1, Ordering::Relaxed);
-            split_size = packet_buf.len().div_ceil(MTU) as u32;
+            max_content_len = SPLIT_FRAME_MAX_CONTENT;
+            split_size = packet_buf.len().div_ceil(max_content_len) as u32;
             split_size as usize
         } else {
             1
@@ -570,12 +575,12 @@ impl BedrockClient {
         }
 
         for i in 0..count {
-            let end = if i + 1 == count && !packet_buf.len().is_multiple_of(MTU) {
-                packet_buf.len() % MTU
+            let end = if i + 1 == count && !packet_buf.len().is_multiple_of(max_content_len) {
+                packet_buf.len() % max_content_len
             } else {
-                MTU
+                max_content_len
             };
-            let chunk = &packet_buf[i * MTU..i * MTU + end];
+            let chunk = &packet_buf[i * max_content_len..i * max_content_len + end];
 
             let mut frame_set = FrameSet {
                 sequence: u24(0),

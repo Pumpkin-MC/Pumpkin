@@ -1840,8 +1840,6 @@ impl World {
             })
             .await;
 
-        chunker::update_position(&player).await;
-
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {

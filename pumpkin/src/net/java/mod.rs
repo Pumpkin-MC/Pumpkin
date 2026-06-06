@@ -359,27 +359,6 @@ impl JavaClient {
 
         let player = self.player.lock().await.clone();
         let cancelled = if let Some(player) = player.as_ref() {
-            // We can only fire the event if the packet is 'static and Clone
-            // This is a bit of a hack to get around the fact that not all packets are 'static
-            // but we want to fire the event at the client level.
-            // In the future, we should make all packets 'static.
-            // For now, we only fire if we can.
-
-            // NOTE: We are using a dummy object if we can't provide the real one
-            // to satisfy the non-optional requirement in WIT for now,
-            // OR we skip firing if we can't provide it.
-            // But user said "don't make it optional in WIT".
-
-            // Let's try to downcast or something? No, P is generic.
-
-            // If I can't provide the object, I can't fire PacketSentEvent.
-            // Chunks are handled in send_chunks now, so they won't reach here if called correctly.
-
-            // I'll add a helper that uses TypeId to check for 'static.
-            // But wait, if I can't provide the object, I'll just skip firing for now to fix compile.
-            // NO, I will make P: Clone + 'static again and fix ALL call sites.
-            // That's the only way to satisfy "non-optional".
-
             player
                 .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
                 .await
