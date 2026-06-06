@@ -128,7 +128,7 @@ impl BedrockClient {
             let on_ground = entity.on_ground.load(std::sync::atomic::Ordering::Relaxed);
 
             if pos_changed {
-                player.living_entity.entity.set_pos(new_pos);
+                player.get_entity().set_pos(new_pos);
             }
             if rot_changed {
                 entity.pitch.store(new_pitch);
@@ -315,7 +315,7 @@ impl BedrockClient {
             return;
         }
 
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         let world = entity.world.load();
 
         let java_animation = match packet.action {
@@ -440,7 +440,7 @@ impl BedrockClient {
                     &message,
                 );
 
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 if server.basic_config.allow_chat_reports {
                     //TODO Alex help, what is this?
                     //world.broadcast_secure_player_chat(player, &message, decorated_message).await;
@@ -479,7 +479,7 @@ impl BedrockClient {
                     return;
                 }
 
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let world = entity.world.load_full();
                 let (block, state) = world.get_block_and_state(&location);
 
@@ -535,7 +535,7 @@ impl BedrockClient {
             }
             PlayerAction::AbortBreak | PlayerAction::StopBreak => {
                 let location = packet.block_pos;
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let world = entity.world.load();
 
                 player.mining.store(false, Ordering::Relaxed);

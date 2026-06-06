@@ -2382,7 +2382,7 @@ impl Entity {
             let chunk_pos = self.chunk_pos.load();
             for player in world.players.load().iter() {
                 if let ClientPlatform::Bedrock(client) = &player.client {
-                    let center = player.living_entity.entity.chunk_pos.load();
+                    let center = player.get_entity().chunk_pos.load();
                     let view_distance =
                         crate::world::chunker::get_view_distance(player).get() as i32;
 
@@ -2426,7 +2426,7 @@ impl Entity {
         for player in world.players.load().iter() {
             if let ClientPlatform::Java(client) = &player.client {
                 // Apply Chebyshev distance check
-                let center = player.living_entity.entity.chunk_pos.load();
+                let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
                 if is_within_view_distance(chunk_pos, center, view_distance) {
@@ -2707,7 +2707,7 @@ impl Entity {
                 player.client.enqueue_packet(&passengers_packet).await;
                 world.broadcast_to_chunk_except(
                     chunk_pos,
-                    &[player.living_entity.entity.entity_uuid],
+                    &[player.get_entity().entity_uuid],
                     &passengers_packet,
                 );
             } else {
@@ -2794,7 +2794,7 @@ impl Entity {
 
             if let Some(player) = passenger.get_player() {
                 let id = teleport_id.unwrap();
-                player.living_entity.entity.set_pos(dismount_pos);
+                player.get_entity().set_pos(dismount_pos);
                 // Update awaiting_teleport with the real dismount position
                 *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
                 // Use enqueue_packet (not send_packet_now) so the teleport goes through

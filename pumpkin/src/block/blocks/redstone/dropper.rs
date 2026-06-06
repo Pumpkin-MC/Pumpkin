@@ -5,6 +5,7 @@ use crate::block::{
     OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::item::ItemEntity;
 
 use crate::block::entities::dropper::DropperBlockEntity;
@@ -103,7 +104,7 @@ impl BlockBehaviour for DropperBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = DispenserLikeProperties::default(args.block);
-            props.facing = args.player.living_entity.entity.get_facing().opposite();
+            props.facing = args.player.get_entity().get_facing().opposite();
             props.to_state_id(args.block)
         })
     }

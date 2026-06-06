@@ -273,7 +273,7 @@ impl World {
     pub fn update_active_chunks(self: &Arc<Self>) {
         let mut active_chunks = FxHashSet::default();
         for player in self.players.load().iter() {
-            let center = player.living_entity.entity.chunk_pos.load();
+            let center = player.get_entity().chunk_pos.load();
             // TODO: gamerule for view distance/ticking distance
             for dx in -8..=8 {
                 for dy in -8..=8 {
@@ -876,7 +876,7 @@ impl World {
                 let entity_bb = entity_inner.bounding_box.load();
 
                 for player in players_clone.iter() {
-                    let player_pos = player.living_entity.entity.pos.load();
+                    let player_pos = player.get_entity().pos.load();
                     let entity_pos = entity_inner.pos.load();
 
                     if (player_pos.x - entity_pos.x).abs() < 5.0
@@ -1655,8 +1655,8 @@ impl World {
 
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
-            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
-            let pitch = player.living_entity.entity.pitch.load();
+            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
+            let pitch = player.get_entity().pitch.load();
 
             (position, yaw, pitch)
         } else {
@@ -1807,7 +1807,7 @@ impl World {
         metadata.set(entity_data_key::HEIGHT, MetadataValue::Float(1.8));
 
         // This is super important, otherwise the client will float by default
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         entity.bedrock_flags.fetch_or(
             (1i64 << entity_data_flag::HAS_GRAVITY)
                 | (1i64 << entity_data_flag::CLIMB)
@@ -1920,7 +1920,7 @@ impl World {
         // --- MULTIPLAYER BROADCASTING ---
 
         let gameprofile = &player.gameprofile;
-        let velocity = player.living_entity.entity.velocity.load();
+        let velocity = player.get_entity().velocity.load();
 
         // 1. Broadcast the new Bedrock player to everyone else (Java + Bedrock)
         let bedrock_player_list = CPlayerList {
@@ -2017,7 +2017,7 @@ impl World {
             .filter(|p| p.gameprofile.id != gameprofile.id)
         {
             let ex_profile = &existing_player.gameprofile;
-            let ex_entity = &existing_player.living_entity.entity;
+            let ex_entity = &existing_player.get_entity();
             let ex_pos = ex_entity.pos.load();
             let ex_vel = ex_entity.velocity.load();
 
@@ -2175,8 +2175,8 @@ impl World {
         // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
-            let yaw = player.living_entity.entity.yaw.load(); //info.spawn_angle;
-            let pitch = player.living_entity.entity.pitch.load();
+            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
+            let pitch = player.get_entity().pitch.load();
 
             (position, yaw, pitch)
         } else {
@@ -2194,12 +2194,12 @@ impl World {
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
-        let velocity = player.living_entity.entity.velocity.load();
+        let velocity = player.get_entity().velocity.load();
 
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
 
-        player.living_entity.entity.last_pos.store(position);
+        player.get_entity().last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
         // Firstly, send an info update to our new player, so they can see their skin
@@ -2427,7 +2427,7 @@ impl World {
             .iter()
             .filter(|c| c.gameprofile.id != id)
         {
-            let entity = &existing_player.living_entity.entity;
+            let entity = &existing_player.get_entity();
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
             let bedrock_add_player = CAddPlayer {
@@ -2735,7 +2735,7 @@ impl World {
             .enqueue_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
 
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
 
         self.broadcast_packet_except(
             &[player.gameprofile.id],
@@ -2794,7 +2794,7 @@ impl World {
 
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
-        let last_pos = player.living_entity.entity.last_pos.load();
+        let last_pos = player.get_entity().last_pos.load();
         let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
@@ -2967,9 +2967,9 @@ impl World {
 
         // Set entity position BEFORE loading chunks, so chunks load at the right location
         // This mirrors the initial spawn flow where update_position is called before teleport
-        player.living_entity.entity.set_pos(position);
-        player.living_entity.entity.set_rotation(yaw, pitch);
-        player.living_entity.entity.last_pos.store(position);
+        player.get_entity().set_pos(position);
+        player.get_entity().set_rotation(yaw, pitch);
+        player.get_entity().last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
@@ -2980,7 +2980,7 @@ impl World {
 
         // Ensure at least the center chunk is sent synchronously before teleport.
         if let crate::net::ClientPlatform::Java(java_client) = &player.client {
-            let center_chunk = player.living_entity.entity.chunk_pos.load();
+            let center_chunk = player.get_entity().chunk_pos.load();
             let chunk = target_world
                 .level
                 .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
@@ -3299,7 +3299,7 @@ impl World {
             .load()
             .iter()
             .filter_map(|player| {
-                let player_block_pos = player.living_entity.entity.block_pos.load().0;
+                let player_block_pos = player.get_entity().block_pos.load().0;
                 (position.0.x == player_block_pos.x
                     && position.0.y == player_block_pos.y
                     && position.0.z == player_block_pos.z)
@@ -3323,7 +3323,7 @@ impl World {
             .load()
             .iter()
             .filter_map(|player| {
-                let player_pos = player.living_entity.entity.pos.load();
+                let player_pos = player.get_entity().pos.load();
                 (player_pos.squared_distance_to_vec(&pos) <= radius_squared).then(|| player.clone())
             })
             .collect()
@@ -4006,7 +4006,7 @@ impl World {
                     Some(player) => {
                         self.broadcast_to_chunk_except(
                             chunk_pos,
-                            &[player.living_entity.entity.entity_uuid],
+                            &[player.get_entity().entity_uuid],
                             &particles_packet,
                         );
                     }

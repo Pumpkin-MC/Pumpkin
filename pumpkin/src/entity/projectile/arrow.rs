@@ -257,7 +257,9 @@ impl EntityBase for ArrowEntity {
 
             // Broadcast velocity update
             let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-            world.broadcast_packet_all(&packet);
+
+            let chunk_pos = entity.chunk_pos.load();
+            world.broadcast_to_chunk(chunk_pos, &packet);
 
             // Check for collisions using raycasting
             let search_box = BoundingBox::new(
@@ -368,7 +370,8 @@ impl EntityBase for ArrowEntity {
                         1.0,
                         0.0,
                     );
-                    world.broadcast_packet_all(&sound_packet);
+                    let chunk_pos = entity.chunk_pos.load();
+                    world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                     // Reset critical flag
                     self.is_critical.store(false, Ordering::Relaxed);

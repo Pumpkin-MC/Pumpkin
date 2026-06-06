@@ -2278,7 +2278,7 @@ impl Player {
                 self.send_permission_lvl_update();
 
                 player.clone().request_teleport(position, yaw, pitch).await;
-                player.living_entity.entity.last_pos.store(position);
+                player.get_entity().last_pos.store(position);
 
                 self.send_abilities_update().await;
 
