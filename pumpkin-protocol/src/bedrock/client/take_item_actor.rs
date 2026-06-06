@@ -4,7 +4,7 @@ use pumpkin_macros::packet;
 #[derive(PacketWrite)]
 #[packet(17)]
 pub struct CTakeItemActor {
-    // https://github.com/Mojang/bedrock-protocol-docs/blob/main/docs/TakeItemActorPacket.html
+    // https://github.com/Sandertv/gophertunnel/blob/master/minecraft/protocol/packet/take_item_actor.go
     pub item_runtime_id: VarULong,
     pub actor_runtime_id: VarULong,
 }
