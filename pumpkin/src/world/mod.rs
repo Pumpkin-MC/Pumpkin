@@ -783,7 +783,7 @@ impl World {
 
         let players = self.players.load();
         let recipients = players.iter().filter(|p| {
-            let center = p.living_entity.entity.chunk_pos.load();
+            let center = p.get_entity().chunk_pos.load();
             // If the sound reaches their chunk, send it!
             is_within_view_distance(chunk_pos, center, audible_chunks)
         });
@@ -814,7 +814,7 @@ impl World {
                 return false;
             }
 
-            let center = p.living_entity.entity.chunk_pos.load();
+            let center = p.get_entity().chunk_pos.load();
             is_within_view_distance(chunk_pos, center, audible_chunks)
         });
 
@@ -903,8 +903,7 @@ impl World {
                         && (player_pos.y - entity_pos.y).abs() < 5.0
                         && (player_pos.z - entity_pos.z).abs() < 5.0
                         && player
-                            .living_entity
-                            .entity
+                            .get_entity()
                             .bounding_box
                             .load()
                             .expand(1.0, 0.5, 1.0)
@@ -1010,7 +1009,7 @@ impl World {
                 let mut java_recipients = Vec::new();
 
                 let recipients = players.iter().filter(|p| {
-                    let center = p.living_entity.entity.chunk_pos.load();
+                    let center = p.get_entity().chunk_pos.load();
                     let view_distance = get_view_distance(p).get() as i32;
                     is_within_view_distance(chunk_pos, center, view_distance)
                 });
@@ -1856,7 +1855,7 @@ impl World {
             abilities.set_for_gamemode(player.gamemode.load());
         };
 
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         let metadata = entity.bedrock_metadata();
 
         let actor_data = CSetActorData {
@@ -3445,18 +3444,11 @@ impl World {
         players
             .iter()
             .min_by(|a, b| {
-                a.living_entity
-                    .entity
+                a.get_entity()
                     .pos
                     .load()
                     .squared_distance_to_vec(&pos)
-                    .partial_cmp(
-                        &b.living_entity
-                            .entity
-                            .pos
-                            .load()
-                            .squared_distance_to_vec(&pos),
-                    )
+                    .partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
                     .unwrap()
             })
             .cloned()
@@ -4786,7 +4778,7 @@ impl World {
         let players = self.players.load();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.living_entity.entity.chunk_pos.load();
+            let center = p.get_entity().chunk_pos.load();
             let view_distance = get_view_distance(p).get() as i32;
 
             // Chebyshev distance (Minecraft's chunk loading shape)
@@ -4807,7 +4799,7 @@ impl World {
         let mut java_recipients = Vec::new();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.living_entity.entity.chunk_pos.load();
+            let center = p.get_entity().chunk_pos.load();
             let view_distance = get_view_distance(p).get() as i32;
             is_within_view_distance(chunk_pos, center, view_distance)
         });
@@ -4834,10 +4826,10 @@ impl World {
         let players = self.players.load();
 
         let recipients = players.iter().filter(|p| {
-            if except.contains(&p.living_entity.entity.entity_uuid) {
+            if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.living_entity.entity.chunk_pos.load();
+            let center = p.get_entity().chunk_pos.load();
             let view_distance = get_view_distance(p).get() as i32;
 
             is_within_view_distance(chunk_pos, center, view_distance)
@@ -4856,10 +4848,10 @@ impl World {
     ) {
         let players = self.players.load();
         let recipients = players.iter().filter(|p| {
-            if except.contains(&p.living_entity.entity.entity_uuid) {
+            if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.living_entity.entity.chunk_pos.load();
+            let center = p.get_entity().chunk_pos.load();
             let view_distance = get_view_distance(p).get() as i32;
 
             is_within_view_distance(chunk_pos, center, view_distance)
