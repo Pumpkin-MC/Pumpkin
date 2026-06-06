@@ -6,6 +6,7 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -199,15 +200,19 @@ impl LivingEntity {
 
     /// Picks up and Item entity or XP Orb
     pub fn pickup(&self, item: &Entity, stack_amount: u32) {
-        // TODO: Only nearby
-        self.entity
-            .world
-            .load()
-            .broadcast_packet_all(&CTakeItemEntity::new(
+        let chunk_pos = self.entity.chunk_pos.load();
+        self.entity.world.load().broadcast_to_chunk_editioned_sync(
+            chunk_pos,
+            &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
                 stack_amount.try_into().unwrap(),
-            ));
+            ),
+            &CTakeItemActor::new(
+                item.entity_id.try_into().unwrap(),
+                self.entity.entity_id.try_into().unwrap(),
+            ),
+        );
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -356,8 +361,18 @@ impl LivingEntity {
                 .attributes
                 .iter()
                 .find(|a| a.0.id == attribute.id)
-                .unwrap()
-                .1;
+                .map_or_else(
+                    || {
+                        tracing::warn!(
+                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
+                            self.entity.entity_type,
+                            attribute.id,
+                            attribute.default_value,
+                        );
+                        attribute.default_value
+                    },
+                    |a| a.1,
+                );
             AttributeInstance::new(base)
         });
 

@@ -191,7 +191,7 @@ impl Compression {
                 drop(encoder);
                 Ok(compressed_data)
             }
-            Self::Custom => todo!(),
+            Self::Custom => Err(CompressionError::UnknownCompression),
         }
     }
 
@@ -1321,3 +1321,23 @@ mod tests {
     */
 }
  */
+#[cfg(test)]
+mod tests {
+    use super::{Compression, CompressionError};
+
+    #[test]
+    fn custom_compression_returns_unknown_compression_error() {
+        assert!(matches!(
+            Compression::Custom.compress_data(b"chunk data", 6),
+            Err(CompressionError::UnknownCompression)
+        ));
+    }
+
+    #[test]
+    fn custom_decompression_returns_unknown_compression_error() {
+        assert!(matches!(
+            Compression::Custom.decompress_data(b"chunk data"),
+            Err(CompressionError::UnknownCompression)
+        ));
+    }
+}

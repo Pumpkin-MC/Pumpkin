@@ -22,7 +22,7 @@ use serde::{
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-use crate::packet::{MultiVersionJavaPacket, Packet};
+pub use crate::packet::{MultiVersionJavaPacket, Packet};
 
 pub mod bedrock;
 pub mod codec;

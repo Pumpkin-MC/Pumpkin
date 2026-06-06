@@ -1,10 +1,10 @@
-use crate::block::entities::BlockEntity;
+use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_protocol::bedrock::client::EntityProperties;
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::network_item::{ItemInstanceUserData, NetworkItemDescriptor};
+use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use std::sync::atomic::Ordering::Relaxed;
@@ -69,10 +69,7 @@ use pumpkin_data::{BlockDirection, BlockState, translation};
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::bedrock::client::set_actor_data::{
-    CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
-    entity_data_key,
-};
+use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::{
@@ -527,9 +524,32 @@ impl World {
         }
     }
 
-    pub fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
-        let packet = CSystemChatMessage::new(message, overlay);
-        self.broadcast_packet_all(&packet);
+    pub async fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
+        let je_packet = CSystemChatMessage::new(message, overlay);
+        let be_packet = Self::component_to_bedrock_text(message);
+        self.broadcast_editioned(&je_packet, &be_packet).await;
+    }
+
+    fn component_to_bedrock_text(message: &TextComponent) -> SText {
+        match &*message.0.content {
+            pumpkin_util::text::TextContent::Translate {
+                translate,
+                bedrock_translate,
+                with,
+            } => {
+                let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
+                let parameters = with
+                    .iter()
+                    .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
+                    .collect();
+                SText::translation(key.to_string(), parameters)
+            }
+            _ => SText::system_message(
+                message
+                    .0
+                    .to_bedrock_legacy(pumpkin_util::translation::Locale::EnUs),
+            ),
+        }
     }
 
     pub async fn broadcast_message(
@@ -565,7 +585,7 @@ impl World {
         Self::broadcast_java_grouped(je_packet, je_recipients_by_version);
 
         for recipient in be_recipients {
-            recipient.send_game_packet(be_packet).await;
+            recipient.enqueue_packet(be_packet).await;
         }
     }
 
@@ -1820,8 +1840,6 @@ impl World {
             })
             .await;
 
-        chunker::update_position(&player).await;
-
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -1838,28 +1856,8 @@ impl World {
             abilities.set_for_gamemode(player.gamemode.load());
         };
 
-        let mut metadata = EntityMetadata::new();
-        metadata.set(entity_data_key::WIDTH, MetadataValue::Float(0.6));
-        metadata.set(entity_data_key::HEIGHT, MetadataValue::Float(1.8));
-
-        // This is super important, otherwise the client will float by default
         let entity = &player.living_entity.entity;
-        entity.bedrock_flags.fetch_or(
-            (1i64 << entity_data_flag::HAS_GRAVITY)
-                | (1i64 << entity_data_flag::CLIMB)
-                | (1i64 << entity_data_flag::HAS_COLLISION)
-                | (1i64 << entity_data_flag::BREATHING),
-            Ordering::Relaxed,
-        );
-
-        metadata.set(
-            entity_data_key::FLAGS,
-            MetadataValue::Long(entity.bedrock_flags.load(Ordering::Relaxed)),
-        );
-        metadata.set(
-            entity_data_key::FLAGS_TWO,
-            MetadataValue::Long(entity.bedrock_flags_two.load(Ordering::Relaxed)),
-        );
+        let metadata = entity.bedrock_metadata();
 
         let actor_data = CSetActorData {
             actor_runtime_id: VarULong(runtime_id),
@@ -1976,16 +1974,28 @@ impl World {
             }],
         };
 
+        let gamemode = player.gamemode.load();
         self.broadcast_packet_except_editioned_sync(
             &[gameprofile.id],
             &CPlayerInfoUpdate::new(
-                PlayerInfoFlags::ADD_PLAYER.bits(),
+                (PlayerInfoFlags::ADD_PLAYER
+                    | PlayerInfoFlags::UPDATE_GAME_MODE
+                    | PlayerInfoFlags::UPDATE_LISTED
+                    | PlayerInfoFlags::UPDATE_LATENCY
+                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                    .bits(),
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: gameprofile.id,
-                    actions: &[PlayerAction::AddPlayer {
-                        name: &gameprofile.name,
-                        properties: &gameprofile.properties.load(),
-                    }],
+                    actions: &[
+                        PlayerAction::AddPlayer {
+                            name: &gameprofile.name,
+                            properties: &gameprofile.properties.load(),
+                        },
+                        PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
+                        PlayerAction::UpdateListed(true),
+                        PlayerAction::UpdateLatency(VarInt(0)),
+                        PlayerAction::UpdateListOrder(VarInt(0)),
+                    ],
                 }],
             ),
             &bedrock_player_list,
@@ -2008,7 +2018,7 @@ impl World {
                 GameMode::Adventure => 2,
                 GameMode::Spectator => 6,
             }),
-            metadata: EntityMetadata::default(),
+            metadata: entity.bedrock_metadata(),
             properties: EntityProperties::default(),
             ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
                 entity_unique_id: runtime_id as i64,
@@ -2044,8 +2054,27 @@ impl World {
             &bedrock_add_player,
         );
 
+        // Broadcast metadata to Java players so they can correctly interact with the new player
+        let config = player.config.load();
+        let mut java_meta_buf = Vec::new();
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        java_meta_buf.put_u8(255);
+
+        self.broadcast_packet_except_editioned_sync(
+            &[gameprofile.id],
+            &CSetEntityMetadata::new((runtime_id as i32).into(), java_meta_buf.into()),
+            &actor_data,
+        );
+
         // 2. Spawn existing players for our new Bedrock client
-        let mut existing_entries = Vec::new();
         let players = self.players.load();
 
         for existing_player in players
@@ -2057,19 +2086,24 @@ impl World {
             let ex_pos = ex_entity.pos.load();
             let ex_vel = ex_entity.velocity.load();
 
-            existing_entries.push(PlayerListEntry {
-                uuid: ex_profile.id,
-                entity_unique_id: VarLong(existing_player.entity_id() as i64),
-                username: ex_profile.name.clone(),
-                xuid: String::new(),
-                platform_chat_id: String::new(),
-                build_platform: 0,
-                skin: (**existing_player.bedrock_skin.load()).clone(),
-                is_teacher: false,
-                is_host: false,
-                is_sub_client: false,
-                player_color: [0, 0, 0, 0],
-            });
+            let ex_player_list = CPlayerList {
+                action: CPlayerList::ACTION_ADD,
+                entries: vec![PlayerListEntry {
+                    uuid: ex_profile.id,
+                    entity_unique_id: VarLong(existing_player.entity_id() as i64),
+                    username: ex_profile.name.clone(),
+                    xuid: String::new(),
+                    platform_chat_id: String::new(),
+                    build_platform: 0,
+                    skin: (**existing_player.bedrock_skin.load()).clone(),
+                    is_teacher: false,
+                    is_host: false,
+                    is_sub_client: false,
+                    player_color: [0, 0, 0, 0],
+                }],
+            };
+            // Send PlayerList FIRST
+            client.send_game_packet(&ex_player_list).await;
 
             let ex_add_player = CAddPlayer {
                 uuid: ex_profile.id,
@@ -2088,7 +2122,7 @@ impl World {
                     GameMode::Adventure => 2,
                     GameMode::Spectator => 6,
                 }),
-                metadata: EntityMetadata::default(),
+                metadata: ex_entity.bedrock_metadata(),
                 properties: EntityProperties::default(),
                 ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
                     entity_unique_id: existing_player.entity_id() as i64,
@@ -2111,14 +2145,6 @@ impl World {
             client.send_game_packet(&ex_add_player).await;
         }
 
-        if !existing_entries.is_empty() {
-            let ex_player_list = CPlayerList {
-                action: CPlayerList::ACTION_ADD,
-                entries: existing_entries,
-            };
-            client.send_game_packet(&ex_player_list).await;
-        }
-
         // 3. Trigger Join Event and Broadcast Join Message
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
@@ -2131,7 +2157,8 @@ impl World {
         let event = server.plugin_manager.fire(event).await;
 
         if !event.cancelled {
-            self.broadcast_system_message(&event.join_message, false);
+            self.broadcast_system_message(&event.join_message, false)
+                .await;
             info!("{}", event.join_message.to_pretty_console());
         }
     }
@@ -2238,41 +2265,63 @@ impl World {
         player.living_entity.entity.last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
-        // Firstly, send an info update to our new player, so they can see their skin
-        // and also send their info to everyone else.
-        debug!("Broadcasting player info for {}", player.gameprofile.name);
-        self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+        let bedrock_player_list = CPlayerList {
+            action: CPlayerList::ACTION_ADD,
+            entries: vec![PlayerListEntry {
+                uuid: gameprofile.id,
+                entity_unique_id: VarLong(entity_id as i64),
+                username: gameprofile.name.clone(),
+                xuid: String::new(),
+                platform_chat_id: String::new(),
+                build_platform: 0,
+                skin: (**player.bedrock_skin.load()).clone(),
+                is_teacher: false,
+                is_host: false,
+                is_sub_client: false,
+                player_color: [0, 0, 0, 0],
+            }],
+        };
+
+        let player_actions = [
+            PlayerAction::AddPlayer {
+                name: &gameprofile.name,
+                properties: &gameprofile.properties.load(),
+            },
+            PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
+            PlayerAction::UpdateListed(true),
+            PlayerAction::UpdateLatency(VarInt(0)),
+            PlayerAction::UpdateListOrder(VarInt(0)),
+        ];
+        let java_player = [pumpkin_protocol::java::client::play::Player {
+            uuid: gameprofile.id,
+            actions: &player_actions,
+        }];
+        let player_info_update = CPlayerInfoUpdate::new(
             (PlayerInfoFlags::ADD_PLAYER
                 | PlayerInfoFlags::UPDATE_GAME_MODE
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
                 | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
                 .bits(),
-            &[pumpkin_protocol::java::client::play::Player {
-                uuid: gameprofile.id,
-                actions: &[
-                    PlayerAction::AddPlayer {
-                        name: &gameprofile.name,
-                        properties: &gameprofile.properties.load(),
-                    },
-                    PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
-                    PlayerAction::UpdateListed(true),
-                    PlayerAction::UpdateLatency(VarInt(0)),
-                    PlayerAction::UpdateListOrder(VarInt(0)),
-                ],
-            }],
-        ));
+            &java_player,
+        );
+
+        self.broadcast_editioned(&player_info_update, &bedrock_player_list)
+            .await;
 
         // If the player has a custom tab_list_name, send an update for it
         if let Some(tab_list_name) = player.get_tab_list_name().await {
+            let actions = [PlayerAction::UpdateDisplayName(Some(&tab_list_name))];
+            let java_player = [pumpkin_protocol::java::client::play::Player {
+                uuid: gameprofile.id,
+                actions: &actions,
+            }];
             self.broadcast_packet_all(&CPlayerInfoUpdate::new(
                 PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: gameprofile.id,
-                    actions: &[PlayerAction::UpdateDisplayName(Some(&tab_list_name))],
-                }],
+                &java_player,
             ));
         }
+
         // Here, we send all the infos of players who already joined.
         let mut players_tab_list_names = Vec::new();
         {
@@ -2303,6 +2352,7 @@ impl World {
                     PlayerAction::UpdateListOrder(VarInt(
                         player.tab_list_order.load(Ordering::Relaxed),
                     )),
+                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
                 ];
 
                 if base_config.allow_chat_reports {
@@ -2326,7 +2376,8 @@ impl World {
             let mut action_flags = PlayerInfoFlags::ADD_PLAYER
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
-                | PlayerInfoFlags::UPDATE_LIST_PRIORITY;
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                | PlayerInfoFlags::UPDATE_GAME_MODE;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -2347,13 +2398,15 @@ impl World {
             // Send tab_list_names for existing players with custom names
             for (player_id, tab_list_name) in &players_tab_list_names {
                 if let Some(name) = tab_list_name {
+                    let actions = [PlayerAction::UpdateDisplayName(Some(name))];
+                    let java_player = [pumpkin_protocol::java::client::play::Player {
+                        uuid: *player_id,
+                        actions: &actions,
+                    }];
                     client
                         .enqueue_packet(&CPlayerInfoUpdate::new(
                             PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
-                            &[pumpkin_protocol::java::client::play::Player {
-                                uuid: *player_id,
-                                actions: &[PlayerAction::UpdateDisplayName(Some(name))],
-                            }],
+                            &java_player,
                         ))
                         .await;
                 }
@@ -2372,20 +2425,14 @@ impl World {
             pitch,
             yaw,
             head_yaw: yaw,
-            held_item: NetworkItemDescriptor {
-                id: VarInt(0),
-                stack_size: 0,
-                aux_value: VarUInt(0),
-                block_runtime_id: VarInt(0),
-                user_data_buffer: ItemInstanceUserData::default(),
-            },
+            held_item: NetworkItemDescriptor::default(),
             game_mode: VarInt(match player.gamemode.load() {
                 GameMode::Survival => 0,
                 GameMode::Creative => 1,
                 GameMode::Adventure => 2,
                 GameMode::Spectator => 6,
             }),
-            metadata: EntityMetadata::default(),
+            metadata: player.get_entity().bedrock_metadata(),
             properties: EntityProperties::default(),
             ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
                 entity_unique_id: entity_id as i64,
@@ -2405,54 +2452,51 @@ impl World {
             build_platform: 0,
         };
 
-        let bedrock_player_list = CPlayerList {
-            action: CPlayerList::ACTION_ADD,
-            entries: vec![PlayerListEntry {
-                uuid: gameprofile.id,
-                entity_unique_id: VarLong(entity_id as i64),
-                username: gameprofile.name.clone(),
-                xuid: String::new(),
-                platform_chat_id: String::new(),
-                build_platform: 0,
-                skin: (**player.bedrock_skin.load()).clone(),
-                is_teacher: false,
-
-                is_host: false,
-                is_sub_client: false,
-                player_color: [0, 0, 0, 0],
-            }],
-        };
-
-        self.broadcast_packet_except_editioned_sync(
-            &[player.gameprofile.id],
-            &CPlayerInfoUpdate::new(
-                PlayerInfoFlags::ADD_PLAYER.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: gameprofile.id,
-                    actions: &[PlayerAction::AddPlayer {
-                        name: &gameprofile.name,
-                        properties: &gameprofile.properties.load(),
-                    }],
-                }],
-            ),
-            &bedrock_player_list,
+        // Spawn the player for every client.
+        let spawn_entity = CSpawnEntity::new(
+            entity_id.into(),
+            gameprofile.id,
+            i32::from(EntityType::PLAYER.id).into(),
+            position,
+            pitch,
+            yaw,
+            yaw,
+            0.into(),
+            velocity,
         );
 
-        // Spawn the player for every client.
         self.broadcast_packet_except_editioned_sync(
             &[player.gameprofile.id],
-            &CSpawnEntity::new(
-                entity_id.into(),
-                gameprofile.id,
-                i32::from(EntityType::PLAYER.id).into(),
-                position,
-                pitch,
-                yaw,
-                yaw,
-                0.into(),
-                velocity,
-            ),
+            &spawn_entity,
             &bedrock_add_player,
+        );
+
+        // Broadcast metadata to Java players so they can correctly interact with the new player
+        let config = player.config.load();
+        let mut java_meta_buf = Vec::new();
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        java_meta_buf.put_u8(255);
+
+        self.broadcast_packet_except_editioned_sync(
+            &[gameprofile.id],
+            &CSetEntityMetadata::new((entity_id).into(), java_meta_buf.into()),
+            &CSetActorData {
+                actor_runtime_id: VarULong(entity_id as u64),
+                metadata: player.get_entity().bedrock_metadata(),
+                synced_properties: PropertySyncData {
+                    int_properties: HashMap::new(),
+                    float_properties: HashMap::new(),
+                },
+                tick: VarULong(0),
+            },
         );
 
         // Spawn players for our client.
@@ -2480,20 +2524,14 @@ impl World {
                 pitch: entity.pitch.load(),
                 yaw: entity.yaw.load(),
                 head_yaw: entity.head_yaw.load(),
-                held_item: NetworkItemDescriptor {
-                    id: VarInt(0),
-                    stack_size: 0,
-                    aux_value: VarUInt(0),
-                    block_runtime_id: VarInt(0),
-                    user_data_buffer: ItemInstanceUserData::default(),
-                },
+                held_item: NetworkItemDescriptor::default(),
                 game_mode: VarInt(match existing_player.gamemode.load() {
                     GameMode::Survival => 0,
                     GameMode::Creative => 1,
                     GameMode::Adventure => 2,
                     GameMode::Spectator => 6,
                 }),
-                metadata: EntityMetadata::default(),
+                metadata: entity.bedrock_metadata(),
                 properties: EntityProperties::default(),
                 ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
                     entity_unique_id: existing_player.entity_id() as i64,
@@ -2530,18 +2568,35 @@ impl World {
                 }],
             };
 
+            let actions = [
+                PlayerAction::AddPlayer {
+                    name: &gameprofile.name,
+                    properties: &gameprofile.properties.load(),
+                },
+                PlayerAction::UpdateListed(existing_player.tab_list_listed.load(Ordering::Relaxed)),
+                PlayerAction::UpdateGameMode(VarInt(existing_player.gamemode.load() as i32)),
+                PlayerAction::UpdateLatency(VarInt(
+                    existing_player.tab_list_latency.load(Ordering::Relaxed),
+                )),
+                PlayerAction::UpdateListOrder(VarInt(
+                    existing_player.tab_list_order.load(Ordering::Relaxed),
+                )),
+            ];
+            let java_player = [pumpkin_protocol::java::client::play::Player {
+                uuid: gameprofile.id,
+                actions: &actions,
+            }];
             player
                 .client
                 .enqueue_packet_editioned(
                     &CPlayerInfoUpdate::new(
-                        PlayerInfoFlags::ADD_PLAYER.bits(),
-                        &[pumpkin_protocol::java::client::play::Player {
-                            uuid: gameprofile.id,
-                            actions: &[PlayerAction::AddPlayer {
-                                name: &gameprofile.name,
-                                properties: &gameprofile.properties.load(),
-                            }],
-                        }],
+                        (PlayerInfoFlags::ADD_PLAYER
+                            | PlayerInfoFlags::UPDATE_LISTED
+                            | PlayerInfoFlags::UPDATE_GAME_MODE
+                            | PlayerInfoFlags::UPDATE_LATENCY
+                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                            .bits(),
+                        &java_player,
                     ),
                     &bedrock_player_list,
                 )
@@ -2564,6 +2619,7 @@ impl World {
                     &bedrock_add_player,
                 )
                 .await;
+
             {
                 let config = existing_player.config.load();
                 let mut buf = Vec::new();
@@ -2722,7 +2778,8 @@ impl World {
         let event = server.plugin_manager.fire(event).await;
 
         if !event.cancelled {
-            self.broadcast_system_message(&event.join_message, false);
+            self.broadcast_system_message(&event.join_message, false)
+                .await;
             // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
             info!("{}", event.join_message.to_pretty_console());
         }
@@ -4452,9 +4509,23 @@ impl World {
     }
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
-        self.block_entities
-            .get(block_pos)
-            .map(|e| e.value().clone())
+        if let Some(entry) = self.block_entities.get(block_pos) {
+            return Some(entry.value().clone());
+        }
+
+        let nbt = self
+            .level
+            .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .remove(block_pos)
+            })
+            .flatten()?;
+        let entity = block_entity_from_nbt(&nbt)?;
+        self.block_entities.insert(*block_pos, entity.clone());
+        Some(entity)
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
