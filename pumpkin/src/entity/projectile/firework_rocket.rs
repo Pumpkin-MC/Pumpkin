@@ -108,7 +108,7 @@ impl EntityBase for FireworkRocketEntity {
                     let shooter = shooter.get_entity();
 
                     // Logic for boosting Elytra flight
-                    if shooter.fall_flying.load(Ordering::Relaxed) {
+                    if shooter.is_fall_flying() {
                         let rotation = shooter.rotation().to_f64();
                         let shooter_vel = shooter.velocity.load();
 

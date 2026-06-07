@@ -1531,7 +1531,7 @@ impl Player {
     }
 
     pub async fn get_off_ground_speed(&self) -> f64 {
-        let sprinting = self.get_entity().sprinting.load(Ordering::Relaxed);
+        let sprinting = self.get_entity().is_sprinting();
 
         if !self.get_entity().has_vehicle().await {
             let fly_speed = {
@@ -1566,7 +1566,7 @@ impl Player {
         // (LivingEntity#updateSwimming + entity swimming flag).
         entity.touching_water.load(Ordering::Relaxed)
             && entity.water_height.load() > swim_height
-            && entity.sprinting.load(Ordering::Relaxed)
+            && entity.is_sprinting()
             && !entity.on_ground.load(Ordering::Relaxed)
             && !flying
             && !entity.has_vehicle().await
@@ -1599,11 +1599,11 @@ impl Player {
             EntityPose::Sleeping
         } else if self.is_swimming(flying).await {
             EntityPose::Swimming
-        } else if entity.fall_flying.load(Ordering::Relaxed) {
+        } else if entity.is_fall_flying() {
             EntityPose::FallFlying
         } else if Self::is_auto_spin_attack() {
             EntityPose::SpinAttack
-        } else if entity.sneaking.load(Ordering::Relaxed) && !flying {
+        } else if entity.is_sneaking() && !flying {
             EntityPose::Crouching
         } else {
             EntityPose::Standing
@@ -1930,7 +1930,7 @@ impl Player {
     }
 
     pub async fn jump(&self) {
-        if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+        if self.living_entity.entity.is_sprinting() {
             self.add_exhaustion(0.2).await;
         } else {
             self.add_exhaustion(0.05).await;
@@ -1942,7 +1942,7 @@ impl Player {
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
             if delta > 0.0 {
-                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+                if self.living_entity.entity.is_sprinting() {
                     self.add_exhaustion(0.1 * delta * 0.01).await;
                 } else {
                     self.add_exhaustion(0.0 * delta * 0.01).await;
@@ -2639,10 +2639,10 @@ impl Player {
                 // Stop elytra flight and reset sneaking when switching to spectator mode
                 if gamemode == GameMode::Spectator {
                     let entity = self.get_entity();
-                    if entity.fall_flying.load(Ordering::Relaxed) {
+                    if entity.is_fall_flying() {
                         entity.set_fall_flying(false).await;
                     }
-                    if entity.sneaking.load(Ordering::Relaxed) {
+                    if entity.is_sneaking() {
                         entity.set_sneaking(false).await;
                     }
                 }

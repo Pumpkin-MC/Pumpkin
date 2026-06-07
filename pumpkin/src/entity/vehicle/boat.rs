@@ -183,7 +183,7 @@ impl EntityBase for BoatEntity {
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if player.get_entity().sneaking.load(Ordering::Relaxed) {
+            if player.get_entity().is_sneaking() {
                 return false;
             }
 

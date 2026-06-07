@@ -364,7 +364,7 @@ impl JavaClient {
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
-                if new_on_ground && entity.fall_flying.load(Ordering::Relaxed) {
+                if new_on_ground && entity.is_fall_flying() {
                     entity.set_fall_flying(false).await;
                 }
                 let world = &player.world();
@@ -855,7 +855,7 @@ impl JavaClient {
         let entity = &player.get_entity();
         match command.action {
             Action::StartSprinting => {
-                if !entity.sprinting.load(Ordering::Relaxed) {
+                if !entity.is_sprinting() {
                     send_cancellable! {{
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), true);
@@ -866,7 +866,7 @@ impl JavaClient {
                 }
             }
             Action::StopSprinting => {
-                if entity.sprinting.load(Ordering::Relaxed) {
+                if entity.is_sprinting() {
                     send_cancellable! {{
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), false);
@@ -883,7 +883,7 @@ impl JavaClient {
             }
             Action::StartFlyingElytra => {
                 let fall_flying = entity.check_fall_flying();
-                if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
+                if entity.is_fall_flying() != fall_flying {
                     entity.set_fall_flying(fall_flying).await;
                 }
             }
@@ -908,7 +908,7 @@ impl JavaClient {
         server: &Server,
     ) {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
-        if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
+        if player.get_entity().is_sneaking() != sneak {
             send_cancellable! {{
                 server;
                 PlayerToggleSneakEvent::new(player.clone(), sneak);
@@ -1634,7 +1634,7 @@ impl JavaClient {
 
         let sneaking = interact.sneaking;
         let player_entity = &player.get_entity();
-        if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
+        if player_entity.is_sneaking() != sneaking {
             player_entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
@@ -2059,7 +2059,7 @@ impl JavaClient {
             }
         }}
 
-        let sneaking = player.get_entity().sneaking.load(Ordering::Relaxed);
+        let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {

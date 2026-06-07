@@ -10,7 +10,6 @@ use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 pub mod blocks;
 pub mod entities;
@@ -46,7 +45,7 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
     let base_entity = entity.get_entity();
     let mut velocity = base_entity.velocity.load();
 
-    if base_entity.sneaking.load(Ordering::Relaxed) {
+    if base_entity.is_sneaking() {
         velocity.y = 0.0;
     } else if velocity.y < 0.0 {
         let entity_factor = if entity.get_living_entity().is_some() {

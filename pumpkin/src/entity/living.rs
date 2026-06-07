@@ -649,7 +649,7 @@ impl LivingEntity {
     pub fn should_prevent_fall_damage(&self) -> bool {
         let (prevents, block) = self.is_in_fall_damage_resetting();
 
-        if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
+        if block == &Block::SCAFFOLDING && !self.entity.is_sneaking() {
             return false;
         }
 

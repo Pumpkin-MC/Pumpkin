@@ -26,7 +26,7 @@ impl AttackType {
     pub async fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
         let entity = &player.get_entity();
 
-        let sprinting = entity.sprinting.load(Ordering::Relaxed);
+        let sprinting = entity.is_sprinting();
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let fall_distance = player.living_entity.fall_distance.load();
         let held_item = player.inventory().held_item();
