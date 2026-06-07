@@ -65,30 +65,35 @@ impl VarULong {
         Err(ReadingError::TooLarge("VarLong".to_string()))
     }
 }
-
-impl From<u64> for VarULong {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
+macro_rules! gen_from {
+    ($ty: ty) => {
+        impl From<$ty> for VarULong {
+            fn from(value: $ty) -> Self {
+                VarULong(value.into())
+            }
+        }
+    };
 }
+gen_from!(u8);
+gen_from!(u16);
+gen_from!(u32);
+gen_from!(u64);
 
-impl From<u32> for VarULong {
-    fn from(value: u32) -> Self {
-        Self(u64::from(value))
-    }
-}
+macro_rules! gen_try_from {
+    ($ty: ty) => {
+        impl TryFrom<$ty> for VarULong {
+            type Error = <u64 as TryFrom<$ty>>::Error;
 
-impl From<u8> for VarULong {
-    fn from(value: u8) -> Self {
-        Self(u64::from(value))
-    }
+            fn try_from(value: $ty) -> Result<Self, Self::Error> {
+                Ok(VarULong(value.try_into()?))
+            }
+        }
+    };
 }
-
-impl From<usize> for VarULong {
-    fn from(value: usize) -> Self {
-        Self(value as u64)
-    }
-}
+gen_try_from!(i32);
+gen_try_from!(i64);
+gen_try_from!(isize);
+gen_try_from!(usize);
 
 impl From<VarULong> for u64 {
     fn from(value: VarULong) -> Self {

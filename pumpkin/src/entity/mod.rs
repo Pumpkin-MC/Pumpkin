@@ -1,6 +1,6 @@
-use crate::entity::item::ItemEntity;
-use crate::net::ClientPlatform;
 use crate::{
+    entity::item::ItemEntity,
+    net::{ClientPlatform, bedrock::BedrockClient},
     server::Server,
     world::{
         World,
@@ -32,7 +32,8 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::bedrock::client::CSetActorMotion;
+use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
+use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
@@ -246,6 +247,35 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
     fn get_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    fn send_bedrock_spawn_packet<'a>(
+        &'a self,
+        client: &'a BedrockClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let runtime_id = entity.entity_id as u64;
+            let packet = CAddActor::new(
+                VarLong(runtime_id as i64),
+                VarULong(runtime_id),
+                self.get_entity().entity_type.resource_name.to_string(),
+                entity.pos.load().to_f32_lossy(),
+                entity.velocity.load().to_f32_lossy(),
+                entity.pitch.load(),
+                entity.yaw.load(),
+                entity.head_yaw.load(),
+                entity.body_yaw.load(),
+                Vec::new(),
+                entity.bedrock_metadata(),
+                PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                Vec::new(),
+            );
+            client.send_game_packet(&packet).await;
+        })
     }
 
     fn damage_with_context<'a>(
@@ -672,6 +702,58 @@ impl Entity {
     /// Called when the entity changes dimensions (e.g., through a nether portal).
     pub fn set_world(&self, world: Arc<World>) {
         self.world.store(world);
+    }
+
+    pub fn bedrock_metadata(&self) -> EntityMetadata {
+        if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
+            self.bedrock_flags.fetch_or(
+                (1i64 << entity_data_flag::HAS_GRAVITY)
+                    | (1i64 << entity_data_flag::CLIMB)
+                    | (1i64 << entity_data_flag::HAS_COLLISION)
+                    | (1i64 << entity_data_flag::BREATHING),
+                Ordering::Relaxed,
+            );
+        }
+
+        let mut metadata = EntityMetadata::new();
+        metadata.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(self.entity_type.dimension[0]),
+        );
+        metadata.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(self.entity_type.dimension[1]),
+        );
+        metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+
+        if let Some(name) = &**self.custom_name.load() {
+            metadata.set(
+                entity_data_key::NAME,
+                MetadataValue::String(name.clone().get_text()),
+            );
+            if self.custom_name_visible.load(Ordering::Relaxed) {
+                metadata.set_flag(
+                    entity_data_key::FLAGS,
+                    entity_data_flag::SHOW_NAME as u8,
+                    true,
+                );
+                metadata.set_flag(
+                    entity_data_key::FLAGS,
+                    entity_data_flag::ALWAYS_SHOW_NAME as u8,
+                    true,
+                );
+            }
+        }
+
+        metadata
     }
 
     /// Sets the entity's age in ticks.
@@ -2382,7 +2464,7 @@ impl Entity {
             let chunk_pos = self.chunk_pos.load();
             for player in world.players.load().iter() {
                 if let ClientPlatform::Bedrock(client) = &player.client {
-                    let center = player.living_entity.entity.chunk_pos.load();
+                    let center = player.get_entity().chunk_pos.load();
                     let view_distance =
                         crate::world::chunker::get_view_distance(player).get() as i32;
 
@@ -2426,7 +2508,7 @@ impl Entity {
         for player in world.players.load().iter() {
             if let ClientPlatform::Java(client) = &player.client {
                 // Apply Chebyshev distance check
-                let center = player.living_entity.entity.chunk_pos.load();
+                let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
                 if is_within_view_distance(chunk_pos, center, view_distance) {
@@ -2707,7 +2789,7 @@ impl Entity {
                 player.client.enqueue_packet(&passengers_packet).await;
                 world.broadcast_to_chunk_except(
                     chunk_pos,
-                    &[player.living_entity.entity.entity_uuid],
+                    &[player.get_entity().entity_uuid],
                     &passengers_packet,
                 );
             } else {
@@ -2794,7 +2876,7 @@ impl Entity {
 
             if let Some(player) = passenger.get_player() {
                 let id = teleport_id.unwrap();
-                player.living_entity.entity.set_pos(dismount_pos);
+                player.get_entity().set_pos(dismount_pos);
                 // Update awaiting_teleport with the real dismount position
                 *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
                 // Use enqueue_packet (not send_packet_now) so the teleport goes through

@@ -12,6 +12,7 @@ use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
 const NAMES: [&str; 1] = ["spawnpoint"];
@@ -37,7 +38,7 @@ impl CommandExecutor for SelfExecutor {
                 return Err(CommandError::InvalidRequirement);
             };
             let pos = player.position().to_block_pos();
-            let yaw = player.living_entity.entity.yaw.load();
+            let yaw = player.get_entity().yaw.load();
             set_spawnpoint(sender, &player, pos, yaw).await;
 
             Ok(1)

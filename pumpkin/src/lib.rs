@@ -466,7 +466,9 @@ impl PumpkinServer {
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
                                     if let ClientPlatform::Java(client) = &player.client {
+                                        *client.player.lock().await = Some(player.clone());
                                         client.progress_player_packets(&player, &server_clone).await;
+
                                         // Close when done
                                         client.close();
                                         client.await_tasks().await;

@@ -1,18 +1,16 @@
 use pumpkin_macros::packet;
 
 use crate::{
-    bedrock::network_item::NetworkItemStackDescriptor, codec::var_uint::VarUInt,
-    serial::PacketWrite,
+    bedrock::network_item::FullContainerName, bedrock::network_item::NetworkItemStackDescriptor,
+    codec::var_uint::VarUInt, serial::PacketWrite,
 };
 
 #[derive(PacketWrite)]
 #[packet(49)]
 pub struct CInventoryContent {
-    // https://mojang.github.io/bedrock-protocol-docs/html/InventoryContentPacket.html
-    pub inventory_id: VarUInt,
+    // https://mojang.github.io/bedrock-protocol-docs/docs/InventoryContentPacket.html
+    pub container_id: VarUInt,
     pub slots: Vec<NetworkItemStackDescriptor>,
-    pub container_name: u8,
-    pub dynamic_id: Option<u32>,
-    /// Use `NetworkItemDescriptor` if none
+    pub full_container_name: FullContainerName,
     pub storage_item: NetworkItemStackDescriptor,
 }

@@ -8,14 +8,19 @@ use std::{
     },
 };
 
-pub use crate::wit::pumpkin::plugin::event::{Event, EventPriority, InteractAction};
+pub use crate::wit::pumpkin::plugin::event::{
+    BedrockClientboundPacket, BedrockServerboundPacket, ClientboundPacket, Event, EventPriority,
+    InteractAction, JavaClientboundPacket, JavaServerboundPacket, ServerboundPacket,
+};
 use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 pub mod block;
+pub mod packet;
 pub mod player;
 pub mod server;
 
 pub use block::*;
+pub use packet::*;
 pub use player::*;
 pub use server::*;
 
