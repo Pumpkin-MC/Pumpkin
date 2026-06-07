@@ -54,7 +54,7 @@ impl FishingBobberEntity {
         if hooked_id != 0
             && let Some(hooked) = world.get_entity_by_id(hooked_id)
         {
-            let player_pos = player.living_entity.entity.pos.load();
+            let player_pos = player.get_entity().pos.load();
             let hooked_pos = hooked.get_entity().pos.load();
             let delta = player_pos - hooked_pos;
             let motion =

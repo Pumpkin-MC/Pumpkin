@@ -1,4 +1,6 @@
+#[cfg(feature = "codegen")]
 use proc_macro2::TokenStream;
+#[cfg(feature = "codegen")]
 use quote::{ToTokens, quote};
 use serde::Deserialize;
 
@@ -257,6 +259,7 @@ pub enum LootNumberProviderTypesProvider {
     Uniform(UniformLootNumberProvider),
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for LootNumberProviderTypesProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -278,6 +281,7 @@ pub struct UniformLootNumberProvider {
     pub max: f32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for UniformLootNumberProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min_inclusive = self.min;
@@ -312,6 +316,7 @@ pub enum LootNumberProviderTypes {
     Constant(f32),
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for LootNumberProviderTypes {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {

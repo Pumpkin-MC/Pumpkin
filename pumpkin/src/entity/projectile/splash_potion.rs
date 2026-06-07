@@ -8,9 +8,9 @@ use crate::{
 use pumpkin_data::Block;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::CWorldEvent;
-use pumpkin_util::math::boundingbox::BoundingBox;
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{boundingbox::BoundingBox, vector2::Vector2};
+use pumpkin_util::math::{position::BlockPos, vector2::to_chunk_pos};
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::RwLock;
 
@@ -209,7 +209,10 @@ impl EntityBase for SplashPotionEntity {
                 hit_pos.y.floor() as i32,
                 hit_pos.z.floor() as i32,
             ));
-            world.broadcast_packet_all(&CWorldEvent::new(event_id, block_pos, color, false));
+            world.broadcast_to_chunk(
+                to_chunk_pos(&Vector2::new(block_pos.0.x, block_pos.0.z)),
+                &CWorldEvent::new(event_id, block_pos, color, false),
+            );
 
             // If no effects, just splash (like water bottles)
             if effects.is_empty() {
@@ -244,10 +247,7 @@ impl EntityBase for SplashPotionEntity {
                         }
 
                         // Distance scaling
-                        let mut scale = 1.0f32 - (dist as f32 / radius as f32);
-                        if scale < 0.0 {
-                            scale = 0.0;
-                        }
+                        let scale = (1.0f32 - (dist as f32 / radius as f32)).max(0.0);
 
                         crate::item::potion::PotionContents::apply_effects_to(
                             living,

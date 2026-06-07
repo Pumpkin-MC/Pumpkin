@@ -33,7 +33,7 @@ pub fn is_within_view_distance(
 }
 
 pub async fn update_position(player: &Arc<Player>) {
-    let entity = &player.living_entity.entity;
+    let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
 

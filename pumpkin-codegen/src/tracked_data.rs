@@ -96,28 +96,27 @@ fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStre
 /// Generates `TrackedId` constants for every tracked data key present in the latest version.
 fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8>>) -> TokenStream {
     let mut constants = TokenStream::new();
-    let mut generated_names = std::collections::HashSet::new();
 
-    let latest_data = versions.get(&LATEST_VERSION).unwrap();
-    for name in latest_data.keys() {
-        let name_upper = name.to_uppercase();
-        let final_name = if let Some(stripped) = name_upper.strip_prefix("DATA_") {
-            stripped.to_string()
-        } else {
-            name_upper.to_string()
-        };
+    // Union of all normalized names across every version
+    let all_names: std::collections::BTreeSet<String> = versions
+        .values()
+        .flat_map(|data| data.keys().map(|k| normalize_name(k)))
+        .collect();
 
-        if !generated_names.insert(final_name.clone()) {
-            continue;
-        }
-
+    for final_name in &all_names {
         let ident = format_ident!("{}", final_name);
+        // Some versions prefix keys with DATA_ (Bedrock), others don't (Java)
+        // Try both forms so every version resolves correctly
+        let prefixed = format!("DATA_{final_name}");
 
         let mut fields = TokenStream::new();
         for (ver, data) in versions.iter() {
             let field_ident = ver.to_field_ident();
-            // 255 as an 'Invalid' marker
-            let id = data.get(name).copied().unwrap_or(255);
+            let id = data
+                .get(final_name.as_str())
+                .or_else(|| data.get(prefixed.as_str()))
+                .copied()
+                .unwrap_or(255);
             fields.extend(quote! {
                 #field_ident: #id,
             });
@@ -129,4 +128,11 @@ fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8
     }
 
     constants
+}
+
+fn normalize_name(name: &str) -> String {
+    let upper = name.to_uppercase();
+    upper
+        .strip_prefix("DATA_")
+        .map_or(upper.clone(), str::to_string)
 }

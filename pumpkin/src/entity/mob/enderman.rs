@@ -220,15 +220,18 @@ impl EndermanEntity {
         }
 
         entity.set_pos(new_pos);
-
-        world.broadcast_packet_all(&CEntityPositionSync::new(
-            entity.entity_id.into(),
-            new_pos,
-            Vector3::new(0.0, 0.0, 0.0),
-            entity.yaw.load(),
-            entity.pitch.load(),
-            entity.on_ground.load(Ordering::Relaxed),
-        ));
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityPositionSync::new(
+                entity.entity_id.into(),
+                new_pos,
+                Vector3::new(0.0, 0.0, 0.0),
+                entity.yaw.load(),
+                entity.pitch.load(),
+                entity.on_ground.load(Ordering::Relaxed),
+            ),
+        );
 
         self.mob_entity.navigator.lock().unwrap().stop();
 

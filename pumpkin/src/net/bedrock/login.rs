@@ -287,7 +287,8 @@ impl BedrockClient {
             }
             SResourcePackResponse::STATUS_COMPLETED => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
-                if let Some(player) = &*self.player.lock().await {
+                let player = self.player.lock().await.clone();
+                if let Some(player) = player {
                     player
                         .world()
                         .spawn_bedrock_player(&server.basic_config, player.clone(), server)

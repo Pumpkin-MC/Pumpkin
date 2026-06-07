@@ -10,6 +10,7 @@ use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
+use crate::entity::EntityBase;
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_util::math::position::BlockPos;
@@ -41,7 +42,7 @@ impl BlockBehaviour for PoweredRailBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut rail_props = RailProperties::default(args.block);
-            let player_facing = args.player.living_entity.entity.get_horizontal_facing();
+            let player_facing = args.player.get_entity().get_horizontal_facing();
 
             rail_props.set_waterlogged(args.replacing.water_source());
             rail_props.set_straight_shape(

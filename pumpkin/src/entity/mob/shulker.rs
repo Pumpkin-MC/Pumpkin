@@ -264,14 +264,18 @@ impl ShulkerEntity {
                 self.set_attach_face(dir);
                 entity.set_pos(new_pos);
 
-                world.broadcast_packet_all(&CEntityPositionSync::new(
-                    entity.entity_id.into(),
-                    new_pos,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    entity.yaw.load(),
-                    entity.pitch.load(),
-                    entity.on_ground.load(Ordering::Relaxed),
-                ));
+                let chunk_pos = entity.chunk_pos.load();
+                world.broadcast_to_chunk(
+                    chunk_pos,
+                    &CEntityPositionSync::new(
+                        entity.entity_id.into(),
+                        new_pos,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        entity.yaw.load(),
+                        entity.pitch.load(),
+                        entity.on_ground.load(Ordering::Relaxed),
+                    ),
+                );
 
                 entity.last_sent_pos.store(new_pos);
 

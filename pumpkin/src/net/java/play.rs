@@ -228,7 +228,7 @@ impl JavaClient {
             if id == &confirm_teleport.teleport_id {
                 // We should set the position now to what we requested in the teleport packet.
                 // This may fix issues when the client sends the position while being teleported.
-                player.living_entity.entity.set_pos(*position);
+                player.get_entity().set_pos(*position);
 
                 *awaiting_teleport = None;
                 drop(awaiting_teleport);
@@ -346,16 +346,16 @@ impl JavaClient {
             server;
             PlayerMoveEvent {
                 player: player.clone(),
-                from: player.living_entity.entity.pos.load(),
+                from: player.get_entity().pos.load(),
                 to: position,
                 cancelled: false,
             };
 
             'after: {
                 let pos = event.to;
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.living_entity.entity.set_pos(pos);
+                player.get_entity().set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
@@ -427,7 +427,7 @@ impl JavaClient {
             }
 
             'cancelled: {
-                self.force_tp(player, player.living_entity.entity.pos.load()).await;
+                self.force_tp(player, player.get_entity().pos.load()).await;
             }
         }}
     }
@@ -473,15 +473,15 @@ impl JavaClient {
             server;
             PlayerMoveEvent::new(
                 player.clone(),
-                player.living_entity.entity.pos.load(),
+                player.get_entity().pos.load(),
                 position,
             );
 
             'after: {
                 let pos = event.to;
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.living_entity.entity.set_pos(pos);
+                player.get_entity().set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed)
@@ -581,10 +581,10 @@ impl JavaClient {
         *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
         self.enqueue_packet(&CPlayerPosition::new(
             teleport_id.into(),
-            player.living_entity.entity.pos.load(),
+            player.get_entity().pos.load(),
             Vector3::new(0.0, 0.0, 0.0),
-            player.living_entity.entity.yaw.load(),
-            player.living_entity.entity.pitch.load(),
+            player.get_entity().yaw.load(),
+            player.get_entity().pitch.load(),
             Vec::new(),
         ))
         .await;
@@ -603,7 +603,7 @@ impl JavaClient {
             .await;
             return;
         }
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         entity.on_ground.store(rotation.ground, Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
@@ -852,7 +852,7 @@ impl JavaClient {
         }
         player.update_last_action_time();
 
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         match command.action {
             Action::StartSprinting => {
                 if !entity.sprinting.load(Ordering::Relaxed) {
@@ -860,7 +860,7 @@ impl JavaClient {
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), true);
                         'after: {
-                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                            player.get_entity().set_sprinting(event.is_sprinting).await;
                         }
                     }}
                 }
@@ -871,7 +871,7 @@ impl JavaClient {
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), false);
                         'after: {
-                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                            player.get_entity().set_sprinting(event.is_sprinting).await;
                         }
                     }}
                 }
@@ -1280,7 +1280,7 @@ impl JavaClient {
                     &message,
                 );
 
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
@@ -1572,7 +1572,7 @@ impl JavaClient {
         }
         player.update_last_action_time();
         let entity_id = attack.entity_id;
-        let player_entity = &player.living_entity.entity;
+        let player_entity = &player.get_entity();
         let world = player_entity.world.load_full();
 
         let config = &server.advanced_config.pvp;
@@ -1633,7 +1633,7 @@ impl JavaClient {
         let entity_id = interact.entity_id;
 
         let sneaking = interact.sneaking;
-        let player_entity = &player.living_entity.entity;
+        let player_entity = &player.get_entity();
         if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
             player_entity.set_sneaking(sneaking).await;
         }
@@ -1751,7 +1751,7 @@ impl JavaClient {
                         return;
                     }
                     let position = player_action.position;
-                    let entity = &player.living_entity.entity;
+                    let entity = &player.get_entity();
                     let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position);
 
@@ -1837,7 +1837,7 @@ impl JavaClient {
                         return;
                     }
                     player.mining.store(false, Ordering::Relaxed);
-                    let entity = &player.living_entity.entity;
+                    let entity = &player.get_entity();
                     entity
                         .world
                         .load()
@@ -1858,7 +1858,7 @@ impl JavaClient {
                     }
 
                     // Block break & play sound
-                    let entity = &player.living_entity.entity;
+                    let entity = &player.get_entity();
                     let world = entity.world.load_full();
 
                     player.mining.store(false, Ordering::Relaxed);
@@ -2035,7 +2035,7 @@ impl JavaClient {
             off_hand_item
         };
 
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         let world = entity.world.load_full();
         let block = world.get_block(&position);
 
@@ -2059,7 +2059,7 @@ impl JavaClient {
             }
         }}
 
-        let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
+        let sneaking = player.get_entity().sneaking.load(Ordering::Relaxed);
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
@@ -2137,7 +2137,7 @@ impl JavaClient {
             };
             player
                 .world()
-                .send_entity_status(&player.living_entity.entity, equipment_break_status(slot));
+                .send_entity_status(player.get_entity(), equipment_break_status(slot));
         }
 
         if !after.are_equal(&before) {
@@ -2200,7 +2200,7 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = player.living_entity.entity.world.load_full();
+        let world = player.get_entity().world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location) else {
             return;
         };
@@ -2604,7 +2604,7 @@ impl JavaClient {
         location: BlockPos,
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
 
         match player.gamemode.load() {
             GameMode::Spectator | GameMode::Adventure => {

@@ -862,9 +862,11 @@ impl GenerationSchedule {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
 
                             let stage = chunk.stage_id();
-                            if stage < holder.tasks.len() as u8 {
-                                let task_idx = stage as usize;
+                            for task_idx in (holder.current_stage as usize + 1)
+                                ..=(stage as usize).min(holder.tasks.len() - 1)
+                            {
                                 if !holder.tasks[task_idx].is_null() {
+                                    self.waiting_for_chunks.remove(&holder.tasks[task_idx]);
                                     self.drop_node(holder.tasks[task_idx]);
                                     holder.tasks[task_idx] = NodeKey::null();
                                 }

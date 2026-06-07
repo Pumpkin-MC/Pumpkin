@@ -1,7 +1,10 @@
 use crate::random::RandomImpl;
+#[cfg(feature = "codegen")]
 use proc_macro2::{Span, TokenStream};
+#[cfg(feature = "codegen")]
 use quote::{ToTokens, quote};
 use serde::Deserialize;
+#[cfg(feature = "codegen")]
 use syn::LitFloat;
 
 /// Represents different types of number providers that generate floating-point values.
@@ -22,6 +25,7 @@ pub enum NormalFloatProvider {
     Trapezoid(TrapezoidFloatProvider),
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for NormalFloatProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -59,6 +63,7 @@ pub enum FloatProvider {
     Constant(f32),
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for FloatProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -136,6 +141,7 @@ pub struct ConstantFloatProvider {
     value: f32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for ConstantFloatProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let value = LitFloat::new(&self.value.to_string(), Span::call_site());
@@ -197,6 +203,7 @@ pub struct UniformFloatProvider {
     max_exclusive: f32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for UniformFloatProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min_inclusive = LitFloat::new(&self.min_inclusive.to_string(), Span::call_site());
@@ -269,6 +276,7 @@ pub struct ClampedNormalFloatProvider {
     max: f32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for ClampedNormalFloatProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let mean = LitFloat::new(&self.mean.to_string(), Span::call_site());
@@ -353,6 +361,7 @@ pub struct TrapezoidFloatProvider {
     plateau: f32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for TrapezoidFloatProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min = LitFloat::new(&self.min.to_string(), Span::call_site());

@@ -106,11 +106,12 @@ impl Skin {
         Self {
             skin_id: "Standard_Custom".to_string(),
             play_fab_id: String::new(),
-            resource_patch: r#"{"geometry":{"default":"geometry.humanoid.custom"}}"#.into(),
+            resource_patch: r#"{"geometry":{"default":"geometry.humanoid"}}"#.into(),
             image_width: 64,
             image_height: 64,
             // 64 * 64 * 4 = 16384 bytes of raw RGBA data
-            skin_data: vec![0; 16384],
+            // Fill with 255 so the skin is visible (solid white) instead of invisible (transparent)
+            skin_data: vec![255; 16384],
             animations: Vec::new(),
             cape_width: 0,
             cape_height: 0,
