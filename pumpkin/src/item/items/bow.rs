@@ -150,8 +150,7 @@ impl BowItem {
         let arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
 
         // Set velocity based on player's look direction and power
-        let yaw = player.get_entity().yaw.load();
-        let pitch = player.get_entity().pitch.load();
+        let (yaw, pitch) = player.rotation();
         let speed = power * Self::ARROW_SPEED_MULTIPLIER;
         arrow.set_velocity_from_rotation(pitch, yaw, 0.0, speed, 1.0);
 

@@ -45,8 +45,7 @@ impl ItemBehaviour for EggItem {
             // Propagate the item stack so clients show correct variant
             egg.set_item_stack(item_stack.clone()).await;
 
-            let yaw = player.get_entity().yaw.load();
-            let pitch = player.get_entity().pitch.load();
+            let (yaw, pitch) = player.rotation();
             egg.thrown
                 .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
             world.spawn_entity(Arc::new(egg)).await;

@@ -161,8 +161,7 @@ impl CrossbowItem {
                 &player.position(),
             );
 
-            let yaw = player.get_entity().yaw.load();
-            let pitch = player.get_entity().pitch.load();
+            let (yaw, pitch) = player.rotation();
 
             for _ in charged.projectiles {
                 let yaws = if has_multishot {

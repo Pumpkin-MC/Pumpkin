@@ -88,8 +88,7 @@ impl ItemBehaviour for SplashPotionItem {
             let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
             splash.set_item_stack(stack).await;
 
-            let yaw = player.get_entity().yaw.load();
-            let pitch = player.get_entity().pitch.load();
+            let (yaw, pitch) = player.rotation();
             splash
                 .thrown
                 .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
@@ -157,8 +156,7 @@ impl ItemBehaviour for LingeringPotionItem {
             let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
             ling.set_item_stack(stack).await;
 
-            let yaw = player.get_entity().yaw.load();
-            let pitch = player.get_entity().pitch.load();
+            let (yaw, pitch) = player.rotation();
             ling.thrown
                 .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
 
