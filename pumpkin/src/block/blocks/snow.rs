@@ -119,7 +119,7 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool
 /// Snow melts away when exposed to a block light level greater than 11, e.g. from
 /// torches, campfires, lanterns, fire, lava, or glowstone.
 /// See <https://minecraft.wiki/w/Snow#Melting>.
-fn melts_at_light_level(block_light_level: u8) -> bool {
+const fn melts_at_light_level(block_light_level: u8) -> bool {
     block_light_level > 11
 }
 
