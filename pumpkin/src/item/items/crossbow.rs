@@ -82,16 +82,29 @@ impl ItemBehaviour for CrossbowItem {
 
             if use_ticks >= charge_time {
                 let arrow_slot = player.find_arrow().await;
-                if let Some(slot) = arrow_slot {
-                    let inventory = player.inventory();
-                    let mut stack = held.lock().await;
+                let mut stack = held.lock().await;
+                let (arrow_nbt_wrapper, slot) = {
+                    if let Some(slot) = arrow_slot {
+                        let inventory = player.inventory();
 
-                    let arrow_stack_arc = inventory.get_stack(slot).await;
-                    let arrow_stack = arrow_stack_arc.lock().await;
-                    let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
-                    arrow_stack.write_item_stack(&mut arrow_nbt);
-                    drop(arrow_stack);
+                        let arrow_stack_arc = inventory.get_stack(slot).await;
+                        let arrow_stack = arrow_stack_arc.lock().await;
+                        let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                        arrow_stack.write_item_stack(&mut arrow_nbt);
+                        drop(arrow_stack);
+                        (Some(arrow_nbt), slot)
+                    } else if player.gamemode.load() == GameMode::Creative {
+                        let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                        let arrow_stack = ItemStack::new(1, &Item::ARROW);
+                        arrow_stack.write_item_stack(&mut arrow_nbt);
+                        drop(arrow_stack);
 
+                        (Some(arrow_nbt), 0)
+                    } else {
+                        (None, 0)
+                    }
+                };
+                if let Some(arrow_nbt) = arrow_nbt_wrapper {
                     stack.patch.push((
                         DataComponent::ChargedProjectiles,
                         Some(Box::new(ChargedProjectilesImpl {
@@ -148,8 +161,8 @@ impl CrossbowItem {
                 &player.position(),
             );
 
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
+            let yaw = player.get_entity().yaw.load();
+            let pitch = player.get_entity().pitch.load();
 
             for _ in charged.projectiles {
                 let yaws = if has_multishot {
@@ -167,8 +180,7 @@ impl CrossbowItem {
                         ArrowPickup::Allowed
                     };
 
-                    let arrow =
-                        ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup);
+                    let arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
                     arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
                     let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
                     world.spawn_entity(arrow_arc).await;

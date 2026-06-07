@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use pumpkin_protocol::bedrock::{
-    RAKNET_PROTOCOL_VERSION,
+    MTU, RAKNET_PROTOCOL_VERSION,
     client::raknet::{
         incompatible_protocol::CIncompatibleProtocolVersion,
         open_connection::{COpenConnectionReply1, COpenConnectionReply2},
@@ -30,7 +30,7 @@ impl BedrockClient {
         }
 
         Self::send_offline_packet(
-            &COpenConnectionReply1::new(server.server_guid, false, 1400),
+            &COpenConnectionReply1::new(server.server_guid, false, MTU as u16),
             addr,
             socket,
         )

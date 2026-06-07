@@ -7,6 +7,7 @@ use crate::block::{
 };
 
 use crate::block::entities::barrel::BarrelBlockEntity;
+use crate::entity::EntityBase;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
@@ -53,7 +54,7 @@ impl BlockBehaviour for BarrelBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = BarrelLikeProperties::default(args.block);
-            props.facing = args.player.living_entity.entity.get_facing().opposite();
+            props.facing = args.player.get_entity().get_facing().opposite();
             props.to_state_id(args.block)
         })
     }

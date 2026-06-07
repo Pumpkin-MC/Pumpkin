@@ -52,24 +52,19 @@ impl VarLong {
         Err(ReadingError::TooLarge("VarLong".to_string()))
     }
 }
-
-impl From<i64> for VarLong {
-    fn from(value: i64) -> Self {
-        Self(value)
-    }
+macro_rules! gen_from {
+    ($ty: ty) => {
+        impl From<$ty> for VarLong {
+            fn from(value: $ty) -> Self {
+                VarLong(value.into())
+            }
+        }
+    };
 }
 
-impl From<u32> for VarLong {
-    fn from(value: u32) -> Self {
-        Self(i64::from(value))
-    }
-}
-
-impl From<u8> for VarLong {
-    fn from(value: u8) -> Self {
-        Self(i64::from(value))
-    }
-}
+gen_from!(u8);
+gen_from!(u32);
+gen_from!(i64);
 
 impl From<usize> for VarLong {
     fn from(value: usize) -> Self {

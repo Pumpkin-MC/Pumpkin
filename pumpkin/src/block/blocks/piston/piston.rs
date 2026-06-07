@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::entities::{has_block_block_entity, piston::PistonBlockEntity};
+use crate::entity::EntityBase;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, FacingExt,
     block_properties::{
@@ -80,7 +81,7 @@ impl BlockBehaviour for PistonBlock {
         Box::pin(async move {
             let mut props = PistonProps::default(args.block);
             props.extended = false;
-            props.facing = args.player.living_entity.entity.get_facing().opposite();
+            props.facing = args.player.get_entity().get_facing().opposite();
             props.to_state_id(args.block)
         })
     }

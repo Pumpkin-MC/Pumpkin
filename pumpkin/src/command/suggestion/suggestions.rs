@@ -36,13 +36,13 @@ impl SuggestionsBuilder {
     /// Gets the remaining substring of the underlying input string.
     #[must_use]
     pub fn remaining(&self) -> &str {
-        &self.input[self.start..]
+        &self.input[self.start.min(self.input.len())..]
     }
 
     /// Gets the remaining substring of the underlying lowercased input string.
     #[must_use]
     pub fn remaining_lowercase(&self) -> &str {
-        &self.input_lowercase[self.start..]
+        &self.input_lowercase[self.start.min(self.input_lowercase.len())..]
     }
 
     /// Builds the [`Suggestions`] object, consuming itself in the process.

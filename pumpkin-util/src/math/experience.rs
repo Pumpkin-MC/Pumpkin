@@ -1,4 +1,6 @@
+#[cfg(feature = "codegen")]
 use proc_macro2::TokenStream;
+#[cfg(feature = "codegen")]
 use quote::{ToTokens, quote};
 use serde::Deserialize;
 
@@ -10,6 +12,7 @@ pub struct Experience {
     pub experience: IntProvider,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for Experience {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let experience = self.experience.to_token_stream();

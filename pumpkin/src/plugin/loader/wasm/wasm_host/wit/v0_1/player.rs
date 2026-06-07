@@ -699,12 +699,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
 
     async fn get_yaw(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
         let player = player_from_resource(self, &player)?;
-        Ok(player.living_entity.entity.yaw.load())
+        Ok(player.get_entity().yaw.load())
     }
 
     async fn get_pitch(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
         let player = player_from_resource(self, &player)?;
-        Ok(player.living_entity.entity.pitch.load())
+        Ok(player.get_entity().pitch.load())
     }
 
     async fn get_world(
@@ -2038,7 +2038,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         );
 
         let packet = CSetActorData {
-            actor_runtime_id: VarULong(player.living_entity.entity.entity_id as u64),
+            actor_runtime_id: VarULong(player.get_entity().entity_id as u64),
             metadata,
             synced_properties: PropertySyncData {
                 int_properties: std::collections::HashMap::new(),

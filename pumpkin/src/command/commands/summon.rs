@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
@@ -55,7 +56,7 @@ impl CommandExecutor for Executor {
                     (world, pos)
                 }
                 CommandSender::Player(player) => {
-                    let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
+                    let pos = pos.unwrap_or(player.get_entity().pos.load());
 
                     (player.world(), pos)
                 }

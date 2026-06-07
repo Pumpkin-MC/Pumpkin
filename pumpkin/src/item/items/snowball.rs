@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::projectile::snowball::SnowballEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -34,17 +35,12 @@ impl ItemBehaviour for SnowBallItem {
                 &position,
             );
             let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
-            let snowball = SnowballEntity::new_shot(entity, &player.living_entity.entity);
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
-            snowball.thrown.set_velocity_from(
-                &player.living_entity.entity,
-                pitch,
-                yaw,
-                0.0,
-                POWER,
-                1.0,
-            );
+            let snowball = SnowballEntity::new_shot(entity, player.get_entity());
+            let yaw = player.get_entity().yaw.load();
+            let pitch = player.get_entity().pitch.load();
+            snowball
+                .thrown
+                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
             world.spawn_entity(Arc::new(snowball)).await;
 
             // Consume item

@@ -819,7 +819,7 @@ pub struct BlockAssets {
 
 /// Reads all block assets and generates the complete block registry `TokenStream`.
 pub fn build() -> TokenStream {
-    let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
+    let be_blocks_data = fs::read("../assets/bedrock/block_states.nbt").unwrap();
     let mut be_blocks_cursor = Cursor::new(be_blocks_data);
     let be_blocks = get_be_data_from_nbt(&mut be_blocks_cursor);
 

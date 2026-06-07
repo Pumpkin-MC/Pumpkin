@@ -304,8 +304,8 @@ impl CommandExecutor for SelfToPosExecutor {
             match sender {
                 CommandSender::Player(player) => {
                     let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-                    let yaw = player.living_entity.entity.yaw.load();
-                    let pitch = player.living_entity.entity.pitch.load();
+                    let yaw = player.get_entity().yaw.load();
+                    let pitch = player.get_entity().pitch.load();
                     if !World::is_valid(BlockPos(pos.floor_to_i32())) {
                         return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                             translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
