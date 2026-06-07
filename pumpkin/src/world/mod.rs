@@ -7,6 +7,7 @@ use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::network_item::{ItemInstanceUserData, NetworkItemDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 use std::{
@@ -219,6 +220,10 @@ pub struct World {
     pub spawn_state: ArcSwap<SpawnState>,
     pub active_chunks: ArcSwap<FxHashSet<Vector2<i32>>>,
     pub block_entities: DashMap<BlockPos, Arc<dyn BlockEntity>>,
+    /// Cached sky darken value (0 during day, up to 11 at night).
+    /// Updated every tick in `tick_environment`. Used by
+    /// `get_max_local_raw_brightness` for correct light checks.
+    pub sky_darken: AtomicU8,
 }
 
 impl PartialEq for World {
@@ -267,6 +272,7 @@ impl World {
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
             server,
             block_entities: DashMap::new(),
+            sky_darken: AtomicU8::new(0),
         }
     }
 
@@ -1023,6 +1029,7 @@ impl World {
     }
 
     async fn tick_environment(&self) {
+        use std::f32::consts::PI;
         let (world_age, is_night, time_of_day) = {
             let mut level_time = self.level_time.lock().await;
             let (advance_time, advance_weather) = {
@@ -1065,6 +1072,15 @@ impl World {
             )
         };
 
+        // Update cached sky darken for sync light checks.
+        let sun_angle_fraction = (time_of_day as f32 / 24000.0) - 0.25;
+        let cos_angle = (sun_angle_fraction * PI * 2.0).cos();
+        let darken = if cos_angle < 0.0 {
+            (cos_angle.abs() * 11.0) as u8
+        } else {
+            0
+        };
+        self.sky_darken.store(darken, Relaxed);
         let mut weather = self.weather.lock().await;
         weather.tick_weather(self);
 
@@ -3891,8 +3907,9 @@ impl World {
 
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
         let sky_light = self.get_sky_light_level(pos);
+        let sky_darken = self.sky_darken.load(Relaxed);
         let block_light = self.get_block_light_level(pos).unwrap_or(0);
-        sky_light.max(block_light) // TODO: getSkyDarken
+        sky_light.saturating_sub(sky_darken).max(block_light)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {

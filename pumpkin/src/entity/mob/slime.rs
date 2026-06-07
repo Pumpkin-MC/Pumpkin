@@ -31,27 +31,43 @@ const SLIME_SPAWN_MAX_Y_SWAMP: i32 = 70;
 /// Vanilla `random.nextFloat() < 0.5F` gate for swamp surface spawns.
 const SWAMP_SURFACE_SPAWN_CHANCE: f64 = 0.5;
 
-/// Vanilla slime-chunk check (Mojang mappings, `SpawnPlacements#isSlimeChunk`).
+/// Vanilla slime-chunk check (Mojang mappings, `WorldgenRandom#seedSlimeChunk`).
 ///
-/// Computes the same polynomial Mojang seeds a `RandomSource` with, then
-/// returns whether `result % 10 == 0`. Roughly 1/10 chunks are slime chunks.
+/// Mirrors the vanilla algorithm exactly: polynomial in 32-bit int arithmetic,
+/// XOR with decoration seed `0x3ad8025f`, Java LCG init + `nextInt(10)`.
+/// Roughly 1/10 chunks are slime chunks.
 #[must_use]
-pub fn is_slime_chunk(world_seed: u64, chunk_x: i32, chunk_z: i32) -> bool {
-    let cx = i64::from(chunk_x);
-    let cz = i64::from(chunk_z);
-    let k = (world_seed as i64).wrapping_add(
-        cx.wrapping_mul(cx)
-            .wrapping_mul(0x4c1906)
-            .wrapping_add(cx.wrapping_mul(0x5ac0db))
-            .wrapping_add(cz.wrapping_mul(cz).wrapping_mul(0x4307a7))
-            .wrapping_add(cz.wrapping_mul(0x5f24f)),
-    );
-    // Mirror the Java LCG truncation to 48 bits before taking the modulo.
-    ((k as u64) & 0x0000_FFFF_FFFF_FFFF).is_multiple_of(10)
+pub const fn is_slime_chunk(world_seed: u64, chunk_x: i32, chunk_z: i32) -> bool {
+    // Sub-expression terms in Java int (32-bit) arithmetic.
+    // `as i32` truncates to 32 bits (matching Java int overflow),
+    // then `as i64` sign-extends back to long.
+    let t1 = ((chunk_x as i64) * (chunk_x as i64) * 0x4c1906) as i32 as i64;
+    let t2 = ((chunk_x as i64) * 0x5ac0db) as i32 as i64;
+    // (int)(chunkZ * chunkZ) * 0x4307a7L: int widened to long before multiply.
+    let t3 = ((chunk_z as i64) * (chunk_z as i64)) as i32 as i64 * 0x4307a7;
+    let t4 = ((chunk_z as i64) * 0x5f24f) as i32 as i64;
+
+    let poly = (world_seed as i64)
+        .wrapping_add(t1)
+        .wrapping_add(t2)
+        .wrapping_add(t3)
+        .wrapping_add(t4);
+
+    // XOR with decoration seed (Paper's 987234911L = 0x3ad8025f).
+    let seed = poly ^ 0x3ad8025f;
+
+    // Java LCG — Random(long seed) constructor.
+    let mut lcg = (seed ^ 0x5DEECE66D) & ((1i64 << 48) - 1);
+
+    // nextInt(10) via next(31).
+    // For bound=10, rejection sampling never fires.
+    lcg = (lcg.wrapping_mul(0x5DEECE66D).wrapping_add(0xB)) & ((1i64 << 48) - 1);
+    let next31 = ((lcg >> 17) & 0x7FFF_FFFF) as i32;
+    next31 % 10 == 0
 }
 
 fn is_swamp_biome(biome: &'static Biome) -> bool {
-    biome.registry_id == "minecraft:swamp" || biome.registry_id == "minecraft:mangrove_swamp"
+    *biome == Biome::SWAMP || *biome == Biome::MANGROVE_SWAMP
 }
 
 pub struct SlimeEntity {
@@ -111,8 +127,8 @@ impl SlimeEntity {
     ///   a `random.nextInt(10) == 0` roll must pass. No light, biome, or
     ///   difficulty-gating beyond the overworld check.
     /// - **Swamp surface**: biome is in
-    ///   `BiomeTags.ALLOWS_SURFACE_SLIME_SPAWNS` (vanilla: `minecraft:swamp`
-    ///   and `minecraft:mangrove_swamp`), Y is strictly between
+    ///   `BiomeTags.ALLOWS_SURFACE_SLIME_SPAWNS` (vanilla: `swamp`
+    ///   and `mangrove_swamp`), Y is strictly between
     ///   [`SLIME_SPAWN_MIN_Y_SWAMP`] and [`SLIME_SPAWN_MAX_Y_SWAMP`], a
     ///   `nextFloat() < 0.5` roll must pass, and the Mojang light check
     ///   `getMaxLocalRawBrightness(pos) <= nextInt(8)` must hold.
@@ -202,14 +218,14 @@ mod tests {
     }
 
     #[test]
-    fn slime_chunk_zero_zero_is_a_slime_chunk() {
-        // seed=0, chunk (0,0): k = 0 + 0 + 0 + 0 + 0 = 0; 0 % 10 == 0
-        assert!(is_slime_chunk(0, 0, 0));
+    fn slime_chunk_zero_zero_is_not_a_slime_chunk() {
+        // seed=0, chunk (0,0): poly=0, XOR→0x3ad8025f, LCG→next31=7, 7%10≠0
+        assert!(!is_slime_chunk(0, 0, 0));
     }
 
     #[test]
     fn slime_chunk_seed_one_at_origin_is_not_a_slime_chunk() {
-        // seed=1, chunk (0,0): k = 1 + 0 + 0 + 0 + 0 = 1; 1 % 10 != 0
+        // seed=1, chunk (0,0): poly=1, XOR+LCG produces next31≠0
         assert!(!is_slime_chunk(1, 0, 0));
     }
 
