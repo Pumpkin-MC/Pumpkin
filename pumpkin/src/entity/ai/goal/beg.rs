@@ -1,4 +1,5 @@
 use super::{Controls, Goal, GoalFuture};
+use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use pumpkin_data::item::Item;
@@ -45,7 +46,7 @@ impl BegGoal {
 
     fn distance_sq(mob: &dyn Mob, player: &Player) -> f64 {
         let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-        let player_pos = player.living_entity.entity.pos.load();
+        let player_pos = player.get_entity().pos.load();
         mob_pos.squared_distance_to_vec(&player_pos)
     }
 
@@ -88,7 +89,7 @@ impl Goal for BegGoal {
                 return false;
             };
 
-            if !player.living_entity.entity.is_alive() {
+            if !player.get_entity().is_alive() {
                 return false;
             }
 
@@ -118,7 +119,7 @@ impl Goal for BegGoal {
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             if let Some(player) = &self.target {
-                let player_pos = player.living_entity.entity.get_eye_pos();
+                let player_pos = player.get_entity().get_eye_pos();
                 let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
                 look_control.look_at_with_range(
                     player_pos.x,

@@ -161,8 +161,8 @@ impl CrossbowItem {
                 &player.position(),
             );
 
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
+            let yaw = player.get_entity().yaw.load();
+            let pitch = player.get_entity().pitch.load();
 
             for _ in charged.projectiles {
                 let yaws = if has_multishot {
@@ -180,8 +180,7 @@ impl CrossbowItem {
                         ArrowPickup::Allowed
                     };
 
-                    let arrow =
-                        ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup);
+                    let arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
                     arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
                     let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
                     world.spawn_entity(arrow_arc).await;

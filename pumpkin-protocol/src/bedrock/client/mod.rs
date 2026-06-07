@@ -1,4 +1,5 @@
 pub mod add_actor;
+pub mod add_item_actor;
 pub mod add_player;
 pub mod available_commands;
 pub mod boss_event;
@@ -11,6 +12,7 @@ pub mod disconnect_player;
 pub mod gamerules_changed;
 pub mod handshake;
 pub mod inventory_content;
+pub mod item_registry;
 pub mod level_chunk;
 pub mod level_event;
 pub mod modal_form_request;
@@ -34,12 +36,14 @@ pub mod set_player_gamemode;
 pub mod set_time;
 pub mod set_title;
 pub mod start_game;
+pub mod take_item_actor;
 pub mod transfer;
 pub mod update_abilities;
 pub mod update_attributes;
 pub mod update_block;
 
 pub use add_actor::*;
+pub use add_item_actor::*;
 pub use add_player::*;
 pub use available_commands::*;
 pub use boss_event::*;

@@ -111,7 +111,7 @@ impl UDPNetworkEncoder {
     }
 
     pub fn write_game_packet(
-        &mut self,
+        &self,
         packet_id: u16,
         sub_client_sender: SubClient,
         sub_client_target: SubClient,
@@ -161,7 +161,7 @@ impl UDPNetworkEncoder {
     }
 
     pub async fn write_packet(
-        &mut self,
+        &self,
         packet_data: &[u8],
         addr: SocketAddr,
         socket: &UdpSocket,

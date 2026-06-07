@@ -7,6 +7,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -42,18 +43,11 @@ impl ItemBehaviour for WindChargeItem {
             let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
             let wind_charge =
-                ThrownItemEntity::new(entity, &player.living_entity.entity, WIND_CHARGE_GRAVITY);
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
+                ThrownItemEntity::new(entity, player.get_entity(), WIND_CHARGE_GRAVITY);
+            let yaw = player.get_entity().yaw.load();
+            let pitch = player.get_entity().pitch.load();
 
-            wind_charge.set_velocity_from(
-                &player.living_entity.entity,
-                pitch,
-                yaw,
-                0.0,
-                POWER,
-                1.0,
-            );
+            wind_charge.set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
             // TODO: player.incrementStat(Stats.USED)
 
             // TODO: Implement that the projectile will explode on impact
