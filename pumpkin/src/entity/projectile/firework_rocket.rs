@@ -19,7 +19,6 @@ const GRAVITY: f64 = 0.0;
 
 pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
-    shooter_id: Option<i32>,
     life: AtomicU32,
     life_time: AtomicU32,
 }
@@ -41,7 +40,6 @@ impl FireworkRocketEntity {
                 has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
             },
-            shooter_id: None,
             life: 0.into(),
             // TODO
             life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
@@ -64,7 +62,6 @@ impl FireworkRocketEntity {
         // Set random life
         let rocket = Self {
             entity: thrown,
-            shooter_id: Some(shooter.entity_id),
             life: 0.into(),
             life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
                 .into(),
@@ -105,7 +102,7 @@ impl EntityBase for FireworkRocketEntity {
             let world = entity.world.load();
             let mut velocity = entity.velocity.load();
 
-            if let Some(shooter_id) = self.shooter_id {
+            if let Some(shooter_id) = self.entity.owner_id {
                 // Check if the player who fired this rocket still exists in the world
                 if let Some(shooter) = world.get_entity_by_id(shooter_id) {
                     let shooter = shooter.get_entity();
