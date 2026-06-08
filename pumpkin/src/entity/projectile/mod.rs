@@ -142,7 +142,8 @@ impl ThrownItemEntity {
 
         // Send updated velocity to clients
         let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        world.broadcast_packet_all(&packet);
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(chunk_pos, &packet);
 
         // Calculate search box for collisions
         let search_box = BoundingBox::new(

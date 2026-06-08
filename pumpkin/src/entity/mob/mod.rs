@@ -533,21 +533,29 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
             let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
 
+            let chunk_pos = entity.chunk_pos.load();
             if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
                 let world = entity.world.load();
-                world.broadcast_packet_all(&CUpdateEntityRot::new(
-                    entity.entity_id.into(),
-                    yaw,
-                    pitch,
-                    entity.on_ground.load(Relaxed),
-                ));
+                world.broadcast_to_chunk(
+                    chunk_pos,
+                    &CUpdateEntityRot::new(
+                        entity.entity_id.into(),
+                        yaw,
+                        pitch,
+                        entity.on_ground.load(Relaxed),
+                    ),
+                );
                 mob_entity.last_sent_yaw.store(yaw, Relaxed);
                 mob_entity.last_sent_pitch.store(pitch, Relaxed);
             }
 
             if head_yaw.abs_diff(last_head_yaw) >= 1 {
                 let world = entity.world.load();
-                world.broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw));
+
+                world.broadcast_to_chunk(
+                    chunk_pos,
+                    &CHeadRot::new(entity.entity_id.into(), head_yaw),
+                );
                 mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
             }
         })

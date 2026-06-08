@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
@@ -166,7 +167,7 @@ impl BlockBehaviour for DoorBlock {
             let powered = block_receives_redstone_power(args.world, args.position).await
                 || block_receives_redstone_power(args.world, &args.position.up()).await;
 
-            let direction = args.player.living_entity.entity.get_horizontal_facing();
+            let direction = args.player.get_entity().get_horizontal_facing();
             let hinge = get_hinge(args.world, args.position, args.use_item_on, direction).await;
 
             let mut door_props = DoorProperties::default(args.block);

@@ -72,7 +72,7 @@ pub struct BedBlock;
 impl BlockBehaviour for BedBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         if let Some(player) = args.player {
-            let facing = player.living_entity.entity.get_horizontal_facing();
+            let facing = player.get_entity().get_horizontal_facing();
             return args
                 .block_accessor
                 .get_block_state(args.position)
@@ -106,7 +106,7 @@ impl BlockBehaviour for BedBlock {
         Box::pin(async move {
             let mut bed_props = BedProperties::default(args.block);
 
-            bed_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+            bed_props.facing = args.player.get_entity().get_horizontal_facing();
             bed_props.part = BedPart::Foot;
 
             bed_props.to_state_id(args.block)

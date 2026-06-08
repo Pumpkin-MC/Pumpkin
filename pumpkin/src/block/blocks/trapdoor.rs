@@ -1,6 +1,7 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
@@ -85,7 +86,7 @@ impl BlockBehaviour for TrapDoorBlock {
 
             let powered = block_receives_redstone_power(args.world, args.position).await;
 
-            let player_facing = args.player.living_entity.entity.get_horizontal_facing();
+            let player_facing = args.player.get_entity().get_horizontal_facing();
 
             // Correct facing logic using Option unwrap
             let facing = args

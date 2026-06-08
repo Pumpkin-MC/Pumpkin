@@ -1,5 +1,6 @@
 use std::sync::atomic::Ordering;
 
+use crate::entity::EntityBase;
 use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -23,7 +24,7 @@ pub enum AttackType {
 
 impl AttackType {
     pub async fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
 
         let sprinting = entity.sprinting.load(Ordering::Relaxed);
         let on_ground = entity.on_ground.load(Ordering::Relaxed);

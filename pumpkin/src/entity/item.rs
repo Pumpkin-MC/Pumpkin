@@ -4,10 +4,12 @@ use pumpkin_data::data_component_impl::DamageResistantImpl;
 use pumpkin_data::data_component_impl::DamageResistantType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
-use pumpkin_protocol::{
-    codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CTakeItemEntity, Metadata},
-};
+use pumpkin_protocol::bedrock::client::CAddItemActor;
+use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::codec::var_long::VarLong;
+use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
@@ -461,15 +463,7 @@ impl EntityBase for ItemEntity {
                     let stack = self.item_stack.lock().await;
                     (stack.item_count, stack.is_empty())
                 };
-
-                player
-                    .client
-                    .enqueue_packet(&CTakeItemEntity::new(
-                        self.entity.entity_id.into(),
-                        player.entity_id().into(),
-                        item_count.into(),
-                    ))
-                    .await;
+                player.living_entity.pickup(&self.entity, item_count.into());
 
                 player
                     .current_screen_handler
@@ -511,5 +505,26 @@ impl EntityBase for ItemEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn send_bedrock_spawn_packet<'a>(
+        &'a self,
+        client: &'a crate::net::bedrock::BedrockClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = &self.entity;
+            let runtime_id = entity.entity_id as u64;
+            let item_stack = self.item_stack.lock().await;
+            let packet = CAddItemActor {
+                entity_unique_id: VarLong(runtime_id as i64),
+                entity_runtime_id: VarULong(runtime_id),
+                item: NetworkItemStackDescriptor::from(&*item_stack),
+                position: entity.pos.load().to_f32_lossy(),
+                velocity: entity.velocity.load().to_f32_lossy(),
+                metadata: entity.bedrock_metadata(),
+                from_fishing: false,
+            };
+            client.send_game_packet(&packet).await;
+        })
     }
 }

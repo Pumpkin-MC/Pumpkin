@@ -1,7 +1,10 @@
 use crate::random::RandomImpl;
+#[cfg(feature = "codegen")]
 use proc_macro2::{Span, TokenStream};
+#[cfg(feature = "codegen")]
 use quote::{ToTokens, quote};
 use serde::Deserialize;
+#[cfg(feature = "codegen")]
 use syn::LitInt;
 
 /// Represents different types of number providers that generate integer values.
@@ -30,6 +33,7 @@ pub enum NormalIntProvider {
     WeightedList(WeightedListIntProvider),
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for NormalIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -82,6 +86,7 @@ pub enum IntProvider {
     Constant(i32),
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for IntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -172,6 +177,7 @@ pub struct ConstantIntProvider {
     pub value: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for ConstantIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let value = LitInt::new(&self.value.to_string(), Span::call_site());
@@ -233,6 +239,7 @@ pub struct BiasedToBottomIntProvider {
     pub max_inclusive: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for BiasedToBottomIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
@@ -305,6 +312,7 @@ pub struct ClampedIntProvider {
     pub max_inclusive: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for ClampedIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let source = &self.source;
@@ -380,6 +388,7 @@ pub struct TrapezoidIntProvider {
     pub plateau: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for TrapezoidIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
@@ -469,6 +478,7 @@ pub struct ClampedNormalIntProvider {
     pub max_inclusive: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for ClampedNormalIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let mean = syn::LitFloat::new(&self.mean.to_string(), Span::call_site());
@@ -549,6 +559,7 @@ pub struct WeightedEntry {
     pub weight: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for WeightedEntry {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let data = &self.data;
@@ -566,6 +577,7 @@ pub struct WeightedListIntProvider {
     pub distribution: Vec<WeightedEntry>,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for WeightedListIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let distribution = &self.distribution;
@@ -659,6 +671,7 @@ pub struct UniformIntProvider {
     pub max_inclusive: i32,
 }
 
+#[cfg(feature = "codegen")]
 impl ToTokens for UniformIntProvider {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());

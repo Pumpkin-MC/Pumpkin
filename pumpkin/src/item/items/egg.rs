@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::projectile::egg::EggEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -39,15 +40,15 @@ impl ItemBehaviour for EggItem {
             let item_stack: ItemStack = player.inventory.held_item().lock().await.clone();
 
             let entity = Entity::new(world.clone(), position, &EntityType::EGG);
-            let egg = EggEntity::new_shot(entity, &player.living_entity.entity);
+            let egg = EggEntity::new_shot(entity, player.get_entity());
 
             // Propagate the item stack so clients show correct variant
             egg.set_item_stack(item_stack.clone()).await;
 
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
+            let yaw = player.get_entity().yaw.load();
+            let pitch = player.get_entity().pitch.load();
             egg.thrown
-                .set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
+                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
             world.spawn_entity(Arc::new(egg)).await;
 
             // Consume item

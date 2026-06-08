@@ -451,6 +451,13 @@ mod test {
     }
 
     #[test]
+    fn remaining_past_end() {
+        let builder = SuggestionsBuilder::new("ab", 10);
+        assert_eq!(builder.remaining(), "");
+        assert_eq!(builder.remaining_lowercase(), "");
+    }
+
+    #[test]
     fn sort() {
         let suggestions = SuggestionsBuilder::new("A random thing to say is foobar", 25)
             .suggest("1")
