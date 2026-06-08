@@ -4555,6 +4555,14 @@ impl World {
         }
     }
 
+    /// Returns whether monsters can be spawned in the world
+    pub fn should_spawn_monsters(&self) -> bool {
+        let level_data = self.level_info.load();
+        level_data.game_rules.spawn_mobs
+            && level_data.game_rules.spawn_monsters
+            && level_data.difficulty != Difficulty::Peaceful
+    }
+
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         if let Some(entry) = self.block_entities.get(block_pos) {
             return Some(entry.value().clone());
