@@ -14,8 +14,12 @@ use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_data::chunk_gen_settings::MaterialRule;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl, get_carver_seed};
+
+const OVERWORLD_CARVERS: [&CarverConfig; 3] = [&CAVE, &CAVE_EXTRA_UNDERGROUND, &CANYON];
+const NETHER_CARVERS: [&CarverConfig; 1] = [&NETHER_CAVE];
 
 pub struct CarverBlockIds {
     pub air: &'static BlockState,
@@ -83,16 +87,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     let chunk_z = chunk.z;
     let chunk_pos = Vector2::new(chunk_x, chunk_z);
 
-    let overworld_carvers = [&CAVE, &CAVE_EXTRA_UNDERGROUND, &CANYON];
-    let nether_carvers = [&NETHER_CAVE];
-
-    let carvers_to_use = if generator.dimension == pumpkin_data::dimension::Dimension::OVERWORLD {
-        &overworld_carvers[..]
-    } else if generator.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
-        &nether_carvers[..]
-    } else {
-        &[]
-    };
+    let carvers_to_use = carvers_for_dimension(&generator.dimension);
 
     let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk_x);
     let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk_z);
@@ -193,6 +188,16 @@ fn should_carve(config: &CarverConfig, random: &mut RandomGenerator) -> bool {
     random.next_f32() <= config.probability
 }
 
+fn carvers_for_dimension(dimension: &Dimension) -> &'static [&'static CarverConfig] {
+    if dimension == &Dimension::OVERWORLD {
+        &OVERWORLD_CARVERS
+    } else if dimension == &Dimension::THE_NETHER {
+        &NETHER_CARVERS
+    } else {
+        &[]
+    }
+}
+
 #[cfg(test)]
 fn with_test_carve_run<F>(dimension: pumpkin_data::dimension::Dimension, test: F)
 where
@@ -241,4 +246,16 @@ where
     };
 
     test(&mut run);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn carver_selection_remains_dimension_scoped() {
+        assert_eq!(carvers_for_dimension(&Dimension::OVERWORLD).len(), 3);
+        assert_eq!(carvers_for_dimension(&Dimension::THE_NETHER).len(), 1);
+        assert!(carvers_for_dimension(&Dimension::THE_END).is_empty());
+    }
 }

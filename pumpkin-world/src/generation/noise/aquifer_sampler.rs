@@ -158,28 +158,35 @@ impl WorldAquiferSampler {
         }
     }
 
-    const fn packed_position_index(&self, x: i32, y: i32, z: i32) -> usize {
-        let local_x = (x - self.start_x) as usize;
-        let local_y = (y - self.start_y) as usize;
-        let local_z = (z - self.start_z) as usize;
+    fn checked_packed_position_index(&self, x: i32, y: i32, z: i32) -> Option<usize> {
+        let local_x = usize::try_from(x - self.start_x).ok()?;
+        let local_y = usize::try_from(y - self.start_y).ok()?;
+        let local_z = usize::try_from(z - self.start_z).ok()?;
 
-        packed_position_index!(local_x, local_y, local_z, self.size_y, self.size_z)
+        if local_y >= self.size_y || local_z >= self.size_z {
+            return None;
+        }
+
+        let index = packed_position_index!(local_x, local_y, local_z, self.size_y, self.size_z);
+        (index < self.packed_positions.len()).then_some(index)
     }
 
-    fn random_positions_for_pos(&self, x: i32, y: i32, z: i32) -> [i64; 12] {
+    fn random_positions_for_pos(&self, x: i32, y: i32, z: i32) -> Option<[i64; 12]> {
         let sy = self.size_y;
         let syz = self.size_y * self.size_z;
 
-        let i00 = self.packed_position_index(x, y - 1, z);
+        let i00 = self.checked_packed_position_index(x, y - 1, z)?;
         let i01 = i00 + sy;
         let i10 = i00 + syz;
         let i11 = i10 + sy;
 
-        assert!(i11 + 2 < self.packed_positions.len(), "Index out of bounds");
+        if i11 + 2 >= self.packed_positions.len() {
+            return None;
+        }
 
         let p = &self.packed_positions;
 
-        [
+        Some([
             p[i11 + 2],
             p[i10 + 2],
             p[i01 + 2],
@@ -192,7 +199,7 @@ impl WorldAquiferSampler {
             p[i10],
             p[i01],
             p[i00],
-        ]
+        ])
     }
 
     #[inline]
@@ -250,7 +257,7 @@ impl WorldAquiferSampler {
         router: &mut ChunkNoiseRouter,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> &FluidLevel {
+    ) -> FluidLevel {
         let x = block_pos::unpack_x(packed_pos);
         let y = block_pos::unpack_y(packed_pos);
         let z = block_pos::unpack_z(packed_pos);
@@ -259,9 +266,20 @@ impl WorldAquiferSampler {
         let local_y = local_y!(y);
         let local_z = local_xz!(z);
 
-        let index = self.packed_position_index(local_x, local_y, local_z);
+        let Some(index) = self.checked_packed_position_index(local_x, local_y, local_z) else {
+            return Self::get_fluid_level(
+                &self.fluid_level_sampler,
+                x,
+                y,
+                z,
+                router,
+                height_estimator,
+                sample_options,
+            );
+        };
+
         if let Some(ref level) = self.levels[index] {
-            return level;
+            return level.clone();
         }
 
         let sampled = Self::get_fluid_level(
@@ -274,7 +292,8 @@ impl WorldAquiferSampler {
             sample_options,
         );
 
-        self.levels[index].insert(sampled)
+        self.levels[index] = Some(sampled.clone());
+        sampled
     }
 
     fn get_fluid_level(
@@ -469,25 +488,16 @@ impl WorldAquiferSampler {
         let scaled_y = local_y!(sample_y + 1);
         let scaled_z = local_xz!(sample_z - 5);
 
-        // Inline random_positions_for_pos: read directly from packed_positions with a
-        // single bounds check instead of stack-allocating and copying a [i64; 12].
-        let sy = self.size_y;
-        let syz = sy * self.size_z;
-        let i00 = self.packed_position_index(scaled_x, scaled_y - 1, scaled_z);
-        let i01 = i00 + sy;
-        let i10 = i00 + syz;
-        let i11 = i10 + sy;
-
-        let p = &self.packed_positions;
-        // i11 + 2 is the largest index we ever access; all others are strictly smaller.
-        assert!(i11 + 2 < p.len(), "Index out of bounds");
+        let Some(random_positions) = self.random_positions_for_pos(scaled_x, scaled_y, scaled_z)
+        else {
+            return (Some(fluid_level.get_block(sample_y).default_state), false);
+        };
 
         let mut nearest = [(0i64, i32::MAX); 4];
 
-        // SAFETY: every index passed to this macro is <= i11 + 2, checked by the assert above.
         macro_rules! process {
-            ($idx:expr) => {{
-                let packed = unsafe { *p.get_unchecked($idx) };
+            ($packed:expr) => {{
+                let packed = $packed;
                 let dx = block_pos::unpack_x(packed) - sample_x;
                 let dy = block_pos::unpack_y(packed) - sample_y;
                 let dz = block_pos::unpack_z(packed) - sample_z;
@@ -510,23 +520,13 @@ impl WorldAquiferSampler {
             }};
         }
 
-        // Same insertion order as the original array literal — sort behaviour is preserved.
-        process!(i11 + 2);
-        process!(i10 + 2);
-        process!(i01 + 2);
-        process!(i00 + 2);
-        process!(i11 + 1);
-        process!(i10 + 1);
-        process!(i01 + 1);
-        process!(i00 + 1);
-        process!(i11);
-        process!(i10);
-        process!(i01);
-        process!(i00);
+        // Same insertion order as the original array literal; sort behaviour is preserved.
+        for packed in random_positions {
+            process!(packed);
+        }
 
-        let fluid_level2 = self
-            .get_water_level(nearest[0].0, router, height_estimator, sample_options)
-            .clone();
+        let fluid_level2 =
+            self.get_water_level(nearest[0].0, router, height_estimator, sample_options);
         let block_state = fluid_level2.get_block(sample_y);
         let sim12 = Self::max_distance(nearest[0].1, nearest[1].1);
 
@@ -553,9 +553,8 @@ impl WorldAquiferSampler {
         }
 
         let mut barrier_sample = None;
-        let fluid_level3 = self
-            .get_water_level(nearest[1].0, router, height_estimator, sample_options)
-            .clone();
+        let fluid_level3 =
+            self.get_water_level(nearest[1].0, router, height_estimator, sample_options);
         let barrier12 = sim12
             * Self::calculate_density(
                 &mut barrier_sample,
@@ -570,9 +569,8 @@ impl WorldAquiferSampler {
             return (None, false);
         }
 
-        let fluid_level4 = self
-            .get_water_level(nearest[2].0, router, height_estimator, sample_options)
-            .clone();
+        let fluid_level4 =
+            self.get_water_level(nearest[2].0, router, height_estimator, sample_options);
         let sim13 = Self::max_distance(nearest[0].1, nearest[2].1);
         if sim13 > 0f64 {
             let barrier13 = sim12
