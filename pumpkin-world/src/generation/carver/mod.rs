@@ -194,8 +194,15 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                     carver_x,
                     carver_z,
                 );
-                let mut carver_random =
-                    carver_start_random(seed, generator.settings.legacy_random_source);
+                let mut carver_random = if generator.settings.legacy_random_source {
+                    RandomGenerator::Xoroshiro(
+                        pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(seed),
+                    )
+                } else {
+                    RandomGenerator::Legacy(
+                        pumpkin_util::random::legacy_rand::LegacyRand::from_seed(seed),
+                    )
+                };
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
@@ -238,18 +245,6 @@ fn get_large_feature_seed(seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
     let result =
         (chunk_x as i64).wrapping_mul(x_scale) ^ (chunk_z as i64).wrapping_mul(z_scale) ^ seed;
     result as u64
-}
-
-fn carver_start_random(seed: u64, non_vanilla_random: bool) -> RandomGenerator {
-    if non_vanilla_random {
-        RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
-            seed,
-        ))
-    } else {
-        RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
-            seed,
-        ))
-    }
 }
 
 fn carvers_for_dimension(dimension: &Dimension) -> &'static [&'static CarverConfig] {
