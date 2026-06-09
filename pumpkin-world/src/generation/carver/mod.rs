@@ -349,8 +349,20 @@ fn schedule_fluid_tick_for_state(
 }
 
 #[cfg(test)]
-fn with_test_carve_run<F>(dimension: pumpkin_data::dimension::Dimension, test: F)
+fn with_carve_run<F>(dimension: Dimension, test: F)
 where
+    F: FnOnce(&mut CarveRun<'_, '_>),
+{
+    with_carve_run_options(dimension, None, true, test);
+}
+
+#[cfg(test)]
+fn with_carve_run_options<F>(
+    dimension: Dimension,
+    surface_rule: Option<&MaterialRule>,
+    use_carver_aquifer: bool,
+    test: F,
+) where
     F: FnOnce(&mut CarveRun<'_, '_>),
 {
     use crate::generation::generator::{GeneratorInit, VanillaGenerator};
@@ -378,7 +390,7 @@ where
         &generator.base_router.surface_estimator,
         &surface_config,
     );
-    let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
+    let carver_aquifer = use_carver_aquifer.then(|| {
         CarverAquiferSampler::new(
             chunk.x,
             chunk.z,
@@ -395,7 +407,7 @@ where
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
         sea_level: generator.settings.sea_level,
-        surface_rule: &generator.settings.surface_rule,
+        surface_rule: surface_rule.unwrap_or(&generator.settings.surface_rule),
         surface_height_sampler,
         carver_aquifer,
     };
@@ -413,7 +425,8 @@ mod tests {
     use super::*;
     use pumpkin_data::Block;
     use pumpkin_data::chunk_gen_settings::{
-        BlockMaterialRule, ConditionMaterialRule, SequenceMaterialRule, WaterMaterialCondition,
+        BlockMaterialRule, ConditionMaterialRule, MaterialCondition, SequenceMaterialRule,
+        WaterMaterialCondition,
     };
 
     static PODZOL_RULE: MaterialRule = MaterialRule::Block(BlockMaterialRule {
@@ -424,13 +437,11 @@ mod tests {
     });
     static WATER_SENSITIVE_RULES: [MaterialRule; 2] = [
         MaterialRule::Condition(ConditionMaterialRule {
-            if_true: pumpkin_data::chunk_gen_settings::MaterialCondition::Water(
-                WaterMaterialCondition {
-                    offset: 0,
-                    surface_depth_multiplier: 0,
-                    add_stone_depth: false,
-                },
-            ),
+            if_true: MaterialCondition::Water(WaterMaterialCondition {
+                offset: 0,
+                surface_depth_multiplier: 0,
+                add_stone_depth: false,
+            }),
             then_run: &GRASS_RULE,
         }),
         MaterialRule::Block(BlockMaterialRule {
@@ -442,15 +453,15 @@ mod tests {
     });
 
     #[test]
-    fn carve_run_threads_carver_aquifer_for_overworld() {
-        with_test_carve_run(Dimension::OVERWORLD, |run| {
+    fn overworld_has_aquifer() {
+        with_carve_run(Dimension::OVERWORLD, |run| {
             assert!(run.ctx.carver_aquifer.is_some());
         });
     }
 
     #[test]
-    fn top_material_rewrites_dirt_below_carved_grass() {
-        with_test_carve_run_and_rule(Dimension::OVERWORLD, &PODZOL_RULE, |run| {
+    fn restores_surface() {
+        with_carve_run_options(Dimension::OVERWORLD, Some(&PODZOL_RULE), false, |run| {
             let x = 4;
             let y = 70;
             let z = 5;
@@ -467,8 +478,8 @@ mod tests {
     }
 
     #[test]
-    fn top_material_does_not_rewrite_without_grass_dirt_or_overworld() {
-        with_test_carve_run_and_rule(Dimension::OVERWORLD, &PODZOL_RULE, |run| {
+    fn skips_surface_restore() {
+        with_carve_run_options(Dimension::OVERWORLD, Some(&PODZOL_RULE), false, |run| {
             let x = 4;
             let y = 70;
             let z = 5;
@@ -500,29 +511,34 @@ mod tests {
     }
 
     #[test]
-    fn top_material_passes_under_fluid_to_surface_rule() {
-        with_test_carve_run_and_rule(Dimension::OVERWORLD, &WATER_SENSITIVE_RULE, |run| {
-            let x = 6;
-            let y = 70;
-            let z = 7;
+    fn passes_fluid_to_rule() {
+        with_carve_run_options(
+            Dimension::OVERWORLD,
+            Some(&WATER_SENSITIVE_RULE),
+            false,
+            |run| {
+                let x = 6;
+                let y = 70;
+                let z = 7;
 
-            let dry = run
-                .ctx
-                .top_material(run.chunk, x, y - 1, z, false, false)
-                .unwrap();
-            let under_fluid = run
-                .ctx
-                .top_material(run.chunk, x, y - 1, z, true, false)
-                .unwrap();
+                let dry = run
+                    .ctx
+                    .top_material(run.chunk, x, y - 1, z, false, false)
+                    .unwrap();
+                let under_fluid = run
+                    .ctx
+                    .top_material(run.chunk, x, y - 1, z, true, false)
+                    .unwrap();
 
-            assert_eq!(dry.id, Block::GRASS_BLOCK.default_state.id);
-            assert_eq!(under_fluid.id, Block::DIRT.default_state.id);
-        });
+                assert_eq!(dry.id, Block::GRASS_BLOCK.default_state.id);
+                assert_eq!(under_fluid.id, Block::DIRT.default_state.id);
+            },
+        );
     }
 
     #[test]
-    fn steep_material_condition_matches_vanilla_asymmetry() {
-        with_test_carve_run(Dimension::OVERWORLD, |run| {
+    fn steep_matches_vanilla() {
+        with_carve_run(Dimension::OVERWORLD, |run| {
             let x = 5;
             let z = 5;
 
@@ -546,59 +562,6 @@ mod tests {
             set_surface_height(run.chunk, x + 1, z, 64);
             assert!(!steep_material_condition(run.chunk, x, z));
         });
-    }
-
-    fn with_test_carve_run_and_rule<F>(
-        dimension: Dimension,
-        surface_rule: &'static MaterialRule,
-        test: F,
-    ) where
-        F: FnOnce(&mut CarveRun<'_, '_>),
-    {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
-        use pumpkin_util::world_seed::Seed;
-
-        let generator = VanillaGenerator::new(Seed(42), dimension);
-        let mut chunk = ProtoChunk::new(0, 0, &generator);
-
-        let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
-        let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);
-        let generation_shape = &generator.settings.shape;
-        let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
-        let horizontal_biome_end = crate::generation::biome_coords::from_block(
-            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-        );
-        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-            crate::generation::biome_coords::from_block(start_x),
-            crate::generation::biome_coords::from_block(start_z),
-            horizontal_biome_end as usize,
-            generation_shape.min_y as i32,
-            generation_shape.max_y() as i32,
-            generation_shape.vertical_cell_block_count() as usize,
-        );
-        let surface_height_sampler = SurfaceHeightEstimateSampler::generate(
-            &generator.base_router.surface_estimator,
-            &surface_config,
-        );
-        let mut context = CarvingContext {
-            min_y: generator.dimension.min_y as i8,
-            height: generator.dimension.logical_height as u16,
-            random_config: &generator.random_config,
-            surface_noise: &generator.terrain_cache.surface_noise,
-            secondary_noise: &generator.terrain_cache.secondary_noise,
-            terrain_builder: &generator.terrain_cache.terrain_builder,
-            sea_level: generator.settings.sea_level,
-            surface_rule,
-            surface_height_sampler,
-            carver_aquifer: None,
-        };
-        let mut run = CarveRun {
-            ctx: &mut context,
-            chunk: &mut chunk,
-            ids: CarverBlockIds::new(),
-        };
-
-        test(&mut run);
     }
 
     fn set_surface_height(chunk: &mut ProtoChunk, x: i32, z: i32, height: i16) {

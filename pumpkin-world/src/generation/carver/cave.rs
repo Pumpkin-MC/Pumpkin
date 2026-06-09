@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn carve_block_writes_aquifer_state_at_world_y() {
-        super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
+        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
             let x = 5;
             let y = 20;
             let z = 6;
@@ -470,7 +470,7 @@ mod tests {
 
     #[test]
     fn carve_block_replaces_water_with_aquifer_state() {
-        super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
+        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
             let Some((x, y, z, expected_state)) =
                 find_aquifer_carve_state(run, |state, _| state.id != Block::AIR.default_state.id)
             else {
@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn carve_block_schedules_aquifer_fluids() {
-        super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
+        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
             let Some((x, y, z, expected_state)) =
                 find_aquifer_carve_state(run, |state, schedule| state.is_liquid() && schedule)
             else {
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn carve_block_writes_lava_at_world_y() {
-        super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
+        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
             let x = 7;
             let y = -58;
             let z = 8;
