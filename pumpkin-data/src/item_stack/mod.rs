@@ -97,7 +97,7 @@ static ITEM_STACK_ID_GEN: ItemStackIdGenerator = ItemStackIdGenerator::new();
 
 impl ItemStack {
     #[must_use]
-    pub const fn new(item_count: u8, item: &'static Item) -> Self {
+    pub fn new(item_count: u8, item: &'static Item) -> Self {
         Self {
             item_count,
             item,
@@ -119,6 +119,20 @@ impl ItemStack {
             patch: component,
 
             uid: ITEM_STACK_ID_GEN.next_id(),
+        }
+    }
+
+    /// Ignore the Bedrock UID for this `ItemStack`.
+    /// This constructor is intended for Java-only item stacks, where the network UID
+    /// is not required.
+    #[must_use]
+    pub const fn static_new_java(item_count: u8, item: &'static Item) -> Self {
+        Self {
+            item_count,
+            item,
+            patch: Vec::new(),
+
+            uid: NonZeroI32::new(1).unwrap(),
         }
     }
 

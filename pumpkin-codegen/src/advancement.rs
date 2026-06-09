@@ -11,12 +11,12 @@ use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::{collections::BTreeMap, fs};
 
-// helper default used by serde for fields that should be `true` when omitted.
+/// helper default used by serde for fields that should be `true` when omitted.
 const fn default_true() -> bool {
     true
 }
 
-///the structure that contains the display information of a advancement
+///the structure that contains the display information of an advancement
 #[derive(Deserialize, Clone)]
 pub struct AdvancementDisplay {
     pub title: TextComponent,
@@ -87,7 +87,7 @@ impl ToTokens for AdvancementDisplay {
         tokens.extend(quote! {
             AdvancementDisplay::new(#title,
                 #description,
-                ItemStack::new(1,&Item::#item_icon),
+                ItemStack::static_new_java(1,&Item::#item_icon),
                 #frame_type,
                 #background_texture,
                 #show_toast,
@@ -121,7 +121,7 @@ impl ToTokens for FrameTypeStruct {
     }
 }
 
-///what it gives you when you complete a advancment
+///what it gives you when you complete an advancement
 #[derive(Deserialize, Default, Clone)]
 pub struct AdvancementRewards {
     #[serde(default)]
@@ -260,7 +260,8 @@ impl ToTokens for AdvancementHolder {
 }
 
 ///the item use for the icon of the display
-/// (doesn't support custom items has the vanilla advancement does not use custom items)
+///
+///(doesn't support custom items has the vanilla advancement does not use custom items)
 #[derive(Deserialize)]
 struct DisplayIcon {
     id: ResourceLocation,
@@ -338,8 +339,9 @@ impl AdvancementTree {
 impl ToTokens for AdvancementTree {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let nodes = self.nodes.iter().map(|(k, v)| {
+            let key = identifier_to_tokens(k);
             quote! {
-                nodes.insert(#k, #v);
+                nodes.insert(#key, #v);
             }
         });
         let nodes_vector = &self.nodes_vector;
@@ -434,9 +436,10 @@ pub(crate) fn build() -> TokenStream {
             };
         }]);
         let minecraft_name = identifier.to_string();
+
         name_to_type.extend(quote! { #raw_name => Some(Self::#format_name), });
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(Self::#format_name), });
-        minecraft_namespaces.extend(quote! { #identifier,})
+        minecraft_namespaces.extend(quote! { Identifier::vanilla_static(#raw_name),})
     }
 
     quote! {
