@@ -242,6 +242,13 @@ impl ClientPlatform {
         }
     }
 
+    pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(&entity.get_entity().create_spawn_packet()),
+            Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
+        }
+    }
+
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,

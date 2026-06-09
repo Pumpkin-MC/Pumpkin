@@ -1,6 +1,6 @@
-use crate::entity::item::ItemEntity;
-use crate::net::ClientPlatform;
 use crate::{
+    entity::item::ItemEntity,
+    net::{ClientPlatform, bedrock::BedrockClient},
     server::Server,
     world::{
         World,
@@ -32,7 +32,8 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::bedrock::client::CSetActorMotion;
+use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
+use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
@@ -246,6 +247,35 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
     fn get_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    fn send_bedrock_spawn_packet<'a>(
+        &'a self,
+        client: &'a BedrockClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let runtime_id = entity.entity_id as u64;
+            let packet = CAddActor::new(
+                VarLong(runtime_id as i64),
+                VarULong(runtime_id),
+                self.get_entity().entity_type.resource_name.to_string(),
+                entity.pos.load().to_f32_lossy(),
+                entity.velocity.load().to_f32_lossy(),
+                entity.pitch.load(),
+                entity.yaw.load(),
+                entity.head_yaw.load(),
+                entity.body_yaw.load(),
+                Vec::new(),
+                entity.bedrock_metadata(),
+                PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                Vec::new(),
+            );
+            client.send_game_packet(&packet).await;
+        })
     }
 
     fn damage_with_context<'a>(

@@ -117,6 +117,8 @@ impl ThrownItemEntity {
         let entity = self.get_entity();
         let world = entity.world.load();
 
+        entity.update_last_pos();
+
         // Apply gravity and inertia
         let mut velocity = entity.velocity.load();
         velocity.y -= self.get_gravity();

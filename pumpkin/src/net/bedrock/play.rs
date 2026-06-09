@@ -29,6 +29,7 @@ use pumpkin_util::{GameMode, math::position::BlockPos, text::TextComponent};
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
+    block::{BlockHitResult, registry::BlockActionResult},
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
@@ -38,6 +39,7 @@ use crate::{
     server::{Server, seasonal_events},
     world::chunker::{self},
 };
+use pumpkin_data::BlockDirection;
 use tracing::{debug, info};
 
 impl BedrockClient {
@@ -386,8 +388,60 @@ impl BedrockClient {
             TransactionData::Mismatch(_data) => {
                 // TODO
             }
-            TransactionData::UseItem(_data) => {
-                // TODO
+            TransactionData::UseItem(data) => {
+                let face = match data.block_face.0 {
+                    0 => BlockDirection::Down,
+                    2 => BlockDirection::North,
+                    3 => BlockDirection::South,
+                    4 => BlockDirection::West,
+                    5 => BlockDirection::East,
+                    _ => BlockDirection::Up,
+                };
+                let world = player.world();
+                let block = world.get_block(&data.block_position);
+                let server = world.server.upgrade().expect("Server is gone");
+
+                if data.action_type.0 == 0 {
+                    // Click block
+                    let held_item = player.inventory.held_item();
+
+                    let result = server
+                        .block_registry
+                        .use_with_item(
+                            block,
+                            player,
+                            &data.block_position,
+                            &BlockHitResult {
+                                face: &face,
+                                cursor_pos: &data.click_position,
+                            },
+                            &held_item,
+                            &server,
+                            &world,
+                        )
+                        .await;
+
+                    if result.consumes_action() {
+                        return;
+                    }
+
+                    if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+                        server
+                            .block_registry
+                            .on_use(
+                                block,
+                                player,
+                                &data.block_position,
+                                &BlockHitResult {
+                                    face: &face,
+                                    cursor_pos: &data.click_position,
+                                },
+                                &server,
+                                &world,
+                            )
+                            .await;
+                    }
+                }
             }
             TransactionData::UseItemOnEntity(data) => {
                 let target_runtime_id = data.target_entity_runtime_id.0 as i32;
@@ -497,6 +551,7 @@ impl BedrockClient {
     }
 
     #[expect(clippy::match_same_arms)]
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_player_action(
         &self,
         player: &Arc<Player>,
@@ -509,7 +564,9 @@ impl BedrockClient {
         player.update_last_action_time();
 
         match packet.action {
-            PlayerAction::StartBreak | PlayerAction::CreativePlayerDestroyBlock => {
+            PlayerAction::StartBreak
+            | PlayerAction::CreativePlayerDestroyBlock
+            | PlayerAction::ContinueDestroyBlock => {
                 let location = packet.block_pos;
                 if !player.can_interact_with_block_at(&location, 1.0) {
                     return;
@@ -534,9 +591,6 @@ impl BedrockClient {
                             .await;
                     }
                 } else if !state.is_air() {
-                    // Broadcast that breaking started
-                    world.set_block_breaking(entity, location, 0).await;
-
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
                         let broken_state = world.get_block_state(&location);
@@ -565,11 +619,47 @@ impl BedrockClient {
                     }
                 }
             }
+            PlayerAction::PredictDestroyBlock | PlayerAction::StopBreak => {
+                let location = packet.block_pos;
+                if !player.can_interact_with_block_at(&location, 1.0) {
+                    return;
+                }
+
+                let entity = &player.get_entity();
+                let world = entity.world.load_full();
+
+                player.mining.store(false, Ordering::Relaxed);
+                world.set_block_breaking(entity, location, -1).await;
+
+                let (block, state) = world.get_block_and_state(&location);
+                if player.gamemode.load() != GameMode::Creative {
+                    let block_drop = player.can_harvest(state, block).await;
+
+                    let new_state = world
+                        .break_block(
+                            &location,
+                            Some(player.clone()),
+                            if block_drop {
+                                BlockFlags::NOTIFY_NEIGHBORS
+                            } else {
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            },
+                        )
+                        .await;
+                    if new_state.is_some() {
+                        server
+                            .block_registry
+                            .broken(&world, block, player, &location, server, state)
+                            .await;
+                        player.apply_tool_damage_for_block_break(state).await;
+                    }
+                }
+            }
             PlayerAction::CrackBreak => {
                 // Don't do anything for this action. It is no longer used. Block
                 // cracking is done fully server-side.
             }
-            PlayerAction::AbortBreak | PlayerAction::StopBreak => {
+            PlayerAction::AbortBreak => {
                 let location = packet.block_pos;
                 let entity = &player.get_entity();
                 let world = entity.world.load();

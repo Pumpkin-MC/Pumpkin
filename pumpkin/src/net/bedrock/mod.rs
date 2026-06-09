@@ -662,6 +662,13 @@ impl BedrockClient {
         self.close_token.is_cancelled()
     }
 
+    pub fn enqueue_spawn_packet(self: &Arc<Self>, entity: Arc<dyn crate::entity::EntityBase>) {
+        let client = self.clone();
+        self.spawn_task(async move {
+            entity.send_bedrock_spawn_packet(&client).await;
+        });
+    }
+
     pub async fn send_acknowledgement(&self, ack: &Acknowledge, id: u8) -> Result<(), Error> {
         let mut packet_buf = Vec::new();
         ack.write(&mut packet_buf, id)?;

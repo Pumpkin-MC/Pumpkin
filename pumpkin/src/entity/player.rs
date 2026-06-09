@@ -40,7 +40,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, tag, translation};
+use pumpkin_data::{Block, BlockState, Enchantment, screen::WindowType, tag, translation};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -54,7 +54,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
+use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CCloseContainer,
     CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync,
@@ -3326,16 +3328,44 @@ impl Player {
             .await
         {
             let screen_handler_temp = screen_handler.lock().await;
+            let sync_id = screen_handler_temp.sync_id();
+            let window_type = screen_handler_temp
+                .window_type()
+                .expect("Can't open PlayerScreenHandler");
+
+            let display_name = screen_handler_factory.get_display_name();
+            let java_packet =
+                COpenScreen::new(sync_id.into(), (window_type as i32).into(), &display_name);
+
+            let bedrock_window_type = match window_type {
+                WindowType::Crafting => 1,
+                WindowType::Furnace => 2,
+                WindowType::Enchantment => 3,
+                WindowType::BrewingStand => 4,
+                WindowType::Anvil => 5,
+                WindowType::Hopper => 8,
+                WindowType::Beacon => 13,
+                WindowType::BlastFurnace => 27,
+                WindowType::Smoker => 28,
+                WindowType::Stonecutter => 29,
+                WindowType::CartographyTable => 30,
+                WindowType::Grindstone => 26,
+                WindowType::Loom => 24,
+                WindowType::Smithing => 34,
+                _ => 0,
+            };
+
+            let bedrock_packet = CContainerOpen {
+                container_id: sync_id,
+                container_type: bedrock_window_type,
+                position: block_pos.unwrap_or(BlockPos::ZERO),
+                target_entity_id: VarLong(-1),
+            };
+
             self.client
-                .enqueue_packet(&COpenScreen::new(
-                    screen_handler_temp.sync_id().into(),
-                    (screen_handler_temp
-                        .window_type()
-                        .expect("Can't open PlayerScreenHandler") as i32)
-                        .into(),
-                    &screen_handler_factory.get_display_name(),
-                ))
+                .enqueue_packet_editioned(&java_packet, &bedrock_packet)
                 .await;
+
             drop(screen_handler_temp);
             self.on_screen_handler_opened(screen_handler.clone()).await;
             *self.current_screen_handler.lock().await = screen_handler;
@@ -3366,16 +3396,42 @@ impl Player {
         }
 
         let screen_handler_temp = screen_handler.lock().await;
+        let sync_id = screen_handler_temp.sync_id();
+        let window_type = screen_handler_temp
+            .window_type()
+            .expect("Can't open PlayerScreenHandler");
+
+        let java_packet = COpenScreen::new(sync_id.into(), (window_type as i32).into(), &title);
+
+        let bedrock_window_type = match window_type {
+            WindowType::Crafting => 1,
+            WindowType::Furnace => 2,
+            WindowType::Enchantment => 3,
+            WindowType::BrewingStand => 4,
+            WindowType::Anvil => 5,
+            WindowType::Hopper => 8,
+            WindowType::Beacon => 13,
+            WindowType::BlastFurnace => 27,
+            WindowType::Smoker => 28,
+            WindowType::Stonecutter => 29,
+            WindowType::CartographyTable => 30,
+            WindowType::Grindstone => 26,
+            WindowType::Loom => 24,
+            WindowType::Smithing => 34,
+            _ => 0,
+        };
+
+        let bedrock_packet = CContainerOpen {
+            container_id: sync_id,
+            container_type: bedrock_window_type,
+            position: BlockPos::ZERO,
+            target_entity_id: VarLong(-1),
+        };
+
         self.client
-            .enqueue_packet(&COpenScreen::new(
-                screen_handler_temp.sync_id().into(),
-                (screen_handler_temp
-                    .window_type()
-                    .expect("Can't open PlayerScreenHandler") as i32)
-                    .into(),
-                &title,
-            ))
+            .enqueue_packet_editioned(&java_packet, &bedrock_packet)
             .await;
+
         drop(screen_handler_temp);
         self.on_screen_handler_opened(screen_handler.clone()).await;
         *self.current_screen_handler.lock().await = screen_handler;

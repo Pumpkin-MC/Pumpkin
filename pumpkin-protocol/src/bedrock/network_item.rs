@@ -1,4 +1,4 @@
-use std::io::{Error, Write};
+use std::io::{Error, Read, Write};
 use std::num::NonZeroI32;
 
 use pumpkin_data::item::{BedrockItem, JavaToBedrockItemMapping};
@@ -7,10 +7,10 @@ use pumpkin_nbt::Nbt;
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
-    serial::PacketWrite,
+    serial::{PacketRead, PacketWrite},
 };
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct NetworkItemDescriptor {
     // I hate mojang
     // https://mojang.github.io/bedrock-protocol-docs/html/NetworkItemInstanceDescriptor.html
@@ -30,6 +30,36 @@ pub struct NetworkItemDescriptor {
 impl PacketWrite for NetworkItemDescriptor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.write_with_net_id(writer, None)
+    }
+}
+
+impl PacketRead for NetworkItemDescriptor {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        let id = VarInt::read(buf)?;
+        if id.0 == 0 {
+            return Ok(Self::default());
+        }
+        let stack_size = u16::read(buf)?;
+        let aux_value = VarUInt::read(buf)?;
+
+        let has_net_id = bool::read(buf)?;
+        if has_net_id {
+            let _net_id = VarInt::read(buf)?;
+        }
+
+        let block_runtime_id = VarInt::read(buf)?;
+
+        let user_data_len = VarUInt::read(buf)?.0;
+        let mut user_data = vec![0u8; user_data_len as usize];
+        buf.read_exact(&mut user_data)?;
+
+        Ok(Self {
+            id,
+            stack_size,
+            aux_value,
+            block_runtime_id,
+            ..Default::default()
+        })
     }
 }
 
@@ -76,6 +106,12 @@ impl NetworkItemDescriptor {
             writer.write_all(&buf)?;
         }
         Ok(())
+    }
+}
+
+impl From<&ItemStack> for NetworkItemDescriptor {
+    fn from(stack: &ItemStack) -> Self {
+        NetworkItemStackDescriptor::from(stack).item
     }
 }
 

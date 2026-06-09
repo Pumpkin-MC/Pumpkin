@@ -1,4 +1,5 @@
 pub mod add_actor;
+pub mod add_item_actor;
 pub mod add_player;
 pub mod available_commands;
 pub mod boss_event;
@@ -42,6 +43,7 @@ pub mod update_attributes;
 pub mod update_block;
 
 pub use add_actor::*;
+pub use add_item_actor::*;
 pub use add_player::*;
 pub use available_commands::*;
 pub use boss_event::*;
