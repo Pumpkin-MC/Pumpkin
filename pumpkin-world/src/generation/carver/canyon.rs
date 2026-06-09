@@ -15,7 +15,7 @@ impl Carver for CanyonCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
-        legacy_random_source: bool,
+        _legacy_random_source: bool,
     ) {
         let CarverAdditionalConfig::Canyon(ref canyon_config) = config.additional else {
             return;
@@ -50,7 +50,6 @@ impl Carver for CanyonCarver {
             0,
             distance,
             y_scale,
-            legacy_random_source,
         );
     }
 }
@@ -71,17 +70,10 @@ impl CanyonCarver {
         step: i32,
         distance: i32,
         y_scale: f64,
-        legacy_random_source: bool,
     ) {
-        let mut random = if legacy_random_source {
-            RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
-                tunnel_seed as u64,
-            ))
-        } else {
-            RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
-                tunnel_seed as u64,
-            ))
-        };
+        let mut random = RandomGenerator::Legacy(
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(tunnel_seed as u64),
+        );
         let width_factor_per_height =
             self.init_width_factors(run.chunk.height() as usize, config, &mut random);
         let mut y_rota = 0.0f32;
@@ -92,9 +84,9 @@ impl CanyonCarver {
         };
 
         for current_step in step..distance {
-            let progress = current_step as f64 * std::f64::consts::PI / distance as f64;
-            let mut horizontal_radius: f64 =
-                1.5 + pumpkin_util::math::mth::sin(progress) as f64 * thickness as f64;
+            let progress = (current_step as f32 * PI / distance as f32) as f64;
+            let mut horizontal_radius =
+                1.5 + (pumpkin_util::math::mth::sin(progress) * thickness) as f64;
             let mut vertical_radius = horizontal_radius * y_scale;
             horizontal_radius *= canyon_config
                 .shape

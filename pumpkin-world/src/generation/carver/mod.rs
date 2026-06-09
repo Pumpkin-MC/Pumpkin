@@ -21,7 +21,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::{RandomGenerator, RandomImpl, get_carver_seed};
+use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
 const OVERWORLD_CARVERS: [&CarverConfig; 3] = [&CAVE, &CAVE_EXTRA_UNDERGROUND, &CANYON];
 const NETHER_CARVERS: [&CarverConfig; 1] = [&NETHER_CAVE];
@@ -189,20 +189,13 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             // In vanilla, carvers are per-biome. Here we use the hardcoded list but
             // maintain the random seed logic.
             for (index, &config) in carvers_to_use.iter().enumerate() {
-                let seed = get_carver_seed(
+                let seed = get_large_feature_seed(
                     generator.random_config.seed + index as u64,
                     carver_x,
                     carver_z,
                 );
-                let mut carver_random = if generator.settings.legacy_random_source {
-                    RandomGenerator::Legacy(
-                        pumpkin_util::random::legacy_rand::LegacyRand::from_seed(seed),
-                    )
-                } else {
-                    RandomGenerator::Xoroshiro(
-                        pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(seed),
-                    )
-                };
+                let mut carver_random =
+                    carver_start_random(seed, generator.settings.legacy_random_source);
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
@@ -235,6 +228,28 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
 fn should_carve(config: &CarverConfig, random: &mut RandomGenerator) -> bool {
     random.next_f32() <= config.probability
+}
+
+fn get_large_feature_seed(seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
+    let mut random = pumpkin_util::random::legacy_rand::LegacyRand::from_seed(seed);
+    let x_scale = random.next_i64();
+    let z_scale = random.next_i64();
+    let seed = seed as i64;
+    let result =
+        (chunk_x as i64).wrapping_mul(x_scale) ^ (chunk_z as i64).wrapping_mul(z_scale) ^ seed;
+    result as u64
+}
+
+fn carver_start_random(seed: u64, non_vanilla_random: bool) -> RandomGenerator {
+    if non_vanilla_random {
+        RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
+            seed,
+        ))
+    } else {
+        RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
+            seed,
+        ))
+    }
 }
 
 fn carvers_for_dimension(dimension: &Dimension) -> &'static [&'static CarverConfig] {

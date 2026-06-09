@@ -15,7 +15,7 @@ impl Carver for CaveCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
-        legacy_random_source: bool,
+        _legacy_random_source: bool,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -85,7 +85,6 @@ impl Carver for CaveCarver {
                     if is_nether { 5.0 } else { 1.0 }, // this.getYScale()
                     floor_level,
                     is_nether,
-                    legacy_random_source,
                 );
             }
         }
@@ -117,8 +116,8 @@ impl CaveCarver {
         floor_level: f64,
         is_nether: bool,
     ) {
-        let horizontal_radius: f64 = 1.5
-            + pumpkin_util::math::mth::sin(std::f64::consts::FRAC_PI_2) as f64 * thickness as f64;
+        let horizontal_radius =
+            1.5 + (pumpkin_util::math::mth::sin(std::f64::consts::FRAC_PI_2) * thickness) as f64;
         let vertical_radius = horizontal_radius * y_scale;
         Self::carve_ellipsoid(
             run,
@@ -151,26 +150,19 @@ impl CaveCarver {
         y_scale: f64,
         floor_level: f64,
         is_nether: bool,
-        legacy_random_source: bool,
     ) {
-        let mut random = if legacy_random_source {
-            RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
-                tunnel_seed as u64,
-            ))
-        } else {
-            RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
-                tunnel_seed as u64,
-            ))
-        };
+        let mut random = RandomGenerator::Legacy(
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(tunnel_seed as u64),
+        );
         let split_point = random.next_bounded_i32(dist / 2) + dist / 4;
         let is_steep = random.next_bounded_i32(6) == 0;
         let mut y_rota = 0.0f32;
         let mut x_rota = 0.0f32;
 
         for current_step in step..dist {
-            let progress_arg = std::f64::consts::PI * current_step as f64 / dist as f64;
-            let horizontal_radius: f64 =
-                1.5 + pumpkin_util::math::mth::sin(progress_arg) as f64 * thickness as f64;
+            let progress_arg = (PI * current_step as f32 / dist as f32) as f64;
+            let horizontal_radius =
+                1.5 + (pumpkin_util::math::mth::sin(progress_arg) * thickness) as f64;
             let vertical_radius = horizontal_radius * y_scale;
             let cos_x = pumpkin_util::math::mth::cos(vertical_rotation as f64);
             x += (pumpkin_util::math::mth::cos(horizontal_rotation as f64) * cos_x) as f64;
@@ -203,7 +195,6 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
-                    legacy_random_source,
                 );
                 Self::create_tunnel(
                     config,
@@ -222,7 +213,6 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
-                    legacy_random_source,
                 );
                 return;
             }
