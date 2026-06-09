@@ -192,3 +192,53 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 fn should_carve(config: &CarverConfig, random: &mut RandomGenerator) -> bool {
     random.next_f32() <= config.probability
 }
+
+#[cfg(test)]
+fn with_test_carve_run<F>(dimension: pumpkin_data::dimension::Dimension, test: F)
+where
+    F: FnOnce(&mut CarveRun<'_, '_>),
+{
+    use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+    use pumpkin_util::world_seed::Seed;
+
+    let generator = VanillaGenerator::new(Seed(42), dimension);
+    let mut chunk = ProtoChunk::new(0, 0, &generator);
+
+    let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
+    let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);
+    let generation_shape = &generator.settings.shape;
+    let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
+    let horizontal_biome_end = crate::generation::biome_coords::from_block(
+        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
+    );
+    let surface_config = SurfaceHeightSamplerBuilderOptions::new(
+        crate::generation::biome_coords::from_block(start_x),
+        crate::generation::biome_coords::from_block(start_z),
+        horizontal_biome_end as usize,
+        generation_shape.min_y as i32,
+        generation_shape.max_y() as i32,
+        generation_shape.vertical_cell_block_count() as usize,
+    );
+    let surface_height_sampler = SurfaceHeightEstimateSampler::generate(
+        &generator.base_router.surface_estimator,
+        &surface_config,
+    );
+    let mut context = CarvingContext {
+        min_y: generator.dimension.min_y as i8,
+        height: generator.dimension.logical_height as u16,
+        random_config: &generator.random_config,
+        surface_noise: &generator.terrain_cache.surface_noise,
+        secondary_noise: &generator.terrain_cache.secondary_noise,
+        terrain_builder: &generator.terrain_cache.terrain_builder,
+        sea_level: generator.settings.sea_level,
+        surface_rule: &generator.settings.surface_rule,
+        surface_height_sampler,
+    };
+    let mut run = CarveRun {
+        ctx: &mut context,
+        chunk: &mut chunk,
+        ids: CarverBlockIds::new(),
+    };
+
+    test(&mut run);
+}

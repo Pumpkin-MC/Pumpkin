@@ -303,11 +303,9 @@ impl CanyonCarver {
                 .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
 
             if y <= lava_y {
-                run.chunk
-                    .set_block_state(x & 15, local_y, z & 15, run.ids.lava);
+                run.chunk.set_block_state(x, y, z, run.ids.lava);
             } else {
-                run.chunk
-                    .set_block_state(x & 15, local_y, z & 15, run.ids.air);
+                run.chunk.set_block_state(x, y, z, run.ids.air);
             }
 
             return true;
