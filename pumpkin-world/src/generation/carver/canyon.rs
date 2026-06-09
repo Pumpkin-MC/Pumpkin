@@ -1,5 +1,5 @@
 use super::cave::get_height;
-use super::{CarveRun, Carver, carve_top_material};
+use super::{CarveRun, Carver, overworld_carve_state, place_carved_block};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -313,22 +313,21 @@ impl CanyonCarver {
             *has_grass = true;
         }
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
-            return false;
-        }
-
         if config.replaceable.1.contains(&block.id) {
-            let lava_y = config
-                .lava_level
-                .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
+            let Some((state, should_schedule_fluid_update)) =
+                overworld_carve_state(run, config, x, y, z)
+            else {
+                return false;
+            };
 
-            if y <= lava_y {
-                run.chunk.set_block_state(x, y, z, run.ids.lava);
-                carve_top_material(run, x, y, z, run.ids.lava, *has_grass, true);
-            } else {
-                run.chunk.set_block_state(x, y, z, run.ids.air);
-                carve_top_material(run, x, y, z, run.ids.air, *has_grass, true);
-            }
+            place_carved_block(
+                run,
+                pumpkin_util::math::vector3::Vector3::new(x, y, z),
+                state,
+                should_schedule_fluid_update,
+                *has_grass,
+                true,
+            );
 
             return true;
         }

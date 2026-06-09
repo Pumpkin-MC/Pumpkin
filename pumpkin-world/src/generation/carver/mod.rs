@@ -273,11 +273,63 @@ fn carve_top_material(
     {
         run.chunk.set_block_state(x, below_y, z, top_material);
 
-        if top_material.id == pumpkin_data::Block::WATER.default_state.id {
-            run.chunk.schedule_fluid_tick(x, below_y, z, &Fluid::WATER);
-        } else if top_material.id == pumpkin_data::Block::LAVA.default_state.id {
-            run.chunk.schedule_fluid_tick(x, below_y, z, &Fluid::LAVA);
-        }
+        schedule_fluid_tick_for_state(run.chunk, x, below_y, z, top_material);
+    }
+}
+
+fn overworld_carve_state(
+    run: &mut CarveRun,
+    config: &CarverConfig,
+    x: i32,
+    y: i32,
+    z: i32,
+) -> Option<(&'static BlockState, bool)> {
+    let lava_y = config
+        .lava_level
+        .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
+
+    if y <= lava_y {
+        return Some((run.ids.lava, false));
+    }
+
+    let Some(aquifer) = run.ctx.carver_aquifer.as_mut() else {
+        return Some((run.ids.air, false));
+    };
+
+    let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
+    result
+        .state
+        .map(|state| (state, result.should_schedule_fluid_update))
+}
+
+fn place_carved_block(
+    run: &mut CarveRun,
+    pos: Vector3<i32>,
+    state: &'static BlockState,
+    should_schedule_fluid_update: bool,
+    has_grass: bool,
+    overworld: bool,
+) {
+    run.chunk.set_block_state(pos.x, pos.y, pos.z, state);
+
+    if overworld && should_schedule_fluid_update && state.is_liquid() {
+        schedule_fluid_tick_for_state(run.chunk, pos.x, pos.y, pos.z, state);
+    }
+
+    carve_top_material(run, pos.x, pos.y, pos.z, state, has_grass, overworld);
+}
+
+fn schedule_fluid_tick_for_state(
+    chunk: &mut ProtoChunk,
+    x: i32,
+    y: i32,
+    z: i32,
+    state: &'static BlockState,
+) {
+    if state.id == pumpkin_data::Block::WATER.default_state.id {
+        chunk.schedule_fluid_tick(x, y, z, &Fluid::WATER);
+    } else if state.id == pumpkin_data::Block::LAVA.default_state.id {
+        chunk.schedule_fluid_tick(x, y, z, &Fluid::LAVA);
     }
 }
 

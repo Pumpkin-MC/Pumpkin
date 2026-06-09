@@ -1,4 +1,4 @@
-use super::{CarveRun, Carver, carve_top_material};
+use super::{CarveRun, Carver, overworld_carve_state, place_carved_block};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -372,47 +372,30 @@ impl CaveCarver {
             return false;
         }
 
-        let carve_state = {
-            let lava_y = if is_nether {
-                run.chunk.bottom_y() as i32 + 31
+        let (state, should_schedule_fluid_update) = if is_nether {
+            let state = if y <= run.chunk.bottom_y() as i32 + 31 {
+                run.ids.lava
             } else {
-                config
-                    .lava_level
-                    .get_y(run.chunk.bottom_y() as i16, run.chunk.height())
+                run.ids.cave_air
             };
-
-            if y <= lava_y {
-                Some(run.ids.lava)
-            } else {
-                // TODO: Aquifer logic goes here.
-                // BlockState state = aquifer.computeSubstance(...)
-                // return state (or debug barrier if null)
-                if block.id == pumpkin_data::Block::WATER.id
-                    || block.id == pumpkin_data::Block::LAVA.id
-                {
-                    None
-                } else if is_nether {
-                    Some(run.ids.cave_air)
-                } else {
-                    Some(run.ids.air)
-                }
-            }
+            (state, false)
+        } else {
+            let Some(state) = overworld_carve_state(run, config, x, y, z) else {
+                return false;
+            };
+            state
         };
 
-        if let Some(state) = carve_state {
-            run.chunk.set_block_state(x, y, z, state);
+        place_carved_block(
+            run,
+            Vector3::new(x, y, z),
+            state,
+            should_schedule_fluid_update,
+            *has_grass,
+            !is_nether,
+        );
 
-            // TODO: Fluid scheduling
-            // if aquifer.should_schedule_fluid_update() && !state.fluid_state().is_empty() {
-            //     chunk.mark_pos_for_postprocessing(x, y, z);
-            // }
-
-            carve_top_material(run, x, y, z, state, *has_grass, !is_nether);
-
-            return true;
-        }
-
-        false
+        true
     }
 }
 
@@ -454,13 +437,16 @@ mod tests {
     use pumpkin_data::carver::CAVE;
 
     #[test]
-    fn carve_block_writes_air_at_world_y() {
+    fn carve_block_writes_aquifer_state_at_world_y() {
         super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
             let x = 5;
             let y = 20;
             let z = 6;
             let old_wrong_y = y - run.chunk.bottom_y() as i32;
             let mut has_grass = false;
+            let expected_state = super::super::overworld_carve_state(run, &CAVE, x, y, z)
+                .expect("test position should carve")
+                .0;
 
             run.chunk
                 .set_block_state(x, y, z, Block::STONE.default_state);
@@ -479,7 +465,7 @@ mod tests {
 
             assert_eq!(
                 run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
-                Block::AIR.default_state.id,
+                expected_state.id,
             );
             assert_eq!(
                 run.chunk
@@ -487,6 +473,72 @@ mod tests {
                     .0,
                 Block::STONE.default_state.id,
             );
+        });
+    }
+
+    #[test]
+    fn carve_block_replaces_water_with_aquifer_state() {
+        super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
+            let Some((x, y, z, expected_state)) =
+                find_aquifer_carve_state(run, |state, _| state.id != Block::AIR.default_state.id)
+            else {
+                panic!("expected non-air aquifer carve state in test chunk");
+            };
+            let mut has_grass = false;
+
+            run.chunk
+                .set_block_state(x, y, z, Block::WATER.default_state);
+
+            assert!(CaveCarver::carve_block(
+                run,
+                &CAVE,
+                x,
+                y,
+                z,
+                false,
+                &mut has_grass,
+            ));
+
+            assert_eq!(
+                run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
+                expected_state.id,
+            );
+            assert_ne!(expected_state.id, Block::AIR.default_state.id);
+        });
+    }
+
+    #[test]
+    fn carve_block_schedules_aquifer_fluids() {
+        super::super::with_test_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
+            let Some((x, y, z, expected_state)) =
+                find_aquifer_carve_state(run, |state, schedule| state.is_liquid() && schedule)
+            else {
+                panic!("expected scheduled aquifer fluid in test chunk");
+            };
+            let mut has_grass = false;
+            let old_tick_count = run.chunk.fluid_ticks.len();
+
+            run.chunk
+                .set_block_state(x, y, z, Block::STONE.default_state);
+
+            assert!(CaveCarver::carve_block(
+                run,
+                &CAVE,
+                x,
+                y,
+                z,
+                false,
+                &mut has_grass,
+            ));
+
+            assert_eq!(
+                run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
+                expected_state.id,
+            );
+            assert_eq!(run.chunk.fluid_ticks.len(), old_tick_count + 1);
+            assert_eq!(run.chunk.fluid_ticks.last().unwrap().position.0.x, x);
+            assert_eq!(run.chunk.fluid_ticks.last().unwrap().position.0.y, y);
+            assert_eq!(run.chunk.fluid_ticks.last().unwrap().position.0.z, z);
         });
     }
 
@@ -525,5 +577,32 @@ mod tests {
                 Block::STONE.default_state.id,
             );
         });
+    }
+
+    fn find_aquifer_carve_state(
+        run: &mut super::super::CarveRun,
+        predicate: impl Fn(&'static pumpkin_data::BlockState, bool) -> bool,
+    ) -> Option<(i32, i32, i32, &'static pumpkin_data::BlockState)> {
+        let lava_y = CAVE
+            .lava_level
+            .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
+
+        for y in (lava_y + 1)..=63 {
+            for x in 0..16 {
+                for z in 0..16 {
+                    let Some((state, should_schedule)) =
+                        super::super::overworld_carve_state(run, &CAVE, x, y, z)
+                    else {
+                        continue;
+                    };
+
+                    if predicate(state, should_schedule) {
+                        return Some((x, y, z, state));
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
