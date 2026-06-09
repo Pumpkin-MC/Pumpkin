@@ -1,6 +1,7 @@
+use std::{borrow::Cow, fmt::Display};
+
 use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, fmt::Display};
 use thiserror::Error;
 
 pub const VANILLA_NAMESPACE: &str = "minecraft";
