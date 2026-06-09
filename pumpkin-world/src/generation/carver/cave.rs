@@ -15,7 +15,7 @@ impl Carver for CaveCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
-        _legacy_random_source: bool,
+        legacy_random_source: bool,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -85,6 +85,7 @@ impl Carver for CaveCarver {
                     if is_nether { 5.0 } else { 1.0 }, // this.getYScale()
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
             }
         }
@@ -150,10 +151,9 @@ impl CaveCarver {
         y_scale: f64,
         floor_level: f64,
         is_nether: bool,
+        legacy_random_source: bool,
     ) {
-        let mut random = RandomGenerator::Legacy(
-            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(tunnel_seed as u64),
-        );
+        let mut random = super::new_carver_random(tunnel_seed as u64, legacy_random_source);
         let split_point = random.next_bounded_i32(dist / 2) + dist / 4;
         let is_steep = random.next_bounded_i32(6) == 0;
         let mut y_rota = 0.0f32;
@@ -195,6 +195,7 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 Self::create_tunnel(
                     config,
@@ -213,6 +214,7 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 return;
             }
