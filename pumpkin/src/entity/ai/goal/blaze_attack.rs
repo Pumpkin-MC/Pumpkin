@@ -148,20 +148,23 @@ impl Goal for BlazeShootFireballGoal {
                     if self.attack_step > 1 {
                         let distance = distance_sq.sqrt();
                         let sqd = distance.sqrt() * 0.5;
-
                         // play shoot sound
+                        let chunk_pos = blaze.entity.living_entity.entity.chunk_pos.load();
                         blaze
                             .entity
                             .living_entity
                             .entity
                             .world
                             .load()
-                            .broadcast_packet_all(&CWorldEvent::new(
-                                1018,
-                                blaze.entity.living_entity.entity.block_pos.load(),
-                                0,
-                                false,
-                            ));
+                            .broadcast_to_chunk(
+                                chunk_pos,
+                                &CWorldEvent::new(
+                                    1018,
+                                    blaze.entity.living_entity.entity.block_pos.load(),
+                                    0,
+                                    false,
+                                ),
+                            );
 
                         for _ in 0..1 {
                             // Vanilla loops 1 time

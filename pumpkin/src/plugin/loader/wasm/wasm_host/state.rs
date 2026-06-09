@@ -31,6 +31,7 @@ use crate::{
     server::{RecipeManager, Server},
     world::World,
 };
+use pumpkin_world::level::SyncChunk;
 
 pub struct WasmResource<T> {
     pub provider: T,
@@ -43,6 +44,8 @@ pub type JavaPlayerResource = WasmResource<Arc<Player>>;
 pub type BedrockPlayerResource = WasmResource<Arc<Player>>;
 pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
+pub type ChunkResource = WasmResource<(Arc<World>, SyncChunk)>;
+pub type WorldBorderResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
 pub type BossBarResource = WasmResource<
@@ -145,6 +148,25 @@ impl PluginHostState {
         provider: Arc<World>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(WorldResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_chunk<T>(
+        &mut self,
+        world: Arc<World>,
+        chunk: SyncChunk,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ChunkResource {
+            provider: (world, chunk),
+        })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_world_border<T>(
+        &mut self,
+        provider: Arc<World>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(WorldBorderResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -26,7 +27,7 @@ impl BlockBehaviour for StairBlock {
             let mut stair_props = StairsProperties::default(args.block);
             stair_props.waterlogged = args.replacing.water_source();
 
-            stair_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+            stair_props.facing = args.player.get_entity().get_horizontal_facing();
             stair_props.half = match args.direction {
                 BlockDirection::Up => Half::Top,
                 BlockDirection::Down => Half::Bottom,

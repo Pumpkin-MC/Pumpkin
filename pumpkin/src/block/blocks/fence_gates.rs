@@ -6,6 +6,7 @@ use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs,
 };
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::Block;
@@ -55,7 +56,7 @@ pub async fn toggle_fence_gate(
                 .get_horizontal_facing()
                 .opposite()
         {
-            fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
+            fence_gate_props.facing = player.get_entity().get_horizontal_facing();
         }
         fence_gate_props.open = true;
     }
@@ -84,7 +85,7 @@ impl BlockBehaviour for FenceGateBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut fence_gate_props = FenceGateProperties::default(args.block);
-            fence_gate_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+            fence_gate_props.facing = args.player.get_entity().get_horizontal_facing();
 
             let powered = block_receives_redstone_power(args.world, args.position).await;
             fence_gate_props.powered = powered;

@@ -3,6 +3,7 @@ use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInst
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
+use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use wasmtime::component::Resource;
@@ -15,10 +16,13 @@ use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
     BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
-    NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
+    Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
+    PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{PluginHostState, TextComponentResource, WorldResource},
+    state::{
+        ChunkResource, PluginHostState, TextComponentResource, WorldBorderResource, WorldResource,
+    },
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
@@ -85,6 +89,21 @@ impl PluginHostState {
             .map_err(wasmtime::Error::from)
     }
 
+    fn get_chunk_res(&self, res: &Resource<WitChunk>) -> wasmtime::Result<&ChunkResource> {
+        self.resource_table
+            .get::<ChunkResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+
+    fn get_world_border_res(
+        &self,
+        res: &Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<&WorldBorderResource> {
+        self.resource_table
+            .get::<WorldBorderResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+
     pub(crate) fn get_text_provider(
         &self,
         res: &Resource<pumpkin::plugin::text::TextComponent>,
@@ -95,6 +114,81 @@ impl PluginHostState {
             .map_err(wasmtime::Error::from)?
             .provider
             .clone())
+    }
+
+    fn get_wit_biome(
+        biome: &pumpkin_data::biome::Biome,
+    ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
+        let mut names: Vec<String> = serde_json::from_str::<
+            std::collections::BTreeMap<String, serde_json::Value>,
+        >(&std::fs::read_to_string("assets/biome.json")?)?
+        .keys()
+        .cloned()
+        .collect();
+        names.sort();
+
+        let index = names
+            .iter()
+            .position(|n| n.strip_prefix("minecraft:").unwrap_or(n) == biome.registry_id)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown biome: {}", biome.registry_id)))?;
+
+        // Safety: The WIT enum is generated from the sorted keys of assets/biome.json.
+        Ok(unsafe { std::mem::transmute::<u8, pumpkin::plugin::biomes::Biome>(index as u8) })
+    }
+
+    fn get_wit_block_entity(
+        &mut self,
+        block_entity: Arc<dyn crate::block::entities::BlockEntity>,
+    ) -> wasmtime::Result<Option<BlockEntityType>> {
+        let be = block_entity;
+        if be
+            .as_any()
+            .downcast_ref::<InternalCommandBlockEntity>()
+            .is_some()
+        {
+            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+            Ok(Some(BlockEntityType::CommandBlockEntity(
+                Resource::new_own(res.rep()),
+            )))
+        } else if be
+            .as_any()
+            .downcast_ref::<InternalSignBlockEntity>()
+            .is_some()
+        {
+            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+            Ok(Some(BlockEntityType::SignBlockEntity(Resource::new_own(
+                res.rep(),
+            ))))
+        } else if be
+            .as_any()
+            .downcast_ref::<InternalJukeboxBlockEntity>()
+            .is_some()
+        {
+            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+            Ok(Some(BlockEntityType::JukeboxBlockEntity(
+                Resource::new_own(res.rep()),
+            )))
+        } else if be
+            .as_any()
+            .downcast_ref::<InternalChestBlockEntity>()
+            .is_some()
+        {
+            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+            Ok(Some(BlockEntityType::ChestBlockEntity(Resource::new_own(
+                res.rep(),
+            ))))
+        } else if be
+            .as_any()
+            .downcast_ref::<InternalMobSpawnerBlockEntity>()
+            .is_some()
+        {
+            let res: Resource<BlockEntity> = self.add_block_entity(be)?;
+            Ok(Some(BlockEntityType::MobSpawnerBlockEntity(
+                Resource::new_own(res.rep()),
+            )))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -109,6 +203,37 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .provider
             .get_world_name()
             .to_string())
+    }
+
+    async fn get_world_border(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<Resource<WitWorldBorder>> {
+        let world_res = self.get_world_res(&world)?;
+        self.add_world_border(world_res.provider.clone())
+    }
+
+    async fn get_chunk(
+        &mut self,
+        world: Resource<World>,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<Option<Resource<WitChunk>>> {
+        let world_res = self.get_world_res(&world)?;
+        let world_provider = world_res.provider.clone();
+        let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+
+        let chunk = world_provider
+            .level
+            .loaded_chunks
+            .get(&pos)
+            .map(|c| c.value().clone());
+        if let Some(chunk) = chunk {
+            let res = self.add_chunk(world_provider, chunk)?;
+            Ok(Some(res))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_block_state_id(
@@ -487,21 +612,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
         let biome = world_ref.provider.get_biome(&internal_pos);
 
-        let mut names: Vec<String> = serde_json::from_str::<
-            std::collections::BTreeMap<String, serde_json::Value>,
-        >(&std::fs::read_to_string("assets/biome.json")?)?
-        .keys()
-        .cloned()
-        .collect();
-        names.sort();
-
-        let index = names
-            .iter()
-            .position(|n| n.strip_prefix("minecraft:").unwrap_or(n) == biome.registry_id)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown biome: {}", biome.registry_id)))?;
-
-        // Safety: The WIT enum is generated from the sorted keys of assets/biome.json.
-        Ok(unsafe { std::mem::transmute::<u8, pumpkin::plugin::biomes::Biome>(index as u8) })
+        Self::get_wit_biome(biome)
     }
 
     async fn spawn_entity(
@@ -570,63 +681,318 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
         let block_entity = world_provider.get_block_entity(&internal_pos);
 
-        if let Some(be) = block_entity {
-            if be
-                .as_any()
-                .downcast_ref::<InternalCommandBlockEntity>()
-                .is_some()
-            {
-                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-                Ok(Some(BlockEntityType::CommandBlockEntity(
-                    Resource::new_own(res.rep()),
-                )))
-            } else if be
-                .as_any()
-                .downcast_ref::<InternalSignBlockEntity>()
-                .is_some()
-            {
-                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-                Ok(Some(BlockEntityType::SignBlockEntity(Resource::new_own(
-                    res.rep(),
-                ))))
-            } else if be
-                .as_any()
-                .downcast_ref::<InternalJukeboxBlockEntity>()
-                .is_some()
-            {
-                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-                Ok(Some(BlockEntityType::JukeboxBlockEntity(
-                    Resource::new_own(res.rep()),
-                )))
-            } else if be
-                .as_any()
-                .downcast_ref::<InternalChestBlockEntity>()
-                .is_some()
-            {
-                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-                Ok(Some(BlockEntityType::ChestBlockEntity(Resource::new_own(
-                    res.rep(),
-                ))))
-            } else if be
-                .as_any()
-                .downcast_ref::<InternalMobSpawnerBlockEntity>()
-                .is_some()
-            {
-                let res: Resource<BlockEntity> = self.add_block_entity(be)?;
-                Ok(Some(BlockEntityType::MobSpawnerBlockEntity(
-                    Resource::new_own(res.rep()),
-                )))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
-        }
+        block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<WorldResource>(Resource::new_own(rep.rep()))
+            .map_err(wasmtime::Error::from)?;
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::world::HostChunk for PluginHostState {
+    async fn get_x(&mut self, chunk: Resource<WitChunk>) -> wasmtime::Result<i32> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        Ok(chunk_data.x)
+    }
+
+    async fn get_z(&mut self, chunk: Resource<WitChunk>) -> wasmtime::Result<i32> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        Ok(chunk_data.z)
+    }
+
+    async fn get_block_state_id(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<u16> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        Ok(chunk_data
+            .section
+            .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
+            .unwrap_or(0))
+    }
+
+    async fn get_block_state(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<WitBlockState> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let id = chunk_data
+            .section
+            .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
+            .unwrap_or(0);
+        let state = pumpkin_data::block_state::BlockState::from_id(id);
+
+        Ok(WitBlockState {
+            id: state.id,
+            luminance: state.luminance,
+            opacity: state.opacity,
+            hardness: state.hardness,
+            is_air: state.is_air(),
+            is_liquid: state.is_liquid(),
+            is_solid: state.is_solid(),
+            is_full_cube: state.is_full_cube(),
+            has_random_ticks: state.has_random_ticks(),
+            piston_behavior: match state.piston_behavior {
+                PistonBehavior::Normal => WitPistonBehavior::Normal,
+                PistonBehavior::Destroy => WitPistonBehavior::Destroy,
+                PistonBehavior::Block => WitPistonBehavior::Block,
+                PistonBehavior::Ignore => WitPistonBehavior::Ignore,
+                PistonBehavior::PushOnly => WitPistonBehavior::PushOnly,
+            },
+            burnable: state.burnable(),
+            tool_required: state.tool_required(),
+            sided_transparency: state.sided_transparency(),
+            replaceable: state.replaceable(),
+            is_solid_block: state.is_solid_block(),
+            block_entity_type: state.block_entity_type,
+            instrument: to_wit_noteblock_instrument(state.instrument),
+            collision_shapes: state
+                .get_block_collision_shapes()
+                .map(to_wit_bounding_box)
+                .collect(),
+            outline_shapes: state
+                .get_block_outline_shapes()
+                .map(to_wit_bounding_box)
+                .collect(),
+            down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
+            up_side_solid: state.is_side_solid(InternalBlockDirection::Up),
+            north_side_solid: state.is_side_solid(InternalBlockDirection::North),
+            south_side_solid: state.is_side_solid(InternalBlockDirection::South),
+            west_side_solid: state.is_side_solid(InternalBlockDirection::West),
+            east_side_solid: state.is_side_solid(InternalBlockDirection::East),
+            down_center_solid: state.is_center_solid(InternalBlockDirection::Down),
+            up_center_solid: state.is_center_solid(InternalBlockDirection::Up),
+            map_color: pumpkin_data::Block::from_state_id(state.id).map_color,
+        })
+    }
+
+    async fn set_block_state(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+        state: u16,
+    ) -> wasmtime::Result<()> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (world, chunk_data) = &chunk_res.provider;
+
+        let replaced =
+            chunk_data.set_block_absolute_y(pos.x as usize, pos.y, pos.z as usize, state);
+
+        if replaced != state {
+            chunk_data.mark_dirty(true);
+            let absolute_pos =
+                BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
+            world.register_block_change(absolute_pos, state).await;
+        }
+
+        Ok(())
+    }
+
+    async fn get_biome(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let id = chunk_data
+            .section
+            .get_rough_biome_absolute_y(pos.x as usize, pos.y, pos.z as usize)
+            .unwrap_or(0);
+        let biome = pumpkin_data::biome::Biome::from_id(id)
+            .unwrap_or(&pumpkin_data::biome::Biome::THE_VOID);
+
+        Self::get_wit_biome(biome)
+    }
+
+    async fn get_block_entity(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<Option<BlockEntityType>> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (world, chunk_data) = &chunk_res.provider;
+        let absolute_pos =
+            BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
+        let block_entity = world.get_block_entity(&absolute_pos);
+
+        block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
+    }
+
+    async fn get_top_block_y(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<i32> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        Ok(chunk_data.heightmap.lock().unwrap().get(
+            ChunkHeightmapType::WorldSurface,
+            x,
+            z,
+            chunk_data.section.min_y,
+        ))
+    }
+
+    async fn get_sky_light(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<u8> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let section_index = (pos.y - chunk_data.section.min_y) as usize / 16;
+        Ok(chunk_data
+            .light_engine
+            .lock()
+            .unwrap()
+            .sky_light
+            .get(section_index)
+            .map_or(0, |c| {
+                c.get(pos.x as usize, pos.y as usize % 16, pos.z as usize)
+            }))
+    }
+
+    async fn get_block_light(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<u8> {
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let section_index = (pos.y - chunk_data.section.min_y) as usize / 16;
+        Ok(chunk_data
+            .light_engine
+            .lock()
+            .unwrap()
+            .block_light
+            .get(section_index)
+            .map_or(0, |c| {
+                c.get(pos.x as usize, pos.y as usize % 16, pos.z as usize)
+            }))
+    }
+
+    async fn drop(&mut self, rep: Resource<WitChunk>) -> wasmtime::Result<()> {
+        self.resource_table
+            .delete::<ChunkResource>(Resource::new_own(rep.rep()))
+            .map_err(wasmtime::Error::from)?;
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
+    async fn get_center_x(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.center_x)
+    }
+
+    async fn get_center_z(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.center_z)
+    }
+
+    async fn set_center(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        x: f64,
+        z: f64,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        let world = border_res.provider.clone();
+        world.worldborder.lock().await.set_center(&world, x, z);
+        Ok(())
+    }
+
+    async fn get_diameter(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.new_diameter)
+    }
+
+    async fn set_diameter(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        diameter: f64,
+        speed: Option<u64>,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        let world = border_res.provider.clone();
+        world
+            .worldborder
+            .lock()
+            .await
+            .set_diameter(&world, diameter, speed.map(|s| s as i64));
+        Ok(())
+    }
+
+    async fn get_warning_distance(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<i32> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.warning_blocks)
+    }
+
+    async fn set_warning_distance(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        distance: i32,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        let world = border_res.provider.clone();
+        world
+            .worldborder
+            .lock()
+            .await
+            .set_warning_distance(&world, distance);
+        Ok(())
+    }
+
+    async fn get_warning_delay(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<i32> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.warning_time)
+    }
+
+    async fn set_warning_delay(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        delay: i32,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get_world_border_res(&border)?;
+        let world = border_res.provider.clone();
+        world
+            .worldborder
+            .lock()
+            .await
+            .set_warning_delay(&world, delay);
+        Ok(())
+    }
+
+    async fn contains(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        x: f64,
+        z: f64,
+    ) -> wasmtime::Result<bool> {
+        let border_res = self.get_world_border_res(&border)?;
+        Ok(border_res.provider.worldborder.lock().await.contains(x, z))
+    }
+
+    async fn drop(&mut self, rep: Resource<WitWorldBorder>) -> wasmtime::Result<()> {
+        self.resource_table
+            .delete::<WorldBorderResource>(Resource::new_own(rep.rep()))
             .map_err(wasmtime::Error::from)?;
         Ok(())
     }

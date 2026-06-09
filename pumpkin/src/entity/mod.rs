@@ -1,6 +1,6 @@
-use crate::entity::item::ItemEntity;
-use crate::net::ClientPlatform;
 use crate::{
+    entity::item::ItemEntity,
+    net::{ClientPlatform, bedrock::BedrockClient},
     server::Server,
     world::{
         World,
@@ -32,7 +32,8 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::bedrock::client::CSetActorMotion;
+use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
+use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
@@ -246,6 +247,35 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Bats return `Some(0.6)` to match vanilla's `travel()` override.
     fn get_y_velocity_drag(&self) -> Option<f64> {
         None
+    }
+
+    fn send_bedrock_spawn_packet<'a>(
+        &'a self,
+        client: &'a BedrockClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let runtime_id = entity.entity_id as u64;
+            let packet = CAddActor::new(
+                VarLong(runtime_id as i64),
+                VarULong(runtime_id),
+                self.get_entity().entity_type.resource_name.to_string(),
+                entity.pos.load().to_f32_lossy(),
+                entity.velocity.load().to_f32_lossy(),
+                entity.pitch.load(),
+                entity.yaw.load(),
+                entity.head_yaw.load(),
+                entity.body_yaw.load(),
+                Vec::new(),
+                entity.bedrock_metadata(),
+                PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                Vec::new(),
+            );
+            client.send_game_packet(&packet).await;
+        })
     }
 
     fn damage_with_context<'a>(
@@ -2239,6 +2269,9 @@ impl Entity {
         self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
     }
+    pub fn is_sneaking(&self) -> bool {
+        self.sneaking.load(Ordering::Relaxed)
+    }
 
     pub async fn set_swimming(&self, invisible: bool) {
         if self.swimming.load(Ordering::Relaxed) != invisible {
@@ -2382,6 +2415,9 @@ impl Entity {
         self.set_flag(Flag::Sprinting, sprinting).await;
     }
 
+    pub fn is_sprinting(&self) -> bool {
+        self.sprinting.load(Ordering::Relaxed)
+    }
     pub fn check_fall_flying(&self) -> bool {
         !self.on_ground.load(Relaxed)
     }
@@ -2390,6 +2426,9 @@ impl Entity {
         assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying).await;
+    }
+    pub fn is_fall_flying(&self) -> bool {
+        self.fall_flying.load(Ordering::Relaxed)
     }
 
     async fn set_flag(&self, flag: Flag, value: bool) {
@@ -2434,7 +2473,7 @@ impl Entity {
             let chunk_pos = self.chunk_pos.load();
             for player in world.players.load().iter() {
                 if let ClientPlatform::Bedrock(client) = &player.client {
-                    let center = player.living_entity.entity.chunk_pos.load();
+                    let center = player.get_entity().chunk_pos.load();
                     let view_distance =
                         crate::world::chunker::get_view_distance(player).get() as i32;
 
@@ -2478,7 +2517,7 @@ impl Entity {
         for player in world.players.load().iter() {
             if let ClientPlatform::Java(client) = &player.client {
                 // Apply Chebyshev distance check
-                let center = player.living_entity.entity.chunk_pos.load();
+                let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
                 if is_within_view_distance(chunk_pos, center, view_distance) {
@@ -2759,7 +2798,7 @@ impl Entity {
                 player.client.enqueue_packet(&passengers_packet).await;
                 world.broadcast_to_chunk_except(
                     chunk_pos,
-                    &[player.living_entity.entity.entity_uuid],
+                    &[player.get_entity().entity_uuid],
                     &passengers_packet,
                 );
             } else {
@@ -2846,7 +2885,7 @@ impl Entity {
 
             if let Some(player) = passenger.get_player() {
                 let id = teleport_id.unwrap();
-                player.living_entity.entity.set_pos(dismount_pos);
+                player.get_entity().set_pos(dismount_pos);
                 // Update awaiting_teleport with the real dismount position
                 *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
                 // Use enqueue_packet (not send_packet_now) so the teleport goes through

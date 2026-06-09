@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::projectile::{
     lingering_potion::LingeringPotionEntity, splash_potion::SplashPotionEntity,
@@ -66,7 +67,7 @@ impl ItemBehaviour for SplashPotionItem {
                 &position,
             );
             let entity = Entity::new(world.clone(), position, &EntityType::SPLASH_POTION);
-            let splash = SplashPotionEntity::new_shot(entity, &player.living_entity.entity);
+            let splash = SplashPotionEntity::new_shot(entity, player.get_entity());
 
             // Copy the held item stack data into the projectile
             let main = player.inventory.held_item();
@@ -87,16 +88,10 @@ impl ItemBehaviour for SplashPotionItem {
             let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
             splash.set_item_stack(stack).await;
 
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
-            splash.thrown.set_velocity_from(
-                &player.living_entity.entity,
-                pitch,
-                yaw,
-                0.0,
-                POWER,
-                1.0,
-            );
+            let (yaw, pitch) = player.rotation();
+            splash
+                .thrown
+                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
 
             world.spawn_entity(Arc::new(splash)).await;
 
@@ -140,7 +135,7 @@ impl ItemBehaviour for LingeringPotionItem {
                 &position,
             );
             let entity = Entity::new(world.clone(), position, &EntityType::LINGERING_POTION);
-            let ling = LingeringPotionEntity::new_shot(entity, &player.living_entity.entity);
+            let ling = LingeringPotionEntity::new_shot(entity, player.get_entity());
 
             // Copy the held item stack data into the projectile
             let main = player.inventory.held_item();
@@ -161,16 +156,9 @@ impl ItemBehaviour for LingeringPotionItem {
             let stack = stack.unwrap_or_else(|| ItemStack::EMPTY.clone());
             ling.set_item_stack(stack).await;
 
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
-            ling.thrown.set_velocity_from(
-                &player.living_entity.entity,
-                pitch,
-                yaw,
-                0.0,
-                POWER,
-                1.0,
-            );
+            let (yaw, pitch) = player.rotation();
+            ling.thrown
+                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
 
             world.spawn_entity(Arc::new(ling)).await;
 

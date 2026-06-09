@@ -135,7 +135,7 @@ impl SignBlock {
     /// Determines the block variant and placement properties for a sign.
     fn determine_placement(args: &OnPlaceArgs, support: &SupportInfo) -> Option<SignPlacement> {
         let is_hanging = args.block.name.contains("hanging");
-        let is_sneaking = args.player.get_entity().sneaking.load(Ordering::Relaxed);
+        let is_sneaking = args.player.get_entity().is_sneaking();
 
         // Select block variant
         let block_id = if is_hanging {

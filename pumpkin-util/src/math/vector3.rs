@@ -522,6 +522,21 @@ impl<T> From<Vector3<T>> for (T, T, T) {
     }
 }
 
+impl Vector3<f64> {
+    /// Converts this vector to a `Vector3<f32>` (lossy).
+    ///
+    /// # Returns
+    /// A new `Vector3<f32>` with each component cast to `f32`.
+    #[must_use]
+    pub const fn to_f32_lossy(&self) -> Vector3<f32> {
+        Vector3 {
+            x: self.x as f32,
+            y: self.y as f32,
+            z: self.z as f32,
+        }
+    }
+}
+
 impl<T: Math + Copy + Into<f64>> Vector3<T> {
     /// Converts this vector to a `Vector3<f64>`.
     ///

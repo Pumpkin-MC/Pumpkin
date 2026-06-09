@@ -1,7 +1,10 @@
+use rand::{RngExt, rng};
+
 use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -17,7 +20,10 @@ impl ItemMetadata for EnderPearlItem {
     }
 }
 
+const ROLL: f32 = 0.0;
 const POWER: f32 = 1.5;
+const DIVERGENCE: f32 = 1.0;
+const THROW_SOUND_VOLUME: f32 = 0.5;
 
 impl ItemBehaviour for EnderPearlItem {
     fn normal_use<'a>(
@@ -28,23 +34,24 @@ impl ItemBehaviour for EnderPearlItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
+            world.play_sound_fine(
                 Sound::EntityEnderPearlThrow,
                 pumpkin_data::sound::SoundCategory::Neutral,
                 &position,
+                THROW_SOUND_VOLUME,
+                0.4 / (rng().random::<f32>() * 0.4 + 0.8),
             );
 
             let entity = Entity::new(world.clone(), position, &EntityType::ENDER_PEARL);
-            let pearl = EnderPearlEntity::new_shot(entity, &player.living_entity.entity);
-            let yaw = player.living_entity.entity.yaw.load();
-            let pitch = player.living_entity.entity.pitch.load();
+            let pearl = EnderPearlEntity::new_shot(entity, player.get_entity());
+            let (yaw, pitch) = player.rotation();
             pearl.thrown.set_velocity_from(
-                &player.living_entity.entity,
+                player.get_entity(),
                 pitch,
                 yaw,
-                0.0,
+                ROLL,
                 POWER,
-                1.0,
+                DIVERGENCE,
             );
             world.spawn_entity(Arc::new(pearl)).await;
 

@@ -14,6 +14,8 @@ use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
+use std::num::NonZeroI32;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 mod categories;
 
@@ -36,6 +38,10 @@ pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
     pub patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
+
+    // unique ID for Bedrock network; don't serialize
+    // Should always be a positive value for non-empty stacks
+    pub uid: NonZeroI32,
 }
 
 // impl Hash for ItemStack {
@@ -53,6 +59,42 @@ impl PartialEq for ItemStack {
     }
 } */
 
+pub struct ItemStackIdGenerator {
+    counter: AtomicU32,
+}
+
+impl ItemStackIdGenerator {
+    pub const fn new() -> Self {
+        Self {
+            counter: AtomicU32::new(1),
+        }
+    }
+
+    pub fn next_id(&self) -> NonZeroI32 {
+        // Wraps on overflow, which is what we want.
+        let value = self.counter.fetch_add(1, Ordering::Relaxed);
+
+        // Negative values are invalid; cycle through the positives
+        let masked = value & 0x7FFFFFFF;
+
+        if let Some(id) = NonZeroI32::new(masked as i32) {
+            id
+        } else {
+            // If we fetched 0 or 0x80000000, that's masked out as 0
+            // Zero is invalid, so we just ask for the next ID to keep things simple/correct.
+            self.next_id()
+        }
+    }
+}
+
+impl Default for ItemStackIdGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+static ITEM_STACK_ID_GEN: ItemStackIdGenerator = ItemStackIdGenerator::new();
+
 impl ItemStack {
     #[must_use]
     pub const fn new(item_count: u8, item: &'static Item) -> Self {
@@ -60,6 +102,8 @@ impl ItemStack {
             item_count,
             item,
             patch: Vec::new(),
+
+            uid: ITEM_STACK_ID_GEN.next_id(),
         }
     }
 
@@ -73,6 +117,8 @@ impl ItemStack {
             item_count,
             item,
             patch: component,
+
+            uid: ITEM_STACK_ID_GEN.next_id(),
         }
     }
 
@@ -147,6 +193,8 @@ impl ItemStack {
         item_count: 0,
         item: &Item::AIR,
         patch: Vec::new(),
+
+        uid: NonZeroI32::new(i32::MIN).unwrap(), // white lie - Bedrock `uid` is never sent if the stack is empty
     };
 
     #[must_use]
@@ -366,6 +414,7 @@ impl ItemStack {
     #[must_use]
     pub fn copy_with_count(&self, count: u8) -> Self {
         let mut stack = self.clone();
+        stack.uid = ITEM_STACK_ID_GEN.next_id();
         stack.item_count = count;
         stack
     }
@@ -574,12 +623,11 @@ impl ItemStack {
 
 impl From<&RecipeResultStruct> for ItemStack {
     fn from(value: &RecipeResultStruct) -> Self {
-        Self {
-            item_count: value.count,
-            item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
+        Self::new(
+            value.count,
+            Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
                 .expect("Crafting recipe gives invalid item"),
-            patch: Vec::new(),
-        }
+        )
     }
 }
 

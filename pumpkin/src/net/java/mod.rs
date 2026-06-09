@@ -1,3 +1,7 @@
+use pumpkin_protocol::java::client::play::{
+    CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+};
+use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -23,7 +27,7 @@ use pumpkin_protocol::{
     ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
-        client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
+        client::{config::CConfigDisconnect, login::CLoginDisconnect},
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
         server::{
@@ -68,6 +72,7 @@ pub mod status;
 
 use crate::entity::player::Player;
 use crate::net::{GameProfile, PacketHandlerResult, PlayerConfig};
+use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
@@ -86,6 +91,7 @@ pub struct JavaClient {
     pub address: Mutex<SocketAddr>,
     /// The client's brand or modpack information, Optional.
     pub brand: Mutex<Option<String>>,
+    pub player: Mutex<Option<Arc<Player>>>,
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
     /// An notifier that is triggered when this client is closed.
@@ -161,6 +167,7 @@ impl JavaClient {
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
+            player: Mutex::new(None),
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
@@ -261,7 +268,8 @@ impl JavaClient {
                     self.keep_alive_id.store(keep_alive_id);
                     self.wait_for_keep_alive.store(true, Ordering::Relaxed);
                     self.last_keep_alive_time.store(Instant::now());
-                    self.enqueue_packet(&pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id)).await;
+                    let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
+                    self.enqueue_packet(&packet).await;
                 }
 
                 // INCOMING PACKETS
@@ -313,11 +321,54 @@ impl JavaClient {
         }
     }
 
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+        let player = self.player.lock().await.clone();
+        let Some(player) = player.as_ref() else {
+            return;
+        };
+        let Some(server) = player.world().server.upgrade() else {
+            return;
+        };
+
+        self.send_packet_now(&CChunkBatchStart).await;
+        for chunk in chunks {
+            let event = ChunkSend::new(player.world(), chunk.clone());
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                continue;
+            }
+
+            let mut buf = Vec::new();
+            let version = self.version.load();
+            buf.write_var_int(&VarInt(CChunkData::to_id(version)))
+                .unwrap();
+            CChunkData(chunk)
+                .write_packet_data(&mut buf, &version)
+                .unwrap();
+            self.send_packet_now_data(buf.into()).await;
+        }
+        self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
+            .await;
+    }
+
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
         self.write_packet(packet, writer).unwrap();
-        self.enqueue_packet_data(buf.into()).await;
+        let payload = Bytes::from(buf);
+
+        let player = self.player.lock().await.clone();
+        let cancelled = if let Some(player) = player.as_ref() {
+            player
+                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
+                .await
+        } else {
+            false
+        };
+
+        if !cancelled {
+            self.enqueue_packet_data(payload).await;
+        }
     }
 
     pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
@@ -424,7 +475,20 @@ impl JavaClient {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
         self.write_packet(packet, writer).unwrap();
-        self.send_packet_now_data(packet_buf.into()).await;
+        let payload = Bytes::from(packet_buf);
+
+        let player = self.player.lock().await.clone();
+        let cancelled = if let Some(player) = player.as_ref() {
+            player
+                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
+                .await
+        } else {
+            false
+        };
+
+        if !cancelled {
+            self.send_packet_now_data(payload).await;
+        }
     }
 
     pub async fn send_packet_now_data(&self, packet: Bytes) {
@@ -792,6 +856,16 @@ impl JavaClient {
     ) -> Result<(), Box<dyn PumpkinError>> {
         let payload = &packet.payload[..];
         let version = self.version.load();
+
+        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+            player.clone(),
+            packet.id,
+            packet.payload.clone(),
+        );
+        event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return Ok(());
+        }
 
         match packet.id {
             id if id == SConfirmTeleport::to_id(version) => {

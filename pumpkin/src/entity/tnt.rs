@@ -48,10 +48,10 @@ impl EntityBase for TNTEntity {
 
             entity.move_entity(caller, velo).await;
             entity.tick_block_collisions(caller, server).await;
-            entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
-
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
+            } else {
+                entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
             }
 
             if entity.velocity_dirty.swap(false, Ordering::SeqCst) {

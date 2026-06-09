@@ -21,7 +21,7 @@ impl BlockBehaviour for MagmaBlock {
             let ent = args.entity.get_entity();
 
             // Don't damage if sneaking
-            if ent.sneaking.load(Ordering::Relaxed) {
+            if ent.is_sneaking() {
                 return;
             }
 

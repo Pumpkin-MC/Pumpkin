@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -91,7 +92,7 @@ impl ItemBehaviour for EnderEyeItem {
                 return;
             }
 
-            let origin = player.living_entity.entity.block_pos.load();
+            let origin = player.get_entity().block_pos.load();
             let target_block_pos = find_stronghold(&world, origin);
 
             let Some(target) = target_block_pos else {
@@ -99,10 +100,10 @@ impl ItemBehaviour for EnderEyeItem {
             };
 
             let spawn_pos = Vector3::new(
-                player.living_entity.entity.pos.load().x,
-                player.living_entity.entity.pos.load().y
+                player.get_entity().pos.load().x,
+                player.get_entity().pos.load().y
                     + f64::from(EntityType::EYE_OF_ENDER.dimension[1]) * 0.5,
-                player.living_entity.entity.pos.load().z,
+                player.get_entity().pos.load().z,
             );
 
             let entity = Entity::new(world.clone(), spawn_pos, &EntityType::EYE_OF_ENDER);

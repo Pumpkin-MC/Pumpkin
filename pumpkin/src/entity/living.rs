@@ -6,6 +6,7 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -199,15 +200,19 @@ impl LivingEntity {
 
     /// Picks up and Item entity or XP Orb
     pub fn pickup(&self, item: &Entity, stack_amount: u32) {
-        // TODO: Only nearby
-        self.entity
-            .world
-            .load()
-            .broadcast_packet_all(&CTakeItemEntity::new(
+        let chunk_pos = self.entity.chunk_pos.load();
+        self.entity.world.load().broadcast_to_chunk_editioned_sync(
+            chunk_pos,
+            &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
                 stack_amount.try_into().unwrap(),
-            ));
+            ),
+            &CTakeItemActor::new(
+                item.entity_id.try_into().unwrap(),
+                self.entity.entity_id.try_into().unwrap(),
+            ),
+        );
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -644,7 +649,7 @@ impl LivingEntity {
     pub fn should_prevent_fall_damage(&self) -> bool {
         let (prevents, block) = self.is_in_fall_damage_resetting();
 
-        if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
+        if block == &Block::SCAFFOLDING && !self.entity.is_sneaking() {
             return false;
         }
 

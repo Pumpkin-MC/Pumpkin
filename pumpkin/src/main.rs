@@ -194,7 +194,7 @@ fn print_support_links_and_warning() {
         TextComponent::text("Discord")
             .color_named(NamedColor::DarkBlue)
             .to_pretty_console(),
-        TextComponent::text("https://discord.gg/pumpkinmc")
+        TextComponent::text("https://discord.gg/wT8XjrjKkf")
             .color_named(NamedColor::Aqua)
             .to_pretty_console()
     );

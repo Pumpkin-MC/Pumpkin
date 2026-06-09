@@ -4,7 +4,7 @@ We appreciate your interest in contributing to Pumpkin! This document outlines t
 
 ## Getting Started
 
-The easiest way to get started is by asking for help in [our Discord server](https://discord.gg/pumpkinmc).
+The easiest way to get started is by asking for help in [our Discord server](https://discord.gg/wT8XjrjKkf).
 
 ### How to Contribute
 

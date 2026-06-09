@@ -24,7 +24,14 @@ pub fn map_type(ty: &Type) -> WitType {
                     }
                     WitType::String
                 }
-                "Vec" | "Box" => {
+                "Box" => {
+                    if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments
+                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                            return map_type(inner_ty);
+                        }
+                    WitType::String
+                }
+                "Vec" => {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments
                         && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
                     {
