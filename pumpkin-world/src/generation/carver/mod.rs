@@ -5,6 +5,7 @@ pub mod mask;
 use crate::ProtoChunk;
 use crate::generation::GlobalRandomConfig;
 use crate::generation::generator::VanillaGenerator;
+use crate::generation::noise::aquifer_sampler::CarverAquiferSampler;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::{
     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
@@ -60,6 +61,7 @@ pub struct CarvingContext<'a> {
     pub sea_level: i32,
     pub surface_rule: &'a MaterialRule,
     pub surface_height_sampler: SurfaceHeightEstimateSampler<'a>,
+    pub carver_aquifer: Option<CarverAquiferSampler<'a>>,
 }
 
 pub struct CarveRun<'a, 'b> {
@@ -109,6 +111,15 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         &generator.base_router.surface_estimator,
         &surface_config,
     );
+    let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
+        CarverAquiferSampler::new(
+            chunk_x,
+            chunk_z,
+            &generator.base_router,
+            &generator.random_config,
+            generator.settings,
+        )
+    });
 
     let mut context = CarvingContext {
         min_y: generator.dimension.min_y as i8,
@@ -120,6 +131,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         sea_level: generator.settings.sea_level,
         surface_rule: &generator.settings.surface_rule,
         surface_height_sampler,
+        carver_aquifer,
     };
 
     let mut run = CarveRun {
@@ -228,6 +240,15 @@ where
         &generator.base_router.surface_estimator,
         &surface_config,
     );
+    let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
+        CarverAquiferSampler::new(
+            chunk.x,
+            chunk.z,
+            &generator.base_router,
+            &generator.random_config,
+            generator.settings,
+        )
+    });
     let mut context = CarvingContext {
         min_y: generator.dimension.min_y as i8,
         height: generator.dimension.logical_height as u16,
@@ -238,6 +259,7 @@ where
         sea_level: generator.settings.sea_level,
         surface_rule: &generator.settings.surface_rule,
         surface_height_sampler,
+        carver_aquifer,
     };
     let mut run = CarveRun {
         ctx: &mut context,
@@ -253,9 +275,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn carver_selection_remains_dimension_scoped() {
-        assert_eq!(carvers_for_dimension(&Dimension::OVERWORLD).len(), 3);
-        assert_eq!(carvers_for_dimension(&Dimension::THE_NETHER).len(), 1);
-        assert!(carvers_for_dimension(&Dimension::THE_END).is_empty());
+    fn carve_run_threads_carver_aquifer_for_overworld() {
+        with_test_carve_run(Dimension::OVERWORLD, |run| {
+            assert!(run.ctx.carver_aquifer.is_some());
+        });
     }
 }

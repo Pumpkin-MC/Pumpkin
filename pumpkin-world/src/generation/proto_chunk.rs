@@ -59,6 +59,8 @@ use crate::{
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::tick::{ScheduledTick, TickPriority};
+
 enum ActiveSupplier {
     Overworld(MultiNoiseBiomeSupplier),
     Nether(MultiNoiseBiomeSupplier),
@@ -177,6 +179,7 @@ pub struct ProtoChunk {
     /// Block entities pending creation when the chunk is finalized.
     /// These are created from structure templates during world generation.
     pub pending_block_entities: Vec<NbtCompound>,
+    pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
 pub struct TerrainCache {
@@ -258,6 +261,7 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            fluid_ticks: Vec::new(),
         }
     }
     #[must_use]
@@ -372,6 +376,15 @@ impl ProtoChunk {
     /// Takes all pending block entities, leaving an empty Vec.
     pub fn take_pending_block_entities(&mut self) -> Vec<NbtCompound> {
         std::mem::take(&mut self.pending_block_entities)
+    }
+
+    pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {
+        self.fluid_ticks.push(ScheduledTick {
+            delay: 0,
+            priority: TickPriority::Normal,
+            position: BlockPos::new(x, y, z),
+            value: fluid,
+        });
     }
 
     fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
@@ -1382,5 +1395,32 @@ impl BlockAccessor for ProtoChunk {
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
         BlockState::from_id_with_block(id.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::{dimension::Dimension, fluid::Fluid};
+    use pumpkin_util::world_seed::Seed;
+
+    use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+    use crate::tick::TickPriority;
+
+    use super::ProtoChunk;
+
+    #[test]
+    fn schedule_fluid_tick_records_generation_tick() {
+        let generator = VanillaGenerator::new(Seed(42), Dimension::OVERWORLD);
+        let mut chunk = ProtoChunk::new(0, 0, &generator);
+
+        chunk.schedule_fluid_tick(3, 12, 5, &Fluid::WATER);
+
+        assert_eq!(chunk.fluid_ticks.len(), 1);
+        assert_eq!(chunk.fluid_ticks[0].position.0.x, 3);
+        assert_eq!(chunk.fluid_ticks[0].position.0.y, 12);
+        assert_eq!(chunk.fluid_ticks[0].position.0.z, 5);
+        assert!(chunk.fluid_ticks[0].value == &Fluid::WATER);
+        assert_eq!(chunk.fluid_ticks[0].priority, TickPriority::Normal);
+        assert_eq!(chunk.fluid_ticks[0].delay, 0);
     }
 }

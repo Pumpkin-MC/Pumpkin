@@ -1,16 +1,20 @@
 use enum_dispatch::enum_dispatch;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationSettings};
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector3::Vector3},
     random::{RandomImpl, xoroshiro128::XoroshiroSplitter},
 };
 
 use crate::generation::{
+    GlobalRandomConfig, biome_coords,
     noise::{
-        LAVA_BLOCK, WATER_BLOCK,
+        CHUNK_DIM, LAVA_BLOCK, WATER_BLOCK,
         router::{
-            chunk_density_function::ChunkNoiseFunctionSampleOptions,
+            chunk_density_function::{
+                ChunkNoiseFunctionBuilderOptions, ChunkNoiseFunctionSampleOptions, SampleAction,
+            },
             chunk_noise_router::ChunkNoiseRouter,
+            proto_noise_router::ProtoNoiseRouters,
             surface_height_sampler::SurfaceHeightEstimateSampler,
         },
     },
@@ -53,6 +57,104 @@ pub trait FluidLevelSamplerImpl {
 pub enum AquiferSampler {
     SeaLevel(SeaLevelAquiferSampler),
     Aquifer(WorldAquiferSampler),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CarverAquiferResult {
+    pub state: Option<&'static BlockState>,
+    pub should_schedule_fluid_update: bool,
+}
+
+pub struct CarverAquiferSampler<'a> {
+    aquifer: WorldAquiferSampler,
+    router: ChunkNoiseRouter<'a>,
+    height_estimator: SurfaceHeightEstimateSampler<'a>,
+    sample_options: ChunkNoiseFunctionSampleOptions,
+}
+
+impl<'a> CarverAquiferSampler<'a> {
+    #[must_use]
+    pub fn new(
+        chunk_x: i32,
+        chunk_z: i32,
+        base_router: &'a ProtoNoiseRouters,
+        random_config: &GlobalRandomConfig,
+        settings: &GenerationSettings,
+    ) -> Self {
+        let shape = &settings.shape;
+        let horizontal_cell_count = CHUNK_DIM / shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(chunk_x);
+        let start_z = chunk_pos::start_block_z(chunk_z);
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count as i32 * shape.horizontal_cell_block_count() as i32,
+        );
+        let builder_options = ChunkNoiseFunctionBuilderOptions::new(
+            shape.horizontal_cell_block_count() as usize,
+            shape.vertical_cell_block_count() as usize,
+            floor_div(
+                shape.height as usize,
+                shape.vertical_cell_block_count() as usize,
+            ),
+            horizontal_cell_count as usize,
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+            horizontal_biome_end as usize,
+        );
+        let surface_config =
+            super::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+                biome_coords::from_block(start_x),
+                biome_coords::from_block(start_z),
+                horizontal_biome_end as usize,
+                shape.min_y as i32,
+                shape.max_y() as i32,
+                shape.vertical_cell_block_count() as usize,
+            );
+        let fluid_level = StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(
+                settings.sea_level,
+                Block::from_state_id(settings.default_fluid.id),
+            ),
+            FluidLevel::new(-54, &Block::LAVA),
+        );
+
+        Self {
+            aquifer: WorldAquiferSampler::new(
+                chunk_x,
+                chunk_z,
+                &random_config.aquifer_random_deriver,
+                shape.min_y,
+                shape.height,
+                fluid_level,
+            ),
+            router: ChunkNoiseRouter::generate(&base_router.noise, &builder_options),
+            height_estimator: SurfaceHeightEstimateSampler::generate(
+                &base_router.surface_estimator,
+                &surface_config,
+            ),
+            sample_options: ChunkNoiseFunctionSampleOptions::new(
+                false,
+                SampleAction::SkipCellCaches,
+                0,
+                0,
+                0,
+            ),
+        }
+    }
+
+    pub fn compute(&mut self, pos: &Vector3<i32>, density: f64) -> CarverAquiferResult {
+        let (state, should_schedule_fluid_update) = self.aquifer.apply_internal(
+            &mut self.router,
+            pos,
+            &self.sample_options,
+            &mut self.height_estimator,
+            density,
+        );
+
+        CarverAquiferResult {
+            state,
+            should_schedule_fluid_update,
+        }
+    }
 }
 
 macro_rules! packed_position_index {
@@ -720,7 +822,7 @@ mod random_positions_and_hypot {
         },
     };
 
-    use super::{AquiferSampler, FluidLevel, WorldAquiferSampler};
+    use super::{AquiferSampler, CarverAquiferSampler, FluidLevel, WorldAquiferSampler};
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
@@ -792,6 +894,57 @@ mod random_positions_and_hypot {
         );
 
         (aquifer, noise.router, height_estimator, options)
+    }
+
+    fn create_carver_aquifer() -> CarverAquiferSampler<'static> {
+        let settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
+        CarverAquiferSampler::new(7, 4, &PROTO_ROUTER, &RANDOM_CONFIG, settings)
+    }
+
+    #[test]
+    fn carver_aquifer_returns_stable_output() {
+        let pos = Vector3::new(112, 0, 64);
+        let mut first = create_carver_aquifer();
+        let mut second = create_carver_aquifer();
+
+        assert_eq!(first.compute(&pos, -1.0), second.compute(&pos, -1.0));
+    }
+
+    #[test]
+    fn carver_aquifer_handles_chunk_edges() {
+        let mut aquifer = create_carver_aquifer();
+        let positions = [
+            Vector3::new(112, -64, 64),
+            Vector3::new(127, -64, 79),
+            Vector3::new(112, 319, 79),
+            Vector3::new(127, 319, 64),
+        ];
+
+        for pos in positions {
+            let _ = aquifer.compute(&pos, -1.0);
+        }
+    }
+
+    #[test]
+    fn carver_aquifer_reports_fluid_schedule_signal() {
+        let mut aquifer = create_carver_aquifer();
+        let mut found_schedule = false;
+
+        'positions: for y in -64..=63 {
+            for x in 112..=127 {
+                for z in 64..=79 {
+                    if aquifer
+                        .compute(&Vector3::new(x, y, z), -1.0)
+                        .should_schedule_fluid_update
+                    {
+                        found_schedule = true;
+                        break 'positions;
+                    }
+                }
+            }
+        }
+
+        assert!(found_schedule);
     }
 
     #[test]

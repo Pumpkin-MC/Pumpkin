@@ -327,7 +327,9 @@ impl Chunk {
             z: proto_chunk.z,
             dirty: AtomicBool::new(true),
             block_ticks: Default::default(),
-            fluid_ticks: Default::default(),
+            fluid_ticks: crate::tick::scheduler::ChunkTickScheduler::from_iter(
+                proto_chunk.fluid_ticks,
+            ),
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
