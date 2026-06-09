@@ -1,5 +1,5 @@
 use super::cave::get_height;
-use super::{CarveRun, Carver};
+use super::{CarveRun, Carver, carve_top_material};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -251,6 +251,8 @@ impl CanyonCarver {
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
                 if xd * xd + zd * zd < 1.0 {
+                    let mut has_grass = false;
+
                     for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
@@ -264,7 +266,14 @@ impl CanyonCarver {
                         ) && !run.chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             run.chunk.carving_mask.set(world_x, world_y, world_z);
-                            Self::carve_block(run, config, world_x, world_y, world_z);
+                            Self::carve_block(
+                                run,
+                                config,
+                                world_x,
+                                world_y,
+                                world_z,
+                                &mut has_grass,
+                            );
                         }
                     }
                 }
@@ -288,10 +297,21 @@ impl CanyonCarver {
         (xd * xd + zd * zd) * width_factor_per_height[y_index - 1] as f64 + yd * yd / 6.0 >= 1.0
     }
 
-    fn carve_block(run: &mut CarveRun, config: &CarverConfig, x: i32, y: i32, z: i32) -> bool {
+    fn carve_block(
+        run: &mut CarveRun,
+        config: &CarverConfig,
+        x: i32,
+        y: i32,
+        z: i32,
+        has_grass: &mut bool,
+    ) -> bool {
         let local_y = y - run.chunk.bottom_y() as i32;
         let state_id = run.chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
+
+        if block.id == run.ids.grass_block.id || block.id == run.ids.mycelium.id {
+            *has_grass = true;
+        }
 
         if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
             return false;
@@ -304,8 +324,10 @@ impl CanyonCarver {
 
             if y <= lava_y {
                 run.chunk.set_block_state(x, y, z, run.ids.lava);
+                carve_top_material(run, x, y, z, run.ids.lava, *has_grass, true);
             } else {
                 run.chunk.set_block_state(x, y, z, run.ids.air);
+                carve_top_material(run, x, y, z, run.ids.air, *has_grass, true);
             }
 
             return true;

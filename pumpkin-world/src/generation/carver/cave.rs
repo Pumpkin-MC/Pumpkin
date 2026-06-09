@@ -1,4 +1,4 @@
-use super::{CarveRun, Carver};
+use super::{CarveRun, Carver, carve_top_material};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -407,17 +407,7 @@ impl CaveCarver {
             //     chunk.mark_pos_for_postprocessing(x, y, z);
             // }
 
-            // TODO: fix this (grass block survival logic)
-            // if *has_grass {
-            //     let below_state_id = chunk.get_block_state_raw(x, local_y - 1, z);
-            //     let below_block = pumpkin_data::Block::from_state_id(below_state_id);
-
-            //     if below_block.id == pumpkin_data::Block::DIRT.id {
-            //         let top_material =
-            //            pumpkin_data::Block::GRASS_BLOCK.default_state;
-            //         chunk.set_block_state(x, local_y - 1, z, top_material);
-            //     }
-            // }
+            carve_top_material(run, x, y, z, state, *has_grass, !is_nether);
 
             return true;
         }

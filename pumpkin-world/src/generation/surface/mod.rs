@@ -52,6 +52,7 @@ pub struct MaterialRuleContext<'a> {
     pub stone_depth_above: i32,
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
+    steep_material_condition: Option<bool>,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -88,6 +89,7 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_below: 0,
             stone_depth_above: 0,
             sea_level,
+            steep_material_condition: None,
         }
     }
 
@@ -133,9 +135,12 @@ impl<'a> MaterialRuleContext<'a> {
         }
         self.secondary_depth
     }
+
+    pub const fn set_steep_material_condition(&mut self, steep: bool) {
+        self.steep_material_condition = Some(steep);
+    }
 }
 
-#[expect(clippy::similar_names)]
 pub fn test_condition(
     condition: &MaterialCondition,
     chunk: &mut ProtoChunk,
@@ -161,28 +166,9 @@ pub fn test_condition(
             );
             temperature < 0.15f32
         }
-        MaterialCondition::Steep => {
-            let local_x = context.block_pos_x & 15;
-            let local_z = context.block_pos_z & 15;
-
-            let local_z_sub = 0.max(local_z - 1);
-            let local_z_add = 15.min(local_z + 1);
-
-            let sub_height = chunk.top_block_height_exclusive(local_x, local_z_sub);
-            let add_height = chunk.top_block_height_exclusive(local_x, local_z_add);
-
-            if add_height >= sub_height + 4 {
-                true
-            } else {
-                let local_x_sub = 0.max(local_x - 1);
-                let local_x_add = 15.min(local_x + 1);
-
-                let sub_height = chunk.top_block_height_exclusive(local_x_sub, local_z);
-                let add_height = chunk.top_block_height_exclusive(local_x_add, local_z);
-
-                sub_height >= add_height + 4
-            }
-        }
+        MaterialCondition::Steep => context.steep_material_condition.unwrap_or_else(|| {
+            steep_material_condition(chunk, context.block_pos_x, context.block_pos_z)
+        }),
         MaterialCondition::Not(not) => {
             test_not_material(not, chunk, context, surface_height_estimate_sampler)
         }
@@ -192,6 +178,30 @@ pub fn test_condition(
         }
         MaterialCondition::StoneDepth(stone_depth) => test_stone_depth(stone_depth, context),
     }
+}
+
+#[must_use]
+pub fn steep_material_condition(chunk: &ProtoChunk, block_x: i32, block_z: i32) -> bool {
+    let local_x = block_x & 15;
+    let local_z = block_z & 15;
+
+    let local_z_sub = 0.max(local_z - 1);
+    let local_z_add = 15.min(local_z + 1);
+
+    let sub_height = chunk.top_block_height_exclusive(local_x, local_z_sub);
+    let add_height = chunk.top_block_height_exclusive(local_x, local_z_add);
+
+    if add_height >= sub_height + 4 {
+        return true;
+    }
+
+    let local_x_sub = 0.max(local_x - 1);
+    let local_x_add = 15.min(local_x + 1);
+
+    let sub_height = chunk.top_block_height_exclusive(local_x_sub, local_z);
+    let add_height = chunk.top_block_height_exclusive(local_x_add, local_z);
+
+    sub_height >= add_height + 4
 }
 
 pub struct HoleMaterialCondition;
