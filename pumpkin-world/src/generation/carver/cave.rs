@@ -425,154 +425,76 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::Block;
     use pumpkin_data::carver::CAVE;
+    use pumpkin_data::{Block, dimension::Dimension};
+
+    type Run<'a, 'b> = super::super::CarveRun<'a, 'b>;
 
     #[test]
-    fn carve_block_writes_aquifer_state_at_world_y() {
-        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
-            let x = 5;
-            let y = 20;
-            let z = 6;
-            let old_wrong_y = y - run.chunk.bottom_y() as i32;
-            let mut has_grass = false;
-            let expected_state = super::super::overworld_carve_state(run, &CAVE, x, y, z)
+    fn carves_at_world_y() {
+        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+            let expected = super::super::overworld_carve_state(run, &CAVE, 5, 20, 6)
                 .expect("test position should carve")
-                .0;
-
-            run.chunk
-                .set_block_state(x, y, z, Block::STONE.default_state);
-            run.chunk
-                .set_block_state(x, old_wrong_y, z, Block::STONE.default_state);
-
-            assert!(CaveCarver::carve_block(
-                run,
-                &CAVE,
-                x,
-                y,
-                z,
-                false,
-                &mut has_grass,
-            ));
-
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
-                expected_state.id,
-            );
-            assert_eq!(
-                run.chunk
-                    .get_block_state(&Vector3::new(x, old_wrong_y, z))
-                    .0,
-                Block::STONE.default_state.id,
-            );
+                .0
+                .id;
+            assert_world_y(run, 5, 20, 6, expected);
+            assert_world_y(run, 7, -58, 8, Block::LAVA.default_state.id);
         });
     }
 
     #[test]
-    fn carve_block_replaces_water_with_aquifer_state() {
-        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
-            let Some((x, y, z, expected_state)) =
+    fn uses_aquifer_state() {
+        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+            let (x, y, z, expected_state) =
                 find_aquifer_carve_state(run, |state, _| state.id != Block::AIR.default_state.id)
-            else {
-                panic!("expected non-air aquifer carve state in test chunk");
-            };
-            let mut has_grass = false;
-
-            run.chunk
-                .set_block_state(x, y, z, Block::WATER.default_state);
-
-            assert!(CaveCarver::carve_block(
-                run,
-                &CAVE,
-                x,
-                y,
-                z,
-                false,
-                &mut has_grass,
-            ));
-
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
-                expected_state.id,
-            );
+                    .expect("expected non-air aquifer carve state in test chunk");
+            carve_at(run, x, y, z, Block::WATER.default_state, expected_state.id);
             assert_ne!(expected_state.id, Block::AIR.default_state.id);
-        });
-    }
 
-    #[test]
-    fn carve_block_schedules_aquifer_fluids() {
-        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
-            let Some((x, y, z, expected_state)) =
+            let (x, y, z, expected_state) =
                 find_aquifer_carve_state(run, |state, schedule| state.is_liquid() && schedule)
-            else {
-                panic!("expected scheduled aquifer fluid in test chunk");
-            };
-            let mut has_grass = false;
+                    .expect("expected scheduled aquifer fluid in test chunk");
             let old_tick_count = run.chunk.fluid_ticks.len();
 
-            run.chunk
-                .set_block_state(x, y, z, Block::STONE.default_state);
-
-            assert!(CaveCarver::carve_block(
-                run,
-                &CAVE,
-                x,
-                y,
-                z,
-                false,
-                &mut has_grass,
-            ));
-
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
-                expected_state.id,
-            );
+            carve_at(run, x, y, z, Block::STONE.default_state, expected_state.id);
             assert_eq!(run.chunk.fluid_ticks.len(), old_tick_count + 1);
-            assert_eq!(run.chunk.fluid_ticks.last().unwrap().position.0.x, x);
-            assert_eq!(run.chunk.fluid_ticks.last().unwrap().position.0.y, y);
-            assert_eq!(run.chunk.fluid_ticks.last().unwrap().position.0.z, z);
+            let pos = run.chunk.fluid_ticks.last().unwrap().position.0;
+            assert_eq!((pos.x, pos.y, pos.z), (x, y, z));
         });
     }
 
-    #[test]
-    fn carve_block_writes_lava_at_world_y() {
-        super::super::with_carve_run(pumpkin_data::dimension::Dimension::OVERWORLD, |run| {
-            let x = 7;
-            let y = -58;
-            let z = 8;
-            let old_wrong_y = y - run.chunk.bottom_y() as i32;
-            let mut has_grass = false;
+    fn assert_world_y(run: &mut Run, x: i32, y: i32, z: i32, expected: u16) {
+        let old_wrong_y = y - run.chunk.bottom_y() as i32;
+        let stone = Block::STONE.default_state;
 
-            run.chunk
-                .set_block_state(x, y, z, Block::STONE.default_state);
-            run.chunk
-                .set_block_state(x, old_wrong_y, z, Block::STONE.default_state);
+        run.chunk.set_block_state(x, y, z, stone);
+        run.chunk.set_block_state(x, old_wrong_y, z, stone);
+        carve_at(run, x, y, z, stone, expected);
+        assert_eq!(block_id(run, x, old_wrong_y, z), stone.id);
+    }
 
-            assert!(CaveCarver::carve_block(
-                run,
-                &CAVE,
-                x,
-                y,
-                z,
-                false,
-                &mut has_grass,
-            ));
+    fn carve_at(
+        run: &mut Run,
+        x: i32,
+        y: i32,
+        z: i32,
+        initial_state: &'static pumpkin_data::BlockState,
+        expected: u16,
+    ) {
+        let mut has_grass = false;
 
-            assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y, z)).0,
-                Block::LAVA.default_state.id,
-            );
-            assert_eq!(
-                run.chunk
-                    .get_block_state(&Vector3::new(x, old_wrong_y, z))
-                    .0,
-                Block::STONE.default_state.id,
-            );
-        });
+        run.chunk.set_block_state(x, y, z, initial_state);
+        let carved = CaveCarver::carve_block(run, &CAVE, x, y, z, false, &mut has_grass);
+        assert!(carved);
+        assert_eq!(block_id(run, x, y, z), expected);
+    }
+
+    fn block_id(run: &Run, x: i32, y: i32, z: i32) -> u16 {
+        run.chunk.get_block_state(&Vector3::new(x, y, z)).0
     }
 
     fn find_aquifer_carve_state(
-        run: &mut super::super::CarveRun,
+        run: &mut Run,
         predicate: impl Fn(&'static pumpkin_data::BlockState, bool) -> bool,
     ) -> Option<(i32, i32, i32, &'static pumpkin_data::BlockState)> {
         let lava_y = CAVE

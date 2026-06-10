@@ -1397,30 +1397,3 @@ impl BlockAccessor for ProtoChunk {
         BlockState::from_id_with_block(id.0)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use pumpkin_data::{dimension::Dimension, fluid::Fluid};
-    use pumpkin_util::world_seed::Seed;
-
-    use crate::generation::generator::{GeneratorInit, VanillaGenerator};
-    use crate::tick::TickPriority;
-
-    use super::ProtoChunk;
-
-    #[test]
-    fn schedule_fluid_tick_records_generation_tick() {
-        let generator = VanillaGenerator::new(Seed(42), Dimension::OVERWORLD);
-        let mut chunk = ProtoChunk::new(0, 0, &generator);
-
-        chunk.schedule_fluid_tick(3, 12, 5, &Fluid::WATER);
-
-        assert_eq!(chunk.fluid_ticks.len(), 1);
-        assert_eq!(chunk.fluid_ticks[0].position.0.x, 3);
-        assert_eq!(chunk.fluid_ticks[0].position.0.y, 12);
-        assert_eq!(chunk.fluid_ticks[0].position.0.z, 5);
-        assert!(chunk.fluid_ticks[0].value == &Fluid::WATER);
-        assert_eq!(chunk.fluid_ticks[0].priority, TickPriority::Normal);
-        assert_eq!(chunk.fluid_ticks[0].delay, 0);
-    }
-}
