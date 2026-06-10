@@ -242,6 +242,7 @@ impl GenerationSchedule {
         self.queue = BinaryHeap::from(tasks);
     }
 
+    /// TODO: will remove at some point
     pub(crate) fn restore_ready_tasks(
         graph: &mut DAG,
         queue: &mut BinaryHeap<TaskHeapNode>,
