@@ -10,6 +10,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
@@ -69,6 +70,10 @@ pub struct TrapDoorBlock;
 impl BlockBehaviour for TrapDoorBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if args.player.gamemode.load() == GameMode::Spectator {
+                return BlockActionResult::Pass;
+            }
+
             if !can_open_trapdoor(args.block) {
                 return BlockActionResult::Pass;
             }
