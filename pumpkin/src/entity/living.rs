@@ -11,7 +11,6 @@ use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
-use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
@@ -19,7 +18,7 @@ use std::sync::atomic::{
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
-use tracing::warn;
+use tracing::warn; // inside pumpkin_protocol
 
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
@@ -1291,6 +1290,7 @@ impl LivingEntity {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn on_death(
         &self,
         damage_type: DamageType,
@@ -1301,79 +1301,141 @@ impl LivingEntity {
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
             .expect("Entity not found in world");
+
+        // Atomic guard to prevent double-death logic execution
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
-            .is_ok()
+            .is_err()
         {
-            self.movement_input.store(Vector3::default());
-            self.jumping.store(false, Relaxed);
+            return;
+        }
 
-            // Plays the death sound
-            world.send_entity_status(&self.entity, EntityStatus::Death);
-            let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
-                this_entity: Some(self.entity.entity_type),
-                killer_entity: cause.map(|c| c.get_entity().entity_type),
-                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
-                position: Some(self.entity.pos.load()),
-                world_time: world.level_info.load().day_time as u64,
-                damage_type: Some(damage_type),
-                ..Default::default()
-            };
+        self.movement_input.store(Vector3::default());
+        self.jumping.store(false, Relaxed);
 
-            // Drop loot
-            self.drop_loot(params).await;
+        // Update health and pose server-side
+        self.health.store(0.0);
+        self.entity.pose.store(EntityPose::Dying);
 
-            // Award experience
-            if params.killed_by_player.unwrap_or(false)
-                && world.level_info.load().game_rules.mob_drops
-            {
-                let amount = dyn_self.get_experience_reward(cause);
-                if amount > 0 {
-                    ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
+        // ALWAYS broadcast entity status first so the client updates its targeting matrix
+        world.send_entity_status(&self.entity, EntityStatus::Death);
+
+        let entity_type = self.entity.entity_type;
+
+        // FIX #2205 & #1621: Only sync structural pose/health metadata down to actual players.
+        // Mobs and Armor stands are destroyed instantly on the client side via entity status.
+        if *entity_type == EntityType::PLAYER {
+            self.entity
+                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                    pumpkin_data::tracked_data::TrackedData::POSE,
+                    pumpkin_data::meta_data_type::MetaDataType::POSE,
+                    pumpkin_protocol::codec::var_int::VarInt(EntityPose::Dying as i32),
+                )]);
+
+            self.entity
+                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                    pumpkin_data::tracked_data::TrackedData::HEALTH,
+                    pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                    0.0f32,
+                )]);
+        }
+
+        let cause_type = cause.map(|c| c.get_entity().entity_type);
+        let feet_pos = self.entity.pos.load();
+
+        let params = LootContextParameters {
+            killed_by_player: Some(cause_type == Some(&EntityType::PLAYER)),
+            this_entity: Some(entity_type),
+            killer_entity: cause_type,
+            direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+            position: Some(feet_pos),
+            world_time: world.level_info.load().day_time as u64,
+            damage_type: Some(damage_type),
+            ..Default::default()
+        };
+
+        // Drop loot table items via fluid vector spaces
+        self.drop_loot(params).await;
+
+        // Award experience
+        let level_info = world.level_info.load();
+        if params.killed_by_player == Some(true) && level_info.game_rules.mob_drops {
+            let amount = dyn_self.get_experience_reward(cause);
+            if amount > 0 {
+                ExperienceOrbEntity::spawn(&world, feet_pos, amount).await;
+            }
+        }
+
+        // Extract items safely to prevent holding locks over async drop boundaries
+        let mut items_to_drop = Vec::new();
+        {
+            let equipment_lock = self.entity_equipment.lock().await;
+            for slot in self.equipment_slots.values() {
+                let equipment = equipment_lock.get(slot);
+                let mut item_lock = equipment.lock().await;
+                let item = std::mem::replace(&mut *item_lock, ItemStack::EMPTY.clone());
+
+                if !item.is_empty() {
+                    items_to_drop.push(item);
                 }
             }
-            self.entity.pose.store(EntityPose::Dying);
+        }
 
-            let block_pos = self.entity.block_pos.load();
+        // VANILLA EXACT POSITION FIX: Spawn items at standard eye/head level (+1.62 Y).
+        // Using explicit Vector3 math allows items to stay trapped in cobwebs natively.
+        let head_drop_pos = Vector3::new(feet_pos.x, feet_pos.y + 1.62, feet_pos.z);
 
-            let armor_slots: Vec<Arc<Mutex<ItemStack>>> = {
-                let equipment_lock = self.entity_equipment.lock().await;
-                self.equipment_slots
-                    .values()
-                    .map(|slot| equipment_lock.get(slot))
-                    .collect()
-            };
+        // Convert the fluid position directly into BlockPos coordinates expected by drop_stack
+        let item_spawn_block_pos = BlockPos::new(
+            head_drop_pos.x.floor() as i32,
+            head_drop_pos.y.floor() as i32,
+            head_drop_pos.z.floor() as i32,
+        );
 
-            for equipment in armor_slots {
-                let item = {
-                    let mut item_lock = equipment.lock().await;
-                    mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
-                };
-                world.drop_stack(&block_pos, item).await;
-            }
+        let drop_futures = items_to_drop
+            .into_iter()
+            .map(|item| world.drop_stack(&item_spawn_block_pos, item));
+        futures::future::join_all(drop_futures).await;
 
-            // Broadcast death message if it's a player and the gamerule is enabled
-            let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
-            if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
-                //TODO: KillCredit
-                let death_message =
-                    Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
-                if let Some(server) = world.server.upgrade() {
+        // Broadcast death message and trigger the client death screen if it's a player
+        if *entity_type == EntityType::PLAYER {
+            let death_message =
+                Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
+
+            if let Some(server) = world.server.upgrade() {
+                if let Some(player) = server.get_player_by_uuid(self.entity.entity_uuid) {
+                    let combat_death_packet =
+                        pumpkin_protocol::java::client::play::CCombatDeath::new(
+                            pumpkin_protocol::codec::var_int::VarInt(self.entity.entity_id),
+                            &death_message,
+                        );
+                    player.client.send_packet_now(&combat_death_packet).await;
+                }
+
+                // Chat broadcast to all other active server players
+                if level_info.game_rules.show_death_messages {
                     for player in server.get_all_players() {
                         player.send_system_message(&death_message).await;
                     }
                 }
             }
-
-            self.reset_effects_and_attributes().await;
         }
+
+        self.reset_effects_and_attributes().await;
     }
 
     async fn drop_loot(&self, params: LootContextParameters) {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
-            let pos = self.entity.block_pos.load();
+            let feet_pos = self.entity.pos.load();
+            let head_drop_pos = Vector3::new(feet_pos.x, feet_pos.y + 1.62, feet_pos.z);
+
+            let pos = BlockPos::new(
+                head_drop_pos.x.floor() as i32,
+                head_drop_pos.y.floor() as i32,
+                head_drop_pos.z.floor() as i32,
+            );
+
             for stack in loot_table.get_loot(params) {
                 self.entity.world.load().drop_stack(&pos, stack).await;
             }
@@ -1387,7 +1449,6 @@ impl LivingEntity {
         {
             let mut effects = self.active_effects.lock().await;
             for effect in effects.values_mut() {
-                // A duration below 0 means the effect is infinite
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
                     continue;
@@ -1400,8 +1461,6 @@ impl LivingEntity {
             }
         }
 
-        // Call the central removal function for each expired effect
-        // This will now trigger your logs and absorption resets!
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
@@ -1707,7 +1766,7 @@ impl LivingEntity {
 
         // If this LivingEntity corresponds to a Player, reset their hunger manager
         let world = self.entity.world.load();
-        if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
+        if let Some(player) = world.get_player_by_uuid(self.entity.entity_uuid) {
             player.hunger_manager.restart();
         }
 
@@ -1773,7 +1832,7 @@ impl LivingEntity {
 
     pub fn is_player(&self) -> bool {
         let world = self.entity.world.load();
-        world.get_player_by_id(self.entity.entity_id).is_some()
+        world.get_player_by_uuid(self.entity.entity_uuid).is_some()
     }
 
     pub fn get_movement(&self) -> Vector3<f64> {
