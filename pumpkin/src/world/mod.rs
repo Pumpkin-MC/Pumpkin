@@ -11,10 +11,11 @@ use pumpkin_protocol::bedrock::network_item::{
 };
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
+use std::num::NonZeroUsize;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, LazyLock, Weak};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::atomic::Ordering,
 };
 use tracing::{debug, error, info, trace, warn};
@@ -41,6 +42,7 @@ use crate::{
     error::PumpkinError,
     net::{ClientPlatform, java::JavaClient},
     plugin::{
+        api::events::world::chunk_send::ChunkSend,
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
     },
@@ -92,6 +94,7 @@ use pumpkin_protocol::{
             add_player::CAddPlayer,
             creative_content::{CCreativeContent, Group},
             gamerules_changed::GameRules,
+            level_chunk::CLevelChunk,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
@@ -132,8 +135,82 @@ use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
+
+/// When a single chunk column accumulates at least this many queued block
+/// changes in one flush, resend the whole chunk via `CChunkData` instead of
+/// emitting one `CMultiBlockUpdate` per touched 16x16x16 section. The protocol
+/// caps a multi-block-update packet at a single section, so a dense edit (e.g.
+/// a WorldEdit-style paste) would otherwise produce dozens of packets per
+/// column; one chunk packet is cheaper to send and to apply client-side.
+const CHUNK_RESEND_BLOCK_THRESHOLD: usize = 4_096;
+
+/// How many chunks a bulk update writes to concurrently. Each chunk write holds
+/// only that chunk's own locks, so distinct chunks never contend; the real limit
+/// is CPU. Scale with core count (writes run on the blocking pool) so large
+/// servers parallelize a big paste, while a floor keeps small machines sane.
+static MAX_BULK_BLOCK_WRITE_TASKS: LazyLock<usize> = LazyLock::new(|| {
+    std::thread::available_parallelism()
+        .map_or(4, NonZeroUsize::get)
+        .max(4)
+});
+
+/// How many chunks run per-block side effects (neighbor updates, block-entity
+/// callbacks, relight) concurrently.
+///
+/// Unlike the chunk writers, these tasks are *not* purely async I/O: a single
+/// changed block can recursively trigger `set_block_state` on its neighbors
+/// (redstone, observers, doors, ...), and each of those runs a synchronous,
+/// non-yielding light-convergence pass. Running too many of these at once can
+/// monopolize every tokio worker thread for seconds, starving unrelated tasks
+/// (e.g. a player's inventory lock acquisition) until they hit their timeouts.
+/// Leave at least one worker free for the rest of the server.
+static MAX_BULK_BLOCK_SIDE_EFFECT_TASKS: LazyLock<usize> = LazyLock::new(|| {
+    std::thread::available_parallelism()
+        .map_or(2, NonZeroUsize::get)
+        .saturating_sub(1)
+        .max(2)
+});
+
+/// How many top-level changes a side-effect task processes before yielding to
+/// the runtime. Each change can recursively cascade into many more
+/// `set_block_state` calls (neighbor updates, redstone, lighting convergence),
+/// so this is kept low to give other tasks frequent scheduling chances during
+/// a large bulk update.
+const BULK_BLOCK_SIDE_EFFECT_YIELD_INTERVAL: usize = 16;
+const USE_JAVA_MULTI_BLOCK_UPDATE_PACKET: bool = true;
+
+fn is_valid_block_state_id(block_state_id: BlockStateId) -> bool {
+    let block = Block::from_state_id(block_state_id);
+    block.states.first().is_some_and(|first_state| {
+        block
+            .states
+            .last()
+            .is_some_and(|last_state| (first_state.id..=last_state.id).contains(&block_state_id))
+    })
+}
+
+fn needs_bulk_block_side_effects(flags: BlockFlags) -> bool {
+    flags.intersects(BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::MOVED)
+        || !flags.contains(BlockFlags::FORCE_STATE)
+        || !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK)
+        || !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK)
+}
+
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
+
+/// The pending client-visible block changes within a single 16x16x16 chunk
+/// section: the section position and the `(position, state)` pairs in it.
+type ChunkSectionUpdates = (Vector3<i32>, Vec<(BlockPos, BlockStateId)>);
+
+/// A single block write within a chunk during a bulk update: an index back into
+/// the flat `applied` list, the chunk-relative `(x, y, z)`, and the new state.
+type BulkChunkWrite = (usize, usize, i32, usize, BlockStateId);
+
+/// The result of writing one chunk's worth of bulk changes: the writes that were
+/// requested, paired with the per-write `(index, replaced state)` pairs the chunk
+/// reported back (or `None` if the chunk was not loaded).
+type BulkChunkWriteResult = (Vec<BulkChunkWrite>, Option<Vec<(usize, BlockStateId)>>);
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
@@ -214,6 +291,7 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    pending_block_update_sections: Mutex<VecDeque<ChunkSectionUpdates>>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
@@ -263,6 +341,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            pending_block_update_sections: Mutex::new(VecDeque::new()),
             portal_poi: Mutex::new(portal_poi),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
@@ -981,75 +1060,218 @@ impl World {
             .insert(position, block_state_id);
     }
 
-    pub async fn flush_block_updates(&self) {
-        let mut block_state_updates_by_chunk_section: HashMap<
-            Vector3<i32>,
-            Vec<(BlockPos, BlockStateId)>,
-        > = HashMap::new();
+    pub async fn flush_block_updates(self: &Arc<Self>) {
         let changes = {
             let mut guard = self.unsent_block_changes.lock().await;
             std::mem::take(&mut *guard)
         };
-        for (position, block_state_id) in changes {
-            let chunk_section = chunk_section_from_pos(&position);
-            block_state_updates_by_chunk_section
-                .entry(chunk_section)
-                .or_default()
-                .push((position, block_state_id));
+
+        if !changes.is_empty() {
+            let mut block_state_updates_by_chunk_section: HashMap<
+                Vector3<i32>,
+                Vec<(BlockPos, BlockStateId)>,
+            > = HashMap::new();
+
+            for (position, block_state_id) in changes {
+                let chunk_section = chunk_section_from_pos(&position);
+                block_state_updates_by_chunk_section
+                    .entry(chunk_section)
+                    .or_default()
+                    .push((position, block_state_id));
+            }
+
+            let mut pending = self.pending_block_update_sections.lock().await;
+            pending.extend(block_state_updates_by_chunk_section);
         }
 
-        // TODO: only send packet to players who have the chunks loaded
-        // TODO: Send light updates to update the wire directly next to a broken block
+        // Drain the entire pending queue every tick. The per-tick cap that used
+        // to throttle this streamed a large batch (a WorldEdit-style paste) to
+        // clients a few sections at a time over many ticks; now the whole batch
+        // becomes visible on the tick after it was applied.
+        let block_state_updates_by_chunk_section: Vec<ChunkSectionUpdates> = {
+            let mut pending = self.pending_block_update_sections.lock().await;
+            pending.drain(..).collect()
+        };
+
+        if block_state_updates_by_chunk_section.is_empty() {
+            return;
+        }
+
+        // Group the flat list of sections back into chunk columns so we can
+        // decide, per column, whether a full-chunk resend is cheaper than
+        // per-section multi-block-update packets.
+        let mut sections_by_chunk: HashMap<Vector2<i32>, Vec<ChunkSectionUpdates>> = HashMap::new();
         for (chunk_section, updates) in block_state_updates_by_chunk_section {
             if updates.is_empty() {
                 continue;
             }
-            let chunk_pos = Vector2::new(chunk_section.x, chunk_section.z);
-            if updates.len() == 1 {
-                let (block_pos, block_state_id) = updates[0];
-                let be_block_id = BlockState::to_be_network_id(block_state_id);
-                self.broadcast_to_chunk_editioned_sync(
-                    chunk_pos,
-                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
-                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                        block_pos,
-                        be_block_id as u32,
-                    ),
-                );
-            } else {
-                let players = self.players.load();
-                let mut java_recipients = Vec::new();
+            sections_by_chunk
+                .entry(Vector2::new(chunk_section.x, chunk_section.z))
+                .or_default()
+                .push((chunk_section, updates));
+        }
 
-                let recipients = players.iter().filter(|p| {
-                    let center = p.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(p).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
-                });
+        let mut sections_to_send: Vec<ChunkSectionUpdates> = Vec::new();
+        for (chunk_pos, sections) in sections_by_chunk {
+            let column_block_count: usize = sections.iter().map(|(_, updates)| updates.len()).sum();
 
-                for p in recipients {
-                    match &p.client {
-                        ClientPlatform::Java(_) => java_recipients.push(p),
-                        ClientPlatform::Bedrock(be_client) => {
-                            for (block_pos, block_state_id) in &updates {
-                                let be_block_id = BlockState::to_be_network_id(*block_state_id);
-                                be_client.try_enqueue_packet(
-                                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                                        *block_pos,
-                                        be_block_id as u32,
-                                    ),
-                                );
-                            }
-                        }
+            // Dense column: resend the whole chunk once instead of many
+            // section packets. The chunk is already written and still loaded
+            // (we only just applied the batch to it), so this is a cheap
+            // synchronous clone of the existing `Arc<ChunkData>`.
+            if column_block_count >= CHUNK_RESEND_BLOCK_THRESHOLD
+                && let Some(chunk) = self
+                    .level
+                    .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
+            {
+                self.broadcast_chunk_resend(chunk_pos, chunk).await;
+                continue;
+            }
+
+            sections_to_send.extend(sections);
+        }
+
+        // TODO: only send packet to players who have the chunks loaded
+        // TODO: Send light updates to update the wire directly next to a broken block
+        for (chunk_section, updates) in sections_to_send {
+            self.send_section_block_updates(chunk_section, updates);
+        }
+    }
+
+    /// Sends the queued block changes within a single chunk section to clients,
+    /// picking the cheapest packet: a single `CBlockUpdate` for one change, or a
+    /// `CMultiBlockUpdate` (Java) / per-block `CUpdateBlock` (Bedrock) otherwise.
+    fn send_section_block_updates(
+        &self,
+        chunk_section: Vector3<i32>,
+        updates: Vec<(BlockPos, BlockStateId)>,
+    ) {
+        if updates.is_empty() {
+            return;
+        }
+        let chunk_pos = Vector2::new(chunk_section.x, chunk_section.z);
+        if updates.len() == 1 {
+            let (block_pos, block_state_id) = updates[0];
+            let be_block_id = BlockState::to_be_network_id(block_state_id);
+            self.broadcast_to_chunk_editioned_sync(
+                chunk_pos,
+                &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
+                    block_pos,
+                    be_block_id as u32,
+                ),
+            );
+            return;
+        }
+
+        let players = self.players.load();
+        let mut java_recipients = Vec::new();
+
+        let recipients = players.iter().filter(|p| {
+            let center = p.get_entity().chunk_pos.load();
+            let view_distance = get_view_distance(p).get() as i32;
+            is_within_view_distance(chunk_pos, center, view_distance)
+        });
+
+        for p in recipients {
+            match &p.client {
+                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Bedrock(be_client) => {
+                    for (block_pos, block_state_id) in &updates {
+                        let be_block_id = BlockState::to_be_network_id(*block_state_id);
+                        be_client.try_enqueue_packet(
+                            &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
+                                *block_pos,
+                                be_block_id as u32,
+                            ),
+                        );
                     }
                 }
+            }
+        }
 
-                let recipients_by_version =
-                    Self::collect_java_recipients_by_version(java_recipients.into_iter());
+        let recipients_by_version =
+            Self::collect_java_recipients_by_version(java_recipients.into_iter());
+        if USE_JAVA_MULTI_BLOCK_UPDATE_PACKET {
+            Self::broadcast_java_grouped(&CMultiBlockUpdate::new(&updates), recipients_by_version);
+        } else {
+            for (block_pos, block_state_id) in updates {
                 Self::broadcast_java_grouped(
-                    &CMultiBlockUpdate::new(&updates),
-                    recipients_by_version,
+                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                    recipients_by_version.clone(),
                 );
             }
+        }
+    }
+
+    /// Resends a whole chunk column to every player who can currently see it.
+    ///
+    /// Used by [`Self::flush_block_updates`] when a chunk accumulated so many
+    /// block changes in one flush that a single `CChunkData` packet is cheaper
+    /// than the per-section `CMultiBlockUpdate` packets it would otherwise send.
+    ///
+    /// The Java chunk packet is serialized **once per protocol version** and the
+    /// resulting bytes are shared across every recipient on that version, so a
+    /// dense paste seen by many players costs one serialization per version
+    /// rather than one per player. The `ChunkSend` plugin event is fired a single
+    /// time for the chunk (broadcast semantics): if a plugin cancels it, the
+    /// resend is skipped for everyone.
+    async fn broadcast_chunk_resend(
+        self: &Arc<Self>,
+        chunk_pos: Vector2<i32>,
+        chunk: Arc<ChunkData>,
+    ) {
+        // Fire the plugin event once for this chunk; honor cancellation.
+        if let Some(server) = self.server.upgrade() {
+            let event = ChunkSend::new(self.clone(), chunk.clone());
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+        }
+
+        let players = self.players.load();
+        let mut java_recipients = Vec::new();
+        let mut bedrock_recipients = Vec::new();
+
+        for p in players.iter() {
+            let center = p.get_entity().chunk_pos.load();
+            let view_distance = get_view_distance(p).get() as i32;
+            if !is_within_view_distance(chunk_pos, center, view_distance) {
+                continue;
+            }
+            match &p.client {
+                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client.clone()),
+            }
+        }
+
+        // Java: one serialization per protocol version, shared across recipients.
+        let recipients_by_version =
+            Self::collect_java_recipients_by_version(java_recipients.into_iter());
+        for (version, recipients) in recipients_by_version {
+            let packet_data =
+                match JavaClient::serialize_packet_for_version(&CChunkData(&chunk), version) {
+                    Ok(packet_data) => packet_data,
+                    Err(err) => {
+                        error!("Failed to serialize chunk resend for version {version:?}: {err}");
+                        continue;
+                    }
+                };
+            for recipient in recipients {
+                recipient.try_enqueue_packet_data(packet_data.clone());
+            }
+        }
+
+        // Bedrock: game-packet framing is per-connection (compression/encryption
+        // state lives on the connection), so it cannot share bytes; enqueue the
+        // chunk packet per recipient.
+        for be_client in bedrock_recipients {
+            be_client.try_enqueue_packet(&CLevelChunk {
+                dimension: 0,
+                cache_enabled: false,
+                chunk: &chunk,
+            });
         }
     }
 
@@ -3867,6 +4089,14 @@ impl World {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
+        if !is_valid_block_state_id(block_state_id) {
+            warn!(
+                "Ignoring invalid block state id {} at {:?}",
+                block_state_id, position
+            );
+            return self.get_block_state_id(position);
+        }
+
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
             .level
@@ -3999,6 +4229,392 @@ impl World {
             .update_lighting_at(&self.level, *position);
 
         replaced_block_state_id
+    }
+
+    /// Sets many blocks before yielding, then queues all client-visible changes at once.
+    ///
+    /// This mirrors [`Self::set_block_state`] side effects, but the raw level writes
+    /// and `unsent_block_changes` updates happen for the whole batch first. That keeps
+    /// a large plugin paste from being flushed to clients a few blocks at a time while
+    /// this async function is still awaiting per-block callbacks.
+    #[expect(clippy::too_many_lines)]
+    pub async fn set_block_states(
+        self: &Arc<Self>,
+        changes: Vec<(BlockPos, BlockStateId)>,
+        flags: BlockFlags,
+    ) {
+        let started = std::time::Instant::now();
+        let original_change_count = changes.len();
+        let mut deduped_changes = HashMap::with_capacity(changes.len());
+        for (position, block_state_id) in changes {
+            deduped_changes.insert(position, block_state_id);
+        }
+        let deduped_change_count = deduped_changes.len();
+        let duplicate_change_count = original_change_count.saturating_sub(deduped_change_count);
+
+        let mut invalid_state_count = 0usize;
+        let mut applied: Vec<(BlockPos, BlockStateId, Option<BlockStateId>)> = deduped_changes
+            .into_iter()
+            .filter(|(_, block_state_id)| {
+                let is_valid = is_valid_block_state_id(*block_state_id);
+                if !is_valid {
+                    invalid_state_count += 1;
+                }
+                is_valid
+            })
+            .map(|(position, block_state_id)| (position, block_state_id, None))
+            .collect();
+        let validated = started.elapsed();
+        debug!(
+            "Bulk block update: received {}, deduped {}, duplicate {}, valid {}, invalid {}, validation {:?}",
+            original_change_count,
+            deduped_change_count,
+            duplicate_change_count,
+            applied.len(),
+            invalid_state_count,
+            validated
+        );
+
+        if invalid_state_count > 0 {
+            warn!(
+                "Ignored {} invalid block state ids in bulk block update",
+                invalid_state_count
+            );
+        }
+
+        if applied.is_empty() {
+            return;
+        }
+
+        let mut changes_by_chunk: HashMap<Vector2<i32>, Vec<BulkChunkWrite>> = HashMap::new();
+        let grouping_started = std::time::Instant::now();
+
+        for (index, (position, block_state_id, _)) in applied.iter().enumerate() {
+            let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+            changes_by_chunk.entry(chunk_coordinate).or_default().push((
+                index,
+                relative.x as usize,
+                relative.y,
+                relative.z as usize,
+                *block_state_id,
+            ));
+        }
+        let chunk_count = changes_by_chunk.len();
+        debug!(
+            "Bulk block update: grouped {} changes into {} chunks in {:?}",
+            applied.len(),
+            chunk_count,
+            grouping_started.elapsed()
+        );
+
+        let write_started = std::time::Instant::now();
+        let mut write_tasks = JoinSet::new();
+        for (chunk_coordinate, chunk_changes) in changes_by_chunk {
+            while write_tasks.len() >= *MAX_BULK_BLOCK_WRITE_TASKS {
+                if let Some(result) = write_tasks.join_next().await {
+                    Self::apply_bulk_chunk_write_result(result, &mut applied);
+                }
+            }
+
+            let level = self.level.clone();
+            write_tasks.spawn_blocking(move || {
+                let replacements = level.read_chunk_sync(&chunk_coordinate, |chunk| {
+                    let replacements = chunk.set_blocks_absolute_y(&chunk_changes);
+                    if !replacements.is_empty() && !chunk.is_dirty() {
+                        chunk.mark_dirty(true);
+                    }
+                    replacements
+                });
+
+                (chunk_changes, replacements)
+            });
+        }
+
+        while let Some(result) = write_tasks.join_next().await {
+            Self::apply_bulk_chunk_write_result(result, &mut applied);
+        }
+        let write_elapsed = write_started.elapsed();
+
+        let applied: Vec<_> = applied
+            .into_iter()
+            .filter_map(|(position, block_state_id, replaced_block_state_id)| {
+                replaced_block_state_id.map(|replaced_block_state_id| {
+                    (position, replaced_block_state_id, block_state_id)
+                })
+            })
+            .collect();
+        let applied_count = applied.len();
+        debug!(
+            "Bulk block update: chunk writes produced {} changed blocks in {:?}",
+            applied_count, write_elapsed
+        );
+
+        if applied.is_empty() {
+            return;
+        }
+
+        let queue_started = std::time::Instant::now();
+        {
+            let mut unsent_block_changes = self.unsent_block_changes.lock().await;
+            for (position, _, block_state_id) in &applied {
+                unsent_block_changes.insert(*position, *block_state_id);
+            }
+        }
+        debug!(
+            "Bulk block update: queued {} client block changes in {:?}",
+            applied_count,
+            queue_started.elapsed()
+        );
+
+        let lighting_positions: Vec<BlockPos> =
+            applied.iter().map(|(position, _, _)| *position).collect();
+
+        let side_effect_elapsed = if needs_bulk_block_side_effects(flags) {
+            let side_effect_group_started = std::time::Instant::now();
+            let mut applied_by_chunk: HashMap<Vector2<i32>, Vec<_>> = HashMap::new();
+            for change in applied {
+                applied_by_chunk
+                    .entry(change.0.chunk_position())
+                    .or_default()
+                    .push(change);
+            }
+            let side_effect_chunk_count = applied_by_chunk.len();
+            debug!(
+                "Bulk block update: grouped side effects into {} chunks in {:?}",
+                side_effect_chunk_count,
+                side_effect_group_started.elapsed()
+            );
+
+            let side_effect_started = std::time::Instant::now();
+            let mut side_effect_tasks = JoinSet::new();
+            for chunk_changes in applied_by_chunk.into_values() {
+                while side_effect_tasks.len() >= *MAX_BULK_BLOCK_SIDE_EFFECT_TASKS {
+                    if let Some(result) = side_effect_tasks.join_next().await
+                        && let Err(error) = result
+                    {
+                        error!("Bulk block update side-effect task panicked: {error:?}");
+                    }
+                }
+
+                let world = self.clone();
+                side_effect_tasks.spawn(async move {
+                    world
+                        .apply_bulk_block_side_effects(chunk_changes, flags)
+                        .await;
+                });
+            }
+
+            while let Some(result) = side_effect_tasks.join_next().await {
+                if let Err(error) = result {
+                    error!("Bulk block update side-effect task panicked: {error:?}");
+                }
+            }
+            side_effect_started.elapsed()
+        } else {
+            std::time::Duration::ZERO
+        };
+
+        // Relight the whole batch in one pass on the blocking pool, detached
+        // from this call. The propagation drain is synchronous CPU-bound work:
+        // on the runtime workers it starved ticking/keep-alives, and awaited it
+        // held up this call's return — a plugin command runs inline in the
+        // issuing player's packet loop, so a paste whose relight takes longer
+        // than the keep-alive window got that player disconnected even with the
+        // server otherwise healthy. The blocks are already written and queued
+        // for clients at this point; lighting converges in the background.
+        //
+        // `flush_block_updates` may resend dense columns (`CChunkData`) before
+        // this background relight finishes, baking the pre-relight light arrays
+        // into that packet — clients then render the touched area as solid
+        // black until they reload the chunk. Light can propagate up to 15
+        // blocks, so once relighting converges we resend every touched column
+        // plus its neighbors to push the corrected light data out.
+        let mut affected_columns: HashSet<Vector2<i32>> =
+            HashSet::with_capacity(lighting_positions.len());
+        for position in &lighting_positions {
+            let column = position.chunk_position();
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    affected_columns.insert(Vector2::new(column.x + dx, column.y + dz));
+                }
+            }
+        }
+
+        let lighting_started = std::time::Instant::now();
+        let lighting_position_count = lighting_positions.len();
+        let level = self.level.clone();
+        let world = self.clone();
+        tokio::task::spawn_blocking(move || {
+            level
+                .light_engine
+                .update_lighting_bulk(&level, lighting_positions);
+            info!(
+                "Bulk block update: relit {} positions in {:?} (background)",
+                lighting_position_count,
+                lighting_started.elapsed()
+            );
+
+            tokio::spawn(async move {
+                for chunk_pos in affected_columns {
+                    if let Some(chunk) = world
+                        .level
+                        .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
+                    {
+                        world.broadcast_chunk_resend(chunk_pos, chunk).await;
+                    }
+                }
+            });
+        });
+
+        debug!(
+            "Bulk block update: side effects {:?}; applied {} of {} requested changes; total {:?}",
+            side_effect_elapsed,
+            deduped_change_count - invalid_state_count,
+            original_change_count,
+            started.elapsed()
+        );
+    }
+
+    fn apply_bulk_chunk_write_result(
+        result: Result<BulkChunkWriteResult, tokio::task::JoinError>,
+        applied: &mut [(BlockPos, BlockStateId, Option<BlockStateId>)],
+    ) {
+        let Ok((chunk_changes, replacements)) = result else {
+            if let Err(error) = result {
+                error!("Bulk block chunk write task panicked: {error:?}");
+            }
+            return;
+        };
+
+        if let Some(replacements) = replacements {
+            for (index, replaced_block_state_id) in replacements {
+                applied[index].2 = Some(replaced_block_state_id);
+            }
+        } else {
+            for (index, _, _, _, block_state_id) in chunk_changes {
+                if block_state_id != Block::AIR.default_state.id {
+                    applied[index].2 = Some(Block::AIR.default_state.id);
+                }
+            }
+        }
+    }
+
+    /// Per-block side-effect callbacks for one chunk's worth of bulk changes.
+    ///
+    /// The caller has already checked [`needs_bulk_block_side_effects`] and runs
+    /// the batched relight itself once all chunks are done, so this only handles
+    /// the block-entity / neighbor / prepare callbacks.
+    async fn apply_bulk_block_side_effects(
+        self: Arc<Self>,
+        changes: Vec<(BlockPos, BlockStateId, BlockStateId)>,
+        flags: BlockFlags,
+    ) {
+        for (index, (position, replaced_block_state_id, block_state_id)) in
+            changes.into_iter().enumerate()
+        {
+            let old_block = Block::from_state_id(replaced_block_state_id);
+            let new_block = Block::from_state_id(block_state_id);
+
+            let block_moved = flags.contains(BlockFlags::MOVED);
+
+            let is_new_block = old_block != new_block;
+
+            // WorldChunk.java line 305-314
+            if is_new_block
+                && old_block.default_state.block_entity_type != u16::MAX
+                && !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK)
+                && let Some(entity) = self.get_block_entity(&position)
+            {
+                entity.on_block_replaced(self.clone(), position).await;
+                self.remove_block_entity(&position);
+            }
+
+            // WorldChunk.java line 317
+            if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
+                self.block_registry
+                    .on_state_replaced(
+                        &self,
+                        old_block,
+                        &position,
+                        replaced_block_state_id,
+                        block_moved,
+                    )
+                    .await;
+            }
+
+            // WorldChunk.java line 318
+            if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
+                self.block_registry
+                    .on_placed(
+                        &self,
+                        new_block,
+                        block_state_id,
+                        &position,
+                        replaced_block_state_id,
+                        block_moved,
+                    )
+                    .await;
+                let new_fluid = self.get_fluid(&position);
+                self.block_registry
+                    .on_placed_fluid(
+                        &self,
+                        new_fluid,
+                        block_state_id,
+                        &position,
+                        replaced_block_state_id,
+                        block_moved,
+                    )
+                    .await;
+            }
+
+            // Ig they do this cause it could be modified in chunkPos.setBlockState?
+            if self.get_block_state_id(&position) == block_state_id {
+                if flags.contains(BlockFlags::NOTIFY_LISTENERS) {
+                    // Mob AI update
+                }
+
+                if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
+                    self.update_neighbors(&position, None).await;
+                    // TODO: updateComparators
+                }
+
+                if !flags.contains(BlockFlags::FORCE_STATE) {
+                    let mut new_flags = flags;
+                    new_flags.remove(BlockFlags::NOTIFY_NEIGHBORS);
+                    new_flags.remove(BlockFlags::NOTIFY_LISTENERS);
+                    self.block_registry
+                        .prepare(
+                            &self,
+                            &position,
+                            Block::from_state_id(replaced_block_state_id),
+                            replaced_block_state_id,
+                            new_flags,
+                        )
+                        .await;
+                    self.block_registry
+                        .update_neighbors(
+                            &self,
+                            &position,
+                            Block::from_state_id(block_state_id),
+                            new_flags,
+                        )
+                        .await;
+                    self.block_registry
+                        .prepare(
+                            &self,
+                            &position,
+                            Block::from_state_id(block_state_id),
+                            block_state_id,
+                            new_flags,
+                        )
+                        .await;
+                }
+            }
+
+            if (index + 1) % BULK_BLOCK_SIDE_EFFECT_YIELD_INTERVAL == 0 {
+                tokio::task::yield_now().await;
+            }
+        }
     }
 
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
