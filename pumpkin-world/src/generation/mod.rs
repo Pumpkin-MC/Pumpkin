@@ -33,7 +33,7 @@ pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> 
 pub struct GlobalRandomConfig {
     pub seed: u64,
     pub legacy_random_source: bool,
-    base_random_deriver: XoroshiroSplitter,
+    pub base_random_deriver: XoroshiroSplitter,
     aquifer_random_deriver: XoroshiroSplitter,
     pub ore_random_deriver: XoroshiroSplitter,
 }

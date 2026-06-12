@@ -9,6 +9,7 @@ pub mod euler_angle;
 pub mod experience;
 pub mod float_provider;
 pub mod int_provider;
+pub mod mth;
 pub mod pool;
 pub mod position;
 pub mod vector2;
