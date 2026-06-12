@@ -189,7 +189,10 @@ impl PlayerAdvancement {
                     format!("chat.type.advancement.{}", display.frame_type.get_name()),
                     [player.get_display_name().await, advancement.name()],
                 );
-                player.world().broadcast_system_message(&component, false).await; //send translate component for the event
+                player
+                    .world()
+                    .broadcast_system_message(&component, false)
+                    .await; //send translate component for the event
             }
         }
         if !is_done && progress.is_done() {
