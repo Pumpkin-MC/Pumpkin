@@ -42,7 +42,6 @@ use crate::{
     error::PumpkinError,
     net::{ClientPlatform, java::JavaClient},
     plugin::{
-        api::events::world::chunk_send::ChunkSend,
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
     },
@@ -80,8 +79,8 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertyS
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CRespawn, CSetBlockDestroyStage, CWorldEvent,
+    CBlockUpdate, CChunkData, CDisguisedChatMessage, CExplosion, CLightUpdate, CRespawn,
+    CSetBlockDestroyStage, CWorldEvent, ChunkBlockEntityData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -94,7 +93,6 @@ use pumpkin_protocol::{
             add_player::CAddPlayer,
             creative_content::{CCreativeContent, Group},
             gamerules_changed::GameRules,
-            level_chunk::CLevelChunk,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
@@ -135,14 +133,6 @@ use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
-
-/// When a single chunk column accumulates at least this many queued block
-/// changes in one flush, resend the whole chunk via `CChunkData` instead of
-/// emitting one `CMultiBlockUpdate` per touched 16x16x16 section. The protocol
-/// caps a multi-block-update packet at a single section, so a dense edit (e.g.
-/// a WorldEdit-style paste) would otherwise produce dozens of packets per
-/// column; one chunk packet is cheaper to send and to apply client-side.
-const CHUNK_RESEND_BLOCK_THRESHOLD: usize = 4_096;
 
 /// How many chunks a bulk update writes to concurrently. Each chunk write holds
 /// only that chunk's own locks, so distinct chunks never contend; the real limit
@@ -1097,43 +1087,10 @@ impl World {
             return;
         }
 
-        // Group the flat list of sections back into chunk columns so we can
-        // decide, per column, whether a full-chunk resend is cheaper than
-        // per-section multi-block-update packets.
-        let mut sections_by_chunk: HashMap<Vector2<i32>, Vec<ChunkSectionUpdates>> = HashMap::new();
+        // A full chunk packet participates in client chunk-loading state and is
+        // not safe as a live block-update optimization. Keep live edits on the
+        // section-update path regardless of density.
         for (chunk_section, updates) in block_state_updates_by_chunk_section {
-            if updates.is_empty() {
-                continue;
-            }
-            sections_by_chunk
-                .entry(Vector2::new(chunk_section.x, chunk_section.z))
-                .or_default()
-                .push((chunk_section, updates));
-        }
-
-        let mut sections_to_send: Vec<ChunkSectionUpdates> = Vec::new();
-        for (chunk_pos, sections) in sections_by_chunk {
-            let column_block_count: usize = sections.iter().map(|(_, updates)| updates.len()).sum();
-
-            // Dense column: resend the whole chunk once instead of many
-            // section packets. The chunk is already written and still loaded
-            // (we only just applied the batch to it), so this is a cheap
-            // synchronous clone of the existing `Arc<ChunkData>`.
-            if column_block_count >= CHUNK_RESEND_BLOCK_THRESHOLD
-                && let Some(chunk) = self
-                    .level
-                    .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
-            {
-                self.broadcast_chunk_resend(chunk_pos, chunk).await;
-                continue;
-            }
-
-            sections_to_send.extend(sections);
-        }
-
-        // TODO: only send packet to players who have the chunks loaded
-        // TODO: Send light updates to update the wire directly next to a broken block
-        for (chunk_section, updates) in sections_to_send {
             self.send_section_block_updates(chunk_section, updates);
         }
     }
@@ -1201,77 +1158,6 @@ impl World {
                     recipients_by_version.clone(),
                 );
             }
-        }
-    }
-
-    /// Resends a whole chunk column to every player who can currently see it.
-    ///
-    /// Used by [`Self::flush_block_updates`] when a chunk accumulated so many
-    /// block changes in one flush that a single `CChunkData` packet is cheaper
-    /// than the per-section `CMultiBlockUpdate` packets it would otherwise send.
-    ///
-    /// The Java chunk packet is serialized **once per protocol version** and the
-    /// resulting bytes are shared across every recipient on that version, so a
-    /// dense paste seen by many players costs one serialization per version
-    /// rather than one per player. The `ChunkSend` plugin event is fired a single
-    /// time for the chunk (broadcast semantics): if a plugin cancels it, the
-    /// resend is skipped for everyone.
-    async fn broadcast_chunk_resend(
-        self: &Arc<Self>,
-        chunk_pos: Vector2<i32>,
-        chunk: Arc<ChunkData>,
-    ) {
-        // Fire the plugin event once for this chunk; honor cancellation.
-        if let Some(server) = self.server.upgrade() {
-            let event = ChunkSend::new(self.clone(), chunk.clone());
-            let event = server.plugin_manager.fire(event).await;
-            if event.cancelled {
-                return;
-            }
-        }
-
-        let players = self.players.load();
-        let mut java_recipients = Vec::new();
-        let mut bedrock_recipients = Vec::new();
-
-        for p in players.iter() {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-            if !is_within_view_distance(chunk_pos, center, view_distance) {
-                continue;
-            }
-            match &p.client {
-                ClientPlatform::Java(_) => java_recipients.push(p),
-                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client.clone()),
-            }
-        }
-
-        // Java: one serialization per protocol version, shared across recipients.
-        let recipients_by_version =
-            Self::collect_java_recipients_by_version(java_recipients.into_iter());
-        for (version, recipients) in recipients_by_version {
-            let packet_data =
-                match JavaClient::serialize_packet_for_version(&CChunkData(&chunk), version) {
-                    Ok(packet_data) => packet_data,
-                    Err(err) => {
-                        error!("Failed to serialize chunk resend for version {version:?}: {err}");
-                        continue;
-                    }
-                };
-            for recipient in recipients {
-                recipient.try_enqueue_packet_data(packet_data.clone());
-            }
-        }
-
-        // Bedrock: game-packet framing is per-connection (compression/encryption
-        // state lives on the connection), so it cannot share bytes; enqueue the
-        // chunk packet per recipient.
-        for be_client in bedrock_recipients {
-            be_client.try_enqueue_packet(&CLevelChunk {
-                dimension: 0,
-                cache_enabled: false,
-                chunk: &chunk,
-            });
         }
     }
 
@@ -3350,11 +3236,20 @@ impl World {
                 .level
                 .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
                 .await;
-            java_client.send_packet_now(&CChunkBatchStart).await;
-            java_client.send_packet_now(&CChunkData(&chunk)).await;
-            java_client
-                .send_packet_now(&CChunkBatchEnd::new(1u16))
-                .await;
+            let block_entities = target_world.chunk_block_entity_data(center_chunk);
+            match JavaClient::serialize_packet_for_version(
+                &CChunkData::with_block_entities(&chunk, &block_entities),
+                java_client.version.load(),
+            ) {
+                Ok(packet_data) => {
+                    java_client
+                        .send_serialized_chunk_batch(std::slice::from_ref(&packet_data))
+                        .await;
+                }
+                Err(error) => {
+                    error!("Failed to serialize center chunk before teleport: {error}");
+                }
+            }
         }
 
         // Send teleport packet after at least the center chunk was delivered
@@ -5144,6 +5039,24 @@ impl World {
         let entity = block_entity_from_nbt(&nbt)?;
         self.block_entities.insert(*block_pos, entity.clone());
         Some(entity)
+    }
+
+    pub(crate) fn chunk_block_entity_data(
+        &self,
+        chunk_pos: Vector2<i32>,
+    ) -> Vec<ChunkBlockEntityData> {
+        self.block_entities
+            .iter()
+            .filter(|entry| entry.key().chunk_position() == chunk_pos)
+            .filter_map(|entry| {
+                let entity = entry.value();
+                entity.chunk_data_nbt().map(|nbt| ChunkBlockEntityData {
+                    position: entity.get_position(),
+                    type_id: entity.get_id() as i32,
+                    nbt,
+                })
+            })
+            .collect()
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {

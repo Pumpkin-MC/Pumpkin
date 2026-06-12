@@ -86,6 +86,10 @@ macro_rules! impl_block_entity_for_chest {
                 Some(self)
             }
 
+            fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                Some(pumpkin_nbt::compound::NbtCompound::new())
+            }
+
             fn is_dirty(&self) -> bool {
                 self.dirty.load(std::sync::atomic::Ordering::Relaxed)
             }

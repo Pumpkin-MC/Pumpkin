@@ -104,6 +104,8 @@ pub struct JavaClient {
     outgoing_packet_priority_send: Sender<OutgoingPacket>,
     /// A high-priority queue of serialized packets to send to the network.
     outgoing_packet_priority_recv: Option<Receiver<OutgoingPacket>>,
+    /// Prevents chunk batch start/data/end sequences from interleaving.
+    chunk_batch_send_lock: Mutex<()>,
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -124,21 +126,33 @@ pub enum OutgoingPacketType {
 }
 
 struct OutgoingPacket {
-    data: Bytes,
+    data: OutgoingPacketData,
     completion: Option<oneshot::Sender<()>>,
 }
 
+enum OutgoingPacketData {
+    Single(Bytes),
+    Batch(Box<[Bytes]>),
+}
+
 impl OutgoingPacket {
-    const fn normal(data: Bytes) -> Self {
+    fn normal(data: Bytes) -> Self {
         Self {
-            data,
+            data: OutgoingPacketData::Single(data),
             completion: None,
         }
     }
 
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+    fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
         Self {
-            data,
+            data: OutgoingPacketData::Single(data),
+            completion: Some(completion),
+        }
+    }
+
+    fn high_priority_batch(data: Box<[Bytes]>, completion: oneshot::Sender<()>) -> Self {
+        Self {
+            data: OutgoingPacketData::Batch(data),
             completion: Some(completion),
         }
     }
@@ -163,6 +177,7 @@ impl JavaClient {
             outgoing_packet_queue_recv: Some(recv),
             outgoing_packet_priority_send: priority_send,
             outgoing_packet_priority_recv: Some(priority_recv),
+            chunk_batch_send_lock: Mutex::new(()),
             version: AtomicCell::new(CURRENT_MC_VERSION),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
@@ -330,7 +345,7 @@ impl JavaClient {
             return;
         };
 
-        self.send_packet_now(&CChunkBatchStart).await;
+        let mut serialized_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let event = ChunkSend::new(player.world(), chunk.clone());
             let event = server.plugin_manager.fire(event).await;
@@ -342,12 +357,49 @@ impl JavaClient {
             let version = self.version.load();
             buf.write_var_int(&VarInt(CChunkData::to_id(version)))
                 .unwrap();
-            CChunkData(chunk)
+            let block_entities =
+                player
+                    .world()
+                    .chunk_block_entity_data(pumpkin_util::math::vector2::Vector2::new(
+                        chunk.x, chunk.z,
+                    ));
+            CChunkData::with_block_entities(chunk, &block_entities)
                 .write_packet_data(&mut buf, &version)
                 .unwrap();
-            self.send_packet_now_data(buf.into()).await;
+            serialized_chunks.push(buf.into());
         }
-        self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
+
+        self.send_serialized_chunk_batch(&serialized_chunks).await;
+    }
+
+    /// Sends already serialized chunk packets as one protocol chunk batch.
+    ///
+    /// The lock covers the complete start/data/end sequence so background chunk
+    /// resends cannot interleave with the player's normal chunk streaming.
+    pub async fn send_serialized_chunk_batch(&self, chunks: &[Bytes]) {
+        if chunks.is_empty() {
+            return;
+        }
+
+        let _batch_guard = self.chunk_batch_send_lock.lock().await;
+        let batch_size = chunks.len().min(usize::from(u16::MAX)) as u16;
+        let version = self.version.load();
+        let Ok(batch_start) = Self::serialize_packet_for_version(&CChunkBatchStart, version) else {
+            error!("Failed to serialize chunk batch start packet");
+            return;
+        };
+        let Ok(batch_end) =
+            Self::serialize_packet_for_version(&CChunkBatchEnd::new(batch_size), version)
+        else {
+            error!("Failed to serialize chunk batch end packet");
+            return;
+        };
+
+        let mut packets = Vec::with_capacity(chunks.len() + 2);
+        packets.push(batch_start);
+        packets.extend_from_slice(chunks);
+        packets.push(batch_end);
+        self.send_packet_batch_now_data(packets.into_boxed_slice())
             .await;
     }
 
@@ -514,6 +566,29 @@ impl JavaClient {
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.
+            self.close();
+        }
+    }
+
+    async fn send_packet_batch_now_data(&self, packets: Box<[Bytes]>) {
+        let (completion_tx, completion_rx) = oneshot::channel();
+
+        if let Err(err) = self
+            .outgoing_packet_priority_send
+            .send(OutgoingPacket::high_priority_batch(packets, completion_tx))
+            .await
+        {
+            if !self.close_token.is_cancelled() {
+                warn!(
+                    "Failed to add high-priority packet batch to the outgoing queue for client {}: {}",
+                    self.id, err
+                );
+                self.close();
+            }
+            return;
+        }
+
+        if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
             self.close();
         }
     }
@@ -687,14 +762,20 @@ impl JavaClient {
                 let send_failed = {
                     let mut writer = writer.lock().await;
                     let mut failed = false;
-                    for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                            failed = true;
-                            // It is expected that the packet will fail if we are closed
-                            if !close_token.is_cancelled() {
-                                warn!("Failed to send packet to client {id}: {err}");
+                    'packet_batch: for packet in &packet_batch {
+                        let packet_data = match &packet.data {
+                            OutgoingPacketData::Single(data) => std::slice::from_ref(data),
+                            OutgoingPacketData::Batch(data) => data,
+                        };
+                        for packet_data in packet_data {
+                            if let Err(err) = writer.write_packet(packet_data.clone()).await {
+                                failed = true;
+                                // It is expected that the packet will fail if we are closed
+                                if !close_token.is_cancelled() {
+                                    warn!("Failed to send packet to client {id}: {err}");
+                                }
+                                break 'packet_batch;
                             }
-                            break;
                         }
                     }
 
