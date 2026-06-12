@@ -66,8 +66,14 @@ impl GenerationCache for Cache {
         let dx = chunk_x - self.x;
         let dz = chunk_z - self.z;
 
-        (dx >= 0 && dx < self.size && dz >= 0 && dz < self.size)
-            .then(|| self.chunks[(dx * self.size + dz) as usize].get_proto_chunk_mut())
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &mut self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => Some(chunk),
+            Chunk::Level(_) => None,
+        }
     }
 
     fn get_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk> {
@@ -348,6 +354,11 @@ impl Cache {
         lighting_config: &LightingEngineConfig,
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
+        match &self.chunks[mid] {
+            Chunk::Level(_) => return,
+            Chunk::Proto(chunk) if chunk.stage >= stage => return,
+            _ => {}
+        }
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
             StagedChunkEnum::StructureStart => {

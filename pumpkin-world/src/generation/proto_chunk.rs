@@ -797,6 +797,9 @@ impl ProtoChunk {
 
     pub fn spawn_mobs<T: GenerationCache>(cache: &mut T, block_registry: &dyn WorldPortalExt) {
         let chunk = cache.get_center_chunk();
+        if chunk.stage >= StagedChunkEnum::Spawn {
+            return;
+        }
         debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
 
         let biome = chunk.get_terrain_gen_biome(
