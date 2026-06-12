@@ -27,7 +27,6 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
-use tracing::warn;
 
 pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
     match dir {
@@ -355,8 +354,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         changes: Vec<WitBlockChange>,
         update_flags: WitBlockFlags,
     ) -> wasmtime::Result<()> {
-        let started = std::time::Instant::now();
-        let change_count = changes.len();
         let world_provider = self.get_world_res(&world)?.provider.clone();
         let internal_flags = to_internal_block_flags(update_flags);
         let internal_changes = changes
@@ -368,20 +365,10 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
                 )
             })
             .collect();
-        let converted = started.elapsed();
-        warn!(
-            "Plugin WIT world.set_block_states: converted {change_count} changes in {:?}",
-            converted
-        );
 
         world_provider
             .set_block_states(internal_changes, internal_flags)
             .await;
-        warn!(
-            "Plugin WIT world.set_block_states: world apply returned in {:?} (total {:?})",
-            started.elapsed().saturating_sub(converted),
-            started.elapsed()
-        );
 
         Ok(())
     }

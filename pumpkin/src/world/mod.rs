@@ -4243,14 +4243,10 @@ impl World {
         changes: Vec<(BlockPos, BlockStateId)>,
         flags: BlockFlags,
     ) {
-        let started = std::time::Instant::now();
-        let original_change_count = changes.len();
         let mut deduped_changes = HashMap::with_capacity(changes.len());
         for (position, block_state_id) in changes {
             deduped_changes.insert(position, block_state_id);
         }
-        let deduped_change_count = deduped_changes.len();
-        let duplicate_change_count = original_change_count.saturating_sub(deduped_change_count);
 
         let mut invalid_state_count = 0usize;
         let mut applied: Vec<(BlockPos, BlockStateId, Option<BlockStateId>)> = deduped_changes
@@ -4264,16 +4260,6 @@ impl World {
             })
             .map(|(position, block_state_id)| (position, block_state_id, None))
             .collect();
-        let validated = started.elapsed();
-        debug!(
-            "Bulk block update: received {}, deduped {}, duplicate {}, valid {}, invalid {}, validation {:?}",
-            original_change_count,
-            deduped_change_count,
-            duplicate_change_count,
-            applied.len(),
-            invalid_state_count,
-            validated
-        );
 
         if invalid_state_count > 0 {
             warn!(
@@ -4287,7 +4273,6 @@ impl World {
         }
 
         let mut changes_by_chunk: HashMap<Vector2<i32>, Vec<BulkChunkWrite>> = HashMap::new();
-        let grouping_started = std::time::Instant::now();
 
         for (index, (position, block_state_id, _)) in applied.iter().enumerate() {
             let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
@@ -4299,15 +4284,7 @@ impl World {
                 *block_state_id,
             ));
         }
-        let chunk_count = changes_by_chunk.len();
-        debug!(
-            "Bulk block update: grouped {} changes into {} chunks in {:?}",
-            applied.len(),
-            chunk_count,
-            grouping_started.elapsed()
-        );
 
-        let write_started = std::time::Instant::now();
         let mut write_tasks = JoinSet::new();
         for (chunk_coordinate, chunk_changes) in changes_by_chunk {
             while write_tasks.len() >= *MAX_BULK_BLOCK_WRITE_TASKS {
@@ -4333,7 +4310,6 @@ impl World {
         while let Some(result) = write_tasks.join_next().await {
             Self::apply_bulk_chunk_write_result(result, &mut applied);
         }
-        let write_elapsed = write_started.elapsed();
 
         let applied: Vec<_> = applied
             .into_iter()
@@ -4343,34 +4319,22 @@ impl World {
                 })
             })
             .collect();
-        let applied_count = applied.len();
-        debug!(
-            "Bulk block update: chunk writes produced {} changed blocks in {:?}",
-            applied_count, write_elapsed
-        );
 
         if applied.is_empty() {
             return;
         }
 
-        let queue_started = std::time::Instant::now();
         {
             let mut unsent_block_changes = self.unsent_block_changes.lock().await;
             for (position, _, block_state_id) in &applied {
                 unsent_block_changes.insert(*position, *block_state_id);
             }
         }
-        debug!(
-            "Bulk block update: queued {} client block changes in {:?}",
-            applied_count,
-            queue_started.elapsed()
-        );
 
         let lighting_positions: Vec<BlockPos> =
             applied.iter().map(|(position, _, _)| *position).collect();
 
-        let side_effect_elapsed = if needs_bulk_block_side_effects(flags) {
-            let side_effect_group_started = std::time::Instant::now();
+        if needs_bulk_block_side_effects(flags) {
             let mut applied_by_chunk: HashMap<Vector2<i32>, Vec<_>> = HashMap::new();
             for change in applied {
                 applied_by_chunk
@@ -4378,14 +4342,7 @@ impl World {
                     .or_default()
                     .push(change);
             }
-            let side_effect_chunk_count = applied_by_chunk.len();
-            debug!(
-                "Bulk block update: grouped side effects into {} chunks in {:?}",
-                side_effect_chunk_count,
-                side_effect_group_started.elapsed()
-            );
 
-            let side_effect_started = std::time::Instant::now();
             let mut side_effect_tasks = JoinSet::new();
             for chunk_changes in applied_by_chunk.into_values() {
                 while side_effect_tasks.len() >= *MAX_BULK_BLOCK_SIDE_EFFECT_TASKS {
@@ -4409,10 +4366,7 @@ impl World {
                     error!("Bulk block update side-effect task panicked: {error:?}");
                 }
             }
-            side_effect_started.elapsed()
-        } else {
-            std::time::Duration::ZERO
-        };
+        }
 
         // Relight the whole batch in one pass on the blocking pool, detached
         // from this call. The propagation drain is synchronous CPU-bound work:
@@ -4440,19 +4394,12 @@ impl World {
             }
         }
 
-        let lighting_started = std::time::Instant::now();
-        let lighting_position_count = lighting_positions.len();
         let level = self.level.clone();
         let world = self.clone();
         tokio::task::spawn_blocking(move || {
             level
                 .light_engine
                 .update_lighting_bulk(&level, lighting_positions);
-            info!(
-                "Bulk block update: relit {} positions in {:?} (background)",
-                lighting_position_count,
-                lighting_started.elapsed()
-            );
 
             tokio::spawn(async move {
                 for chunk_pos in affected_columns {
@@ -4465,14 +4412,6 @@ impl World {
                 }
             });
         });
-
-        debug!(
-            "Bulk block update: side effects {:?}; applied {} of {} requested changes; total {:?}",
-            side_effect_elapsed,
-            deduped_change_count - invalid_state_count,
-            original_change_count,
-            started.elapsed()
-        );
     }
 
     fn apply_bulk_chunk_write_result(
