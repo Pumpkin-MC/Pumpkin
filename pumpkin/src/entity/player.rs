@@ -1,3 +1,5 @@
+pub mod advancement;
+
 use core::f32;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
@@ -29,6 +31,7 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use advancement::PlayerAdvancement;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
@@ -497,6 +500,7 @@ pub struct Player {
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
+    pub advancements: Arc<Mutex<PlayerAdvancement>>,
     pub enchantment_seed: AtomicI32,
     pub fishing_bobber: AtomicI32,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
@@ -618,6 +622,12 @@ impl Player {
         Self {
             living_entity,
             config: ArcSwap::new(Arc::new(config)),
+            advancements: Arc::new(Mutex::new(
+                server
+                    .advancement_manager
+                    .clone()
+                    .new_player_advancement(gameprofile.id),
+            )),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
