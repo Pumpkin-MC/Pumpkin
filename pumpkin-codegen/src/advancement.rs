@@ -532,58 +532,55 @@ impl TreeNodePosition {
             Some(p) => p,
             None => return default_ancestor,
         };
-
-        let mut vir = idx;
-        let mut vor = idx;
-        let mut vil = prev_sib;
-
         let parent_idx = nodes[idx].parent.expect("Tree invariant broken: no parent");
-        let mut vol = nodes[parent_idx].children[0];
+        let mut inner_left = prev_sib;
+        let mut inner_right = idx;
+        let mut outer_left = nodes[parent_idx].children[0];
+        let mut outer_right = idx;
 
-        let mut sir = nodes[vir].mod_field;
-        let mut sor = nodes[vor].mod_field;
-        let mut sil = nodes[vil].mod_field;
-        let mut sol = nodes[vol].mod_field;
-
-        while let (Some(next_vil), Some(next_vir)) = (
-            Self::next_or_thread(nodes, vil),
-            Self::previous_or_thread(nodes, vir),
+        let mut shift_inner_right = nodes[inner_right].mod_field;
+        let mut shift_outer_right = nodes[outer_right].mod_field;
+        let mut shift_inner_left = nodes[inner_left].mod_field;
+        let mut shift_outer_left = nodes[outer_left].mod_field;
+        while let (Some(next_inner_left), Some(next_inner_right)) = (
+            Self::next_or_thread(nodes, inner_left),
+            Self::previous_or_thread(nodes, inner_right),
         ) {
-            vil = next_vil;
-            vir = next_vir;
-            vol = Self::previous_or_thread(nodes, vol).expect("Tree invariant broken");
-            vor = Self::next_or_thread(nodes, vor).expect("Tree invariant broken");
+            inner_left = next_inner_left;
+            inner_right = next_inner_right;
+            outer_left = Self::previous_or_thread(nodes, outer_left).expect("Tree invariant broken");
+            outer_right = Self::next_or_thread(nodes, outer_right).expect("Tree invariant broken");
 
-            nodes[vor].ancestor = idx;
+            nodes[outer_right].ancestor = idx;
 
-            let shift = (nodes[vil].y + sil) - (nodes[vir].y + sir) + 1.0;
+            let shift = (nodes[inner_left].y + shift_inner_left) - (nodes[inner_right].y + shift_inner_right) + 1.0;
             if shift > 0.0 {
-                let ancestor_idx = Self::get_ancestor(nodes, vil, idx, default_ancestor);
+                let ancestor_idx = Self::get_ancestor(nodes, inner_left, idx, default_ancestor);
                 Self::move_subtree(nodes, ancestor_idx, idx, shift);
-                sir += shift;
-                sor += shift;
+                shift_inner_right += shift;
+                shift_outer_right += shift;
             }
 
-            sil += nodes[vil].mod_field;
-            sir += nodes[vir].mod_field;
-            sol += nodes[vol].mod_field;
-            sor += nodes[vor].mod_field;
+            shift_inner_left += nodes[inner_left].mod_field;
+            shift_inner_right += nodes[inner_right].mod_field;
+            shift_outer_left += nodes[outer_left].mod_field;
+            shift_outer_right += nodes[outer_right].mod_field;
         }
 
-        if Self::next_or_thread(nodes, vil).is_some() && Self::next_or_thread(nodes, vor).is_none()
+        if Self::next_or_thread(nodes, inner_left).is_some()
+            && Self::next_or_thread(nodes, outer_right).is_none()
         {
-            nodes[vor].thread = Self::next_or_thread(nodes, vil);
-            nodes[vor].mod_field += sil - sor;
+            nodes[outer_right].thread = Self::next_or_thread(nodes, inner_left);
+            nodes[outer_right].mod_field += shift_inner_left - shift_outer_right;
         } else {
-            if Self::previous_or_thread(nodes, vir).is_some()
-                && Self::previous_or_thread(nodes, vol).is_none()
+            if Self::previous_or_thread(nodes, inner_right).is_some()
+                && Self::previous_or_thread(nodes, outer_left).is_none()
             {
-                nodes[vol].thread = Self::previous_or_thread(nodes, vir);
-                nodes[vol].mod_field += sir - sol;
+                nodes[outer_left].thread = Self::previous_or_thread(nodes, inner_right);
+                nodes[outer_left].mod_field += shift_inner_right - shift_outer_left;
             }
             default_ancestor = idx;
         }
-
         default_ancestor
     }
 
