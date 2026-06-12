@@ -41,6 +41,7 @@ default = [
     "potion",
     "recipe_remainder",
     "chunk_gen_settings",
+    "advancement",
     "carver",
     "villager",
     "placed_feature",
@@ -48,6 +49,7 @@ default = [
     "slot_ranges"
 ]
 
+advancement = []
 item = []
 packet = []
 jukebox_song = []

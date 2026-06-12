@@ -297,6 +297,7 @@ impl WorldAquiferSampler {
             let z = block_z + section_coords::section_to_block(offset_z as i32);
 
             let n = height_estimator.estimate_height(x, z);
+            println!("estimate_height({}, {}) = {}", x, z, n);
             let o = n + 8;
             let bl2 = offset_x == 0 && offset_z == 0;
 
@@ -1504,7 +1505,7 @@ mod random_positions_and_hypot {
                 &mut height_estimator,
                 &env,
             );
-            assert_eq!(level.max_y, y1);
+            assert_eq!(level.max_y, y1, "Failed at x={}, y={}, z={}", x, y, z);
             assert_eq!(level.block, &state);
         }
     }

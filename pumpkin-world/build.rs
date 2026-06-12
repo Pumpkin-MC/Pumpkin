@@ -63,7 +63,7 @@ fn process_dir(
             let template_name = format!("{}/{}", prefix, name.strip_suffix(".nbt").unwrap());
             let abs_path = path.canonicalize().unwrap();
             code.push_str(&format!(
-                "        \"{}\" => Some(include_bytes!(\"{}\")),\n",
+                "        \"{}\" => Some(include_bytes!(r#\"{}\"#)),\n",
                 template_name,
                 abs_path.display()
             ));

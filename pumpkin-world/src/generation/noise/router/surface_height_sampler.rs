@@ -93,9 +93,6 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
                 &sample_options,
             );
 
-            let mut low = self.minimum_y;
-            let mut high = upper.ceil() as i32;
-
             // First find the coarse cell that contains the surface
             let cell_height = fts.cell_height();
             let mut y = (upper / cell_height as f64).floor() as i32 * cell_height;
@@ -106,32 +103,12 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
                     &sample_options,
                 );
                 if density > 0.0 {
-                    low = y;
-                    high = (y + cell_height).min(high);
-                    break;
+                    return y;
                 }
                 y -= cell_height;
             }
 
-            if y < self.minimum_y {
-                return self.minimum_y;
-            }
-
-            // Binary search for precise surface
-            while high - low > 1 {
-                let mid = low + (high - low) / 2;
-                let density = ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut self.component_stack[..=fts.density_index()],
-                    &Vector3::new(aligned_x, mid, aligned_z),
-                    &sample_options,
-                );
-                if density > 0.0 {
-                    low = mid;
-                } else {
-                    high = mid;
-                }
-            }
-            return low + 1;
+            return self.minimum_y;
         }
 
         let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(
@@ -139,7 +116,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             &pos,
             &sample_options,
         );
-        surface_y.floor() as i32 + 1
+        surface_y.floor() as i32
     }
 
     #[must_use]

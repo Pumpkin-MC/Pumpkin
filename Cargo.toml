@@ -195,7 +195,7 @@ wasmtime-wasi = { version = "45.0", default-features = false, features = ["p2"] 
 wasmtime-wasi-http = { version = "45.0", default-features = false, features = ["p2", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.10", default-features = false }
-wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.58", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
