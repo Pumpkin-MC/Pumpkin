@@ -88,6 +88,7 @@ impl PlayerAdvancement {
 
     /// Returns whether advancement saving is enabled for this player.
     #[must_use]
+    #[inline]
     pub fn is_save_enabled(&self) -> bool {
         self.manager.save_enabled
     }
@@ -132,7 +133,7 @@ impl PlayerAdvancement {
 
     /// Loads the player's advancement progress from disk.
     pub fn load(&mut self) -> Result<(), AdvancementDataError> {
-        if !self.path.exists() {
+        if !self.path.exists() || !self.is_save_enabled() {
             return Ok(());
         }
 
