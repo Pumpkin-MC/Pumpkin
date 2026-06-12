@@ -468,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn ignore_loading(){
+    fn ignore_loading() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), false));
 
