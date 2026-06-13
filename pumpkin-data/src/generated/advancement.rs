@@ -15,7 +15,7 @@ pub struct Advancement {
     pub send_telemetry: bool,
     pub display: Option<&'static AdvancementDisplay>,
     pub reward: &'static AdvancementReward,
-    pub requirements: AdvancementRequirement,
+    pub requirements: &'static [&'static [&'static str]],
 }
 impl Display for Advancement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -54,9 +54,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["killed_something", "killed_by_something"]],
-        },
+        requirements: &[&["killed_something", "killed_by_something"]],
     };
     pub const ADVENTURE_SALVAGE_SHERD: &Self = &Self {
         id: Identifier::vanilla_static("adventure/salvage_sherd"),
@@ -78,19 +76,17 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &[
-                    "desert_pyramid",
-                    "desert_well",
-                    "ocean_ruin_cold",
-                    "ocean_ruin_warm",
-                    "trail_ruins_rare",
-                    "trail_ruins_common",
-                ],
-                &["has_sherd"],
+        requirements: &[
+            &[
+                "desert_pyramid",
+                "desert_well",
+                "ocean_ruin_cold",
+                "ocean_ruin_warm",
+                "trail_ruins_rare",
+                "trail_ruins_common",
             ],
-        },
+            &["has_sherd"],
+        ],
     };
     pub const ADVENTURE_SLEEP_IN_BED: &Self = &Self {
         id: Identifier::vanilla_static("adventure/sleep_in_bed"),
@@ -112,9 +108,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["slept_in_bed"]],
-        },
+        requirements: &[&["slept_in_bed"]],
     };
     pub const ADVENTURE_SPYGLASS_AT_PARROT: &Self = &Self {
         id: Identifier::vanilla_static("adventure/spyglass_at_parrot"),
@@ -136,9 +130,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["spyglass_at_parrot"]],
-        },
+        requirements: &[&["spyglass_at_parrot"]],
     };
     pub const ADVENTURE_TRADE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/trade"),
@@ -160,9 +152,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["traded"]],
-        },
+        requirements: &[&["traded"]],
     };
     pub const ADVENTURE_TRADE_AT_WORLD_HEIGHT: &Self = &Self {
         id: Identifier::vanilla_static("adventure/trade_at_world_height"),
@@ -184,9 +174,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["trade_at_world_height"]],
-        },
+        requirements: &[&["trade_at_world_height"]],
     };
     pub const ADVENTURE_TRIM_WITH_ANY_ARMOR_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("adventure/trim_with_any_armor_pattern"),
@@ -208,28 +196,26 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "armor_trimmed_minecraft:bolt_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:coast_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:dune_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:eye_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:flow_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:host_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:raiser_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:sentry_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:shaper_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim",
-                "armor_trimmed_minecraft:wild_armor_trim_smithing_template_smithing_trim",
-            ]],
-        },
+        requirements: &[&[
+            "armor_trimmed_minecraft:bolt_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:coast_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:dune_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:eye_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:flow_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:host_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:raiser_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:sentry_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:shaper_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim",
+            "armor_trimmed_minecraft:wild_armor_trim_smithing_template_smithing_trim",
+        ]],
     };
     pub const ADVENTURE_USE_LODESTONE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/use_lodestone"),
@@ -251,9 +237,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["use_lodestone"]],
-        },
+        requirements: &[&["use_lodestone"]],
     };
     pub const ADVENTURE_VOLUNTARY_EXILE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/voluntary_exile"),
@@ -275,9 +259,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["voluntary_exile"]],
-        },
+        requirements: &[&["voluntary_exile"]],
     };
     pub const ADVENTURE_WALK_ON_POWDER_SNOW_WITH_LEATHER_BOOTS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/walk_on_powder_snow_with_leather_boots"),
@@ -302,9 +284,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["walk_on_powder_snow_with_leather_boots"]],
-        },
+        requirements: &[&["walk_on_powder_snow_with_leather_boots"]],
     };
     pub const END_ROOT: &Self = &Self {
         id: Identifier::vanilla_static("end/root"),
@@ -326,9 +306,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["entered_end"]],
-        },
+        requirements: &[&["entered_end"]],
     };
     pub const HUSBANDRY_ROOT: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/root"),
@@ -350,9 +328,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["consumed_item"]],
-        },
+        requirements: &[&["consumed_item"]],
     };
     pub const HUSBANDRY_SAFELY_HARVEST_HONEY: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/safely_harvest_honey"),
@@ -374,9 +350,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["safely_harvest_honey"]],
-        },
+        requirements: &[&["safely_harvest_honey"]],
     };
     pub const HUSBANDRY_SILK_TOUCH_NEST: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/silk_touch_nest"),
@@ -398,9 +372,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["silk_touch_nest"]],
-        },
+        requirements: &[&["silk_touch_nest"]],
     };
     pub const HUSBANDRY_TADPOLE_IN_A_BUCKET: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/tadpole_in_a_bucket"),
@@ -422,9 +394,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["tadpole_bucket"]],
-        },
+        requirements: &[&["tadpole_bucket"]],
     };
     pub const HUSBANDRY_TAME_AN_ANIMAL: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/tame_an_animal"),
@@ -446,9 +416,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["tamed_animal"]],
-        },
+        requirements: &[&["tamed_animal"]],
     };
     pub const HUSBANDRY_WAX_ON: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/wax_on"),
@@ -473,9 +441,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["wax_on"]],
-        },
+        requirements: &[&["wax_on"]],
     };
     pub const HUSBANDRY_WHOLE_PACK: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/whole_pack"),
@@ -500,19 +466,17 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:ashen"],
-                &["minecraft:black"],
-                &["minecraft:chestnut"],
-                &["minecraft:pale"],
-                &["minecraft:rusty"],
-                &["minecraft:snowy"],
-                &["minecraft:spotted"],
-                &["minecraft:striped"],
-                &["minecraft:woods"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:ashen"],
+            &["minecraft:black"],
+            &["minecraft:chestnut"],
+            &["minecraft:pale"],
+            &["minecraft:rusty"],
+            &["minecraft:snowy"],
+            &["minecraft:spotted"],
+            &["minecraft:striped"],
+            &["minecraft:woods"],
+        ],
     };
     pub const NETHER_ROOT: &Self = &Self {
         id: Identifier::vanilla_static("nether/root"),
@@ -534,9 +498,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["entered_nether"]],
-        },
+        requirements: &[&["entered_nether"]],
     };
     pub const RECIPES_ROOT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/root"),
@@ -547,9 +509,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["impossible"]],
-        },
+        requirements: &[&["impossible"]],
     };
     pub const RECIPES_TOOLS_BLACK_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/black_bundle"),
@@ -560,9 +520,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_black_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_black_dye"]],
     };
     pub const RECIPES_TOOLS_BLUE_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/blue_bundle"),
@@ -573,9 +531,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_dye"]],
     };
     pub const RECIPES_TOOLS_BROWN_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/brown_bundle"),
@@ -586,9 +542,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brown_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brown_dye"]],
     };
     pub const RECIPES_TOOLS_BRUSH: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/brush"),
@@ -599,9 +553,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_TOOLS_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/bundle"),
@@ -612,9 +564,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_TOOLS_CLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/clock"),
@@ -625,9 +575,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_TOOLS_COMPASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/compass"),
@@ -638,9 +586,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_TOOLS_COPPER_AXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/copper_axe"),
@@ -651,9 +597,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_TOOLS_COPPER_HOE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/copper_hoe"),
@@ -664,9 +608,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_TOOLS_COPPER_PICKAXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/copper_pickaxe"),
@@ -677,9 +619,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_TOOLS_COPPER_SHOVEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/copper_shovel"),
@@ -690,9 +630,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_TOOLS_CYAN_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/cyan_bundle"),
@@ -703,9 +641,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cyan_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cyan_dye"]],
     };
     pub const RECIPES_TOOLS_DIAMOND_AXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/diamond_axe"),
@@ -716,9 +652,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_TOOLS_DIAMOND_HOE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/diamond_hoe"),
@@ -729,9 +663,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_TOOLS_DIAMOND_PICKAXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/diamond_pickaxe"),
@@ -742,9 +674,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_TOOLS_DIAMOND_SHOVEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/diamond_shovel"),
@@ -755,9 +685,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_TOOLS_FISHING_ROD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/fishing_rod"),
@@ -768,9 +696,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_TOOLS_FLINT_AND_STEEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/flint_and_steel"),
@@ -781,9 +707,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_flint", "has_obsidian"]],
-        },
+        requirements: &[&["has_the_recipe", "has_flint", "has_obsidian"]],
     };
     pub const RECIPES_TOOLS_GOLDEN_AXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/golden_axe"),
@@ -794,9 +718,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_TOOLS_GOLDEN_HOE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/golden_hoe"),
@@ -807,9 +729,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_TOOLS_GOLDEN_PICKAXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/golden_pickaxe"),
@@ -820,9 +740,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_TOOLS_GOLDEN_SHOVEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/golden_shovel"),
@@ -833,9 +751,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_TOOLS_GRAY_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/gray_bundle"),
@@ -846,9 +762,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_dye"]],
     };
     pub const RECIPES_TOOLS_GREEN_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/green_bundle"),
@@ -859,9 +773,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_dye"]],
     };
     pub const RECIPES_TOOLS_IRON_AXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/iron_axe"),
@@ -872,9 +784,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_TOOLS_IRON_HOE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/iron_hoe"),
@@ -885,9 +795,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_TOOLS_IRON_PICKAXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/iron_pickaxe"),
@@ -898,9 +806,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_TOOLS_IRON_SHOVEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/iron_shovel"),
@@ -911,9 +817,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_TOOLS_LEAD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/lead"),
@@ -924,9 +828,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_TOOLS_LIGHT_BLUE_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/light_blue_bundle"),
@@ -937,9 +839,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_blue_dye"]],
     };
     pub const RECIPES_TOOLS_LIGHT_GRAY_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/light_gray_bundle"),
@@ -950,9 +850,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_gray_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_gray_dye"]],
     };
     pub const RECIPES_TOOLS_LIME_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/lime_bundle"),
@@ -963,9 +861,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lime_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lime_dye"]],
     };
     pub const RECIPES_TOOLS_MAGENTA_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/magenta_bundle"),
@@ -976,9 +872,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magenta_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magenta_dye"]],
     };
     pub const RECIPES_TOOLS_NAME_TAG: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/name_tag"),
@@ -989,14 +883,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_metal_nugget",
-                "has_paper",
-                "has_name_tag",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_metal_nugget",
+            "has_paper",
+            "has_name_tag",
+        ]],
     };
     pub const RECIPES_TOOLS_NETHERITE_AXE_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/netherite_axe_smithing"),
@@ -1007,9 +899,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_TOOLS_NETHERITE_HOE_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/netherite_hoe_smithing"),
@@ -1020,9 +910,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_TOOLS_NETHERITE_PICKAXE_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/netherite_pickaxe_smithing"),
@@ -1033,9 +921,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_TOOLS_NETHERITE_SHOVEL_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/netherite_shovel_smithing"),
@@ -1046,9 +932,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_TOOLS_ORANGE_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/orange_bundle"),
@@ -1059,9 +943,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_dye"]],
     };
     pub const RECIPES_TOOLS_PINK_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/pink_bundle"),
@@ -1072,9 +954,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_dye"]],
     };
     pub const RECIPES_TOOLS_PURPLE_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/purple_bundle"),
@@ -1085,9 +965,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purple_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purple_dye"]],
     };
     pub const RECIPES_TOOLS_RECOVERY_COMPASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/recovery_compass"),
@@ -1098,9 +976,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_echo_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_echo_shard"]],
     };
     pub const RECIPES_TOOLS_RED_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/red_bundle"),
@@ -1111,9 +987,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_dye"]],
     };
     pub const RECIPES_TOOLS_SHEARS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/shears"),
@@ -1124,9 +998,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_TOOLS_SPYGLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/spyglass"),
@@ -1137,9 +1009,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
     };
     pub const RECIPES_TOOLS_STONE_AXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/stone_axe"),
@@ -1150,9 +1020,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_TOOLS_STONE_HOE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/stone_hoe"),
@@ -1163,9 +1031,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_TOOLS_STONE_PICKAXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/stone_pickaxe"),
@@ -1176,9 +1042,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_TOOLS_STONE_SHOVEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/stone_shovel"),
@@ -1189,9 +1053,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_TOOLS_WHITE_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/white_bundle"),
@@ -1202,9 +1064,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_dye"]],
     };
     pub const RECIPES_TOOLS_WOODEN_AXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/wooden_axe"),
@@ -1215,9 +1075,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_TOOLS_WOODEN_HOE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/wooden_hoe"),
@@ -1228,9 +1086,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_TOOLS_WOODEN_PICKAXE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/wooden_pickaxe"),
@@ -1241,9 +1097,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_TOOLS_WOODEN_SHOVEL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/wooden_shovel"),
@@ -1254,9 +1108,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_TOOLS_YELLOW_BUNDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/tools/yellow_bundle"),
@@ -1267,9 +1119,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_yellow_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_yellow_dye"]],
     };
     pub const RECIPES_TRANSPORTATION_ACACIA_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/acacia_boat"),
@@ -1280,9 +1130,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_ACACIA_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/acacia_chest_boat"),
@@ -1293,9 +1141,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_ACTIVATOR_RAIL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/activator_rail"),
@@ -1306,9 +1152,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rail"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rail"]],
     };
     pub const RECIPES_TRANSPORTATION_BAMBOO_CHEST_RAFT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/bamboo_chest_raft"),
@@ -1319,9 +1163,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_BAMBOO_RAFT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/bamboo_raft"),
@@ -1332,9 +1174,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_BIRCH_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/birch_boat"),
@@ -1345,9 +1185,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_BIRCH_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/birch_chest_boat"),
@@ -1358,9 +1196,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_CARROT_ON_A_STICK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/carrot_on_a_stick"),
@@ -1371,9 +1207,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_carrot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_carrot"]],
     };
     pub const RECIPES_TRANSPORTATION_CHERRY_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/cherry_boat"),
@@ -1384,9 +1218,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_CHERRY_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/cherry_chest_boat"),
@@ -1397,9 +1229,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_CHEST_MINECART: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/chest_minecart"),
@@ -1410,9 +1240,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_minecart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_minecart"]],
     };
     pub const RECIPES_TRANSPORTATION_DARK_OAK_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/dark_oak_boat"),
@@ -1423,9 +1251,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_DARK_OAK_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/dark_oak_chest_boat"),
@@ -1436,9 +1262,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_DETECTOR_RAIL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/detector_rail"),
@@ -1449,9 +1273,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rail"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rail"]],
     };
     pub const RECIPES_TRANSPORTATION_FURNACE_MINECART: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/furnace_minecart"),
@@ -1462,9 +1284,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_minecart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_minecart"]],
     };
     pub const RECIPES_TRANSPORTATION_HOPPER_MINECART: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/hopper_minecart"),
@@ -1475,9 +1295,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_minecart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_minecart"]],
     };
     pub const RECIPES_TRANSPORTATION_JUNGLE_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/jungle_boat"),
@@ -1488,9 +1306,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_JUNGLE_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/jungle_chest_boat"),
@@ -1501,9 +1317,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_MANGROVE_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/mangrove_boat"),
@@ -1514,9 +1328,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_MANGROVE_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/mangrove_chest_boat"),
@@ -1527,9 +1339,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_MINECART: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/minecart"),
@@ -1540,9 +1350,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_TRANSPORTATION_OAK_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/oak_boat"),
@@ -1553,9 +1361,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_OAK_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/oak_chest_boat"),
@@ -1566,9 +1372,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_PALE_OAK_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/pale_oak_boat"),
@@ -1579,9 +1383,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_PALE_OAK_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/pale_oak_chest_boat"),
@@ -1592,9 +1394,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_POWERED_RAIL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/powered_rail"),
@@ -1605,9 +1405,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rail"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rail"]],
     };
     pub const RECIPES_TRANSPORTATION_RAIL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/rail"),
@@ -1618,9 +1416,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_minecart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_minecart"]],
     };
     pub const RECIPES_TRANSPORTATION_SPRUCE_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/spruce_boat"),
@@ -1631,9 +1427,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "in_water"]],
-        },
+        requirements: &[&["has_the_recipe", "in_water"]],
     };
     pub const RECIPES_TRANSPORTATION_SPRUCE_CHEST_BOAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/spruce_chest_boat"),
@@ -1644,9 +1438,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_boat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_boat"]],
     };
     pub const RECIPES_TRANSPORTATION_TNT_MINECART: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/tnt_minecart"),
@@ -1657,9 +1449,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_minecart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_minecart"]],
     };
     pub const RECIPES_TRANSPORTATION_WARPED_FUNGUS_ON_A_STICK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/transportation/warped_fungus_on_a_stick"),
@@ -1670,9 +1460,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_warped_fungus"]],
-        },
+        requirements: &[&["has_the_recipe", "has_warped_fungus"]],
     };
     pub const STORY_ROOT: &Self = &Self {
         id: Identifier::vanilla_static("story/root"),
@@ -1694,9 +1482,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["crafting_table"]],
-        },
+        requirements: &[&["crafting_table"]],
     };
     pub const ADVENTURE_ADVENTURING_TIME: &Self = &Self {
         id: Identifier::vanilla_static("adventure/adventuring_time"),
@@ -1721,64 +1507,62 @@ impl Advancement {
             experience: 500i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:mushroom_fields"],
-                &["minecraft:deep_frozen_ocean"],
-                &["minecraft:frozen_ocean"],
-                &["minecraft:deep_cold_ocean"],
-                &["minecraft:cold_ocean"],
-                &["minecraft:deep_ocean"],
-                &["minecraft:ocean"],
-                &["minecraft:deep_lukewarm_ocean"],
-                &["minecraft:lukewarm_ocean"],
-                &["minecraft:warm_ocean"],
-                &["minecraft:stony_shore"],
-                &["minecraft:swamp"],
-                &["minecraft:mangrove_swamp"],
-                &["minecraft:snowy_slopes"],
-                &["minecraft:snowy_plains"],
-                &["minecraft:snowy_beach"],
-                &["minecraft:windswept_gravelly_hills"],
-                &["minecraft:grove"],
-                &["minecraft:windswept_hills"],
-                &["minecraft:snowy_taiga"],
-                &["minecraft:windswept_forest"],
-                &["minecraft:taiga"],
-                &["minecraft:plains"],
-                &["minecraft:meadow"],
-                &["minecraft:beach"],
-                &["minecraft:forest"],
-                &["minecraft:old_growth_spruce_taiga"],
-                &["minecraft:flower_forest"],
-                &["minecraft:birch_forest"],
-                &["minecraft:dark_forest"],
-                &["minecraft:pale_garden"],
-                &["minecraft:savanna_plateau"],
-                &["minecraft:savanna"],
-                &["minecraft:jungle"],
-                &["minecraft:badlands"],
-                &["minecraft:desert"],
-                &["minecraft:wooded_badlands"],
-                &["minecraft:jagged_peaks"],
-                &["minecraft:stony_peaks"],
-                &["minecraft:frozen_river"],
-                &["minecraft:river"],
-                &["minecraft:ice_spikes"],
-                &["minecraft:old_growth_pine_taiga"],
-                &["minecraft:sunflower_plains"],
-                &["minecraft:old_growth_birch_forest"],
-                &["minecraft:sparse_jungle"],
-                &["minecraft:bamboo_jungle"],
-                &["minecraft:eroded_badlands"],
-                &["minecraft:windswept_savanna"],
-                &["minecraft:cherry_grove"],
-                &["minecraft:frozen_peaks"],
-                &["minecraft:dripstone_caves"],
-                &["minecraft:lush_caves"],
-                &["minecraft:deep_dark"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:mushroom_fields"],
+            &["minecraft:deep_frozen_ocean"],
+            &["minecraft:frozen_ocean"],
+            &["minecraft:deep_cold_ocean"],
+            &["minecraft:cold_ocean"],
+            &["minecraft:deep_ocean"],
+            &["minecraft:ocean"],
+            &["minecraft:deep_lukewarm_ocean"],
+            &["minecraft:lukewarm_ocean"],
+            &["minecraft:warm_ocean"],
+            &["minecraft:stony_shore"],
+            &["minecraft:swamp"],
+            &["minecraft:mangrove_swamp"],
+            &["minecraft:snowy_slopes"],
+            &["minecraft:snowy_plains"],
+            &["minecraft:snowy_beach"],
+            &["minecraft:windswept_gravelly_hills"],
+            &["minecraft:grove"],
+            &["minecraft:windswept_hills"],
+            &["minecraft:snowy_taiga"],
+            &["minecraft:windswept_forest"],
+            &["minecraft:taiga"],
+            &["minecraft:plains"],
+            &["minecraft:meadow"],
+            &["minecraft:beach"],
+            &["minecraft:forest"],
+            &["minecraft:old_growth_spruce_taiga"],
+            &["minecraft:flower_forest"],
+            &["minecraft:birch_forest"],
+            &["minecraft:dark_forest"],
+            &["minecraft:pale_garden"],
+            &["minecraft:savanna_plateau"],
+            &["minecraft:savanna"],
+            &["minecraft:jungle"],
+            &["minecraft:badlands"],
+            &["minecraft:desert"],
+            &["minecraft:wooded_badlands"],
+            &["minecraft:jagged_peaks"],
+            &["minecraft:stony_peaks"],
+            &["minecraft:frozen_river"],
+            &["minecraft:river"],
+            &["minecraft:ice_spikes"],
+            &["minecraft:old_growth_pine_taiga"],
+            &["minecraft:sunflower_plains"],
+            &["minecraft:old_growth_birch_forest"],
+            &["minecraft:sparse_jungle"],
+            &["minecraft:bamboo_jungle"],
+            &["minecraft:eroded_badlands"],
+            &["minecraft:windswept_savanna"],
+            &["minecraft:cherry_grove"],
+            &["minecraft:frozen_peaks"],
+            &["minecraft:dripstone_caves"],
+            &["minecraft:lush_caves"],
+            &["minecraft:deep_dark"],
+        ],
     };
     pub const ADVENTURE_AVOID_VIBRATION: &Self = &Self {
         id: Identifier::vanilla_static("adventure/avoid_vibration"),
@@ -1800,9 +1584,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["avoid_vibration"]],
-        },
+        requirements: &[&["avoid_vibration"]],
     };
     pub const ADVENTURE_BRUSH_ARMADILLO: &Self = &Self {
         id: Identifier::vanilla_static("adventure/brush_armadillo"),
@@ -1824,9 +1606,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["brush_armadillo"]],
-        },
+        requirements: &[&["brush_armadillo"]],
     };
     pub const ADVENTURE_CRAFT_DECORATED_POT_USING_ONLY_SHERDS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/craft_decorated_pot_using_only_sherds"),
@@ -1851,9 +1631,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["pot_crafted_using_only_sherds"]],
-        },
+        requirements: &[&["pot_crafted_using_only_sherds"]],
     };
     pub const ADVENTURE_CRAFTERS_CRAFTING_CRAFTERS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/crafters_crafting_crafters"),
@@ -1875,9 +1653,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["crafter_crafted_crafter"]],
-        },
+        requirements: &[&["crafter_crafted_crafter"]],
     };
     pub const ADVENTURE_FALL_FROM_WORLD_HEIGHT: &Self = &Self {
         id: Identifier::vanilla_static("adventure/fall_from_world_height"),
@@ -1899,9 +1675,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["fall_from_world_height"]],
-        },
+        requirements: &[&["fall_from_world_height"]],
     };
     pub const ADVENTURE_HEART_TRANSPLANTER: &Self = &Self {
         id: Identifier::vanilla_static("adventure/heart_transplanter"),
@@ -1923,13 +1697,11 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "place_creaking_heart_dormant",
-                "place_creaking_heart_awake",
-                "place_pale_oak_log",
-            ]],
-        },
+        requirements: &[&[
+            "place_creaking_heart_dormant",
+            "place_creaking_heart_awake",
+            "place_pale_oak_log",
+        ]],
     };
     pub const ADVENTURE_HERO_OF_THE_VILLAGE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/hero_of_the_village"),
@@ -1954,9 +1726,7 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["hero_of_the_village"]],
-        },
+        requirements: &[&["hero_of_the_village"]],
     };
     pub const ADVENTURE_HONEY_BLOCK_SLIDE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/honey_block_slide"),
@@ -1978,9 +1748,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["honey_block_slide"]],
-        },
+        requirements: &[&["honey_block_slide"]],
     };
     pub const ADVENTURE_KILL_A_MOB: &Self = &Self {
         id: Identifier::vanilla_static("adventure/kill_a_mob"),
@@ -2002,51 +1770,49 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "minecraft:blaze",
-                "minecraft:bogged",
-                "minecraft:breeze",
-                "minecraft:camel_husk",
-                "minecraft:cave_spider",
-                "minecraft:creaking",
-                "minecraft:creeper",
-                "minecraft:drowned",
-                "minecraft:elder_guardian",
-                "minecraft:ender_dragon",
-                "minecraft:enderman",
-                "minecraft:endermite",
-                "minecraft:evoker",
-                "minecraft:ghast",
-                "minecraft:guardian",
-                "minecraft:hoglin",
-                "minecraft:husk",
-                "minecraft:magma_cube",
-                "minecraft:parched",
-                "minecraft:phantom",
-                "minecraft:piglin",
-                "minecraft:piglin_brute",
-                "minecraft:pillager",
-                "minecraft:ravager",
-                "minecraft:shulker",
-                "minecraft:silverfish",
-                "minecraft:skeleton",
-                "minecraft:slime",
-                "minecraft:spider",
-                "minecraft:stray",
-                "minecraft:vex",
-                "minecraft:vindicator",
-                "minecraft:witch",
-                "minecraft:wither_skeleton",
-                "minecraft:wither",
-                "minecraft:zoglin",
-                "minecraft:zombie_villager",
-                "minecraft:zombie",
-                "minecraft:zombie_horse",
-                "minecraft:zombified_piglin",
-                "minecraft:zombie_nautilus",
-            ]],
-        },
+        requirements: &[&[
+            "minecraft:blaze",
+            "minecraft:bogged",
+            "minecraft:breeze",
+            "minecraft:camel_husk",
+            "minecraft:cave_spider",
+            "minecraft:creaking",
+            "minecraft:creeper",
+            "minecraft:drowned",
+            "minecraft:elder_guardian",
+            "minecraft:ender_dragon",
+            "minecraft:enderman",
+            "minecraft:endermite",
+            "minecraft:evoker",
+            "minecraft:ghast",
+            "minecraft:guardian",
+            "minecraft:hoglin",
+            "minecraft:husk",
+            "minecraft:magma_cube",
+            "minecraft:parched",
+            "minecraft:phantom",
+            "minecraft:piglin",
+            "minecraft:piglin_brute",
+            "minecraft:pillager",
+            "minecraft:ravager",
+            "minecraft:shulker",
+            "minecraft:silverfish",
+            "minecraft:skeleton",
+            "minecraft:slime",
+            "minecraft:spider",
+            "minecraft:stray",
+            "minecraft:vex",
+            "minecraft:vindicator",
+            "minecraft:witch",
+            "minecraft:wither_skeleton",
+            "minecraft:wither",
+            "minecraft:zoglin",
+            "minecraft:zombie_villager",
+            "minecraft:zombie",
+            "minecraft:zombie_horse",
+            "minecraft:zombified_piglin",
+            "minecraft:zombie_nautilus",
+        ]],
     };
     pub const ADVENTURE_KILL_ALL_MOBS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/kill_all_mobs"),
@@ -2068,51 +1834,49 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:blaze"],
-                &["minecraft:bogged"],
-                &["minecraft:breeze"],
-                &["minecraft:camel_husk"],
-                &["minecraft:cave_spider"],
-                &["minecraft:creaking"],
-                &["minecraft:creeper"],
-                &["minecraft:drowned"],
-                &["minecraft:elder_guardian"],
-                &["minecraft:ender_dragon"],
-                &["minecraft:enderman"],
-                &["minecraft:endermite"],
-                &["minecraft:evoker"],
-                &["minecraft:ghast"],
-                &["minecraft:guardian"],
-                &["minecraft:hoglin"],
-                &["minecraft:husk"],
-                &["minecraft:magma_cube"],
-                &["minecraft:parched"],
-                &["minecraft:phantom"],
-                &["minecraft:piglin"],
-                &["minecraft:piglin_brute"],
-                &["minecraft:pillager"],
-                &["minecraft:ravager"],
-                &["minecraft:shulker"],
-                &["minecraft:silverfish"],
-                &["minecraft:skeleton"],
-                &["minecraft:slime"],
-                &["minecraft:spider"],
-                &["minecraft:stray"],
-                &["minecraft:vex"],
-                &["minecraft:vindicator"],
-                &["minecraft:witch"],
-                &["minecraft:wither_skeleton"],
-                &["minecraft:wither"],
-                &["minecraft:zoglin"],
-                &["minecraft:zombie_villager"],
-                &["minecraft:zombie"],
-                &["minecraft:zombie_horse"],
-                &["minecraft:zombified_piglin"],
-                &["minecraft:zombie_nautilus"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:blaze"],
+            &["minecraft:bogged"],
+            &["minecraft:breeze"],
+            &["minecraft:camel_husk"],
+            &["minecraft:cave_spider"],
+            &["minecraft:creaking"],
+            &["minecraft:creeper"],
+            &["minecraft:drowned"],
+            &["minecraft:elder_guardian"],
+            &["minecraft:ender_dragon"],
+            &["minecraft:enderman"],
+            &["minecraft:endermite"],
+            &["minecraft:evoker"],
+            &["minecraft:ghast"],
+            &["minecraft:guardian"],
+            &["minecraft:hoglin"],
+            &["minecraft:husk"],
+            &["minecraft:magma_cube"],
+            &["minecraft:parched"],
+            &["minecraft:phantom"],
+            &["minecraft:piglin"],
+            &["minecraft:piglin_brute"],
+            &["minecraft:pillager"],
+            &["minecraft:ravager"],
+            &["minecraft:shulker"],
+            &["minecraft:silverfish"],
+            &["minecraft:skeleton"],
+            &["minecraft:slime"],
+            &["minecraft:spider"],
+            &["minecraft:stray"],
+            &["minecraft:vex"],
+            &["minecraft:vindicator"],
+            &["minecraft:witch"],
+            &["minecraft:wither_skeleton"],
+            &["minecraft:wither"],
+            &["minecraft:zoglin"],
+            &["minecraft:zombie_villager"],
+            &["minecraft:zombie"],
+            &["minecraft:zombie_horse"],
+            &["minecraft:zombified_piglin"],
+            &["minecraft:zombie_nautilus"],
+        ],
     };
     pub const ADVENTURE_KILL_MOB_NEAR_SCULK_CATALYST: &Self = &Self {
         id: Identifier::vanilla_static("adventure/kill_mob_near_sculk_catalyst"),
@@ -2134,9 +1898,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["kill_mob_near_sculk_catalyst"]],
-        },
+        requirements: &[&["kill_mob_near_sculk_catalyst"]],
     };
     pub const ADVENTURE_LIGHTNING_ROD_WITH_VILLAGER_NO_FIRE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/lightning_rod_with_villager_no_fire"),
@@ -2158,9 +1920,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["lightning_rod_with_villager_no_fire"]],
-        },
+        requirements: &[&["lightning_rod_with_villager_no_fire"]],
     };
     pub const ADVENTURE_MINECRAFT_TRIALS_EDITION: &Self = &Self {
         id: Identifier::vanilla_static("adventure/minecraft_trials_edition"),
@@ -2182,9 +1942,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["minecraft_trials_edition"]],
-        },
+        requirements: &[&["minecraft_trials_edition"]],
     };
     pub const ADVENTURE_OL_BETSY: &Self = &Self {
         id: Identifier::vanilla_static("adventure/ol_betsy"),
@@ -2206,9 +1964,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["shot_crossbow"]],
-        },
+        requirements: &[&["shot_crossbow"]],
     };
     pub const ADVENTURE_OVEROVERKILL: &Self = &Self {
         id: Identifier::vanilla_static("adventure/overoverkill"),
@@ -2233,9 +1989,7 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["overoverkill"]],
-        },
+        requirements: &[&["overoverkill"]],
     };
     pub const ADVENTURE_PLAY_JUKEBOX_IN_MEADOWS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/play_jukebox_in_meadows"),
@@ -2260,9 +2014,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["play_jukebox_in_meadows"]],
-        },
+        requirements: &[&["play_jukebox_in_meadows"]],
     };
     pub const ADVENTURE_READ_POWER_OF_CHISELED_BOOKSHELF: &Self = &Self {
         id: Identifier::vanilla_static("adventure/read_power_of_chiseled_bookshelf"),
@@ -2284,9 +2036,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["chiseled_bookshelf", "comparator"]],
-        },
+        requirements: &[&["chiseled_bookshelf", "comparator"]],
     };
     pub const ADVENTURE_SHOOT_ARROW: &Self = &Self {
         id: Identifier::vanilla_static("adventure/shoot_arrow"),
@@ -2308,9 +2058,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["shot_arrow"]],
-        },
+        requirements: &[&["shot_arrow"]],
     };
     pub const ADVENTURE_SNIPER_DUEL: &Self = &Self {
         id: Identifier::vanilla_static("adventure/sniper_duel"),
@@ -2335,9 +2083,7 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["killed_skeleton"]],
-        },
+        requirements: &[&["killed_skeleton"]],
     };
     pub const ADVENTURE_SPEAR_MANY_MOBS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/spear_many_mobs"),
@@ -2359,9 +2105,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["spear_many_mobs"]],
-        },
+        requirements: &[&["spear_many_mobs"]],
     };
     pub const ADVENTURE_SPYGLASS_AT_GHAST: &Self = &Self {
         id: Identifier::vanilla_static("adventure/spyglass_at_ghast"),
@@ -2386,9 +2130,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["spyglass_at_ghast"]],
-        },
+        requirements: &[&["spyglass_at_ghast"]],
     };
     pub const ADVENTURE_SUMMON_IRON_GOLEM: &Self = &Self {
         id: Identifier::vanilla_static("adventure/summon_iron_golem"),
@@ -2410,9 +2152,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["summoned_golem"]],
-        },
+        requirements: &[&["summoned_golem"]],
     };
     pub const ADVENTURE_THROW_TRIDENT: &Self = &Self {
         id: Identifier::vanilla_static("adventure/throw_trident"),
@@ -2434,9 +2174,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["shot_trident"]],
-        },
+        requirements: &[&["shot_trident"]],
     };
     pub const ADVENTURE_TOTEM_OF_UNDYING: &Self = &Self {
         id: Identifier::vanilla_static("adventure/totem_of_undying"),
@@ -2458,9 +2196,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["used_totem"]],
-        },
+        requirements: &[&["used_totem"]],
     };
     pub const ADVENTURE_TRIM_WITH_ALL_EXCLUSIVE_ARMOR_PATTERNS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/trim_with_all_exclusive_armor_patterns"),
@@ -2485,18 +2221,16 @@ impl Advancement {
             experience: 150i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim"],
-                &["armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim"],
-            ],
-        },
+        requirements: &[
+            &["armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim"],
+            &["armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim"],
+        ],
     };
     pub const ADVENTURE_TWO_BIRDS_ONE_ARROW: &Self = &Self {
         id: Identifier::vanilla_static("adventure/two_birds_one_arrow"),
@@ -2518,9 +2252,7 @@ impl Advancement {
             experience: 65i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["two_birds"]],
-        },
+        requirements: &[&["two_birds"]],
     };
     pub const ADVENTURE_UNDER_LOCK_AND_KEY: &Self = &Self {
         id: Identifier::vanilla_static("adventure/under_lock_and_key"),
@@ -2545,9 +2277,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["under_lock_and_key"]],
-        },
+        requirements: &[&["under_lock_and_key"]],
     };
     pub const ADVENTURE_VERY_VERY_FRIGHTENING: &Self = &Self {
         id: Identifier::vanilla_static("adventure/very_very_frightening"),
@@ -2572,9 +2302,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["struck_villager"]],
-        },
+        requirements: &[&["struck_villager"]],
     };
     pub const ADVENTURE_WHO_NEEDS_ROCKETS: &Self = &Self {
         id: Identifier::vanilla_static("adventure/who_needs_rockets"),
@@ -2599,9 +2327,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["who_needs_rockets"]],
-        },
+        requirements: &[&["who_needs_rockets"]],
     };
     pub const ADVENTURE_WHOS_THE_PILLAGER_NOW: &Self = &Self {
         id: Identifier::vanilla_static("adventure/whos_the_pillager_now"),
@@ -2623,9 +2349,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["kill_pillager"]],
-        },
+        requirements: &[&["kill_pillager"]],
     };
     pub const END_KILL_DRAGON: &Self = &Self {
         id: Identifier::vanilla_static("end/kill_dragon"),
@@ -2647,9 +2371,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["killed_dragon"]],
-        },
+        requirements: &[&["killed_dragon"]],
     };
     pub const END_RESPAWN_DRAGON: &Self = &Self {
         id: Identifier::vanilla_static("end/respawn_dragon"),
@@ -2671,9 +2393,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["summoned_dragon"]],
-        },
+        requirements: &[&["summoned_dragon"]],
     };
     pub const HUSBANDRY_ALLAY_DELIVER_ITEM_TO_PLAYER: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/allay_deliver_item_to_player"),
@@ -2695,9 +2415,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["allay_deliver_item_to_player"]],
-        },
+        requirements: &[&["allay_deliver_item_to_player"]],
     };
     pub const HUSBANDRY_BREED_AN_ANIMAL: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/breed_an_animal"),
@@ -2719,9 +2437,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["bred"]],
-        },
+        requirements: &[&["bred"]],
     };
     pub const HUSBANDRY_COMPLETE_CATALOGUE: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/complete_catalogue"),
@@ -2746,21 +2462,19 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:all_black"],
-                &["minecraft:black"],
-                &["minecraft:british_shorthair"],
-                &["minecraft:calico"],
-                &["minecraft:jellie"],
-                &["minecraft:persian"],
-                &["minecraft:ragdoll"],
-                &["minecraft:red"],
-                &["minecraft:siamese"],
-                &["minecraft:tabby"],
-                &["minecraft:white"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:all_black"],
+            &["minecraft:black"],
+            &["minecraft:british_shorthair"],
+            &["minecraft:calico"],
+            &["minecraft:jellie"],
+            &["minecraft:persian"],
+            &["minecraft:ragdoll"],
+            &["minecraft:red"],
+            &["minecraft:siamese"],
+            &["minecraft:tabby"],
+            &["minecraft:white"],
+        ],
     };
     pub const HUSBANDRY_FISHY_BUSINESS: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/fishy_business"),
@@ -2782,9 +2496,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["cod", "tropical_fish", "pufferfish", "salmon"]],
-        },
+        requirements: &[&["cod", "tropical_fish", "pufferfish", "salmon"]],
     };
     pub const HUSBANDRY_LEASH_ALL_FROG_VARIANTS: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/leash_all_frog_variants"),
@@ -2809,13 +2521,11 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:cold"],
-                &["minecraft:temperate"],
-                &["minecraft:warm"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:cold"],
+            &["minecraft:temperate"],
+            &["minecraft:warm"],
+        ],
     };
     pub const HUSBANDRY_MAKE_A_SIGN_GLOW: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/make_a_sign_glow"),
@@ -2837,9 +2547,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["make_a_sign_glow"]],
-        },
+        requirements: &[&["make_a_sign_glow"]],
     };
     pub const HUSBANDRY_OBTAIN_SNIFFER_EGG: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/obtain_sniffer_egg"),
@@ -2861,9 +2569,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["obtain_sniffer_egg"]],
-        },
+        requirements: &[&["obtain_sniffer_egg"]],
     };
     pub const HUSBANDRY_PLACE_DRIED_GHAST_IN_WATER: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/place_dried_ghast_in_water"),
@@ -2885,9 +2591,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["place_dried_ghast_in_water"]],
-        },
+        requirements: &[&["place_dried_ghast_in_water"]],
     };
     pub const HUSBANDRY_PLANT_SEED: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/plant_seed"),
@@ -2909,17 +2613,15 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "wheat",
-                "pumpkin_stem",
-                "melon_stem",
-                "beetroots",
-                "nether_wart",
-                "torchflower",
-                "pitcher_pod",
-            ]],
-        },
+        requirements: &[&[
+            "wheat",
+            "pumpkin_stem",
+            "melon_stem",
+            "beetroots",
+            "nether_wart",
+            "torchflower",
+            "pitcher_pod",
+        ]],
     };
     pub const HUSBANDRY_REMOVE_WOLF_ARMOR: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/remove_wolf_armor"),
@@ -2944,9 +2646,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["remove_wolf_armor"]],
-        },
+        requirements: &[&["remove_wolf_armor"]],
     };
     pub const HUSBANDRY_REPAIR_WOLF_ARMOR: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/repair_wolf_armor"),
@@ -2971,9 +2671,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["repair_wolf_armor"]],
-        },
+        requirements: &[&["repair_wolf_armor"]],
     };
     pub const HUSBANDRY_RIDE_A_BOAT_WITH_A_GOAT: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/ride_a_boat_with_a_goat"),
@@ -2995,9 +2693,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["ride_a_boat_with_a_goat"]],
-        },
+        requirements: &[&["ride_a_boat_with_a_goat"]],
     };
     pub const HUSBANDRY_TACTICAL_FISHING: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/tactical_fishing"),
@@ -3022,14 +2718,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "cod_bucket",
-                "tropical_fish_bucket",
-                "pufferfish_bucket",
-                "salmon_bucket",
-            ]],
-        },
+        requirements: &[&[
+            "cod_bucket",
+            "tropical_fish_bucket",
+            "pufferfish_bucket",
+            "salmon_bucket",
+        ]],
     };
     pub const HUSBANDRY_WAX_OFF: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/wax_off"),
@@ -3051,9 +2745,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["wax_off"]],
-        },
+        requirements: &[&["wax_off"]],
     };
     pub const NETHER_DISTRACT_PIGLIN: &Self = &Self {
         id: Identifier::vanilla_static("nether/distract_piglin"),
@@ -3075,9 +2767,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["distract_piglin", "distract_piglin_directly"]],
-        },
+        requirements: &[&["distract_piglin", "distract_piglin_directly"]],
     };
     pub const NETHER_FAST_TRAVEL: &Self = &Self {
         id: Identifier::vanilla_static("nether/fast_travel"),
@@ -3099,9 +2789,7 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["travelled"]],
-        },
+        requirements: &[&["travelled"]],
     };
     pub const NETHER_FIND_BASTION: &Self = &Self {
         id: Identifier::vanilla_static("nether/find_bastion"),
@@ -3123,9 +2811,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["bastion"]],
-        },
+        requirements: &[&["bastion"]],
     };
     pub const NETHER_FIND_FORTRESS: &Self = &Self {
         id: Identifier::vanilla_static("nether/find_fortress"),
@@ -3147,9 +2833,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["fortress"]],
-        },
+        requirements: &[&["fortress"]],
     };
     pub const NETHER_GET_WITHER_SKULL: &Self = &Self {
         id: Identifier::vanilla_static("nether/get_wither_skull"),
@@ -3171,9 +2855,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["wither_skull"]],
-        },
+        requirements: &[&["wither_skull"]],
     };
     pub const NETHER_LOOT_BASTION: &Self = &Self {
         id: Identifier::vanilla_static("nether/loot_bastion"),
@@ -3195,14 +2877,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "loot_bastion_other",
-                "loot_bastion_treasure",
-                "loot_bastion_hoglin_stable",
-                "loot_bastion_bridge",
-            ]],
-        },
+        requirements: &[&[
+            "loot_bastion_other",
+            "loot_bastion_treasure",
+            "loot_bastion_hoglin_stable",
+            "loot_bastion_bridge",
+        ]],
     };
     pub const NETHER_OBTAIN_ANCIENT_DEBRIS: &Self = &Self {
         id: Identifier::vanilla_static("nether/obtain_ancient_debris"),
@@ -3224,9 +2904,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["ancient_debris"]],
-        },
+        requirements: &[&["ancient_debris"]],
     };
     pub const NETHER_OBTAIN_BLAZE_ROD: &Self = &Self {
         id: Identifier::vanilla_static("nether/obtain_blaze_rod"),
@@ -3248,9 +2926,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["blaze_rod"]],
-        },
+        requirements: &[&["blaze_rod"]],
     };
     pub const NETHER_OBTAIN_CRYING_OBSIDIAN: &Self = &Self {
         id: Identifier::vanilla_static("nether/obtain_crying_obsidian"),
@@ -3272,9 +2948,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["crying_obsidian"]],
-        },
+        requirements: &[&["crying_obsidian"]],
     };
     pub const NETHER_RETURN_TO_SENDER: &Self = &Self {
         id: Identifier::vanilla_static("nether/return_to_sender"),
@@ -3296,9 +2970,7 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["killed_ghast"]],
-        },
+        requirements: &[&["killed_ghast"]],
     };
     pub const NETHER_RIDE_STRIDER: &Self = &Self {
         id: Identifier::vanilla_static("nether/ride_strider"),
@@ -3320,9 +2992,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["used_warped_fungus_on_a_stick"]],
-        },
+        requirements: &[&["used_warped_fungus_on_a_stick"]],
     };
     pub const NETHER_RIDE_STRIDER_IN_OVERWORLD_LAVA: &Self = &Self {
         id: Identifier::vanilla_static("nether/ride_strider_in_overworld_lava"),
@@ -3344,9 +3014,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["ride_entity_distance"]],
-        },
+        requirements: &[&["ride_entity_distance"]],
     };
     pub const NETHER_SUMMON_WITHER: &Self = &Self {
         id: Identifier::vanilla_static("nether/summon_wither"),
@@ -3371,9 +3039,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["summoned"]],
-        },
+        requirements: &[&["summoned"]],
     };
     pub const NETHER_UNEASY_ALLIANCE: &Self = &Self {
         id: Identifier::vanilla_static("nether/uneasy_alliance"),
@@ -3398,9 +3064,7 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["killed_ghast"]],
-        },
+        requirements: &[&["killed_ghast"]],
     };
     pub const RECIPES_BREWING_BLAZE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/blaze_powder"),
@@ -3411,9 +3075,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blaze_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blaze_rod"]],
     };
     pub const RECIPES_BREWING_BREWING_STAND: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/brewing_stand"),
@@ -3424,9 +3086,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blaze_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blaze_rod"]],
     };
     pub const RECIPES_BREWING_CAULDRON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/cauldron"),
@@ -3437,9 +3097,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_water_bucket"]],
-        },
+        requirements: &[&["has_the_recipe", "has_water_bucket"]],
     };
     pub const RECIPES_BREWING_FERMENTED_SPIDER_EYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/fermented_spider_eye"),
@@ -3450,9 +3108,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_spider_eye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_spider_eye"]],
     };
     pub const RECIPES_BREWING_GLASS_BOTTLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/glass_bottle"),
@@ -3463,9 +3119,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BREWING_GLISTERING_MELON_SLICE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/glistering_melon_slice"),
@@ -3476,9 +3130,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_melon"]],
-        },
+        requirements: &[&["has_the_recipe", "has_melon"]],
     };
     pub const RECIPES_BREWING_GOLDEN_CARROT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/golden_carrot"),
@@ -3489,9 +3141,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_nugget"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_nugget"]],
     };
     pub const RECIPES_BREWING_MAGMA_CREAM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/brewing/magma_cream"),
@@ -3502,9 +3152,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blaze_powder"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blaze_powder"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ACACIA_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/acacia_planks"),
@@ -3515,9 +3163,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ACACIA_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/acacia_slab"),
@@ -3528,9 +3174,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ACACIA_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/acacia_stairs"),
@@ -3541,9 +3185,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ACACIA_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/acacia_wood"),
@@ -3554,9 +3196,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_AMETHYST_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/amethyst_block"),
@@ -3567,9 +3207,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ANDESITE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/andesite"),
@@ -3580,9 +3218,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ANDESITE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/andesite_slab"),
@@ -3593,9 +3229,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ANDESITE_SLAB_FROM_ANDESITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -3608,9 +3242,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ANDESITE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/andesite_stairs"),
@@ -3621,9 +3253,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ANDESITE_STAIRS_FROM_ANDESITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -3636,9 +3266,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BAMBOO_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bamboo_block"),
@@ -3649,9 +3277,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bamboo"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bamboo"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BAMBOO_MOSAIC_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bamboo_mosaic_slab"),
@@ -3662,9 +3288,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bamboo_mosaic"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bamboo_mosaic"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BAMBOO_MOSAIC_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bamboo_mosaic_stairs"),
@@ -3675,9 +3299,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bamboo_mosaic"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bamboo_mosaic"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BAMBOO_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bamboo_planks"),
@@ -3688,9 +3310,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BAMBOO_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bamboo_slab"),
@@ -3701,9 +3321,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BAMBOO_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bamboo_stairs"),
@@ -3714,9 +3332,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BIRCH_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/birch_planks"),
@@ -3727,9 +3343,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BIRCH_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/birch_slab"),
@@ -3740,9 +3354,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BIRCH_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/birch_stairs"),
@@ -3753,9 +3365,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BIRCH_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/birch_wood"),
@@ -3766,9 +3376,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACK_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/black_concrete_powder"),
@@ -3779,9 +3387,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACK_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/black_stained_glass"),
@@ -3792,9 +3398,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACK_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/black_terracotta"),
@@ -3805,9 +3409,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACKSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/blackstone_slab"),
@@ -3818,9 +3420,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACKSTONE_SLAB_FROM_BLACKSTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -3833,9 +3433,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACKSTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/blackstone_stairs"),
@@ -3846,9 +3444,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLACKSTONE_STAIRS_FROM_BLACKSTONE_STONECUTTING: &Self =
         &Self {
@@ -3862,9 +3458,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_blackstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_blackstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_BLUE_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/blue_concrete_powder"),
@@ -3875,9 +3469,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLUE_ICE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/blue_ice"),
@@ -3888,9 +3480,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_packed_ice"]],
-        },
+        requirements: &[&["has_the_recipe", "has_packed_ice"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLUE_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/blue_stained_glass"),
@@ -3901,9 +3491,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BLUE_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/blue_terracotta"),
@@ -3914,9 +3502,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BONE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bone_block"),
@@ -3927,9 +3513,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bone_meal"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bone_meal"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BOOKSHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bookshelf"),
@@ -3940,9 +3524,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_book"]],
-        },
+        requirements: &[&["has_the_recipe", "has_book"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/brick_slab"),
@@ -3953,9 +3535,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BRICK_SLAB_FROM_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -3968,9 +3548,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/brick_stairs"),
@@ -3981,9 +3559,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BRICK_STAIRS_FROM_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -3996,9 +3572,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/bricks"),
@@ -4009,9 +3583,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brick"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BROWN_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/brown_concrete_powder"),
@@ -4022,9 +3594,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BROWN_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/brown_stained_glass"),
@@ -4035,9 +3605,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_BROWN_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/brown_terracotta"),
@@ -4048,9 +3616,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHERRY_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cherry_planks"),
@@ -4061,9 +3627,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHERRY_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cherry_slab"),
@@ -4074,9 +3638,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHERRY_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cherry_stairs"),
@@ -4087,9 +3649,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHERRY_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cherry_wood"),
@@ -4100,9 +3660,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_BOOKSHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_bookshelf"),
@@ -4113,9 +3671,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_book"]],
-        },
+        requirements: &[&["has_the_recipe", "has_book"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_copper"),
@@ -4126,9 +3682,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_COPPER_FROM_COPPER_BLOCK_STONECUTTING: &Self =
         &Self {
@@ -4142,9 +3696,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_copper_block"]],
-            },
+            requirements: &[&["has_the_recipe", "has_copper_block"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_COPPER_FROM_CUT_COPPER_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4157,9 +3709,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_DEEPSLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_deepslate"),
@@ -4170,9 +3720,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_DEEPSLATE_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -4186,9 +3734,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_DEEPSLATE_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -4202,9 +3748,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_NETHER_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_nether_bricks"),
@@ -4215,9 +3759,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_brick_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_brick_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_NETHER_BRICKS_FROM_NETHER_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -4231,9 +3773,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_POLISHED_BLACKSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_polished_blackstone"),
@@ -4244,9 +3784,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_POLISHED_BLACKSTONE_FROM_BLACKSTONE_STONECUTTING:
         &Self = &Self {
@@ -4260,11 +3798,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_CHISELED_POLISHED_BLACKSTONE_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/chiseled_polished_blackstone_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_CHISELED_POLISHED_BLACKSTONE_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/chiseled_polished_blackstone_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_QUARTZ_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_quartz_block"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -4274,14 +3810,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_chiseled_quartz_block",
-                "has_quartz_block",
-                "has_quartz_pillar",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_chiseled_quartz_block",
+            "has_quartz_block",
+            "has_quartz_pillar",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_QUARTZ_BLOCK_FROM_QUARTZ_BLOCK_STONECUTTING: &Self =
         &Self {
@@ -4295,9 +3829,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_quartz_block"]],
-            },
+            requirements: &[&["has_the_recipe", "has_quartz_block"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_RED_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_red_sandstone"),
@@ -4308,14 +3840,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_red_sandstone",
-                "has_chiseled_red_sandstone",
-                "has_cut_red_sandstone",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_red_sandstone",
+            "has_chiseled_red_sandstone",
+            "has_cut_red_sandstone",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_RED_SANDSTONE_FROM_RED_SANDSTONE_STONECUTTING:
         &Self = &Self {
@@ -4329,9 +3859,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_RESIN_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_resin_bricks"),
@@ -4342,9 +3870,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_brick_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_brick_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_RESIN_BRICKS_FROM_RESIN_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -4358,9 +3884,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_sandstone"),
@@ -4371,9 +3895,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_SANDSTONE_FROM_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -4387,9 +3909,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_sandstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_STONE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_stone_bricks"),
@@ -4400,9 +3920,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tag"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tag"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_STONE_BRICKS_FROM_STONE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -4416,9 +3934,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_STONE_BRICKS_FROM_STONE_STONECUTTING: &Self =
         &Self {
@@ -4432,9 +3948,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_stone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_stone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_TUFF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_tuff"),
@@ -4445,9 +3959,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_TUFF_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/chiseled_tuff_bricks"),
@@ -4458,9 +3970,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff_brick_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff_brick_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_TUFF_BRICKS_FROM_POLISHED_TUFF_STONECUTTING: &Self =
         &Self {
@@ -4474,9 +3984,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_TUFF_BRICKS_FROM_TUFF_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -4490,9 +3998,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_TUFF_BRICKS_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4505,9 +4011,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_TUFF_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4520,9 +4024,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CLAY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/clay"),
@@ -4533,9 +4035,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_clay_ball"]],
-        },
+        requirements: &[&["has_the_recipe", "has_clay_ball"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COAL_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/coal_block"),
@@ -4546,9 +4046,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_coal"]],
-        },
+        requirements: &[&["has_the_recipe", "has_coal"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COARSE_DIRT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/coarse_dirt"),
@@ -4559,9 +4057,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -4575,9 +4071,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cobbled_deepslate_slab"),
@@ -4588,9 +4082,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -4604,9 +4096,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_SLAB_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -4620,9 +4110,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cobbled_deepslate_stairs"),
@@ -4633,11 +4121,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/cobbled_deepslate_stairs_from_cobbled_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_cobbled_deepslate"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/cobbled_deepslate_stairs_from_cobbled_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_cobbled_deepslate"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_STAIRS_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
             id: Identifier::vanilla_static(
@@ -4650,9 +4136,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4665,9 +4149,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cobblestone_slab"),
@@ -4678,9 +4160,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_SLAB_FROM_COBBLESTONE_STONECUTTING: &Self =
         &Self {
@@ -4694,9 +4174,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cobblestone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cobblestone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_SLAB_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4709,9 +4187,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cobblestone_stairs"),
@@ -4722,9 +4198,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_STAIRS_FROM_COBBLESTONE_STONECUTTING: &Self =
         &Self {
@@ -4738,9 +4212,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cobblestone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cobblestone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_STAIRS_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4753,9 +4225,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COPPER_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/copper_block"),
@@ -4766,9 +4236,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/copper_grate"),
@@ -4779,9 +4247,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_COPPER_GRATE_FROM_COPPER_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4794,9 +4260,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRACKED_DEEPSLATE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cracked_deepslate_bricks"),
@@ -4807,9 +4271,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRACKED_DEEPSLATE_TILES: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cracked_deepslate_tiles"),
@@ -4820,9 +4282,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRACKED_NETHER_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cracked_nether_bricks"),
@@ -4833,9 +4293,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRACKED_POLISHED_BLACKSTONE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4848,9 +4306,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRACKED_STONE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cracked_stone_bricks"),
@@ -4861,9 +4317,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRIMSON_HYPHAE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/crimson_hyphae"),
@@ -4874,9 +4328,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRIMSON_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/crimson_planks"),
@@ -4887,9 +4339,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRIMSON_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/crimson_slab"),
@@ -4900,9 +4350,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CRIMSON_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/crimson_stairs"),
@@ -4913,9 +4361,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_copper"),
@@ -4926,9 +4372,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_FROM_COPPER_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4941,9 +4385,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_copper_slab"),
@@ -4954,9 +4396,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_SLAB_FROM_COPPER_BLOCK_STONECUTTING: &Self =
         &Self {
@@ -4970,9 +4410,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_copper_block"]],
-            },
+            requirements: &[&["has_the_recipe", "has_copper_block"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_SLAB_FROM_CUT_COPPER_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -4985,9 +4423,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_copper_stairs"),
@@ -4998,9 +4434,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_STAIRS_FROM_COPPER_BLOCK_STONECUTTING: &Self =
         &Self {
@@ -5014,9 +4448,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_copper_block"]],
-            },
+            requirements: &[&["has_the_recipe", "has_copper_block"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CUT_COPPER_STAIRS_FROM_CUT_COPPER_STONECUTTING: &Self =
         &Self {
@@ -5030,9 +4462,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cut_copper"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cut_copper"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CUT_RED_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_red_sandstone"),
@@ -5043,9 +4473,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_RED_SANDSTONE_FROM_RED_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -5059,9 +4487,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CUT_RED_SANDSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_red_sandstone_slab"),
@@ -5072,9 +4498,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_red_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_RED_SANDSTONE_SLAB_FROM_CUT_RED_SANDSTONE_STONECUTTING:
         &Self = &Self {
@@ -5088,9 +4512,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_red_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_RED_SANDSTONE_SLAB_FROM_RED_SANDSTONE_STONECUTTING:
         &Self = &Self {
@@ -5104,9 +4526,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_sandstone"),
@@ -5117,9 +4537,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_SANDSTONE_FROM_SANDSTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -5132,9 +4550,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_SANDSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cut_sandstone_slab"),
@@ -5145,9 +4561,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CUT_SANDSTONE_SLAB_FROM_CUT_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -5161,9 +4575,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cut_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cut_sandstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CUT_SANDSTONE_SLAB_FROM_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -5177,9 +4589,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_sandstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_CYAN_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cyan_concrete_powder"),
@@ -5190,9 +4600,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CYAN_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cyan_stained_glass"),
@@ -5203,9 +4611,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_CYAN_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/cyan_terracotta"),
@@ -5216,9 +4622,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_OAK_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_oak_planks"),
@@ -5229,9 +4633,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_OAK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_oak_slab"),
@@ -5242,9 +4644,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_OAK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_oak_stairs"),
@@ -5255,9 +4655,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_OAK_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_oak_wood"),
@@ -5268,9 +4666,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_PRISMARINE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_prismarine"),
@@ -5281,9 +4677,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_shard"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_PRISMARINE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_prismarine_slab"),
@@ -5294,9 +4688,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_PRISMARINE_SLAB_FROM_DARK_PRISMARINE_STONECUTTING:
         &Self = &Self {
@@ -5310,9 +4702,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_PRISMARINE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dark_prismarine_stairs"),
@@ -5323,9 +4713,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DARK_PRISMARINE_STAIRS_FROM_DARK_PRISMARINE_STONECUTTING:
         &Self = &Self {
@@ -5339,9 +4727,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dark_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate"),
@@ -5352,9 +4738,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate_brick_slab"),
@@ -5365,9 +4749,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5381,9 +4763,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_SLAB_FROM_DEEPSLATE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -5397,9 +4777,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_SLAB_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5413,9 +4791,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_SLAB_FROM_POLISHED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5429,9 +4805,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate_brick_stairs"),
@@ -5442,9 +4816,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5458,9 +4830,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_DEEPSLATE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -5474,9 +4844,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5490,11 +4858,9 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/deepslate_brick_stairs_from_polished_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_deepslate"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/deepslate_brick_stairs_from_polished_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_deepslate"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate_bricks"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -5504,9 +4870,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICKS_FROM_COBBLED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5520,9 +4884,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICKS_FROM_DEEPSLATE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -5535,9 +4897,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICKS_FROM_POLISHED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5551,9 +4911,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate_tile_slab"),
@@ -5564,9 +4922,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5580,9 +4936,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_SLAB_FROM_DEEPSLATE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -5596,9 +4950,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_SLAB_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5612,9 +4964,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_SLAB_FROM_DEEPSLATE_TILES_STONECUTTING: &Self =
         &Self {
@@ -5628,9 +4978,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_SLAB_FROM_POLISHED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5644,9 +4992,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate_tile_stairs"),
@@ -5657,9 +5003,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5673,9 +5017,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_STAIRS_FROM_DEEPSLATE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -5689,9 +5031,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_STAIRS_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5705,9 +5045,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_STAIRS_FROM_DEEPSLATE_TILES_STONECUTTING:
         &Self = &Self {
@@ -5721,9 +5059,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILE_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -5737,9 +5073,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILES: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/deepslate_tiles"),
@@ -5750,9 +5084,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILES_FROM_COBBLED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5766,9 +5098,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILES_FROM_DEEPSLATE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -5782,9 +5112,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILES_FROM_DEEPSLATE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -5797,9 +5125,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_TILES_FROM_POLISHED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -5813,9 +5139,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_DIAMOND_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/diamond_block"),
@@ -5826,9 +5150,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DIORITE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/diorite"),
@@ -5839,9 +5161,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DIORITE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/diorite_slab"),
@@ -5852,9 +5172,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DIORITE_SLAB_FROM_DIORITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -5867,9 +5185,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DIORITE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/diorite_stairs"),
@@ -5880,9 +5196,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DIORITE_STAIRS_FROM_DIORITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -5895,9 +5209,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DRIED_GHAST: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dried_ghast"),
@@ -5908,9 +5220,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ghast_tear"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ghast_tear"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DRIED_KELP_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dried_kelp_block"),
@@ -5921,9 +5231,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_kelp"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_kelp"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DRIPSTONE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dripstone_block"),
@@ -5934,9 +5242,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pointed_dripstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pointed_dripstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_BLACK_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_black_wool"),
@@ -5947,9 +5253,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_BLUE_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_blue_wool"),
@@ -5960,9 +5264,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_BROWN_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_brown_wool"),
@@ -5973,9 +5275,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_CYAN_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_cyan_wool"),
@@ -5986,9 +5286,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_GRAY_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_gray_wool"),
@@ -5999,9 +5297,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_GREEN_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_green_wool"),
@@ -6012,9 +5308,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_LIGHT_BLUE_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_light_blue_wool"),
@@ -6025,9 +5319,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_LIGHT_GRAY_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_light_gray_wool"),
@@ -6038,9 +5330,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_LIME_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_lime_wool"),
@@ -6051,9 +5341,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_MAGENTA_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_magenta_wool"),
@@ -6064,9 +5352,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_ORANGE_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_orange_wool"),
@@ -6077,9 +5363,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_PINK_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_pink_wool"),
@@ -6090,9 +5374,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_PURPLE_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_purple_wool"),
@@ -6103,9 +5385,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_RED_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_red_wool"),
@@ -6116,9 +5396,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_WHITE_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_white_wool"),
@@ -6129,9 +5407,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_DYE_YELLOW_WOOL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/dye_yellow_wool"),
@@ -6142,9 +5418,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EMERALD_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/emerald_block"),
@@ -6155,9 +5429,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_emerald"]],
-        },
+        requirements: &[&["has_the_recipe", "has_emerald"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/end_stone_brick_slab"),
@@ -6168,9 +5440,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICK_SLAB_FROM_END_STONE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -6184,9 +5454,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICK_SLAB_FROM_END_STONE_STONECUTTING: &Self =
         &Self {
@@ -6200,9 +5468,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_end_stone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_end_stone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/end_stone_brick_stairs"),
@@ -6213,9 +5479,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICK_STAIRS_FROM_END_STONE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -6229,9 +5493,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICK_STAIRS_FROM_END_STONE_STONECUTTING: &Self =
         &Self {
@@ -6245,9 +5507,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_end_stone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_end_stone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/end_stone_bricks"),
@@ -6258,9 +5518,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_END_STONE_BRICKS_FROM_END_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -6273,9 +5531,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/exposed_chiseled_copper"),
@@ -6286,9 +5542,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CHISELED_COPPER_FROM_EXPOSED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -6302,11 +5556,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CHISELED_COPPER_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/exposed_chiseled_copper_from_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_exposed_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CHISELED_COPPER_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/exposed_chiseled_copper_from_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_exposed_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/exposed_copper_grate"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -6316,9 +5568,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_COPPER_GRATE_FROM_EXPOSED_COPPER_STONECUTTING: &Self =
         &Self {
@@ -6332,9 +5582,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-            },
+            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/exposed_cut_copper"),
@@ -6345,9 +5593,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_FROM_EXPOSED_COPPER_STONECUTTING: &Self =
         &Self {
@@ -6361,9 +5607,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-            },
+            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/exposed_cut_copper_slab"),
@@ -6374,9 +5618,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_SLAB_FROM_EXPOSED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -6390,11 +5632,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_SLAB_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/exposed_cut_copper_slab_from_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_exposed_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_SLAB_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/exposed_cut_copper_slab_from_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_exposed_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/exposed_cut_copper_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -6404,9 +5644,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS_FROM_EXPOSED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -6420,11 +5658,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/exposed_cut_copper_stairs_from_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_exposed_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/exposed_cut_copper_stairs_from_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_exposed_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/glass"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -6434,9 +5670,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smelts_to_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smelts_to_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GLOWSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/glowstone"),
@@ -6447,9 +5681,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glowstone_dust"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glowstone_dust"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GOLD_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/gold_block"),
@@ -6460,9 +5692,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRANITE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/granite"),
@@ -6473,9 +5703,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRANITE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/granite_slab"),
@@ -6486,9 +5714,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRANITE_SLAB_FROM_GRANITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -6501,9 +5727,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRANITE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/granite_stairs"),
@@ -6514,9 +5738,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRANITE_STAIRS_FROM_GRANITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -6529,9 +5751,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRAY_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/gray_concrete_powder"),
@@ -6542,9 +5762,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRAY_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/gray_stained_glass"),
@@ -6555,9 +5773,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GRAY_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/gray_terracotta"),
@@ -6568,9 +5784,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GREEN_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/green_concrete_powder"),
@@ -6581,9 +5795,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GREEN_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/green_stained_glass"),
@@ -6594,9 +5806,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_GREEN_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/green_terracotta"),
@@ -6607,9 +5817,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_HAY_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/hay_block"),
@@ -6620,9 +5828,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wheat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wheat"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_IRON_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/iron_block"),
@@ -6633,9 +5839,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_JACK_O_LANTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/jack_o_lantern"),
@@ -6646,9 +5850,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_carved_pumpkin"]],
-        },
+        requirements: &[&["has_the_recipe", "has_carved_pumpkin"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_JUNGLE_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/jungle_planks"),
@@ -6659,9 +5861,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_JUNGLE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/jungle_slab"),
@@ -6672,9 +5872,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_JUNGLE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/jungle_stairs"),
@@ -6685,9 +5883,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_JUNGLE_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/jungle_wood"),
@@ -6698,9 +5894,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LAPIS_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/lapis_block"),
@@ -6711,9 +5905,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lapis_lazuli"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lapis_lazuli"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIGHT_BLUE_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/light_blue_concrete_powder"),
@@ -6724,9 +5916,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIGHT_BLUE_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/light_blue_stained_glass"),
@@ -6737,9 +5927,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIGHT_BLUE_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/light_blue_terracotta"),
@@ -6750,9 +5938,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIGHT_GRAY_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/light_gray_concrete_powder"),
@@ -6763,9 +5949,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIGHT_GRAY_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/light_gray_stained_glass"),
@@ -6776,9 +5960,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIGHT_GRAY_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/light_gray_terracotta"),
@@ -6789,9 +5971,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIME_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/lime_concrete_powder"),
@@ -6802,9 +5982,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIME_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/lime_stained_glass"),
@@ -6815,9 +5993,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_LIME_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/lime_terracotta"),
@@ -6828,9 +6004,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MAGENTA_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/magenta_concrete_powder"),
@@ -6841,9 +6015,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MAGENTA_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/magenta_stained_glass"),
@@ -6854,9 +6026,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MAGENTA_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/magenta_terracotta"),
@@ -6867,9 +6037,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MAGMA_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/magma_block"),
@@ -6880,9 +6048,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magma_cream"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magma_cream"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MANGROVE_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mangrove_planks"),
@@ -6893,9 +6059,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MANGROVE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mangrove_slab"),
@@ -6906,9 +6070,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MANGROVE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mangrove_stairs"),
@@ -6919,9 +6081,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MANGROVE_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mangrove_wood"),
@@ -6932,9 +6092,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MELON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/melon"),
@@ -6945,9 +6103,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_melon"]],
-        },
+        requirements: &[&["has_the_recipe", "has_melon"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_FROM_MOSS_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_cobblestone_from_moss_block"),
@@ -6958,9 +6114,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_moss_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_moss_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_FROM_VINE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_cobblestone_from_vine"),
@@ -6971,9 +6125,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_vine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_vine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_cobblestone_slab"),
@@ -6984,9 +6136,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_SLAB_FROM_MOSSY_COBBLESTONE_STONECUTTING:
         &Self = &Self {
@@ -7000,9 +6150,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_cobblestone_stairs"),
@@ -7013,11 +6161,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_STAIRS_FROM_MOSSY_COBBLESTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/mossy_cobblestone_stairs_from_mossy_cobblestone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_mossy_cobblestone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_STAIRS_FROM_MOSSY_COBBLESTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/mossy_cobblestone_stairs_from_mossy_cobblestone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_mossy_cobblestone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_stone_brick_slab"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7027,11 +6173,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_SLAB_FROM_MOSSY_STONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/mossy_stone_brick_slab_from_mossy_stone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_mossy_stone_bricks"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_SLAB_FROM_MOSSY_STONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/mossy_stone_brick_slab_from_mossy_stone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_mossy_stone_bricks"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_stone_brick_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7041,11 +6185,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_STAIRS_FROM_MOSSY_STONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/mossy_stone_brick_stairs_from_mossy_stone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_mossy_stone_bricks"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_STAIRS_FROM_MOSSY_STONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/mossy_stone_brick_stairs_from_mossy_stone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_mossy_stone_bricks"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICKS_FROM_MOSS_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/mossy_stone_bricks_from_moss_block",
@@ -7057,9 +6199,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_moss_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_moss_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICKS_FROM_VINE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mossy_stone_bricks_from_vine"),
@@ -7070,9 +6210,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_vine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_vine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MUD_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mud_brick_slab"),
@@ -7083,9 +6221,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mud_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mud_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MUD_BRICK_SLAB_FROM_MUD_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -7098,9 +6234,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mud_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mud_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MUD_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mud_brick_stairs"),
@@ -7111,9 +6245,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mud_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mud_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MUD_BRICK_STAIRS_FROM_MUD_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -7127,9 +6259,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_mud_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_mud_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_MUD_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/mud_bricks"),
@@ -7140,9 +6270,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_packed_mud"]],
-        },
+        requirements: &[&["has_the_recipe", "has_packed_mud"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_MUDDY_MANGROVE_ROOTS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/muddy_mangrove_roots"),
@@ -7153,9 +6281,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mangrove_roots"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mangrove_roots"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_NETHER_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/nether_brick_slab"),
@@ -7166,9 +6292,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_NETHER_BRICK_SLAB_FROM_NETHER_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -7182,9 +6306,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_NETHER_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/nether_brick_stairs"),
@@ -7195,9 +6317,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_NETHER_BRICK_STAIRS_FROM_NETHER_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -7211,9 +6331,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_NETHER_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/nether_bricks"),
@@ -7224,9 +6342,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_brick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_brick"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_NETHER_WART_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/nether_wart_block"),
@@ -7237,9 +6353,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_wart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_wart"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_NETHERITE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/netherite_block"),
@@ -7250,9 +6364,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OAK_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oak_planks"),
@@ -7263,9 +6375,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OAK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oak_slab"),
@@ -7276,9 +6386,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OAK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oak_stairs"),
@@ -7289,9 +6397,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OAK_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oak_wood"),
@@ -7302,9 +6408,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ORANGE_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/orange_concrete_powder"),
@@ -7315,9 +6419,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ORANGE_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/orange_stained_glass"),
@@ -7328,9 +6430,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_ORANGE_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/orange_terracotta"),
@@ -7341,9 +6441,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oxidized_chiseled_copper"),
@@ -7354,9 +6452,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CHISELED_COPPER_FROM_OXIDIZED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -7370,11 +6466,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CHISELED_COPPER_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_chiseled_copper_from_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_oxidized_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CHISELED_COPPER_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_chiseled_copper_from_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_oxidized_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oxidized_copper_grate"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7384,9 +6478,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_COPPER_GRATE_FROM_OXIDIZED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -7400,9 +6492,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oxidized_cut_copper"),
@@ -7413,9 +6503,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_FROM_OXIDIZED_COPPER_STONECUTTING: &Self =
         &Self {
@@ -7429,9 +6517,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-            },
+            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oxidized_cut_copper_slab"),
@@ -7442,9 +6528,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_SLAB_FROM_OXIDIZED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -7458,11 +6542,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_SLAB_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_cut_copper_slab_from_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_oxidized_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_SLAB_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_cut_copper_slab_from_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_oxidized_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/oxidized_cut_copper_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7472,12 +6554,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_cut_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_oxidized_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_oxidized_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_oxidized_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_oxidized_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_PACKED_ICE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/packed_ice"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7487,9 +6567,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ice"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ice"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PACKED_MUD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/packed_mud"),
@@ -7500,9 +6578,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mud"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mud"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PALE_OAK_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pale_oak_planks"),
@@ -7513,9 +6589,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PALE_OAK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pale_oak_slab"),
@@ -7526,9 +6600,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PALE_OAK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pale_oak_stairs"),
@@ -7539,9 +6611,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PALE_OAK_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pale_oak_wood"),
@@ -7552,9 +6622,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PINK_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pink_concrete_powder"),
@@ -7565,9 +6633,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PINK_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pink_stained_glass"),
@@ -7578,9 +6644,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PINK_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/pink_terracotta"),
@@ -7591,9 +6655,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_andesite"),
@@ -7604,9 +6666,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_FROM_ANDESITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -7619,9 +6679,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_andesite_slab"),
@@ -7632,9 +6690,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_SLAB_FROM_ANDESITE_STONECUTTING: &Self =
         &Self {
@@ -7648,9 +6704,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_andesite"]],
-            },
+            requirements: &[&["has_the_recipe", "has_andesite"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_SLAB_FROM_POLISHED_ANDESITE_STONECUTTING:
         &Self = &Self {
@@ -7664,9 +6718,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_andesite_stairs"),
@@ -7677,9 +6729,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_andesite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_STAIRS_FROM_ANDESITE_STONECUTTING: &Self =
         &Self {
@@ -7693,11 +6743,9 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_andesite"]],
-            },
+            requirements: &[&["has_the_recipe", "has_andesite"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_STAIRS_FROM_POLISHED_ANDESITE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_andesite_stairs_from_polished_andesite_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_andesite"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_STAIRS_FROM_POLISHED_ANDESITE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_andesite_stairs_from_polished_andesite_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_andesite"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BASALT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_basalt"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7707,9 +6755,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_basalt"]],
-        },
+        requirements: &[&["has_the_recipe", "has_basalt"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BASALT_FROM_BASALT_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -7722,9 +6768,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_basalt"]],
-        },
+        requirements: &[&["has_the_recipe", "has_basalt"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_blackstone"),
@@ -7735,9 +6779,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_blackstone_brick_slab"),
@@ -7748,13 +6790,11 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_slab_from_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_blackstone"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone_bricks"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_slab_from_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_blackstone"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone_bricks"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_blackstone_brick_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7764,13 +6804,11 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_stairs_from_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_blackstone"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone_bricks"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_stairs_from_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_blackstone"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone_bricks"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_blackstone_bricks"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7780,9 +6818,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS_FROM_BLACKSTONE_STONECUTTING:
         &Self = &Self {
@@ -7796,11 +6832,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_bricks_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_bricks_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_FROM_BLACKSTONE_STONECUTTING: &Self =
         &Self {
             id: Identifier::vanilla_static(
@@ -7813,9 +6847,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_blackstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_blackstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_blackstone_slab"),
@@ -7826,9 +6858,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_SLAB_FROM_BLACKSTONE_STONECUTTING: &Self =
         &Self {
@@ -7842,11 +6872,9 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_blackstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_blackstone"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_slab_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_slab_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_blackstone_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7856,9 +6884,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS_FROM_BLACKSTONE_STONECUTTING:
         &Self = &Self {
@@ -7872,11 +6898,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_stairs_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_blackstone_stairs_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_deepslate"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7886,9 +6910,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -7902,9 +6924,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -7918,9 +6938,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_deepslate_slab"),
@@ -7931,11 +6949,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_slab_from_cobbled_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_cobbled_deepslate"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_slab_from_cobbled_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_cobbled_deepslate"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
             id: Identifier::vanilla_static(
@@ -7948,11 +6964,9 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_slab_from_polished_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_deepslate"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_slab_from_polished_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_deepslate"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_deepslate_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7962,11 +6976,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_stairs_from_cobbled_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_cobbled_deepslate"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_stairs_from_cobbled_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_cobbled_deepslate"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
             id: Identifier::vanilla_static(
@@ -7979,11 +6991,9 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_stairs_from_polished_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_deepslate"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/polished_deepslate_stairs_from_polished_deepslate_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_deepslate"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_diorite"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -7993,9 +7003,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_FROM_DIORITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8008,9 +7016,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_diorite_slab"),
@@ -8021,9 +7027,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_SLAB_FROM_DIORITE_STONECUTTING: &Self =
         &Self {
@@ -8037,9 +7041,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_diorite"]],
-            },
+            requirements: &[&["has_the_recipe", "has_diorite"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_SLAB_FROM_POLISHED_DIORITE_STONECUTTING:
         &Self = &Self {
@@ -8053,9 +7055,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_diorite_stairs"),
@@ -8066,9 +7066,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_STAIRS_FROM_DIORITE_STONECUTTING: &Self =
         &Self {
@@ -8082,9 +7080,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_diorite"]],
-            },
+            requirements: &[&["has_the_recipe", "has_diorite"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE_STAIRS_FROM_POLISHED_DIORITE_STONECUTTING:
         &Self = &Self {
@@ -8098,9 +7094,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_diorite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_granite"),
@@ -8111,9 +7105,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_FROM_GRANITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8126,9 +7118,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_granite_slab"),
@@ -8139,9 +7129,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_SLAB_FROM_GRANITE_STONECUTTING: &Self =
         &Self {
@@ -8155,9 +7143,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_granite"]],
-            },
+            requirements: &[&["has_the_recipe", "has_granite"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_SLAB_FROM_POLISHED_GRANITE_STONECUTTING:
         &Self = &Self {
@@ -8171,9 +7157,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_granite_stairs"),
@@ -8184,9 +7168,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_STAIRS_FROM_GRANITE_STONECUTTING: &Self =
         &Self {
@@ -8200,9 +7182,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_granite"]],
-            },
+            requirements: &[&["has_the_recipe", "has_granite"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_GRANITE_STAIRS_FROM_POLISHED_GRANITE_STONECUTTING:
         &Self = &Self {
@@ -8216,9 +7196,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_granite"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_tuff"),
@@ -8229,9 +7207,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8244,9 +7220,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_tuff_slab"),
@@ -8257,9 +7231,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_SLAB_FROM_POLISHED_TUFF_STONECUTTING: &Self =
         &Self {
@@ -8273,9 +7245,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_SLAB_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8288,9 +7258,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/polished_tuff_stairs"),
@@ -8301,9 +7269,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_STAIRS_FROM_POLISHED_TUFF_STONECUTTING: &Self =
         &Self {
@@ -8317,9 +7283,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_TUFF_STAIRS_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8332,9 +7296,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/prismarine"),
@@ -8345,9 +7307,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_shard"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/prismarine_brick_slab"),
@@ -8358,9 +7318,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_BRICK_SLAB_FROM_PRISMARINE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -8374,9 +7332,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/prismarine_brick_stairs"),
@@ -8387,11 +7343,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_bricks"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_BRICK_STAIRS_FROM_PRISMARINE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/prismarine_brick_stairs_from_prismarine_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_prismarine_bricks"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_BRICK_STAIRS_FROM_PRISMARINE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/prismarine_brick_stairs_from_prismarine_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_prismarine_bricks"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/prismarine_bricks"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -8401,9 +7355,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_shard"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/prismarine_slab"),
@@ -8414,9 +7366,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_SLAB_FROM_PRISMARINE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8429,9 +7379,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/prismarine_stairs"),
@@ -8442,9 +7390,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PRISMARINE_STAIRS_FROM_PRISMARINE_STONECUTTING: &Self =
         &Self {
@@ -8458,9 +7404,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_prismarine"]],
-            },
+            requirements: &[&["has_the_recipe", "has_prismarine"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_PURPLE_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purple_concrete_powder"),
@@ -8471,9 +7415,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPLE_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purple_stained_glass"),
@@ -8484,9 +7426,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPLE_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purple_terracotta"),
@@ -8497,9 +7437,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purpur_block"),
@@ -8510,9 +7448,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chorus_fruit_popped"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chorus_fruit_popped"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_PILLAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purpur_pillar"),
@@ -8523,9 +7459,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purpur_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purpur_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_PILLAR_FROM_PURPUR_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8538,9 +7472,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purpur_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purpur_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purpur_slab"),
@@ -8551,9 +7483,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purpur_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purpur_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_SLAB_FROM_PURPUR_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8566,9 +7496,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purpur_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purpur_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/purpur_stairs"),
@@ -8579,9 +7507,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purpur_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purpur_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_PURPUR_STAIRS_FROM_PURPUR_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8594,9 +7520,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purpur_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purpur_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/quartz_block"),
@@ -8607,9 +7531,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/quartz_bricks"),
@@ -8620,9 +7542,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_BRICKS_FROM_QUARTZ_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8635,9 +7555,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_PILLAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/quartz_pillar"),
@@ -8648,14 +7566,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_chiseled_quartz_block",
-                "has_quartz_block",
-                "has_quartz_pillar",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_chiseled_quartz_block",
+            "has_quartz_block",
+            "has_quartz_pillar",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_PILLAR_FROM_QUARTZ_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8668,9 +7584,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/quartz_slab"),
@@ -8681,14 +7595,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_chiseled_quartz_block",
-                "has_quartz_block",
-                "has_quartz_pillar",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_chiseled_quartz_block",
+            "has_quartz_block",
+            "has_quartz_pillar",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_SLAB_FROM_QUARTZ_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8701,9 +7613,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/quartz_stairs"),
@@ -8714,14 +7624,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_chiseled_quartz_block",
-                "has_quartz_block",
-                "has_quartz_pillar",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_chiseled_quartz_block",
+            "has_quartz_block",
+            "has_quartz_pillar",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_QUARTZ_STAIRS_FROM_QUARTZ_BLOCK_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -8734,9 +7642,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RAW_COPPER_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/raw_copper_block"),
@@ -8747,9 +7653,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RAW_GOLD_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/raw_gold_block"),
@@ -8760,9 +7664,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_gold"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_gold"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RAW_IRON_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/raw_iron_block"),
@@ -8773,9 +7675,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_iron"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_iron"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_concrete_powder"),
@@ -8786,9 +7686,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_nether_brick_slab"),
@@ -8799,9 +7697,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_SLAB_FROM_RED_NETHER_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -8815,9 +7711,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_nether_brick_stairs"),
@@ -8828,11 +7722,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_STAIRS_FROM_RED_NETHER_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/red_nether_brick_stairs_from_red_nether_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_red_nether_bricks"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_STAIRS_FROM_RED_NETHER_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/red_nether_brick_stairs_from_red_nether_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_red_nether_bricks"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_nether_bricks"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -8842,9 +7734,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_wart"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_wart"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_sandstone"),
@@ -8855,9 +7745,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_SANDSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_sandstone_slab"),
@@ -8868,13 +7756,11 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_red_sandstone",
-                "has_chiseled_red_sandstone",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_red_sandstone",
+            "has_chiseled_red_sandstone",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_SANDSTONE_SLAB_FROM_RED_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -8888,9 +7774,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_RED_SANDSTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_sandstone_stairs"),
@@ -8901,14 +7785,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_red_sandstone",
-                "has_chiseled_red_sandstone",
-                "has_cut_red_sandstone",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_red_sandstone",
+            "has_chiseled_red_sandstone",
+            "has_cut_red_sandstone",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_SANDSTONE_STAIRS_FROM_RED_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -8922,9 +7804,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_RED_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_stained_glass"),
@@ -8935,9 +7815,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/red_terracotta"),
@@ -8948,9 +7826,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RESIN_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/resin_block"),
@@ -8961,9 +7837,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_clump"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_clump"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RESIN_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/resin_brick_slab"),
@@ -8974,9 +7848,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RESIN_BRICK_SLAB_FROM_RESIN_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -8990,9 +7862,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_RESIN_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/resin_brick_stairs"),
@@ -9003,9 +7873,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_RESIN_BRICK_STAIRS_FROM_RESIN_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -9019,9 +7887,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_RESIN_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/resin_bricks"),
@@ -9032,9 +7898,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_brick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_brick"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/sandstone"),
@@ -9045,9 +7909,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SANDSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/sandstone_slab"),
@@ -9058,9 +7920,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone", "has_chiseled_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone", "has_chiseled_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SANDSTONE_SLAB_FROM_SANDSTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9073,9 +7933,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SANDSTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/sandstone_stairs"),
@@ -9086,14 +7944,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_sandstone",
-                "has_chiseled_sandstone",
-                "has_cut_sandstone",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_sandstone",
+            "has_chiseled_sandstone",
+            "has_cut_sandstone",
+        ]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SANDSTONE_STAIRS_FROM_SANDSTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9106,9 +7962,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SEA_LANTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/sea_lantern"),
@@ -9119,9 +7973,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine_crystals"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine_crystals"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_BASALT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_basalt"),
@@ -9132,9 +7984,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_basalt"]],
-        },
+        requirements: &[&["has_the_recipe", "has_basalt"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_QUARTZ: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_quartz"),
@@ -9145,9 +7995,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_QUARTZ_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_quartz_slab"),
@@ -9158,9 +8006,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_QUARTZ_SLAB_FROM_SMOOTH_QUARTZ_STONECUTTING: &Self =
         &Self {
@@ -9174,9 +8020,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
-            },
+            requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_QUARTZ_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_quartz_stairs"),
@@ -9187,9 +8031,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_QUARTZ_STAIRS_FROM_SMOOTH_QUARTZ_STONECUTTING: &Self =
         &Self {
@@ -9203,9 +8045,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
-            },
+            requirements: &[&["has_the_recipe", "has_smooth_quartz"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_red_sandstone"),
@@ -9216,9 +8056,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_red_sandstone_slab"),
@@ -9229,11 +8067,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_red_sandstone"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_SLAB_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/smooth_red_sandstone_slab_from_smooth_red_sandstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_smooth_red_sandstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_SLAB_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/smooth_red_sandstone_slab_from_smooth_red_sandstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_smooth_red_sandstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_red_sandstone_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -9243,11 +8079,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_red_sandstone"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_STAIRS_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/smooth_red_sandstone_stairs_from_smooth_red_sandstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_smooth_red_sandstone"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_STAIRS_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/smooth_red_sandstone_stairs_from_smooth_red_sandstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_smooth_red_sandstone"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_SANDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_sandstone"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -9257,9 +8091,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_SANDSTONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_sandstone_slab"),
@@ -9270,9 +8102,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_SANDSTONE_SLAB_FROM_SMOOTH_SANDSTONE_STONECUTTING:
         &Self = &Self {
@@ -9286,9 +8116,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_SANDSTONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_sandstone_stairs"),
@@ -9299,9 +8127,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_SANDSTONE_STAIRS_FROM_SMOOTH_SANDSTONE_STONECUTTING:
         &Self = &Self {
@@ -9315,9 +8141,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_sandstone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_STONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_stone"),
@@ -9328,9 +8152,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_STONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/smooth_stone_slab"),
@@ -9341,9 +8163,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_STONE_SLAB_FROM_SMOOTH_STONE_STONECUTTING: &Self =
         &Self {
@@ -9357,9 +8177,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_smooth_stone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_smooth_stone"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_SNOW_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/snow_block"),
@@ -9370,9 +8188,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_snowball"]],
-        },
+        requirements: &[&["has_the_recipe", "has_snowball"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SPONGE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/sponge"),
@@ -9383,9 +8199,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wet_sponge"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wet_sponge"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SPRUCE_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/spruce_planks"),
@@ -9396,9 +8210,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SPRUCE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/spruce_slab"),
@@ -9409,9 +8221,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SPRUCE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/spruce_stairs"),
@@ -9422,9 +8232,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_SPRUCE_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/spruce_wood"),
@@ -9435,9 +8243,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stone"),
@@ -9448,9 +8254,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stone_brick_slab"),
@@ -9461,9 +8265,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICK_SLAB_FROM_STONE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -9477,9 +8279,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICK_SLAB_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9492,9 +8292,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stone_brick_stairs"),
@@ -9505,9 +8303,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICK_STAIRS_FROM_STONE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -9521,9 +8317,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICK_STAIRS_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9536,9 +8330,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stone_bricks"),
@@ -9549,9 +8341,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_BRICKS_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9564,9 +8354,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stone_slab"),
@@ -9577,9 +8365,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_SLAB_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9592,9 +8378,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stone_stairs"),
@@ -9605,9 +8389,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STONE_STAIRS_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9620,9 +8402,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_ACACIA_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_acacia_wood"),
@@ -9633,9 +8413,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_BIRCH_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_birch_wood"),
@@ -9646,9 +8424,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_CHERRY_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_cherry_wood"),
@@ -9659,9 +8435,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_CRIMSON_HYPHAE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_crimson_hyphae"),
@@ -9672,9 +8446,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_DARK_OAK_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_dark_oak_wood"),
@@ -9685,9 +8457,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_JUNGLE_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_jungle_wood"),
@@ -9698,9 +8468,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_MANGROVE_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_mangrove_wood"),
@@ -9711,9 +8479,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_OAK_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_oak_wood"),
@@ -9724,9 +8490,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_PALE_OAK_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_pale_oak_wood"),
@@ -9737,9 +8501,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_SPRUCE_WOOD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_spruce_wood"),
@@ -9750,9 +8512,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_STRIPPED_WARPED_HYPHAE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/stripped_warped_hyphae"),
@@ -9763,9 +8523,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/terracotta"),
@@ -9776,9 +8534,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_clay_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_clay_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TINTED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tinted_glass"),
@@ -9789,9 +8545,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tuff_brick_slab"),
@@ -9802,9 +8556,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_SLAB_FROM_POLISHED_TUFF_STONECUTTING: &Self =
         &Self {
@@ -9818,9 +8570,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_SLAB_FROM_TUFF_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -9834,9 +8584,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_SLAB_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9849,9 +8597,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tuff_brick_stairs"),
@@ -9862,9 +8608,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_STAIRS_FROM_POLISHED_TUFF_STONECUTTING: &Self =
         &Self {
@@ -9878,9 +8622,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_STAIRS_FROM_TUFF_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -9894,9 +8636,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICK_STAIRS_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9909,9 +8649,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tuff_bricks"),
@@ -9922,9 +8660,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICKS_FROM_POLISHED_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9937,9 +8673,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_BRICKS_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -9952,9 +8686,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tuff_slab"),
@@ -9965,9 +8697,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_SLAB_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tuff_slab_from_tuff_stonecutting"),
@@ -9978,9 +8708,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/tuff_stairs"),
@@ -9991,9 +8719,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_TUFF_STAIRS_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10006,9 +8732,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WARPED_HYPHAE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/warped_hyphae"),
@@ -10019,9 +8743,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WARPED_PLANKS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/warped_planks"),
@@ -10032,9 +8754,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_logs"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WARPED_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/warped_slab"),
@@ -10045,9 +8765,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WARPED_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/warped_stairs"),
@@ -10058,9 +8776,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_chiseled_copper"),
@@ -10071,9 +8787,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CHISELED_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10086,9 +8800,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chiseled_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chiseled_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CHISELED_COPPER_FROM_WAXED_COPPER_BLOCK_STONECUTTING:
         &Self = &Self {
@@ -10102,9 +8814,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CHISELED_COPPER_FROM_WAXED_CUT_COPPER_STONECUTTING:
         &Self = &Self {
@@ -10118,9 +8828,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_copper_bars_from_honeycomb"),
@@ -10131,9 +8839,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_bars"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_bars"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_BLOCK_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_copper_block_from_honeycomb"),
@@ -10144,9 +8850,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_CHAIN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_copper_chain_from_honeycomb"),
@@ -10157,9 +8861,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_chain"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_chain"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_CHEST_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_copper_chest_from_honeycomb"),
@@ -10170,9 +8872,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_chest"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_chest"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_GOLEM_STATUE_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10185,9 +8885,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_golem_statue"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_golem_statue"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_copper_grate"),
@@ -10198,9 +8896,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_GRATE_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_copper_grate_from_honeycomb"),
@@ -10211,9 +8907,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_grate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_grate"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_GRATE_FROM_WAXED_COPPER_BLOCK_STONECUTTING:
         &Self = &Self {
@@ -10227,9 +8921,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_COPPER_LANTERN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10242,9 +8934,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_lantern"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_lantern"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_cut_copper"),
@@ -10255,9 +8945,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_cut_copper_from_honeycomb"),
@@ -10268,9 +8956,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_FROM_WAXED_COPPER_BLOCK_STONECUTTING: &Self =
         &Self {
@@ -10284,9 +8970,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-            },
+            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_cut_copper_slab"),
@@ -10297,9 +8981,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_SLAB_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10312,9 +8994,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_SLAB_FROM_WAXED_COPPER_BLOCK_STONECUTTING:
         &Self = &Self {
@@ -10328,9 +9008,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_SLAB_FROM_WAXED_CUT_COPPER_STONECUTTING:
         &Self = &Self {
@@ -10344,9 +9022,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_cut_copper_stairs"),
@@ -10357,9 +9033,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10372,11 +9046,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cut_copper_stairs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cut_copper_stairs"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_WAXED_COPPER_BLOCK_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_cut_copper_stairs_from_waxed_copper_block_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_copper_block"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_WAXED_COPPER_BLOCK_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_cut_copper_stairs_from_waxed_copper_block_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_copper_block"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_WAXED_CUT_COPPER_STONECUTTING:
         &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10389,9 +9061,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_exposed_chiseled_copper"),
@@ -10402,9 +9072,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_exposed_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_exposed_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10417,12 +9085,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_chiseled_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_chiseled_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_exposed_copper_bars_from_honeycomb",
@@ -10434,9 +9100,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_bars"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_bars"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_CHAIN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10449,9 +9113,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_chain"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_chain"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_CHEST_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10464,9 +9126,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_chest"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_chest"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10479,9 +9139,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GOLEM_STATUE_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10495,9 +9153,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_exposed_copper_golem_statue"]],
-            },
+            requirements: &[&["has_the_recipe", "has_exposed_copper_golem_statue"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_exposed_copper_grate"),
@@ -10508,9 +9164,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_exposed_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GRATE_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10523,11 +9177,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_grate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_grate"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GRATE_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_copper_grate_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GRATE_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_copper_grate_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_LANTERN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_exposed_copper_lantern_from_honeycomb",
@@ -10539,9 +9191,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_lantern"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_lantern"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_exposed_cut_copper"),
@@ -10552,9 +9202,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_exposed_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10567,11 +9215,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_cut_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_exposed_cut_copper_slab"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -10581,9 +9227,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_exposed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_exposed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10596,12 +9240,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_cut_copper_slab"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_exposed_cut_copper_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -10611,9 +9253,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_exposed_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_exposed_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10627,12 +9267,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_exposed_cut_copper_stairs"]],
-            },
+            requirements: &[&["has_the_recipe", "has_exposed_cut_copper_stairs"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_exposed_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_exposed_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_exposed_lightning_rod_from_honeycomb",
@@ -10644,9 +9282,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_lightning_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_lightning_rod"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10659,9 +9295,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lightning_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lightning_rod"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_oxidized_chiseled_copper"),
@@ -10672,9 +9306,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_oxidized_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_oxidized_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10688,12 +9320,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_oxidized_chiseled_copper"]],
-            },
+            requirements: &[&["has_the_recipe", "has_oxidized_chiseled_copper"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_oxidized_copper_bars_from_honeycomb",
@@ -10705,9 +9335,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_bars"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_bars"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_CHAIN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10720,9 +9348,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_chain"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_chain"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_CHEST_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10735,9 +9361,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_chest"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_chest"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10750,9 +9374,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GOLEM_STATUE_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10766,9 +9388,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_oxidized_copper_golem_statue"]],
-            },
+            requirements: &[&["has_the_recipe", "has_oxidized_copper_golem_statue"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_oxidized_copper_grate"),
@@ -10779,9 +9399,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_oxidized_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GRATE_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10794,11 +9412,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_grate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_grate"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GRATE_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_copper_grate_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GRATE_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_copper_grate_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_LANTERN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_oxidized_copper_lantern_from_honeycomb",
@@ -10810,9 +9426,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_lantern"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_lantern"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_oxidized_cut_copper"),
@@ -10823,9 +9437,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_oxidized_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10838,11 +9450,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_cut_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_oxidized_cut_copper_slab"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -10852,9 +9462,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_oxidized_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_oxidized_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10868,12 +9476,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_oxidized_cut_copper_slab"]],
-            },
+            requirements: &[&["has_the_recipe", "has_oxidized_cut_copper_slab"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_oxidized_cut_copper_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -10883,9 +9489,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_oxidized_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_oxidized_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10899,12 +9503,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_oxidized_cut_copper_stairs"]],
-            },
+            requirements: &[&["has_the_recipe", "has_oxidized_cut_copper_stairs"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_oxidized_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_oxidized_lightning_rod_from_honeycomb",
@@ -10916,9 +9518,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_lightning_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_lightning_rod"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_weathered_chiseled_copper"),
@@ -10929,9 +9529,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_weathered_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_weathered_cut_copper_slab"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_HONEYCOMB: &Self =
         &Self {
@@ -10945,12 +9543,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_weathered_chiseled_copper"]],
-            },
+            requirements: &[&["has_the_recipe", "has_weathered_chiseled_copper"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_weathered_copper_bars_from_honeycomb",
@@ -10962,9 +9558,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_bars"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_bars"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_CHAIN_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10977,9 +9571,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_chain"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_chain"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_CHEST_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -10992,9 +9584,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_chest"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_chest"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -11007,9 +9597,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GOLEM_STATUE_FROM_HONEYCOMB: &Self =
         &Self {
@@ -11023,9 +9611,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_weathered_copper_golem_statue"]],
-            },
+            requirements: &[&["has_the_recipe", "has_weathered_copper_golem_statue"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_weathered_copper_grate"),
@@ -11036,9 +9622,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GRATE_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -11051,11 +9635,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_grate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_grate"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GRATE_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_copper_grate_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GRATE_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_copper_grate_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_LANTERN_FROM_HONEYCOMB: &Self =
         &Self {
             id: Identifier::vanilla_static(
@@ -11068,9 +9650,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_weathered_copper_lantern"]],
-            },
+            requirements: &[&["has_the_recipe", "has_weathered_copper_lantern"]],
         };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_weathered_cut_copper"),
@@ -11081,9 +9661,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -11096,11 +9674,9 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_cut_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_weathered_cut_copper_slab"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -11110,9 +9686,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_weathered_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_weathered_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_HONEYCOMB: &Self =
         &Self {
@@ -11126,12 +9700,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_weathered_cut_copper_slab"]],
-            },
+            requirements: &[&["has_the_recipe", "has_weathered_cut_copper_slab"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/waxed_weathered_cut_copper_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -11141,9 +9713,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_weathered_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_weathered_cut_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_HONEYCOMB: &Self =
         &Self {
@@ -11157,12 +9727,10 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_weathered_cut_copper_stairs"]],
-            },
+            requirements: &[&["has_the_recipe", "has_weathered_cut_copper_stairs"]],
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_waxed_weathered_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_waxed_weathered_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
             "recipes/building_blocks/waxed_weathered_lightning_rod_from_honeycomb",
@@ -11174,9 +9742,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_lightning_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_lightning_rod"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/weathered_chiseled_copper"),
@@ -11187,12 +9753,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_cut_copper_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_cut_copper_slab"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_chiseled_copper_from_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_weathered_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_chiseled_copper_from_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_weathered_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_chiseled_copper_from_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_weathered_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_chiseled_copper_from_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_weathered_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_COPPER_GRATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/weathered_copper_grate"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -11202,9 +9766,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_COPPER_GRATE_FROM_WEATHERED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -11218,9 +9780,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/weathered_cut_copper"),
@@ -11231,9 +9791,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_FROM_WEATHERED_COPPER_STONECUTTING:
         &Self = &Self {
@@ -11247,9 +9805,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/weathered_cut_copper_slab"),
@@ -11260,12 +9816,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_cut_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_slab_from_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_weathered_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_slab_from_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_weathered_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_slab_from_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_weathered_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_slab_from_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_weathered_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/weathered_cut_copper_stairs"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -11275,12 +9829,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_cut_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_cut_copper"]],
     };
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_weathered_copper"]] } } ;
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_weathered_cut_copper"]] } } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_weathered_copper"]] , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_cut_copper_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_weathered_cut_copper"]] , } ;
     pub const RECIPES_BUILDING_BLOCKS_WHITE_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/white_concrete_powder"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -11290,9 +9842,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WHITE_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/white_stained_glass"),
@@ -11303,9 +9853,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WHITE_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/white_terracotta"),
@@ -11316,9 +9864,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_WHITE_WOOL_FROM_STRING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/white_wool_from_string"),
@@ -11329,9 +9875,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_YELLOW_CONCRETE_POWDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/yellow_concrete_powder"),
@@ -11342,9 +9886,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sand", "has_gravel"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_YELLOW_STAINED_GLASS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/yellow_stained_glass"),
@@ -11355,9 +9897,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_BUILDING_BLOCKS_YELLOW_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/building_blocks/yellow_terracotta"),
@@ -11368,9 +9908,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_terracotta"]],
     };
     pub const RECIPES_COMBAT_ARROW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/arrow"),
@@ -11381,9 +9919,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_feather", "has_flint"]],
-        },
+        requirements: &[&["has_the_recipe", "has_feather", "has_flint"]],
     };
     pub const RECIPES_COMBAT_BLACK_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/black_harness"),
@@ -11394,9 +9930,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_BLUE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/blue_harness"),
@@ -11407,9 +9941,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_BOW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/bow"),
@@ -11420,9 +9952,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_COMBAT_BROWN_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/brown_harness"),
@@ -11433,9 +9963,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_COPPER_BOOTS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/copper_boots"),
@@ -11446,9 +9974,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_COMBAT_COPPER_CHESTPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/copper_chestplate"),
@@ -11459,9 +9985,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_COMBAT_COPPER_HELMET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/copper_helmet"),
@@ -11472,9 +9996,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_COMBAT_COPPER_LEGGINGS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/copper_leggings"),
@@ -11485,9 +10007,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_COMBAT_COPPER_SPEAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/copper_spear"),
@@ -11498,9 +10018,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_COMBAT_COPPER_SWORD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/copper_sword"),
@@ -11511,9 +10029,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_COMBAT_CROSSBOW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/crossbow"),
@@ -11524,14 +10040,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_string",
-                "has_iron_ingot",
-                "has_tripwire_hook",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_string",
+            "has_iron_ingot",
+            "has_tripwire_hook",
+        ]],
     };
     pub const RECIPES_COMBAT_CYAN_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/cyan_harness"),
@@ -11542,9 +10056,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_DIAMOND_BOOTS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/diamond_boots"),
@@ -11555,9 +10067,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_COMBAT_DIAMOND_CHESTPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/diamond_chestplate"),
@@ -11568,9 +10078,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_COMBAT_DIAMOND_HELMET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/diamond_helmet"),
@@ -11581,9 +10089,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_COMBAT_DIAMOND_LEGGINGS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/diamond_leggings"),
@@ -11594,9 +10100,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_COMBAT_DIAMOND_SPEAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/diamond_spear"),
@@ -11607,9 +10111,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_COMBAT_DIAMOND_SWORD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/diamond_sword"),
@@ -11620,9 +10122,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_COMBAT_DYE_BLACK_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_black_harness"),
@@ -11633,9 +10133,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_BLUE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_blue_harness"),
@@ -11646,9 +10144,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_BROWN_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_brown_harness"),
@@ -11659,9 +10155,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_CYAN_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_cyan_harness"),
@@ -11672,9 +10166,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_GRAY_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_gray_harness"),
@@ -11685,9 +10177,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_GREEN_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_green_harness"),
@@ -11698,9 +10188,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_LIGHT_BLUE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_light_blue_harness"),
@@ -11711,9 +10199,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_LIGHT_GRAY_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_light_gray_harness"),
@@ -11724,9 +10210,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_LIME_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_lime_harness"),
@@ -11737,9 +10221,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_MAGENTA_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_magenta_harness"),
@@ -11750,9 +10232,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_ORANGE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_orange_harness"),
@@ -11763,9 +10243,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_PINK_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_pink_harness"),
@@ -11776,9 +10254,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_PURPLE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_purple_harness"),
@@ -11789,9 +10265,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_RED_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_red_harness"),
@@ -11802,9 +10276,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_WHITE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_white_harness"),
@@ -11815,9 +10287,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_DYE_YELLOW_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/dye_yellow_harness"),
@@ -11828,9 +10298,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_COMBAT_GOLDEN_BOOTS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/golden_boots"),
@@ -11841,9 +10309,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_COMBAT_GOLDEN_CHESTPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/golden_chestplate"),
@@ -11854,9 +10320,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_COMBAT_GOLDEN_HELMET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/golden_helmet"),
@@ -11867,9 +10331,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_COMBAT_GOLDEN_LEGGINGS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/golden_leggings"),
@@ -11880,9 +10342,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_COMBAT_GOLDEN_SPEAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/golden_spear"),
@@ -11893,9 +10353,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_COMBAT_GOLDEN_SWORD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/golden_sword"),
@@ -11906,9 +10364,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_COMBAT_GRAY_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/gray_harness"),
@@ -11919,9 +10375,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_GREEN_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/green_harness"),
@@ -11932,9 +10386,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_IRON_BOOTS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/iron_boots"),
@@ -11945,9 +10397,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_IRON_CHESTPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/iron_chestplate"),
@@ -11958,9 +10408,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_IRON_HELMET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/iron_helmet"),
@@ -11971,9 +10419,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_IRON_LEGGINGS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/iron_leggings"),
@@ -11984,9 +10430,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_IRON_SPEAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/iron_spear"),
@@ -11997,9 +10441,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_IRON_SWORD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/iron_sword"),
@@ -12010,9 +10452,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_LEATHER_BOOTS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/leather_boots"),
@@ -12023,9 +10463,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_COMBAT_LEATHER_CHESTPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/leather_chestplate"),
@@ -12036,9 +10474,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_COMBAT_LEATHER_HELMET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/leather_helmet"),
@@ -12049,9 +10485,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_COMBAT_LEATHER_LEGGINGS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/leather_leggings"),
@@ -12062,9 +10496,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_COMBAT_LIGHT_BLUE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/light_blue_harness"),
@@ -12075,9 +10507,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_LIGHT_GRAY_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/light_gray_harness"),
@@ -12088,9 +10518,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_LIME_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/lime_harness"),
@@ -12101,9 +10529,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_MACE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/mace"),
@@ -12114,9 +10540,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_breeze_rod", "has_heavy_core"]],
-        },
+        requirements: &[&["has_the_recipe", "has_breeze_rod", "has_heavy_core"]],
     };
     pub const RECIPES_COMBAT_MAGENTA_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/magenta_harness"),
@@ -12127,9 +10551,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_BOOTS_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_boots_smithing"),
@@ -12140,9 +10562,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_CHESTPLATE_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_chestplate_smithing"),
@@ -12153,9 +10573,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_HELMET_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_helmet_smithing"),
@@ -12166,9 +10584,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_HORSE_ARMOR_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_horse_armor_smithing"),
@@ -12179,9 +10595,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_LEGGINGS_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_leggings_smithing"),
@@ -12192,9 +10606,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_NAUTILUS_ARMOR_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_nautilus_armor_smithing"),
@@ -12205,9 +10617,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_SPEAR_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_spear_smithing"),
@@ -12218,9 +10628,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_NETHERITE_SWORD_SMITHING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/netherite_sword_smithing"),
@@ -12231,9 +10639,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_ingot"]],
     };
     pub const RECIPES_COMBAT_ORANGE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/orange_harness"),
@@ -12244,9 +10650,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_PINK_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/pink_harness"),
@@ -12257,9 +10661,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_PURPLE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/purple_harness"),
@@ -12270,9 +10672,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_RED_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/red_harness"),
@@ -12283,9 +10683,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_SADDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/saddle"),
@@ -12296,9 +10694,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_COMBAT_SHIELD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/shield"),
@@ -12309,9 +10705,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_COMBAT_SPECTRAL_ARROW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/spectral_arrow"),
@@ -12322,9 +10716,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glowstone_dust"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glowstone_dust"]],
     };
     pub const RECIPES_COMBAT_STONE_SPEAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/stone_spear"),
@@ -12335,9 +10727,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_COMBAT_STONE_SWORD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/stone_sword"),
@@ -12348,9 +10738,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_COMBAT_TURTLE_HELMET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/turtle_helmet"),
@@ -12361,9 +10749,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_turtle_scute"]],
-        },
+        requirements: &[&["has_the_recipe", "has_turtle_scute"]],
     };
     pub const RECIPES_COMBAT_WHITE_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/white_harness"),
@@ -12374,9 +10760,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_COMBAT_WOLF_ARMOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/wolf_armor"),
@@ -12387,9 +10771,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_armadillo_scute"]],
-        },
+        requirements: &[&["has_the_recipe", "has_armadillo_scute"]],
     };
     pub const RECIPES_COMBAT_WOODEN_SPEAR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/wooden_spear"),
@@ -12400,9 +10782,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_COMBAT_WOODEN_SWORD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/wooden_sword"),
@@ -12413,9 +10793,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_COMBAT_YELLOW_HARNESS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/combat/yellow_harness"),
@@ -12426,9 +10804,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_ghast"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_ghast"]],
     };
     pub const RECIPES_DECORATIONS_ACACIA_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/acacia_fence"),
@@ -12439,9 +10815,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_ACACIA_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/acacia_hanging_sign"),
@@ -12452,9 +10826,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_ACACIA_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/acacia_shelf"),
@@ -12465,9 +10837,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_acacia_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_acacia_log"]],
     };
     pub const RECIPES_DECORATIONS_ACACIA_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/acacia_sign"),
@@ -12478,9 +10848,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_ANDESITE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/andesite_wall"),
@@ -12491,9 +10859,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_DECORATIONS_ANDESITE_WALL_FROM_ANDESITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -12506,9 +10872,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_andesite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_andesite"]],
     };
     pub const RECIPES_DECORATIONS_ANVIL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/anvil"),
@@ -12519,9 +10883,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_block"]],
     };
     pub const RECIPES_DECORATIONS_ARMOR_STAND: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/armor_stand"),
@@ -12532,9 +10894,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_slab"]],
     };
     pub const RECIPES_DECORATIONS_BAMBOO_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/bamboo_fence"),
@@ -12545,9 +10905,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_BAMBOO_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/bamboo_hanging_sign"),
@@ -12558,9 +10916,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_BAMBOO_MOSAIC: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/bamboo_mosaic"),
@@ -12571,9 +10927,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bamboo_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bamboo_slab"]],
     };
     pub const RECIPES_DECORATIONS_BAMBOO_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/bamboo_shelf"),
@@ -12584,9 +10938,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_bamboo_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_bamboo_block"]],
     };
     pub const RECIPES_DECORATIONS_BAMBOO_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/bamboo_sign"),
@@ -12597,9 +10949,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_BARREL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/barrel"),
@@ -12610,9 +10960,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks", "has_wood_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks", "has_wood_slab"]],
     };
     pub const RECIPES_DECORATIONS_BEEHIVE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/beehive"),
@@ -12623,9 +10971,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_honeycomb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_honeycomb"]],
     };
     pub const RECIPES_DECORATIONS_BIRCH_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/birch_fence"),
@@ -12636,9 +10982,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_BIRCH_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/birch_hanging_sign"),
@@ -12649,9 +10993,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_BIRCH_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/birch_shelf"),
@@ -12662,9 +11004,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_birch_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_birch_log"]],
     };
     pub const RECIPES_DECORATIONS_BIRCH_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/birch_sign"),
@@ -12675,9 +11015,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_banner"),
@@ -12688,9 +11026,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_black_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_black_wool"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_bed"),
@@ -12701,9 +11037,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_black_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_black_wool"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_candle"),
@@ -12714,9 +11048,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_black_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_black_dye"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_carpet"),
@@ -12727,9 +11059,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_black_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_black_wool"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_glazed_terracotta"),
@@ -12740,9 +11070,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_black_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_black_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_shulker_box"),
@@ -12753,9 +11081,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/black_stained_glass_pane"),
@@ -12766,9 +11092,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_BLACK_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -12781,9 +11105,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_black_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_black_dye"]],
     };
     pub const RECIPES_DECORATIONS_BLACKSTONE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blackstone_wall"),
@@ -12794,9 +11116,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
     pub const RECIPES_DECORATIONS_BLACKSTONE_WALL_FROM_BLACKSTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -12809,9 +11129,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
     pub const RECIPES_DECORATIONS_BLAST_FURNACE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blast_furnace"),
@@ -12822,9 +11140,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smooth_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smooth_stone"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_banner"),
@@ -12835,9 +11151,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_wool"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_bed"),
@@ -12848,9 +11162,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_wool"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_candle"),
@@ -12861,9 +11173,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_dye"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_carpet"),
@@ -12874,9 +11184,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_wool"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_glazed_terracotta"),
@@ -12887,9 +11195,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_shulker_box"),
@@ -12900,9 +11206,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/blue_stained_glass_pane"),
@@ -12913,9 +11217,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_BLUE_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -12928,9 +11230,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_blue_dye"]],
     };
     pub const RECIPES_DECORATIONS_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brick_wall"),
@@ -12941,9 +11241,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_DECORATIONS_BRICK_WALL_FROM_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brick_wall_from_bricks_stonecutting"),
@@ -12954,9 +11252,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_banner"),
@@ -12967,9 +11263,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brown_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brown_wool"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_bed"),
@@ -12980,9 +11274,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brown_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brown_wool"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_candle"),
@@ -12993,9 +11285,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brown_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brown_dye"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_carpet"),
@@ -13006,9 +11296,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brown_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brown_wool"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_glazed_terracotta"),
@@ -13019,9 +11307,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brown_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brown_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_shulker_box"),
@@ -13032,9 +11318,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/brown_stained_glass_pane"),
@@ -13045,9 +11329,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_BROWN_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13060,9 +11342,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_brown_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_brown_dye"]],
     };
     pub const RECIPES_DECORATIONS_CAMPFIRE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/campfire"),
@@ -13073,9 +11353,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick", "has_coal"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick", "has_coal"]],
     };
     pub const RECIPES_DECORATIONS_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/candle"),
@@ -13086,9 +11364,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string", "has_honeycomb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string", "has_honeycomb"]],
     };
     pub const RECIPES_DECORATIONS_CARTOGRAPHY_TABLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cartography_table"),
@@ -13099,9 +11375,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_paper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_paper"]],
     };
     pub const RECIPES_DECORATIONS_CHERRY_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cherry_fence"),
@@ -13112,9 +11386,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_CHERRY_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cherry_hanging_sign"),
@@ -13125,9 +11397,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_CHERRY_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cherry_shelf"),
@@ -13138,9 +11408,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_cherry_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_cherry_log"]],
     };
     pub const RECIPES_DECORATIONS_CHERRY_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cherry_sign"),
@@ -13151,9 +11419,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_CHEST: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/chest"),
@@ -13164,9 +11430,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lots_of_items"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lots_of_items"]],
     };
     pub const RECIPES_DECORATIONS_COBBLED_DEEPSLATE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cobbled_deepslate_wall"),
@@ -13177,9 +11441,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_COBBLED_DEEPSLATE_WALL_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -13193,9 +11455,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_COBBLED_DEEPSLATE_WALL_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -13209,9 +11469,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_DECORATIONS_COBBLESTONE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cobblestone_wall"),
@@ -13222,9 +11480,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_DECORATIONS_COBBLESTONE_WALL_FROM_COBBLESTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13237,9 +11493,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_DECORATIONS_COBBLESTONE_WALL_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13252,9 +11506,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_DECORATIONS_COMPOSTER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/composter"),
@@ -13265,9 +11517,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wood_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wood_slab"]],
     };
     pub const RECIPES_DECORATIONS_COPPER_BARS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/copper_bars"),
@@ -13278,9 +11528,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_DECORATIONS_COPPER_CHAIN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/copper_chain"),
@@ -13291,9 +11539,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_nugget", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_nugget", "has_copper_ingot"]],
     };
     pub const RECIPES_DECORATIONS_COPPER_CHEST: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/copper_chest"),
@@ -13304,9 +11550,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_chest"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_chest"]],
     };
     pub const RECIPES_DECORATIONS_COPPER_LANTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/copper_lantern"),
@@ -13317,9 +11561,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_torch"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_torch"]],
     };
     pub const RECIPES_DECORATIONS_COPPER_TORCH: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/copper_torch"),
@@ -13330,9 +11572,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_nugget"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_nugget"]],
     };
     pub const RECIPES_DECORATIONS_CRAFTING_TABLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/crafting_table"),
@@ -13343,9 +11583,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "unlock_right_away"]],
-        },
+        requirements: &[&["has_the_recipe", "unlock_right_away"]],
     };
     pub const RECIPES_DECORATIONS_CRIMSON_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/crimson_fence"),
@@ -13356,9 +11594,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_CRIMSON_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/crimson_hanging_sign"),
@@ -13369,9 +11605,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_CRIMSON_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/crimson_shelf"),
@@ -13382,9 +11616,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_crimson_stem"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_crimson_stem"]],
     };
     pub const RECIPES_DECORATIONS_CRIMSON_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/crimson_sign"),
@@ -13395,9 +11627,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_banner"),
@@ -13408,9 +11638,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cyan_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cyan_wool"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_bed"),
@@ -13421,9 +11649,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cyan_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cyan_wool"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_candle"),
@@ -13434,9 +11660,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cyan_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cyan_dye"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_carpet"),
@@ -13447,9 +11671,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cyan_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cyan_wool"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_glazed_terracotta"),
@@ -13460,9 +11682,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cyan_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cyan_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_shulker_box"),
@@ -13473,9 +11693,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/cyan_stained_glass_pane"),
@@ -13486,9 +11704,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_CYAN_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13501,9 +11717,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_cyan_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_cyan_dye"]],
     };
     pub const RECIPES_DECORATIONS_DARK_OAK_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dark_oak_fence"),
@@ -13514,9 +11728,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_DARK_OAK_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dark_oak_hanging_sign"),
@@ -13527,9 +11739,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_DARK_OAK_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dark_oak_shelf"),
@@ -13540,9 +11750,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_dark_oak_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_dark_oak_log"]],
     };
     pub const RECIPES_DECORATIONS_DARK_OAK_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dark_oak_sign"),
@@ -13553,9 +11761,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_DECORATED_POT_SIMPLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/decorated_pot_simple"),
@@ -13566,9 +11772,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brick"]],
     };
     pub const RECIPES_DECORATIONS_DEEPSLATE_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/deepslate_brick_wall"),
@@ -13579,9 +11783,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
     };
     pub const RECIPES_DECORATIONS_DEEPSLATE_BRICK_WALL_FROM_COBBLED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -13595,9 +11797,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
         };
     pub const RECIPES_DECORATIONS_DEEPSLATE_BRICK_WALL_FROM_DEEPSLATE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -13611,9 +11811,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
         };
     pub const RECIPES_DECORATIONS_DEEPSLATE_BRICK_WALL_FROM_DEEPSLATE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13626,9 +11824,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_DEEPSLATE_BRICK_WALL_FROM_POLISHED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -13642,9 +11838,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
         };
     pub const RECIPES_DECORATIONS_DEEPSLATE_TILE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/deepslate_tile_wall"),
@@ -13655,9 +11849,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
     };
     pub const RECIPES_DECORATIONS_DEEPSLATE_TILE_WALL_FROM_COBBLED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -13671,9 +11863,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
         };
     pub const RECIPES_DECORATIONS_DEEPSLATE_TILE_WALL_FROM_DEEPSLATE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -13687,9 +11877,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate_bricks"]],
         };
     pub const RECIPES_DECORATIONS_DEEPSLATE_TILE_WALL_FROM_DEEPSLATE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13702,9 +11890,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_DEEPSLATE_TILE_WALL_FROM_DEEPSLATE_TILES_STONECUTTING: &Self =
         &Self {
@@ -13718,9 +11904,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate_tiles"]],
         };
     pub const RECIPES_DECORATIONS_DEEPSLATE_TILE_WALL_FROM_POLISHED_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -13734,9 +11918,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
         };
     pub const RECIPES_DECORATIONS_DIORITE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/diorite_wall"),
@@ -13747,9 +11929,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_DECORATIONS_DIORITE_WALL_FROM_DIORITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -13762,9 +11942,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diorite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diorite"]],
     };
     pub const RECIPES_DECORATIONS_DYE_BLACK_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_black_bed"),
@@ -13775,9 +11953,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_BLACK_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_black_carpet"),
@@ -13788,9 +11964,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_BLUE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_blue_bed"),
@@ -13801,9 +11975,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_BLUE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_blue_carpet"),
@@ -13814,9 +11986,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_BROWN_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_brown_bed"),
@@ -13827,9 +11997,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_BROWN_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_brown_carpet"),
@@ -13840,9 +12008,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_CYAN_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_cyan_bed"),
@@ -13853,9 +12019,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_CYAN_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_cyan_carpet"),
@@ -13866,9 +12030,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_GRAY_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_gray_bed"),
@@ -13879,9 +12041,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_GRAY_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_gray_carpet"),
@@ -13892,9 +12052,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_GREEN_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_green_bed"),
@@ -13905,9 +12063,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_GREEN_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_green_carpet"),
@@ -13918,9 +12074,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_LIGHT_BLUE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_light_blue_bed"),
@@ -13931,9 +12085,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_LIGHT_BLUE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_light_blue_carpet"),
@@ -13944,9 +12096,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_LIGHT_GRAY_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_light_gray_bed"),
@@ -13957,9 +12107,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_LIGHT_GRAY_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_light_gray_carpet"),
@@ -13970,9 +12118,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_LIME_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_lime_bed"),
@@ -13983,9 +12129,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_LIME_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_lime_carpet"),
@@ -13996,9 +12140,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_MAGENTA_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_magenta_bed"),
@@ -14009,9 +12151,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_MAGENTA_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_magenta_carpet"),
@@ -14022,9 +12162,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_ORANGE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_orange_bed"),
@@ -14035,9 +12173,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_ORANGE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_orange_carpet"),
@@ -14048,9 +12184,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_PINK_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_pink_bed"),
@@ -14061,9 +12195,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_PINK_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_pink_carpet"),
@@ -14074,9 +12206,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_PURPLE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_purple_bed"),
@@ -14087,9 +12217,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_PURPLE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_purple_carpet"),
@@ -14100,9 +12228,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_RED_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_red_bed"),
@@ -14113,9 +12239,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_RED_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_red_carpet"),
@@ -14126,9 +12250,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_WHITE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_white_bed"),
@@ -14139,9 +12261,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_WHITE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_white_carpet"),
@@ -14152,9 +12272,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_YELLOW_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_yellow_bed"),
@@ -14165,9 +12283,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_DYE_YELLOW_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/dye_yellow_carpet"),
@@ -14178,9 +12294,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_needed_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_needed_dye"]],
     };
     pub const RECIPES_DECORATIONS_ENCHANTING_TABLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/enchanting_table"),
@@ -14191,9 +12305,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_obsidian"]],
-        },
+        requirements: &[&["has_the_recipe", "has_obsidian"]],
     };
     pub const RECIPES_DECORATIONS_END_CRYSTAL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/end_crystal"),
@@ -14204,9 +12316,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ender_eye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ender_eye"]],
     };
     pub const RECIPES_DECORATIONS_END_ROD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/end_rod"),
@@ -14217,9 +12327,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chorus_fruit_popped"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chorus_fruit_popped"]],
     };
     pub const RECIPES_DECORATIONS_END_STONE_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/end_stone_brick_wall"),
@@ -14230,9 +12338,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
     };
     pub const RECIPES_DECORATIONS_END_STONE_BRICK_WALL_FROM_END_STONE_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -14246,9 +12352,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_end_stone_bricks"]],
         };
     pub const RECIPES_DECORATIONS_END_STONE_BRICK_WALL_FROM_END_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -14261,9 +12365,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_end_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_end_stone"]],
     };
     pub const RECIPES_DECORATIONS_ENDER_CHEST: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/ender_chest"),
@@ -14274,9 +12376,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ender_eye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ender_eye"]],
     };
     pub const RECIPES_DECORATIONS_FLETCHING_TABLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/fletching_table"),
@@ -14287,9 +12387,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_flint"]],
-        },
+        requirements: &[&["has_the_recipe", "has_flint"]],
     };
     pub const RECIPES_DECORATIONS_FLOWER_POT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/flower_pot"),
@@ -14300,9 +12398,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_brick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_brick"]],
     };
     pub const RECIPES_DECORATIONS_FURNACE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/furnace"),
@@ -14313,9 +12409,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_DECORATIONS_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/glass_pane"),
@@ -14326,9 +12420,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_GLOW_ITEM_FRAME: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/glow_item_frame"),
@@ -14339,9 +12431,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_item_frame", "has_glow_ink_sac"]],
-        },
+        requirements: &[&["has_the_recipe", "has_item_frame", "has_glow_ink_sac"]],
     };
     pub const RECIPES_DECORATIONS_GOLDEN_DANDELION: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/golden_dandelion"),
@@ -14352,9 +12442,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_nugget", "has_dandelion"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_nugget", "has_dandelion"]],
     };
     pub const RECIPES_DECORATIONS_GRANITE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/granite_wall"),
@@ -14365,9 +12453,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_DECORATIONS_GRANITE_WALL_FROM_GRANITE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -14380,9 +12466,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_granite"]],
-        },
+        requirements: &[&["has_the_recipe", "has_granite"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_banner"),
@@ -14393,9 +12477,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_wool"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_bed"),
@@ -14406,9 +12488,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_wool"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_candle"),
@@ -14419,9 +12499,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_dye"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_carpet"),
@@ -14432,9 +12510,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_wool"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_glazed_terracotta"),
@@ -14445,9 +12521,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_shulker_box"),
@@ -14458,9 +12532,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/gray_stained_glass_pane"),
@@ -14471,9 +12543,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_GRAY_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -14486,9 +12556,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_gray_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_gray_dye"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_banner"),
@@ -14499,9 +12567,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_wool"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_bed"),
@@ -14512,9 +12578,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_wool"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_candle"),
@@ -14525,9 +12589,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_dye"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_carpet"),
@@ -14538,9 +12600,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_wool"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_glazed_terracotta"),
@@ -14551,9 +12611,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_shulker_box"),
@@ -14564,9 +12622,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/green_stained_glass_pane"),
@@ -14577,9 +12633,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_GREEN_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -14592,9 +12646,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_green_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_green_dye"]],
     };
     pub const RECIPES_DECORATIONS_GRINDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/grindstone"),
@@ -14605,9 +12657,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_slab"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_slab"]],
     };
     pub const RECIPES_DECORATIONS_HONEYCOMB_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/honeycomb_block"),
@@ -14618,9 +12668,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_honeycomb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_honeycomb"]],
     };
     pub const RECIPES_DECORATIONS_IRON_BARS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/iron_bars"),
@@ -14631,9 +12679,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_DECORATIONS_IRON_CHAIN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/iron_chain"),
@@ -14644,9 +12690,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_nugget", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_nugget", "has_iron_ingot"]],
     };
     pub const RECIPES_DECORATIONS_ITEM_FRAME: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/item_frame"),
@@ -14657,9 +12701,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_DECORATIONS_JUKEBOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/jukebox"),
@@ -14670,9 +12712,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond"]],
     };
     pub const RECIPES_DECORATIONS_JUNGLE_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/jungle_fence"),
@@ -14683,9 +12723,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_JUNGLE_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/jungle_hanging_sign"),
@@ -14696,9 +12734,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_JUNGLE_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/jungle_shelf"),
@@ -14709,9 +12745,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_jungle_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_jungle_log"]],
     };
     pub const RECIPES_DECORATIONS_JUNGLE_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/jungle_sign"),
@@ -14722,9 +12756,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_LADDER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/ladder"),
@@ -14735,9 +12767,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stick"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stick"]],
     };
     pub const RECIPES_DECORATIONS_LANTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lantern"),
@@ -14748,9 +12778,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_nugget", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_nugget", "has_iron_ingot"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_banner"),
@@ -14761,9 +12789,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_blue_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_blue_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_bed"),
@@ -14774,9 +12800,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_blue_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_blue_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_candle"),
@@ -14787,9 +12811,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_blue_dye"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_carpet"),
@@ -14800,9 +12822,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_blue_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_blue_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_glazed_terracotta"),
@@ -14813,9 +12833,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_blue_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_blue_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_shulker_box"),
@@ -14826,9 +12844,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_blue_stained_glass_pane"),
@@ -14839,9 +12855,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_BLUE_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -14854,9 +12868,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_light_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_light_blue_dye"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_banner"),
@@ -14867,9 +12879,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_gray_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_gray_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_bed"),
@@ -14880,9 +12890,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_gray_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_gray_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_candle"),
@@ -14893,9 +12901,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_gray_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_gray_dye"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_carpet"),
@@ -14906,9 +12912,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_gray_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_gray_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_glazed_terracotta"),
@@ -14919,9 +12923,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_light_gray_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_light_gray_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_shulker_box"),
@@ -14932,9 +12934,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/light_gray_stained_glass_pane"),
@@ -14945,9 +12945,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_LIGHT_GRAY_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -14960,9 +12958,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_light_gray_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_light_gray_dye"]],
     };
     pub const RECIPES_DECORATIONS_LIME_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_banner"),
@@ -14973,9 +12969,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lime_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lime_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIME_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_bed"),
@@ -14986,9 +12980,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lime_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lime_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIME_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_candle"),
@@ -14999,9 +12991,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lime_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lime_dye"]],
     };
     pub const RECIPES_DECORATIONS_LIME_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_carpet"),
@@ -15012,9 +13002,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lime_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lime_wool"]],
     };
     pub const RECIPES_DECORATIONS_LIME_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_glazed_terracotta"),
@@ -15025,9 +13013,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lime_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lime_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_LIME_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_shulker_box"),
@@ -15038,9 +13024,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_LIME_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lime_stained_glass_pane"),
@@ -15051,9 +13035,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_LIME_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15066,9 +13048,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_lime_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_lime_dye"]],
     };
     pub const RECIPES_DECORATIONS_LODESTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/lodestone"),
@@ -15079,9 +13059,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot", "has_lodestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot", "has_lodestone"]],
     };
     pub const RECIPES_DECORATIONS_LOOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/loom"),
@@ -15092,9 +13070,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_banner"),
@@ -15105,9 +13081,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magenta_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magenta_wool"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_bed"),
@@ -15118,9 +13092,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magenta_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magenta_wool"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_candle"),
@@ -15131,9 +13103,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magenta_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magenta_dye"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_carpet"),
@@ -15144,9 +13114,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magenta_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magenta_wool"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_glazed_terracotta"),
@@ -15157,9 +13125,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_magenta_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_magenta_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_shulker_box"),
@@ -15170,9 +13136,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/magenta_stained_glass_pane"),
@@ -15183,9 +13147,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_MAGENTA_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15198,9 +13160,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_magenta_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_magenta_dye"]],
     };
     pub const RECIPES_DECORATIONS_MANGROVE_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mangrove_fence"),
@@ -15211,9 +13171,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_MANGROVE_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mangrove_hanging_sign"),
@@ -15224,9 +13182,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_MANGROVE_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mangrove_shelf"),
@@ -15237,9 +13193,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_mangrove_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_mangrove_log"]],
     };
     pub const RECIPES_DECORATIONS_MANGROVE_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mangrove_sign"),
@@ -15250,9 +13204,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_MOSS_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/moss_carpet"),
@@ -15263,9 +13215,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_moss_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_moss_block"]],
     };
     pub const RECIPES_DECORATIONS_MOSSY_COBBLESTONE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mossy_cobblestone_wall"),
@@ -15276,9 +13226,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
     };
     pub const RECIPES_DECORATIONS_MOSSY_COBBLESTONE_WALL_FROM_MOSSY_COBBLESTONE_STONECUTTING:
         &Self = &Self {
@@ -15292,9 +13240,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_cobblestone"]],
     };
     pub const RECIPES_DECORATIONS_MOSSY_STONE_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mossy_stone_brick_wall"),
@@ -15305,9 +13251,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
     };
     pub const RECIPES_DECORATIONS_MOSSY_STONE_BRICK_WALL_FROM_MOSSY_STONE_BRICKS_STONECUTTING:
         &Self = &Self {
@@ -15321,9 +13265,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mossy_stone_bricks"]],
     };
     pub const RECIPES_DECORATIONS_MUD_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/mud_brick_wall"),
@@ -15334,9 +13276,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mud_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mud_bricks"]],
     };
     pub const RECIPES_DECORATIONS_MUD_BRICK_WALL_FROM_MUD_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15349,9 +13289,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mud_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mud_bricks"]],
     };
     pub const RECIPES_DECORATIONS_NETHER_BRICK_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/nether_brick_fence"),
@@ -15362,9 +13300,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_bricks"]],
     };
     pub const RECIPES_DECORATIONS_NETHER_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/nether_brick_wall"),
@@ -15375,9 +13311,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_bricks"]],
     };
     pub const RECIPES_DECORATIONS_NETHER_BRICK_WALL_FROM_NETHER_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -15391,9 +13325,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_nether_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_nether_bricks"]],
         };
     pub const RECIPES_DECORATIONS_OAK_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/oak_fence"),
@@ -15404,9 +13336,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_OAK_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/oak_hanging_sign"),
@@ -15417,9 +13347,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_OAK_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/oak_shelf"),
@@ -15430,9 +13358,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_oak_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_oak_log"]],
     };
     pub const RECIPES_DECORATIONS_OAK_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/oak_sign"),
@@ -15443,9 +13369,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_banner"),
@@ -15456,9 +13380,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_wool"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_bed"),
@@ -15469,9 +13391,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_wool"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_candle"),
@@ -15482,9 +13402,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_dye"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_carpet"),
@@ -15495,9 +13413,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_wool"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_glazed_terracotta"),
@@ -15508,9 +13424,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_shulker_box"),
@@ -15521,9 +13435,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/orange_stained_glass_pane"),
@@ -15534,9 +13446,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_ORANGE_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15549,9 +13459,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_orange_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_orange_dye"]],
     };
     pub const RECIPES_DECORATIONS_PAINTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/painting"),
@@ -15562,9 +13470,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wool"]],
     };
     pub const RECIPES_DECORATIONS_PALE_MOSS_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pale_moss_carpet"),
@@ -15575,9 +13481,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pale_moss_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pale_moss_block"]],
     };
     pub const RECIPES_DECORATIONS_PALE_OAK_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pale_oak_fence"),
@@ -15588,9 +13492,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_PALE_OAK_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pale_oak_hanging_sign"),
@@ -15601,9 +13503,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_PALE_OAK_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pale_oak_shelf"),
@@ -15614,9 +13514,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_pale_oak_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_pale_oak_log"]],
     };
     pub const RECIPES_DECORATIONS_PALE_OAK_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pale_oak_sign"),
@@ -15627,9 +13525,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_PINK_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_banner"),
@@ -15640,9 +13536,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_wool"]],
     };
     pub const RECIPES_DECORATIONS_PINK_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_bed"),
@@ -15653,9 +13547,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_wool"]],
     };
     pub const RECIPES_DECORATIONS_PINK_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_candle"),
@@ -15666,9 +13558,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_dye"]],
     };
     pub const RECIPES_DECORATIONS_PINK_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_carpet"),
@@ -15679,9 +13569,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_wool"]],
     };
     pub const RECIPES_DECORATIONS_PINK_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_glazed_terracotta"),
@@ -15692,9 +13580,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_PINK_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_shulker_box"),
@@ -15705,9 +13591,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_PINK_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/pink_stained_glass_pane"),
@@ -15718,9 +13602,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_PINK_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15733,9 +13615,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_pink_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_pink_dye"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/polished_blackstone_brick_wall"),
@@ -15746,9 +13626,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone_bricks"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_BLACKSTONE_STONECUTTING:
         &Self = &Self {
@@ -15762,12 +13640,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blackstone"]],
     };
-    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone_bricks"]] } } ;
-    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : AdvancementRequirement { requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] } } ;
+    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_bricks_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone_bricks"]] , } ;
+    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : Identifier :: vanilla_static ("recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_stonecutting") , parent : Some (Identifier :: from_static ("minecraft" , "recipes/root")) , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , requirements : & [& ["has_the_recipe" , "has_polished_blackstone"]] , } ;
     pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/polished_blackstone_wall"),
         parent: Some(Identifier::from_static("minecraft", "recipes/root")),
@@ -15777,9 +13653,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_WALL_FROM_BLACKSTONE_STONECUTTING: &Self =
         &Self {
@@ -15793,9 +13667,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_blackstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_blackstone"]],
         };
     pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_WALL_FROM_POLISHED_BLACKSTONE_STONECUTTING:
         &Self = &Self {
@@ -15809,9 +13681,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_DEEPSLATE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/polished_deepslate_wall"),
@@ -15822,9 +13692,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_DEEPSLATE_WALL_FROM_COBBLED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -15838,9 +13706,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobbled_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_DEEPSLATE_WALL_FROM_DEEPSLATE_STONECUTTING: &Self =
         &Self {
@@ -15854,9 +13720,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_deepslate"]],
-            },
+            requirements: &[&["has_the_recipe", "has_deepslate"]],
         };
     pub const RECIPES_DECORATIONS_POLISHED_DEEPSLATE_WALL_FROM_POLISHED_DEEPSLATE_STONECUTTING:
         &Self = &Self {
@@ -15870,9 +13734,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_deepslate"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_TUFF_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/polished_tuff_wall"),
@@ -15883,9 +13745,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_tuff"]],
     };
     pub const RECIPES_DECORATIONS_POLISHED_TUFF_WALL_FROM_POLISHED_TUFF_STONECUTTING: &Self =
         &Self {
@@ -15899,9 +13759,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-            },
+            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
         };
     pub const RECIPES_DECORATIONS_POLISHED_TUFF_WALL_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15914,9 +13772,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_DECORATIONS_PRISMARINE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/prismarine_wall"),
@@ -15927,9 +13783,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine"]],
     };
     pub const RECIPES_DECORATIONS_PRISMARINE_WALL_FROM_PRISMARINE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -15942,9 +13796,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_prismarine"]],
-        },
+        requirements: &[&["has_the_recipe", "has_prismarine"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_banner"),
@@ -15955,9 +13807,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purple_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purple_wool"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_bed"),
@@ -15968,9 +13818,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purple_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purple_wool"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_candle"),
@@ -15981,9 +13829,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purple_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purple_dye"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_carpet"),
@@ -15994,9 +13840,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purple_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purple_wool"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_glazed_terracotta"),
@@ -16007,9 +13851,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_purple_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_purple_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_shulker_box"),
@@ -16020,9 +13862,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/purple_stained_glass_pane"),
@@ -16033,9 +13873,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_PURPLE_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16048,9 +13886,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_purple_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_purple_dye"]],
     };
     pub const RECIPES_DECORATIONS_RED_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_banner"),
@@ -16061,9 +13897,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_wool"]],
     };
     pub const RECIPES_DECORATIONS_RED_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_bed"),
@@ -16074,9 +13908,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_wool"]],
     };
     pub const RECIPES_DECORATIONS_RED_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_candle"),
@@ -16087,9 +13919,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_dye"]],
     };
     pub const RECIPES_DECORATIONS_RED_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_carpet"),
@@ -16100,9 +13930,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_wool"]],
     };
     pub const RECIPES_DECORATIONS_RED_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_glazed_terracotta"),
@@ -16113,9 +13941,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_RED_NETHER_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_nether_brick_wall"),
@@ -16126,9 +13952,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
     };
     pub const RECIPES_DECORATIONS_RED_NETHER_BRICK_WALL_FROM_RED_NETHER_BRICKS_STONECUTTING: &Self =
         &Self {
@@ -16142,9 +13966,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
-            },
+            requirements: &[&["has_the_recipe", "has_red_nether_bricks"]],
         };
     pub const RECIPES_DECORATIONS_RED_SANDSTONE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_sandstone_wall"),
@@ -16155,9 +13977,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_sandstone"]],
     };
     pub const RECIPES_DECORATIONS_RED_SANDSTONE_WALL_FROM_RED_SANDSTONE_STONECUTTING: &Self =
         &Self {
@@ -16171,9 +13991,7 @@ impl Advancement {
                 experience: 0i32,
                 recipes: &[],
             },
-            requirements: AdvancementRequirement {
-                requirements: &[&["has_the_recipe", "has_red_sandstone"]],
-            },
+            requirements: &[&["has_the_recipe", "has_red_sandstone"]],
         };
     pub const RECIPES_DECORATIONS_RED_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_shulker_box"),
@@ -16184,9 +14002,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_RED_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/red_stained_glass_pane"),
@@ -16197,9 +14013,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_RED_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16212,9 +14026,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_red_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_red_dye"]],
     };
     pub const RECIPES_DECORATIONS_RESIN_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/resin_brick_wall"),
@@ -16225,9 +14037,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_bricks"]],
     };
     pub const RECIPES_DECORATIONS_RESIN_BRICK_WALL_FROM_RESIN_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16240,9 +14050,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_bricks"]],
     };
     pub const RECIPES_DECORATIONS_RESPAWN_ANCHOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/respawn_anchor"),
@@ -16253,9 +14061,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_obsidian"]],
-        },
+        requirements: &[&["has_the_recipe", "has_obsidian"]],
     };
     pub const RECIPES_DECORATIONS_SANDSTONE_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/sandstone_wall"),
@@ -16266,9 +14072,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_DECORATIONS_SANDSTONE_WALL_FROM_SANDSTONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16281,9 +14085,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sandstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sandstone"]],
     };
     pub const RECIPES_DECORATIONS_SCAFFOLDING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/scaffolding"),
@@ -16294,9 +14096,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bamboo"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bamboo"]],
     };
     pub const RECIPES_DECORATIONS_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/shulker_box"),
@@ -16307,9 +14107,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_shell"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_shell"]],
     };
     pub const RECIPES_DECORATIONS_SMITHING_TABLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/smithing_table"),
@@ -16320,9 +14118,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_DECORATIONS_SMOKER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/smoker"),
@@ -16333,9 +14129,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_furnace"]],
-        },
+        requirements: &[&["has_the_recipe", "has_furnace"]],
     };
     pub const RECIPES_DECORATIONS_SNOW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/snow"),
@@ -16346,9 +14140,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_snowball"]],
-        },
+        requirements: &[&["has_the_recipe", "has_snowball"]],
     };
     pub const RECIPES_DECORATIONS_SOUL_CAMPFIRE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/soul_campfire"),
@@ -16359,9 +14151,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_soul_sand"]],
-        },
+        requirements: &[&["has_the_recipe", "has_soul_sand"]],
     };
     pub const RECIPES_DECORATIONS_SOUL_LANTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/soul_lantern"),
@@ -16372,9 +14162,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_soul_torch"]],
-        },
+        requirements: &[&["has_the_recipe", "has_soul_torch"]],
     };
     pub const RECIPES_DECORATIONS_SOUL_TORCH: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/soul_torch"),
@@ -16385,9 +14173,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_soul_sand"]],
-        },
+        requirements: &[&["has_the_recipe", "has_soul_sand"]],
     };
     pub const RECIPES_DECORATIONS_SPRUCE_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/spruce_fence"),
@@ -16398,9 +14184,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_SPRUCE_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/spruce_hanging_sign"),
@@ -16411,9 +14195,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_SPRUCE_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/spruce_shelf"),
@@ -16424,9 +14206,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_spruce_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_spruce_log"]],
     };
     pub const RECIPES_DECORATIONS_SPRUCE_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/spruce_sign"),
@@ -16437,9 +14217,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_STONE_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/stone_brick_wall"),
@@ -16450,9 +14228,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_bricks"]],
     };
     pub const RECIPES_DECORATIONS_STONE_BRICK_WALL_FROM_STONE_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16465,9 +14241,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_bricks"]],
     };
     pub const RECIPES_DECORATIONS_STONE_BRICK_WALL_FROM_STONE_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16480,9 +14254,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_DECORATIONS_STONECUTTER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/stonecutter"),
@@ -16493,9 +14265,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_DECORATIONS_TORCH: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/torch"),
@@ -16506,9 +14276,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone_pickaxe"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone_pickaxe"]],
     };
     pub const RECIPES_DECORATIONS_TUFF_BRICK_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/tuff_brick_wall"),
@@ -16519,9 +14287,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
     };
     pub const RECIPES_DECORATIONS_TUFF_BRICK_WALL_FROM_POLISHED_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16534,9 +14300,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_tuff"]],
     };
     pub const RECIPES_DECORATIONS_TUFF_BRICK_WALL_FROM_TUFF_BRICKS_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16549,9 +14313,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff_bricks"]],
     };
     pub const RECIPES_DECORATIONS_TUFF_BRICK_WALL_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16564,9 +14326,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_DECORATIONS_TUFF_WALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/tuff_wall"),
@@ -16577,9 +14337,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_DECORATIONS_TUFF_WALL_FROM_TUFF_STONECUTTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/tuff_wall_from_tuff_stonecutting"),
@@ -16590,9 +14348,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tuff"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tuff"]],
     };
     pub const RECIPES_DECORATIONS_WARPED_FENCE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/warped_fence"),
@@ -16603,9 +14359,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_WARPED_HANGING_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/warped_hanging_sign"),
@@ -16616,9 +14370,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_logs"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_logs"]],
     };
     pub const RECIPES_DECORATIONS_WARPED_SHELF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/warped_shelf"),
@@ -16629,9 +14381,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stripped_warped_stem"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stripped_warped_stem"]],
     };
     pub const RECIPES_DECORATIONS_WARPED_SIGN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/warped_sign"),
@@ -16642,9 +14392,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_banner"),
@@ -16655,9 +14403,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_wool"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_bed"),
@@ -16668,9 +14414,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_wool"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_candle"),
@@ -16681,9 +14425,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_dye"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_carpet"),
@@ -16694,9 +14436,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_wool"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_glazed_terracotta"),
@@ -16707,9 +14447,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_shulker_box"),
@@ -16720,9 +14458,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/white_stained_glass_pane"),
@@ -16733,9 +14469,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_WHITE_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16748,9 +14482,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_white_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_white_dye"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_BANNER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_banner"),
@@ -16761,9 +14493,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_yellow_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_yellow_wool"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_BED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_bed"),
@@ -16774,9 +14504,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_yellow_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_yellow_wool"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_CANDLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_candle"),
@@ -16787,9 +14515,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_yellow_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_yellow_dye"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_CARPET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_carpet"),
@@ -16800,9 +14526,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_yellow_wool"]],
-        },
+        requirements: &[&["has_the_recipe", "has_yellow_wool"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_GLAZED_TERRACOTTA: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_glazed_terracotta"),
@@ -16813,9 +14537,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_yellow_terracotta"]],
-        },
+        requirements: &[&["has_the_recipe", "has_yellow_terracotta"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_SHULKER_BOX: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_shulker_box"),
@@ -16826,9 +14548,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shulker_box"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shulker_box"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_STAINED_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/decorations/yellow_stained_glass_pane"),
@@ -16839,9 +14559,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass"]],
     };
     pub const RECIPES_DECORATIONS_YELLOW_STAINED_GLASS_PANE_FROM_GLASS_PANE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -16854,9 +14572,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glass_pane", "has_yellow_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glass_pane", "has_yellow_dye"]],
     };
     pub const RECIPES_FOOD_BAKED_POTATO: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/baked_potato"),
@@ -16867,9 +14583,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_potato"]],
-        },
+        requirements: &[&["has_the_recipe", "has_potato"]],
     };
     pub const RECIPES_FOOD_BAKED_POTATO_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/baked_potato_from_campfire_cooking"),
@@ -16880,9 +14594,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_potato"]],
-        },
+        requirements: &[&["has_the_recipe", "has_potato"]],
     };
     pub const RECIPES_FOOD_BAKED_POTATO_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/baked_potato_from_smoking"),
@@ -16893,9 +14605,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_potato"]],
-        },
+        requirements: &[&["has_the_recipe", "has_potato"]],
     };
     pub const RECIPES_FOOD_BEETROOT_SOUP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/beetroot_soup"),
@@ -16906,9 +14616,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_beetroot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_beetroot"]],
     };
     pub const RECIPES_FOOD_BREAD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/bread"),
@@ -16919,9 +14627,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wheat"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wheat"]],
     };
     pub const RECIPES_FOOD_CAKE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cake"),
@@ -16932,9 +14638,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_egg"]],
-        },
+        requirements: &[&["has_the_recipe", "has_egg"]],
     };
     pub const RECIPES_FOOD_COOKED_BEEF: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_beef"),
@@ -16945,9 +14649,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_beef"]],
-        },
+        requirements: &[&["has_the_recipe", "has_beef"]],
     };
     pub const RECIPES_FOOD_COOKED_BEEF_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_beef_from_campfire_cooking"),
@@ -16958,9 +14660,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_beef"]],
-        },
+        requirements: &[&["has_the_recipe", "has_beef"]],
     };
     pub const RECIPES_FOOD_COOKED_BEEF_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_beef_from_smoking"),
@@ -16971,9 +14671,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_beef"]],
-        },
+        requirements: &[&["has_the_recipe", "has_beef"]],
     };
     pub const RECIPES_FOOD_COOKED_CHICKEN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_chicken"),
@@ -16984,9 +14682,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chicken"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chicken"]],
     };
     pub const RECIPES_FOOD_COOKED_CHICKEN_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_chicken_from_campfire_cooking"),
@@ -16997,9 +14693,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chicken"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chicken"]],
     };
     pub const RECIPES_FOOD_COOKED_CHICKEN_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_chicken_from_smoking"),
@@ -17010,9 +14704,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chicken"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chicken"]],
     };
     pub const RECIPES_FOOD_COOKED_COD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_cod"),
@@ -17023,9 +14715,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cod"]],
     };
     pub const RECIPES_FOOD_COOKED_COD_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_cod_from_campfire_cooking"),
@@ -17036,9 +14726,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cod"]],
     };
     pub const RECIPES_FOOD_COOKED_COD_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_cod_from_smoking"),
@@ -17049,9 +14737,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cod"]],
     };
     pub const RECIPES_FOOD_COOKED_MUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_mutton"),
@@ -17062,9 +14748,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mutton"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mutton"]],
     };
     pub const RECIPES_FOOD_COOKED_MUTTON_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_mutton_from_campfire_cooking"),
@@ -17075,9 +14759,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mutton"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mutton"]],
     };
     pub const RECIPES_FOOD_COOKED_MUTTON_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_mutton_from_smoking"),
@@ -17088,9 +14770,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_mutton"]],
-        },
+        requirements: &[&["has_the_recipe", "has_mutton"]],
     };
     pub const RECIPES_FOOD_COOKED_PORKCHOP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_porkchop"),
@@ -17101,9 +14781,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_porkchop"]],
-        },
+        requirements: &[&["has_the_recipe", "has_porkchop"]],
     };
     pub const RECIPES_FOOD_COOKED_PORKCHOP_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_porkchop_from_campfire_cooking"),
@@ -17114,9 +14792,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_porkchop"]],
-        },
+        requirements: &[&["has_the_recipe", "has_porkchop"]],
     };
     pub const RECIPES_FOOD_COOKED_PORKCHOP_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_porkchop_from_smoking"),
@@ -17127,9 +14803,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_porkchop"]],
-        },
+        requirements: &[&["has_the_recipe", "has_porkchop"]],
     };
     pub const RECIPES_FOOD_COOKED_RABBIT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_rabbit"),
@@ -17140,9 +14814,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rabbit"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rabbit"]],
     };
     pub const RECIPES_FOOD_COOKED_RABBIT_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_rabbit_from_campfire_cooking"),
@@ -17153,9 +14825,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rabbit"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rabbit"]],
     };
     pub const RECIPES_FOOD_COOKED_RABBIT_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_rabbit_from_smoking"),
@@ -17166,9 +14836,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rabbit"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rabbit"]],
     };
     pub const RECIPES_FOOD_COOKED_SALMON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_salmon"),
@@ -17179,9 +14847,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_salmon"]],
-        },
+        requirements: &[&["has_the_recipe", "has_salmon"]],
     };
     pub const RECIPES_FOOD_COOKED_SALMON_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_salmon_from_campfire_cooking"),
@@ -17192,9 +14858,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_salmon"]],
-        },
+        requirements: &[&["has_the_recipe", "has_salmon"]],
     };
     pub const RECIPES_FOOD_COOKED_SALMON_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cooked_salmon_from_smoking"),
@@ -17205,9 +14869,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_salmon"]],
-        },
+        requirements: &[&["has_the_recipe", "has_salmon"]],
     };
     pub const RECIPES_FOOD_COOKIE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/cookie"),
@@ -17218,9 +14880,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cocoa"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cocoa"]],
     };
     pub const RECIPES_FOOD_DRIED_KELP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/dried_kelp"),
@@ -17231,9 +14891,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dried_kelp_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dried_kelp_block"]],
     };
     pub const RECIPES_FOOD_DRIED_KELP_FROM_CAMPFIRE_COOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/dried_kelp_from_campfire_cooking"),
@@ -17244,9 +14902,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_kelp"]],
-        },
+        requirements: &[&["has_the_recipe", "has_kelp"]],
     };
     pub const RECIPES_FOOD_DRIED_KELP_FROM_SMELTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/dried_kelp_from_smelting"),
@@ -17257,9 +14913,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_kelp"]],
-        },
+        requirements: &[&["has_the_recipe", "has_kelp"]],
     };
     pub const RECIPES_FOOD_DRIED_KELP_FROM_SMOKING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/dried_kelp_from_smoking"),
@@ -17270,9 +14924,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_kelp"]],
-        },
+        requirements: &[&["has_the_recipe", "has_kelp"]],
     };
     pub const RECIPES_FOOD_GOLDEN_APPLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/golden_apple"),
@@ -17283,9 +14935,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_FOOD_HONEY_BOTTLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/honey_bottle"),
@@ -17296,9 +14946,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_honey_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_honey_block"]],
     };
     pub const RECIPES_FOOD_MUSHROOM_STEW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/mushroom_stew"),
@@ -17309,15 +14957,13 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_mushroom_stew",
-                "has_bowl",
-                "has_brown_mushroom",
-                "has_red_mushroom",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_mushroom_stew",
+            "has_bowl",
+            "has_brown_mushroom",
+            "has_red_mushroom",
+        ]],
     };
     pub const RECIPES_FOOD_PUMPKIN_PIE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/pumpkin_pie"),
@@ -17328,9 +14974,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_carved_pumpkin", "has_pumpkin"]],
-        },
+        requirements: &[&["has_the_recipe", "has_carved_pumpkin", "has_pumpkin"]],
     };
     pub const RECIPES_FOOD_RABBIT_STEW_FROM_BROWN_MUSHROOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/rabbit_stew_from_brown_mushroom"),
@@ -17341,9 +14985,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cooked_rabbit"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cooked_rabbit"]],
     };
     pub const RECIPES_FOOD_RABBIT_STEW_FROM_RED_MUSHROOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/rabbit_stew_from_red_mushroom"),
@@ -17354,9 +14996,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cooked_rabbit"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cooked_rabbit"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_ALLIUM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_allium"),
@@ -17367,9 +15007,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_allium"]],
-        },
+        requirements: &[&["has_the_recipe", "has_allium"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_AZURE_BLUET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_azure_bluet"),
@@ -17380,9 +15018,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_azure_bluet"]],
-        },
+        requirements: &[&["has_the_recipe", "has_azure_bluet"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_BLUE_ORCHID: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_blue_orchid"),
@@ -17393,9 +15029,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_orchid"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_orchid"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_CLOSED_EYEBLOSSOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_closed_eyeblossom"),
@@ -17406,9 +15040,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_closed_eyeblossom"]],
-        },
+        requirements: &[&["has_the_recipe", "has_closed_eyeblossom"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_CORNFLOWER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_cornflower"),
@@ -17419,9 +15051,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cornflower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cornflower"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_DANDELION: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_dandelion"),
@@ -17432,9 +15062,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dandelion"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dandelion"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_GOLDEN_DANDELION: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_golden_dandelion"),
@@ -17445,9 +15073,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_golden_dandelion"]],
-        },
+        requirements: &[&["has_the_recipe", "has_golden_dandelion"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_LILY_OF_THE_VALLEY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_lily_of_the_valley"),
@@ -17458,9 +15084,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lily_of_the_valley"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lily_of_the_valley"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_OPEN_EYEBLOSSOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_open_eyeblossom"),
@@ -17471,9 +15095,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_open_eyeblossom"]],
-        },
+        requirements: &[&["has_the_recipe", "has_open_eyeblossom"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_ORANGE_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_orange_tulip"),
@@ -17484,9 +15106,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_tulip"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_OXEYE_DAISY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_oxeye_daisy"),
@@ -17497,9 +15117,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxeye_daisy"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxeye_daisy"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_PINK_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_pink_tulip"),
@@ -17510,9 +15128,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_tulip"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_POPPY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_poppy"),
@@ -17523,9 +15139,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_poppy"]],
-        },
+        requirements: &[&["has_the_recipe", "has_poppy"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_RED_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_red_tulip"),
@@ -17536,9 +15150,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_tulip"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_TORCHFLOWER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_torchflower"),
@@ -17549,9 +15161,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_torchflower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_torchflower"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_WHITE_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_white_tulip"),
@@ -17562,9 +15172,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_tulip"]],
     };
     pub const RECIPES_FOOD_SUSPICIOUS_STEW_FROM_WITHER_ROSE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/food/suspicious_stew_from_wither_rose"),
@@ -17575,9 +15183,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wither_rose"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wither_rose"]],
     };
     pub const RECIPES_MISC_BEACON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/beacon"),
@@ -17588,9 +15194,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_star"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_star"]],
     };
     pub const RECIPES_MISC_BLACK_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/black_dye"),
@@ -17601,9 +15205,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ink_sac"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ink_sac"]],
     };
     pub const RECIPES_MISC_BLACK_DYE_FROM_WITHER_ROSE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/black_dye_from_wither_rose"),
@@ -17614,9 +15216,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wither_rose"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wither_rose"]],
     };
     pub const RECIPES_MISC_BLUE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/blue_dye"),
@@ -17627,9 +15227,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lapis_lazuli"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lapis_lazuli"]],
     };
     pub const RECIPES_MISC_BLUE_DYE_FROM_CORNFLOWER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/blue_dye_from_cornflower"),
@@ -17640,9 +15238,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cornflower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cornflower"]],
     };
     pub const RECIPES_MISC_BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/bolt_armor_trim_smithing_template"),
@@ -17653,9 +15249,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bolt_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bolt_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_BOLT_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -17668,9 +15262,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_BONE_MEAL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/bone_meal"),
@@ -17681,9 +15273,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bone"]],
     };
     pub const RECIPES_MISC_BONE_MEAL_FROM_BONE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/bone_meal_from_bone_block"),
@@ -17694,9 +15284,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bone_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bone_block"]],
     };
     pub const RECIPES_MISC_BOOK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/book"),
@@ -17707,9 +15295,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_paper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_paper"]],
     };
     pub const RECIPES_MISC_BORDURE_INDENTED_BANNER_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/bordure_indented_banner_pattern"),
@@ -17720,9 +15306,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_vines"]],
-        },
+        requirements: &[&["has_the_recipe", "has_vines"]],
     };
     pub const RECIPES_MISC_BOWL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/bowl"),
@@ -17733,14 +15317,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_brown_mushroom",
-                "has_red_mushroom",
-                "has_mushroom_stew",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_brown_mushroom",
+            "has_red_mushroom",
+            "has_mushroom_stew",
+        ]],
     };
     pub const RECIPES_MISC_BRICK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/brick"),
@@ -17751,9 +15333,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_clay_ball"]],
-        },
+        requirements: &[&["has_the_recipe", "has_clay_ball"]],
     };
     pub const RECIPES_MISC_BROWN_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/brown_dye"),
@@ -17764,9 +15344,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cocoa_beans"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cocoa_beans"]],
     };
     pub const RECIPES_MISC_BUCKET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/bucket"),
@@ -17777,9 +15355,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_MISC_CHARCOAL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/charcoal"),
@@ -17790,9 +15366,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_log"]],
-        },
+        requirements: &[&["has_the_recipe", "has_log"]],
     };
     pub const RECIPES_MISC_COAL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/coal"),
@@ -17803,9 +15377,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_coal_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_coal_block"]],
     };
     pub const RECIPES_MISC_COAL_FROM_BLASTING_COAL_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/coal_from_blasting_coal_ore"),
@@ -17816,9 +15388,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_coal_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_coal_ore"]],
     };
     pub const RECIPES_MISC_COAL_FROM_BLASTING_DEEPSLATE_COAL_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/coal_from_blasting_deepslate_coal_ore"),
@@ -17829,9 +15399,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_coal_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_coal_ore"]],
     };
     pub const RECIPES_MISC_COAL_FROM_SMELTING_COAL_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/coal_from_smelting_coal_ore"),
@@ -17842,9 +15410,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_coal_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_coal_ore"]],
     };
     pub const RECIPES_MISC_COAL_FROM_SMELTING_DEEPSLATE_COAL_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/coal_from_smelting_deepslate_coal_ore"),
@@ -17855,9 +15421,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_coal_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_coal_ore"]],
     };
     pub const RECIPES_MISC_COAST_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/coast_armor_trim_smithing_template"),
@@ -17868,9 +15432,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_coast_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_coast_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_COAST_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -17883,9 +15445,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_CONDUIT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/conduit"),
@@ -17896,9 +15456,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nautilus_core", "has_nautilus_shell"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nautilus_core", "has_nautilus_shell"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot"),
@@ -17909,9 +15467,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_BLASTING_COPPER_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot_from_blasting_copper_ore"),
@@ -17922,9 +15478,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ore"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_BLASTING_DEEPSLATE_COPPER_ORE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -17937,9 +15491,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_copper_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_copper_ore"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_BLASTING_RAW_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot_from_blasting_raw_copper"),
@@ -17950,9 +15502,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_copper"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_NUGGETS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot_from_nuggets"),
@@ -17963,9 +15513,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_nugget"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_nugget"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_SMELTING_COPPER_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot_from_smelting_copper_ore"),
@@ -17976,9 +15524,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ore"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_SMELTING_DEEPSLATE_COPPER_ORE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -17991,9 +15537,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_copper_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_copper_ore"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_SMELTING_RAW_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot_from_smelting_raw_copper"),
@@ -18004,9 +15548,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_copper"]],
     };
     pub const RECIPES_MISC_COPPER_INGOT_FROM_WAXED_COPPER_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_ingot_from_waxed_copper_block"),
@@ -18017,9 +15559,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_MISC_COPPER_NUGGET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_nugget"),
@@ -18030,9 +15570,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_MISC_COPPER_NUGGET_FROM_BLASTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_nugget_from_blasting"),
@@ -18043,23 +15581,21 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_copper_pickaxe",
-                "has_copper_shovel",
-                "has_copper_axe",
-                "has_copper_hoe",
-                "has_copper_sword",
-                "has_copper_spear",
-                "has_copper_helmet",
-                "has_copper_chestplate",
-                "has_copper_leggings",
-                "has_copper_boots",
-                "has_copper_horse_armor",
-                "has_copper_nautilus_armor",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_copper_pickaxe",
+            "has_copper_shovel",
+            "has_copper_axe",
+            "has_copper_hoe",
+            "has_copper_sword",
+            "has_copper_spear",
+            "has_copper_helmet",
+            "has_copper_chestplate",
+            "has_copper_leggings",
+            "has_copper_boots",
+            "has_copper_horse_armor",
+            "has_copper_nautilus_armor",
+        ]],
     };
     pub const RECIPES_MISC_COPPER_NUGGET_FROM_SMELTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/copper_nugget_from_smelting"),
@@ -18070,23 +15606,21 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_copper_pickaxe",
-                "has_copper_shovel",
-                "has_copper_axe",
-                "has_copper_hoe",
-                "has_copper_sword",
-                "has_copper_spear",
-                "has_copper_helmet",
-                "has_copper_chestplate",
-                "has_copper_leggings",
-                "has_copper_boots",
-                "has_copper_horse_armor",
-                "has_copper_nautilus_armor",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_copper_pickaxe",
+            "has_copper_shovel",
+            "has_copper_axe",
+            "has_copper_hoe",
+            "has_copper_sword",
+            "has_copper_spear",
+            "has_copper_helmet",
+            "has_copper_chestplate",
+            "has_copper_leggings",
+            "has_copper_boots",
+            "has_copper_horse_armor",
+            "has_copper_nautilus_armor",
+        ]],
     };
     pub const RECIPES_MISC_CREAKING_HEART: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/creaking_heart"),
@@ -18097,9 +15631,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_block"]],
     };
     pub const RECIPES_MISC_CREEPER_BANNER_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/creeper_banner_pattern"),
@@ -18110,9 +15642,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_creeper_head"]],
-        },
+        requirements: &[&["has_the_recipe", "has_creeper_head"]],
     };
     pub const RECIPES_MISC_CYAN_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/cyan_dye"),
@@ -18123,9 +15653,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_dye", "has_blue_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_dye", "has_blue_dye"]],
     };
     pub const RECIPES_MISC_CYAN_DYE_FROM_PITCHER_PLANT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/cyan_dye_from_pitcher_plant"),
@@ -18136,9 +15664,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pitcher_plant"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pitcher_plant"]],
     };
     pub const RECIPES_MISC_DIAMOND: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/diamond"),
@@ -18149,9 +15675,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond_block"]],
     };
     pub const RECIPES_MISC_DIAMOND_FROM_BLASTING_DEEPSLATE_DIAMOND_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/diamond_from_blasting_deepslate_diamond_ore"),
@@ -18162,9 +15686,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_diamond_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_diamond_ore"]],
     };
     pub const RECIPES_MISC_DIAMOND_FROM_BLASTING_DIAMOND_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/diamond_from_blasting_diamond_ore"),
@@ -18175,9 +15697,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond_ore"]],
     };
     pub const RECIPES_MISC_DIAMOND_FROM_SMELTING_DEEPSLATE_DIAMOND_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/diamond_from_smelting_deepslate_diamond_ore"),
@@ -18188,9 +15708,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_diamond_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_diamond_ore"]],
     };
     pub const RECIPES_MISC_DIAMOND_FROM_SMELTING_DIAMOND_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/diamond_from_smelting_diamond_ore"),
@@ -18201,9 +15719,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_diamond_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_diamond_ore"]],
     };
     pub const RECIPES_MISC_DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/dune_armor_trim_smithing_template"),
@@ -18214,9 +15730,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dune_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dune_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_DUNE_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -18229,9 +15743,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_EMERALD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/emerald"),
@@ -18242,9 +15754,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_emerald_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_emerald_block"]],
     };
     pub const RECIPES_MISC_EMERALD_FROM_BLASTING_DEEPSLATE_EMERALD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/emerald_from_blasting_deepslate_emerald_ore"),
@@ -18255,9 +15765,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_emerald_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_emerald_ore"]],
     };
     pub const RECIPES_MISC_EMERALD_FROM_BLASTING_EMERALD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/emerald_from_blasting_emerald_ore"),
@@ -18268,9 +15776,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_emerald_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_emerald_ore"]],
     };
     pub const RECIPES_MISC_EMERALD_FROM_SMELTING_DEEPSLATE_EMERALD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/emerald_from_smelting_deepslate_emerald_ore"),
@@ -18281,9 +15787,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_emerald_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_emerald_ore"]],
     };
     pub const RECIPES_MISC_EMERALD_FROM_SMELTING_EMERALD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/emerald_from_smelting_emerald_ore"),
@@ -18294,9 +15798,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_emerald_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_emerald_ore"]],
     };
     pub const RECIPES_MISC_ENDER_EYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/ender_eye"),
@@ -18307,9 +15809,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blaze_powder"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blaze_powder"]],
     };
     pub const RECIPES_MISC_EYE_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/eye_armor_trim_smithing_template"),
@@ -18320,9 +15820,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_eye_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_eye_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_EYE_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -18335,9 +15833,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_FIELD_MASONED_BANNER_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/field_masoned_banner_pattern"),
@@ -18348,9 +15844,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bricks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bricks"]],
     };
     pub const RECIPES_MISC_FIRE_CHARGE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/fire_charge"),
@@ -18361,9 +15855,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blaze_powder"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blaze_powder"]],
     };
     pub const RECIPES_MISC_FIREWORK_ROCKET_SIMPLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/firework_rocket_simple"),
@@ -18374,9 +15866,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gunpowder"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gunpowder"]],
     };
     pub const RECIPES_MISC_FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/flow_armor_trim_smithing_template"),
@@ -18387,9 +15877,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_flow_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_flow_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_FLOW_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -18402,9 +15890,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_FLOWER_BANNER_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/flower_banner_pattern"),
@@ -18415,9 +15901,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxeye_daisy"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxeye_daisy"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_BLASTING_DEEPSLATE_GOLD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_blasting_deepslate_gold_ore"),
@@ -18428,9 +15912,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_gold_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_gold_ore"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_BLASTING_GOLD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_blasting_gold_ore"),
@@ -18441,9 +15923,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ore"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_BLASTING_NETHER_GOLD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_blasting_nether_gold_ore"),
@@ -18454,9 +15934,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_gold_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_gold_ore"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_BLASTING_RAW_GOLD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_blasting_raw_gold"),
@@ -18467,9 +15945,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_gold"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_gold"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_GOLD_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_gold_block"),
@@ -18480,9 +15956,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_block"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_NUGGETS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_nuggets"),
@@ -18493,9 +15967,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_nugget"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_nugget"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_SMELTING_DEEPSLATE_GOLD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_smelting_deepslate_gold_ore"),
@@ -18506,9 +15978,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_gold_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_gold_ore"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_SMELTING_GOLD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_smelting_gold_ore"),
@@ -18519,9 +15989,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ore"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_SMELTING_NETHER_GOLD_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_smelting_nether_gold_ore"),
@@ -18532,9 +16000,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_gold_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_gold_ore"]],
     };
     pub const RECIPES_MISC_GOLD_INGOT_FROM_SMELTING_RAW_GOLD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_ingot_from_smelting_raw_gold"),
@@ -18545,9 +16011,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_gold"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_gold"]],
     };
     pub const RECIPES_MISC_GOLD_NUGGET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_nugget"),
@@ -18558,9 +16022,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_MISC_GOLD_NUGGET_FROM_BLASTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_nugget_from_blasting"),
@@ -18571,23 +16033,21 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_golden_pickaxe",
-                "has_golden_shovel",
-                "has_golden_axe",
-                "has_golden_hoe",
-                "has_golden_sword",
-                "has_golden_spear",
-                "has_golden_helmet",
-                "has_golden_chestplate",
-                "has_golden_leggings",
-                "has_golden_boots",
-                "has_golden_horse_armor",
-                "has_golden_nautilus_armor",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_golden_pickaxe",
+            "has_golden_shovel",
+            "has_golden_axe",
+            "has_golden_hoe",
+            "has_golden_sword",
+            "has_golden_spear",
+            "has_golden_helmet",
+            "has_golden_chestplate",
+            "has_golden_leggings",
+            "has_golden_boots",
+            "has_golden_horse_armor",
+            "has_golden_nautilus_armor",
+        ]],
     };
     pub const RECIPES_MISC_GOLD_NUGGET_FROM_SMELTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gold_nugget_from_smelting"),
@@ -18598,23 +16058,21 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_golden_pickaxe",
-                "has_golden_shovel",
-                "has_golden_axe",
-                "has_golden_hoe",
-                "has_golden_sword",
-                "has_golden_spear",
-                "has_golden_helmet",
-                "has_golden_chestplate",
-                "has_golden_leggings",
-                "has_golden_boots",
-                "has_golden_horse_armor",
-                "has_golden_nautilus_armor",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_golden_pickaxe",
+            "has_golden_shovel",
+            "has_golden_axe",
+            "has_golden_hoe",
+            "has_golden_sword",
+            "has_golden_spear",
+            "has_golden_helmet",
+            "has_golden_chestplate",
+            "has_golden_leggings",
+            "has_golden_boots",
+            "has_golden_horse_armor",
+            "has_golden_nautilus_armor",
+        ]],
     };
     pub const RECIPES_MISC_GRAY_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gray_dye"),
@@ -18625,9 +16083,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_dye", "has_black_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_dye", "has_black_dye"]],
     };
     pub const RECIPES_MISC_GRAY_DYE_FROM_CLOSED_EYEBLOSSOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/gray_dye_from_closed_eyeblossom"),
@@ -18638,9 +16094,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_closed_eyeblossom"]],
-        },
+        requirements: &[&["has_the_recipe", "has_closed_eyeblossom"]],
     };
     pub const RECIPES_MISC_GREEN_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/green_dye"),
@@ -18651,9 +16105,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cactus"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cactus"]],
     };
     pub const RECIPES_MISC_HOST_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/host_armor_trim_smithing_template"),
@@ -18664,9 +16116,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_host_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_host_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_HOST_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -18679,9 +16129,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_BLASTING_DEEPSLATE_IRON_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_blasting_deepslate_iron_ore"),
@@ -18692,9 +16140,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_iron_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_iron_ore"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_BLASTING_IRON_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_blasting_iron_ore"),
@@ -18705,9 +16151,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ore"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_BLASTING_RAW_IRON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_blasting_raw_iron"),
@@ -18718,9 +16162,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_iron"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_iron"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_IRON_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_iron_block"),
@@ -18731,9 +16173,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_block"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_NUGGETS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_nuggets"),
@@ -18744,9 +16184,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_nugget"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_nugget"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_SMELTING_DEEPSLATE_IRON_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_smelting_deepslate_iron_ore"),
@@ -18757,9 +16195,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_iron_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_iron_ore"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_SMELTING_IRON_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_smelting_iron_ore"),
@@ -18770,9 +16206,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ore"]],
     };
     pub const RECIPES_MISC_IRON_INGOT_FROM_SMELTING_RAW_IRON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_ingot_from_smelting_raw_iron"),
@@ -18783,9 +16217,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_iron"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_iron"]],
     };
     pub const RECIPES_MISC_IRON_NUGGET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_nugget"),
@@ -18796,9 +16228,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_MISC_IRON_NUGGET_FROM_BLASTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_nugget_from_blasting"),
@@ -18809,27 +16239,25 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_iron_pickaxe",
-                "has_iron_shovel",
-                "has_iron_axe",
-                "has_iron_hoe",
-                "has_iron_sword",
-                "has_iron_spear",
-                "has_iron_helmet",
-                "has_iron_chestplate",
-                "has_iron_leggings",
-                "has_iron_boots",
-                "has_iron_horse_armor",
-                "has_chainmail_helmet",
-                "has_chainmail_chestplate",
-                "has_chainmail_leggings",
-                "has_chainmail_boots",
-                "has_iron_nautilus_armor",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_iron_pickaxe",
+            "has_iron_shovel",
+            "has_iron_axe",
+            "has_iron_hoe",
+            "has_iron_sword",
+            "has_iron_spear",
+            "has_iron_helmet",
+            "has_iron_chestplate",
+            "has_iron_leggings",
+            "has_iron_boots",
+            "has_iron_horse_armor",
+            "has_chainmail_helmet",
+            "has_chainmail_chestplate",
+            "has_chainmail_leggings",
+            "has_chainmail_boots",
+            "has_iron_nautilus_armor",
+        ]],
     };
     pub const RECIPES_MISC_IRON_NUGGET_FROM_SMELTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/iron_nugget_from_smelting"),
@@ -18840,27 +16268,25 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_iron_pickaxe",
-                "has_iron_shovel",
-                "has_iron_axe",
-                "has_iron_hoe",
-                "has_iron_sword",
-                "has_iron_spear",
-                "has_iron_helmet",
-                "has_iron_chestplate",
-                "has_iron_leggings",
-                "has_iron_boots",
-                "has_iron_horse_armor",
-                "has_chainmail_helmet",
-                "has_chainmail_chestplate",
-                "has_chainmail_leggings",
-                "has_chainmail_boots",
-                "has_iron_nautilus_armor",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_iron_pickaxe",
+            "has_iron_shovel",
+            "has_iron_axe",
+            "has_iron_hoe",
+            "has_iron_sword",
+            "has_iron_spear",
+            "has_iron_helmet",
+            "has_iron_chestplate",
+            "has_iron_leggings",
+            "has_iron_boots",
+            "has_iron_horse_armor",
+            "has_chainmail_helmet",
+            "has_chainmail_chestplate",
+            "has_chainmail_leggings",
+            "has_chainmail_boots",
+            "has_iron_nautilus_armor",
+        ]],
     };
     pub const RECIPES_MISC_LAPIS_LAZULI: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/lapis_lazuli"),
@@ -18871,9 +16297,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lapis_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lapis_block"]],
     };
     pub const RECIPES_MISC_LAPIS_LAZULI_FROM_BLASTING_DEEPSLATE_LAPIS_ORE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -18886,9 +16310,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_lapis_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_lapis_ore"]],
     };
     pub const RECIPES_MISC_LAPIS_LAZULI_FROM_BLASTING_LAPIS_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/lapis_lazuli_from_blasting_lapis_ore"),
@@ -18899,9 +16321,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lapis_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lapis_ore"]],
     };
     pub const RECIPES_MISC_LAPIS_LAZULI_FROM_SMELTING_DEEPSLATE_LAPIS_ORE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -18914,9 +16334,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_lapis_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_lapis_ore"]],
     };
     pub const RECIPES_MISC_LAPIS_LAZULI_FROM_SMELTING_LAPIS_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/lapis_lazuli_from_smelting_lapis_ore"),
@@ -18927,9 +16345,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lapis_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lapis_ore"]],
     };
     pub const RECIPES_MISC_LEAF_LITTER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leaf_litter"),
@@ -18940,9 +16356,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leaves"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leaves"]],
     };
     pub const RECIPES_MISC_LEATHER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather"),
@@ -18953,9 +16367,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rabbit_hide"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rabbit_hide"]],
     };
     pub const RECIPES_MISC_LEATHER_BOOTS_DYED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather_boots_dyed"),
@@ -18966,9 +16378,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather_boots"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather_boots"]],
     };
     pub const RECIPES_MISC_LEATHER_CHESTPLATE_DYED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather_chestplate_dyed"),
@@ -18979,9 +16389,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather_chestplate"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather_chestplate"]],
     };
     pub const RECIPES_MISC_LEATHER_HELMET_DYED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather_helmet_dyed"),
@@ -18992,9 +16400,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather_helmet"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather_helmet"]],
     };
     pub const RECIPES_MISC_LEATHER_HORSE_ARMOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather_horse_armor"),
@@ -19005,9 +16411,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather"]],
     };
     pub const RECIPES_MISC_LEATHER_HORSE_ARMOR_DYED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather_horse_armor_dyed"),
@@ -19018,9 +16422,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather_horse_armor"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather_horse_armor"]],
     };
     pub const RECIPES_MISC_LEATHER_LEGGINGS_DYED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/leather_leggings_dyed"),
@@ -19031,9 +16433,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_leather_leggings"]],
-        },
+        requirements: &[&["has_the_recipe", "has_leather_leggings"]],
     };
     pub const RECIPES_MISC_LIGHT_BLUE_DYE_FROM_BLUE_ORCHID: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_blue_dye_from_blue_orchid"),
@@ -19044,9 +16444,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_orchid"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_orchid"]],
     };
     pub const RECIPES_MISC_LIGHT_BLUE_DYE_FROM_BLUE_WHITE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_blue_dye_from_blue_white_dye"),
@@ -19057,9 +16455,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_dye", "has_white_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_dye", "has_white_dye"]],
     };
     pub const RECIPES_MISC_LIGHT_GRAY_DYE_FROM_AZURE_BLUET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_gray_dye_from_azure_bluet"),
@@ -19070,9 +16466,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_azure_bluet"]],
-        },
+        requirements: &[&["has_the_recipe", "has_azure_bluet"]],
     };
     pub const RECIPES_MISC_LIGHT_GRAY_DYE_FROM_BLACK_WHITE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_gray_dye_from_black_white_dye"),
@@ -19083,9 +16477,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_dye", "has_black_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_dye", "has_black_dye"]],
     };
     pub const RECIPES_MISC_LIGHT_GRAY_DYE_FROM_GRAY_WHITE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_gray_dye_from_gray_white_dye"),
@@ -19096,9 +16488,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gray_dye", "has_white_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gray_dye", "has_white_dye"]],
     };
     pub const RECIPES_MISC_LIGHT_GRAY_DYE_FROM_OXEYE_DAISY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_gray_dye_from_oxeye_daisy"),
@@ -19109,9 +16499,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxeye_daisy"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxeye_daisy"]],
     };
     pub const RECIPES_MISC_LIGHT_GRAY_DYE_FROM_WHITE_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/light_gray_dye_from_white_tulip"),
@@ -19122,9 +16510,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_tulip"]],
     };
     pub const RECIPES_MISC_LIME_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/lime_dye"),
@@ -19135,9 +16521,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_green_dye", "has_white_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_green_dye", "has_white_dye"]],
     };
     pub const RECIPES_MISC_LIME_DYE_FROM_SMELTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/lime_dye_from_smelting"),
@@ -19148,9 +16532,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sea_pickle"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sea_pickle"]],
     };
     pub const RECIPES_MISC_MAGENTA_DYE_FROM_ALLIUM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/magenta_dye_from_allium"),
@@ -19161,9 +16543,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_allium"]],
-        },
+        requirements: &[&["has_the_recipe", "has_allium"]],
     };
     pub const RECIPES_MISC_MAGENTA_DYE_FROM_BLUE_RED_PINK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/magenta_dye_from_blue_red_pink"),
@@ -19174,14 +16554,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_pink_dye",
-                "has_blue_dye",
-                "has_red_dye",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_pink_dye",
+            "has_blue_dye",
+            "has_red_dye",
+        ]],
     };
     pub const RECIPES_MISC_MAGENTA_DYE_FROM_BLUE_RED_WHITE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/magenta_dye_from_blue_red_white_dye"),
@@ -19192,14 +16570,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_blue_dye",
-                "has_rose_red",
-                "has_white_dye",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_blue_dye",
+            "has_rose_red",
+            "has_white_dye",
+        ]],
     };
     pub const RECIPES_MISC_MAGENTA_DYE_FROM_LILAC: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/magenta_dye_from_lilac"),
@@ -19210,9 +16586,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lilac"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lilac"]],
     };
     pub const RECIPES_MISC_MAGENTA_DYE_FROM_PURPLE_AND_PINK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/magenta_dye_from_purple_and_pink"),
@@ -19223,9 +16597,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_dye", "has_purple_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_dye", "has_purple_dye"]],
     };
     pub const RECIPES_MISC_MAP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/map"),
@@ -19236,9 +16608,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_compass"]],
-        },
+        requirements: &[&["has_the_recipe", "has_compass"]],
     };
     pub const RECIPES_MISC_MAP_CLONING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/map_cloning"),
@@ -19249,9 +16619,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_filled_map"]],
-        },
+        requirements: &[&["has_the_recipe", "has_filled_map"]],
     };
     pub const RECIPES_MISC_MELON_SEEDS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/melon_seeds"),
@@ -19262,9 +16630,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_melon"]],
-        },
+        requirements: &[&["has_the_recipe", "has_melon"]],
     };
     pub const RECIPES_MISC_MOJANG_BANNER_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/mojang_banner_pattern"),
@@ -19275,9 +16641,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_enchanted_golden_apple"]],
-        },
+        requirements: &[&["has_the_recipe", "has_enchanted_golden_apple"]],
     };
     pub const RECIPES_MISC_MUSIC_DISC_5: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/music_disc_5"),
@@ -19288,9 +16652,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_disc_fragment_5"]],
-        },
+        requirements: &[&["has_the_recipe", "has_disc_fragment_5"]],
     };
     pub const RECIPES_MISC_NETHER_BRICK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/nether_brick"),
@@ -19301,9 +16663,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherrack"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherrack"]],
     };
     pub const RECIPES_MISC_NETHERITE_INGOT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/netherite_ingot"),
@@ -19314,9 +16674,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_scrap"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_scrap"]],
     };
     pub const RECIPES_MISC_NETHERITE_INGOT_FROM_NETHERITE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/netherite_ingot_from_netherite_block"),
@@ -19327,9 +16685,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_block"]],
     };
     pub const RECIPES_MISC_NETHERITE_SCRAP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/netherite_scrap"),
@@ -19340,9 +16696,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ancient_debris"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ancient_debris"]],
     };
     pub const RECIPES_MISC_NETHERITE_SCRAP_FROM_BLASTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/netherite_scrap_from_blasting"),
@@ -19353,9 +16707,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ancient_debris"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ancient_debris"]],
     };
     pub const RECIPES_MISC_NETHERITE_UPGRADE_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/netherite_upgrade_smithing_template"),
@@ -19366,9 +16718,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_netherite_upgrade_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_netherite_upgrade_smithing_template"]],
     };
     pub const RECIPES_MISC_ORANGE_DYE_FROM_OPEN_EYEBLOSSOM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/orange_dye_from_open_eyeblossom"),
@@ -19379,9 +16729,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_open_eyeblossom"]],
-        },
+        requirements: &[&["has_the_recipe", "has_open_eyeblossom"]],
     };
     pub const RECIPES_MISC_ORANGE_DYE_FROM_ORANGE_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/orange_dye_from_orange_tulip"),
@@ -19392,9 +16740,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_orange_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_orange_tulip"]],
     };
     pub const RECIPES_MISC_ORANGE_DYE_FROM_RED_YELLOW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/orange_dye_from_red_yellow"),
@@ -19405,9 +16751,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_dye", "has_yellow_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_dye", "has_yellow_dye"]],
     };
     pub const RECIPES_MISC_ORANGE_DYE_FROM_TORCHFLOWER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/orange_dye_from_torchflower"),
@@ -19418,9 +16762,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_torchflower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_torchflower"]],
     };
     pub const RECIPES_MISC_PAPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/paper"),
@@ -19431,9 +16773,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_reeds"]],
-        },
+        requirements: &[&["has_the_recipe", "has_reeds"]],
     };
     pub const RECIPES_MISC_PINK_DYE_FROM_CACTUS_FLOWER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/pink_dye_from_cactus_flower"),
@@ -19444,9 +16784,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cactus_flower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cactus_flower"]],
     };
     pub const RECIPES_MISC_PINK_DYE_FROM_PEONY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/pink_dye_from_peony"),
@@ -19457,9 +16795,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_peony"]],
-        },
+        requirements: &[&["has_the_recipe", "has_peony"]],
     };
     pub const RECIPES_MISC_PINK_DYE_FROM_PINK_PETALS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/pink_dye_from_pink_petals"),
@@ -19470,9 +16806,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_petals"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_petals"]],
     };
     pub const RECIPES_MISC_PINK_DYE_FROM_PINK_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/pink_dye_from_pink_tulip"),
@@ -19483,9 +16817,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pink_tulip"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pink_tulip"]],
     };
     pub const RECIPES_MISC_PINK_DYE_FROM_RED_WHITE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/pink_dye_from_red_white_dye"),
@@ -19496,9 +16828,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_white_dye", "has_red_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_white_dye", "has_red_dye"]],
     };
     pub const RECIPES_MISC_POPPED_CHORUS_FRUIT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/popped_chorus_fruit"),
@@ -19509,9 +16839,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_chorus_fruit"]],
-        },
+        requirements: &[&["has_the_recipe", "has_chorus_fruit"]],
     };
     pub const RECIPES_MISC_PUMPKIN_SEEDS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/pumpkin_seeds"),
@@ -19522,9 +16850,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_pumpkin"]],
-        },
+        requirements: &[&["has_the_recipe", "has_pumpkin"]],
     };
     pub const RECIPES_MISC_PURPLE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/purple_dye"),
@@ -19535,9 +16861,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_blue_dye", "has_red_dye"]],
-        },
+        requirements: &[&["has_the_recipe", "has_blue_dye", "has_red_dye"]],
     };
     pub const RECIPES_MISC_QUARTZ: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/quartz"),
@@ -19548,9 +16872,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_quartz_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_quartz_ore"]],
     };
     pub const RECIPES_MISC_QUARTZ_FROM_BLASTING: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/quartz_from_blasting"),
@@ -19561,9 +16883,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_nether_quartz_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_nether_quartz_ore"]],
     };
     pub const RECIPES_MISC_RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/raiser_armor_trim_smithing_template"),
@@ -19574,9 +16894,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raiser_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raiser_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_RAISER_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19589,9 +16907,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_RAW_COPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/raw_copper"),
@@ -19602,9 +16918,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_copper_block"]],
     };
     pub const RECIPES_MISC_RAW_GOLD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/raw_gold"),
@@ -19615,9 +16929,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_gold_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_gold_block"]],
     };
     pub const RECIPES_MISC_RAW_IRON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/raw_iron"),
@@ -19628,9 +16940,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_raw_iron_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_raw_iron_block"]],
     };
     pub const RECIPES_MISC_RED_DYE_FROM_BEETROOT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/red_dye_from_beetroot"),
@@ -19641,9 +16951,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_beetroot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_beetroot"]],
     };
     pub const RECIPES_MISC_RED_DYE_FROM_POPPY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/red_dye_from_poppy"),
@@ -19654,9 +16962,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_poppy"]],
-        },
+        requirements: &[&["has_the_recipe", "has_poppy"]],
     };
     pub const RECIPES_MISC_RED_DYE_FROM_ROSE_BUSH: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/red_dye_from_rose_bush"),
@@ -19667,9 +16973,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rose_bush"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rose_bush"]],
     };
     pub const RECIPES_MISC_RED_DYE_FROM_TULIP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/red_dye_from_tulip"),
@@ -19680,9 +16984,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_red_flower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_red_flower"]],
     };
     pub const RECIPES_MISC_RESIN_BRICK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/resin_brick"),
@@ -19693,9 +16995,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_clump"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_clump"]],
     };
     pub const RECIPES_MISC_RESIN_CLUMP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/resin_clump"),
@@ -19706,9 +17006,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_resin_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_resin_block"]],
     };
     pub const RECIPES_MISC_RIB_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/rib_armor_trim_smithing_template"),
@@ -19719,9 +17017,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_rib_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_rib_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_RIB_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19734,9 +17030,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/sentry_armor_trim_smithing_template"),
@@ -19747,9 +17041,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sentry_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sentry_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19762,9 +17054,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/shaper_armor_trim_smithing_template"),
@@ -19775,9 +17065,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_shaper_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_shaper_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19790,9 +17078,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/silence_armor_trim_smithing_template"),
@@ -19803,9 +17089,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_silence_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_silence_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19818,9 +17102,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_SKULL_BANNER_PATTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/skull_banner_pattern"),
@@ -19831,9 +17113,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wither_skeleton_skull"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wither_skeleton_skull"]],
     };
     pub const RECIPES_MISC_SLIME_BALL: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/slime_ball"),
@@ -19844,9 +17124,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_slime_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_slime_block"]],
     };
     pub const RECIPES_MISC_SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/snout_armor_trim_smithing_template"),
@@ -19857,9 +17135,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_snout_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_snout_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19872,9 +17148,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/spire_armor_trim_smithing_template"),
@@ -19885,9 +17159,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_spire_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_spire_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19900,9 +17172,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_STICK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/stick"),
@@ -19913,9 +17183,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_MISC_STICK_FROM_BAMBOO_ITEM: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/stick_from_bamboo_item"),
@@ -19926,9 +17194,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bamboo"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bamboo"]],
     };
     pub const RECIPES_MISC_SUGAR_FROM_HONEY_BOTTLE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/sugar_from_honey_bottle"),
@@ -19939,9 +17205,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_honey_bottle"]],
-        },
+        requirements: &[&["has_the_recipe", "has_honey_bottle"]],
     };
     pub const RECIPES_MISC_SUGAR_FROM_SUGAR_CANE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/sugar_from_sugar_cane"),
@@ -19952,9 +17216,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sugar_cane"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sugar_cane"]],
     };
     pub const RECIPES_MISC_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/tide_armor_trim_smithing_template"),
@@ -19965,9 +17227,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tide_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tide_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -19980,9 +17240,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_TIPPED_ARROW: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/tipped_arrow"),
@@ -19993,9 +17251,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lingering_potion"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lingering_potion"]],
     };
     pub const RECIPES_MISC_VEX_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/vex_armor_trim_smithing_template"),
@@ -20006,9 +17262,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_vex_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_vex_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_VEX_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -20021,9 +17275,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_WARD_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/ward_armor_trim_smithing_template"),
@@ -20034,9 +17286,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_ward_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_ward_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_WARD_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -20049,9 +17299,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/wayfinder_armor_trim_smithing_template"),
@@ -20062,12 +17310,10 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "has_the_recipe",
-                "has_wayfinder_armor_trim_smithing_template",
-            ]],
-        },
+        requirements: &[&[
+            "has_the_recipe",
+            "has_wayfinder_armor_trim_smithing_template",
+        ]],
     };
     pub const RECIPES_MISC_WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -20080,9 +17326,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_WHEAT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/wheat"),
@@ -20093,9 +17337,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_hay_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_hay_block"]],
     };
     pub const RECIPES_MISC_WHITE_DYE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/white_dye"),
@@ -20106,9 +17348,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bone_meal"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bone_meal"]],
     };
     pub const RECIPES_MISC_WHITE_DYE_FROM_LILY_OF_THE_VALLEY: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/white_dye_from_lily_of_the_valley"),
@@ -20119,9 +17359,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_lily_of_the_valley"]],
-        },
+        requirements: &[&["has_the_recipe", "has_lily_of_the_valley"]],
     };
     pub const RECIPES_MISC_WILD_ARMOR_TRIM_SMITHING_TEMPLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/wild_armor_trim_smithing_template"),
@@ -20132,9 +17370,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wild_armor_trim_smithing_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wild_armor_trim_smithing_template"]],
     };
     pub const RECIPES_MISC_WILD_ARMOR_TRIM_SMITHING_TEMPLATE_SMITHING_TRIM: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -20147,9 +17383,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
-        },
+        requirements: &[&["has_the_recipe", "has_smithing_trim_template"]],
     };
     pub const RECIPES_MISC_WIND_CHARGE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/wind_charge"),
@@ -20160,9 +17394,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_breeze_rod"]],
-        },
+        requirements: &[&["has_the_recipe", "has_breeze_rod"]],
     };
     pub const RECIPES_MISC_WOLF_ARMOR_DYED: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/wolf_armor_dyed"),
@@ -20173,9 +17405,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wolf_armor"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wolf_armor"]],
     };
     pub const RECIPES_MISC_WRITABLE_BOOK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/writable_book"),
@@ -20186,9 +17416,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_book"]],
-        },
+        requirements: &[&["has_the_recipe", "has_book"]],
     };
     pub const RECIPES_MISC_YELLOW_DYE_FROM_DANDELION: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/yellow_dye_from_dandelion"),
@@ -20199,9 +17427,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dandelion"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dandelion"]],
     };
     pub const RECIPES_MISC_YELLOW_DYE_FROM_GOLDEN_DANDELION: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/yellow_dye_from_golden_dandelion"),
@@ -20212,9 +17438,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_golden_dandelion"]],
-        },
+        requirements: &[&["has_the_recipe", "has_golden_dandelion"]],
     };
     pub const RECIPES_MISC_YELLOW_DYE_FROM_SUNFLOWER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/yellow_dye_from_sunflower"),
@@ -20225,9 +17449,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_sunflower"]],
-        },
+        requirements: &[&["has_the_recipe", "has_sunflower"]],
     };
     pub const RECIPES_MISC_YELLOW_DYE_FROM_WILDFLOWERS: &Self = &Self {
         id: Identifier::vanilla_static("recipes/misc/yellow_dye_from_wildflowers"),
@@ -20238,9 +17460,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_wildflowers"]],
-        },
+        requirements: &[&["has_the_recipe", "has_wildflowers"]],
     };
     pub const RECIPES_REDSTONE_ACACIA_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/acacia_button"),
@@ -20251,9 +17471,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_ACACIA_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/acacia_door"),
@@ -20264,9 +17482,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_ACACIA_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/acacia_fence_gate"),
@@ -20277,9 +17493,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_ACACIA_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/acacia_pressure_plate"),
@@ -20290,9 +17504,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_ACACIA_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/acacia_trapdoor"),
@@ -20303,9 +17515,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BAMBOO_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/bamboo_button"),
@@ -20316,9 +17526,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BAMBOO_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/bamboo_door"),
@@ -20329,9 +17537,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BAMBOO_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/bamboo_fence_gate"),
@@ -20342,9 +17548,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BAMBOO_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/bamboo_pressure_plate"),
@@ -20355,9 +17559,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BAMBOO_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/bamboo_trapdoor"),
@@ -20368,9 +17570,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BIRCH_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/birch_button"),
@@ -20381,9 +17581,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BIRCH_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/birch_door"),
@@ -20394,9 +17592,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BIRCH_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/birch_fence_gate"),
@@ -20407,9 +17603,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BIRCH_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/birch_pressure_plate"),
@@ -20420,9 +17614,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_BIRCH_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/birch_trapdoor"),
@@ -20433,9 +17625,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CALIBRATED_SCULK_SENSOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/calibrated_sculk_sensor"),
@@ -20446,9 +17636,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
-        },
+        requirements: &[&["has_the_recipe", "has_amethyst_shard"]],
     };
     pub const RECIPES_REDSTONE_CHERRY_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/cherry_button"),
@@ -20459,9 +17647,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CHERRY_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/cherry_door"),
@@ -20472,9 +17658,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CHERRY_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/cherry_fence_gate"),
@@ -20485,9 +17669,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CHERRY_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/cherry_pressure_plate"),
@@ -20498,9 +17680,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CHERRY_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/cherry_trapdoor"),
@@ -20511,9 +17691,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_COMPARATOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/comparator"),
@@ -20524,9 +17702,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz"]],
     };
     pub const RECIPES_REDSTONE_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/copper_bulb"),
@@ -20537,9 +17713,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_block"]],
     };
     pub const RECIPES_REDSTONE_COPPER_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/copper_door"),
@@ -20550,9 +17724,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_REDSTONE_COPPER_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/copper_trapdoor"),
@@ -20563,9 +17735,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_REDSTONE_CRAFTER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/crafter"),
@@ -20576,9 +17746,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_dropper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_dropper"]],
     };
     pub const RECIPES_REDSTONE_CRIMSON_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/crimson_button"),
@@ -20589,9 +17757,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CRIMSON_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/crimson_door"),
@@ -20602,9 +17768,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CRIMSON_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/crimson_fence_gate"),
@@ -20615,9 +17779,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CRIMSON_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/crimson_pressure_plate"),
@@ -20628,9 +17790,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_CRIMSON_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/crimson_trapdoor"),
@@ -20641,9 +17801,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_DARK_OAK_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dark_oak_button"),
@@ -20654,9 +17812,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_DARK_OAK_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dark_oak_door"),
@@ -20667,9 +17823,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_DARK_OAK_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dark_oak_fence_gate"),
@@ -20680,9 +17834,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_DARK_OAK_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dark_oak_pressure_plate"),
@@ -20693,9 +17845,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_DARK_OAK_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dark_oak_trapdoor"),
@@ -20706,9 +17856,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_DAYLIGHT_DETECTOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/daylight_detector"),
@@ -20719,9 +17867,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz"]],
     };
     pub const RECIPES_REDSTONE_DISPENSER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dispenser"),
@@ -20732,9 +17878,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_bow"]],
-        },
+        requirements: &[&["has_the_recipe", "has_bow"]],
     };
     pub const RECIPES_REDSTONE_DROPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/dropper"),
@@ -20745,9 +17889,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_REDSTONE_EXPOSED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/exposed_copper_bulb"),
@@ -20758,9 +17900,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper"]],
     };
     pub const RECIPES_REDSTONE_HEAVY_WEIGHTED_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/heavy_weighted_pressure_plate"),
@@ -20771,9 +17911,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_REDSTONE_HONEY_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/honey_block"),
@@ -20784,9 +17922,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_honey_bottle"]],
-        },
+        requirements: &[&["has_the_recipe", "has_honey_bottle"]],
     };
     pub const RECIPES_REDSTONE_HOPPER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/hopper"),
@@ -20797,9 +17933,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_REDSTONE_IRON_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/iron_door"),
@@ -20810,9 +17944,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_REDSTONE_IRON_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/iron_trapdoor"),
@@ -20823,9 +17955,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_iron_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_iron_ingot"]],
     };
     pub const RECIPES_REDSTONE_JUNGLE_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/jungle_button"),
@@ -20836,9 +17966,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_JUNGLE_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/jungle_door"),
@@ -20849,9 +17977,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_JUNGLE_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/jungle_fence_gate"),
@@ -20862,9 +17988,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_JUNGLE_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/jungle_pressure_plate"),
@@ -20875,9 +17999,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_JUNGLE_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/jungle_trapdoor"),
@@ -20888,9 +18010,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_LECTERN: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/lectern"),
@@ -20901,9 +18021,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_book"]],
-        },
+        requirements: &[&["has_the_recipe", "has_book"]],
     };
     pub const RECIPES_REDSTONE_LEVER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/lever"),
@@ -20914,9 +18032,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_cobblestone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_cobblestone"]],
     };
     pub const RECIPES_REDSTONE_LIGHT_WEIGHTED_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/light_weighted_pressure_plate"),
@@ -20927,9 +18043,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gold_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gold_ingot"]],
     };
     pub const RECIPES_REDSTONE_LIGHTNING_ROD: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/lightning_rod"),
@@ -20940,9 +18054,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_ingot"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_ingot"]],
     };
     pub const RECIPES_REDSTONE_MANGROVE_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/mangrove_button"),
@@ -20953,9 +18065,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_MANGROVE_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/mangrove_door"),
@@ -20966,9 +18076,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_MANGROVE_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/mangrove_fence_gate"),
@@ -20979,9 +18087,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_MANGROVE_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/mangrove_pressure_plate"),
@@ -20992,9 +18098,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_MANGROVE_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/mangrove_trapdoor"),
@@ -21005,9 +18109,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_NOTE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/note_block"),
@@ -21018,9 +18120,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_REDSTONE_OAK_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/oak_button"),
@@ -21031,9 +18131,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_OAK_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/oak_door"),
@@ -21044,9 +18142,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_OAK_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/oak_fence_gate"),
@@ -21057,9 +18153,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_OAK_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/oak_pressure_plate"),
@@ -21070,9 +18164,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_OAK_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/oak_trapdoor"),
@@ -21083,9 +18175,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_OBSERVER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/observer"),
@@ -21096,9 +18186,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_quartz"]],
-        },
+        requirements: &[&["has_the_recipe", "has_quartz"]],
     };
     pub const RECIPES_REDSTONE_OXIDIZED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/oxidized_copper_bulb"),
@@ -21109,9 +18197,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper"]],
     };
     pub const RECIPES_REDSTONE_PALE_OAK_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/pale_oak_button"),
@@ -21122,9 +18208,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_PALE_OAK_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/pale_oak_door"),
@@ -21135,9 +18219,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_PALE_OAK_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/pale_oak_fence_gate"),
@@ -21148,9 +18230,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_PALE_OAK_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/pale_oak_pressure_plate"),
@@ -21161,9 +18241,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_PALE_OAK_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/pale_oak_trapdoor"),
@@ -21174,9 +18252,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_PISTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/piston"),
@@ -21187,9 +18263,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_REDSTONE_POLISHED_BLACKSTONE_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/polished_blackstone_button"),
@@ -21200,9 +18274,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_REDSTONE_POLISHED_BLACKSTONE_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/polished_blackstone_pressure_plate"),
@@ -21213,9 +18285,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_polished_blackstone"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/redstone"),
@@ -21226,9 +18296,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone_block"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/redstone_block"),
@@ -21239,9 +18307,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_FROM_BLASTING_DEEPSLATE_REDSTONE_ORE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21254,9 +18320,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_redstone_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_redstone_ore"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_FROM_BLASTING_REDSTONE_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/redstone_from_blasting_redstone_ore"),
@@ -21267,9 +18331,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone_ore"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_FROM_SMELTING_DEEPSLATE_REDSTONE_ORE: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21282,9 +18344,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_deepslate_redstone_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_deepslate_redstone_ore"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_FROM_SMELTING_REDSTONE_ORE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/redstone_from_smelting_redstone_ore"),
@@ -21295,9 +18355,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone_ore"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone_ore"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_LAMP: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/redstone_lamp"),
@@ -21308,9 +18366,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_glowstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_glowstone"]],
     };
     pub const RECIPES_REDSTONE_REDSTONE_TORCH: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/redstone_torch"),
@@ -21321,9 +18377,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone"]],
     };
     pub const RECIPES_REDSTONE_REPEATER: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/repeater"),
@@ -21334,9 +18388,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone_torch"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone_torch"]],
     };
     pub const RECIPES_REDSTONE_SLIME_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/slime_block"),
@@ -21347,9 +18399,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_slime_ball"]],
-        },
+        requirements: &[&["has_the_recipe", "has_slime_ball"]],
     };
     pub const RECIPES_REDSTONE_SPRUCE_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/spruce_button"),
@@ -21360,9 +18410,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_SPRUCE_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/spruce_door"),
@@ -21373,9 +18421,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_SPRUCE_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/spruce_fence_gate"),
@@ -21386,9 +18432,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_SPRUCE_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/spruce_pressure_plate"),
@@ -21399,9 +18443,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_SPRUCE_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/spruce_trapdoor"),
@@ -21412,9 +18454,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_STICKY_PISTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/sticky_piston"),
@@ -21425,9 +18465,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_slime_ball"]],
-        },
+        requirements: &[&["has_the_recipe", "has_slime_ball"]],
     };
     pub const RECIPES_REDSTONE_STONE_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/stone_button"),
@@ -21438,9 +18476,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_REDSTONE_STONE_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/stone_pressure_plate"),
@@ -21451,9 +18487,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_stone"]],
-        },
+        requirements: &[&["has_the_recipe", "has_stone"]],
     };
     pub const RECIPES_REDSTONE_TARGET: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/target"),
@@ -21464,9 +18498,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_redstone", "has_hay_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_redstone", "has_hay_block"]],
     };
     pub const RECIPES_REDSTONE_TNT: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/tnt"),
@@ -21477,9 +18509,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_gunpowder"]],
-        },
+        requirements: &[&["has_the_recipe", "has_gunpowder"]],
     };
     pub const RECIPES_REDSTONE_TRAPPED_CHEST: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/trapped_chest"),
@@ -21490,9 +18520,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_tripwire_hook"]],
-        },
+        requirements: &[&["has_the_recipe", "has_tripwire_hook"]],
     };
     pub const RECIPES_REDSTONE_TRIPWIRE_HOOK: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/tripwire_hook"),
@@ -21503,9 +18531,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_string"]],
-        },
+        requirements: &[&["has_the_recipe", "has_string"]],
     };
     pub const RECIPES_REDSTONE_WARPED_BUTTON: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/warped_button"),
@@ -21516,9 +18542,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_WARPED_DOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/warped_door"),
@@ -21529,9 +18553,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_WARPED_FENCE_GATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/warped_fence_gate"),
@@ -21542,9 +18564,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_WARPED_PRESSURE_PLATE: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/warped_pressure_plate"),
@@ -21555,9 +18575,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_WARPED_TRAPDOOR: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/warped_trapdoor"),
@@ -21568,9 +18586,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_planks"]],
-        },
+        requirements: &[&["has_the_recipe", "has_planks"]],
     };
     pub const RECIPES_REDSTONE_WAXED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_copper_bulb"),
@@ -21581,9 +18597,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_copper_block"]],
     };
     pub const RECIPES_REDSTONE_WAXED_COPPER_BULB_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_copper_bulb_from_honeycomb"),
@@ -21594,9 +18608,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_bulb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_bulb"]],
     };
     pub const RECIPES_REDSTONE_WAXED_COPPER_DOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_copper_door_from_honeycomb"),
@@ -21607,9 +18619,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_door"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_door"]],
     };
     pub const RECIPES_REDSTONE_WAXED_COPPER_TRAPDOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_copper_trapdoor_from_honeycomb"),
@@ -21620,9 +18630,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_copper_trapdoor"]],
-        },
+        requirements: &[&["has_the_recipe", "has_copper_trapdoor"]],
     };
     pub const RECIPES_REDSTONE_WAXED_EXPOSED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_exposed_copper_bulb"),
@@ -21633,9 +18641,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_exposed_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_exposed_copper"]],
     };
     pub const RECIPES_REDSTONE_WAXED_EXPOSED_COPPER_BULB_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_exposed_copper_bulb_from_honeycomb"),
@@ -21646,9 +18652,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_bulb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_bulb"]],
     };
     pub const RECIPES_REDSTONE_WAXED_EXPOSED_COPPER_DOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_exposed_copper_door_from_honeycomb"),
@@ -21659,9 +18663,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_door"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_door"]],
     };
     pub const RECIPES_REDSTONE_WAXED_EXPOSED_COPPER_TRAPDOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21674,9 +18676,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_exposed_copper_trapdoor"]],
-        },
+        requirements: &[&["has_the_recipe", "has_exposed_copper_trapdoor"]],
     };
     pub const RECIPES_REDSTONE_WAXED_OXIDIZED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_oxidized_copper_bulb"),
@@ -21687,9 +18687,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_oxidized_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_oxidized_copper"]],
     };
     pub const RECIPES_REDSTONE_WAXED_OXIDIZED_COPPER_BULB_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21702,9 +18700,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_bulb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_bulb"]],
     };
     pub const RECIPES_REDSTONE_WAXED_OXIDIZED_COPPER_DOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21717,9 +18713,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_door"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_door"]],
     };
     pub const RECIPES_REDSTONE_WAXED_OXIDIZED_COPPER_TRAPDOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21732,9 +18726,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_oxidized_copper_trapdoor"]],
-        },
+        requirements: &[&["has_the_recipe", "has_oxidized_copper_trapdoor"]],
     };
     pub const RECIPES_REDSTONE_WAXED_WEATHERED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/waxed_weathered_copper_bulb"),
@@ -21745,9 +18737,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_waxed_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_waxed_weathered_copper"]],
     };
     pub const RECIPES_REDSTONE_WAXED_WEATHERED_COPPER_BULB_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21760,9 +18750,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_bulb"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_bulb"]],
     };
     pub const RECIPES_REDSTONE_WAXED_WEATHERED_COPPER_DOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21775,9 +18763,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_door"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_door"]],
     };
     pub const RECIPES_REDSTONE_WAXED_WEATHERED_COPPER_TRAPDOOR_FROM_HONEYCOMB: &Self = &Self {
         id: Identifier::vanilla_static(
@@ -21790,9 +18776,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper_trapdoor"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper_trapdoor"]],
     };
     pub const RECIPES_REDSTONE_WEATHERED_COPPER_BULB: &Self = &Self {
         id: Identifier::vanilla_static("recipes/redstone/weathered_copper_bulb"),
@@ -21803,9 +18787,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["has_the_recipe", "has_weathered_copper"]],
-        },
+        requirements: &[&["has_the_recipe", "has_weathered_copper"]],
     };
     pub const STORY_MINE_STONE: &Self = &Self {
         id: Identifier::vanilla_static("story/mine_stone"),
@@ -21827,9 +18809,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["get_stone"]],
-        },
+        requirements: &[&["get_stone"]],
     };
     pub const STORY_UPGRADE_TOOLS: &Self = &Self {
         id: Identifier::vanilla_static("story/upgrade_tools"),
@@ -21851,9 +18831,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["stone_pickaxe"]],
-        },
+        requirements: &[&["stone_pickaxe"]],
     };
     pub const ADVENTURE_ARBALISTIC: &Self = &Self {
         id: Identifier::vanilla_static("adventure/arbalistic"),
@@ -21875,9 +18853,7 @@ impl Advancement {
             experience: 85i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["arbalistic"]],
-        },
+        requirements: &[&["arbalistic"]],
     };
     pub const ADVENTURE_BLOWBACK: &Self = &Self {
         id: Identifier::vanilla_static("adventure/blowback"),
@@ -21902,9 +18878,7 @@ impl Advancement {
             experience: 40i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["blowback"]],
-        },
+        requirements: &[&["blowback"]],
     };
     pub const ADVENTURE_BULLSEYE: &Self = &Self {
         id: Identifier::vanilla_static("adventure/bullseye"),
@@ -21929,9 +18903,7 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["bullseye"]],
-        },
+        requirements: &[&["bullseye"]],
     };
     pub const ADVENTURE_LIGHTEN_UP: &Self = &Self {
         id: Identifier::vanilla_static("adventure/lighten_up"),
@@ -21956,9 +18928,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["lighten_up"]],
-        },
+        requirements: &[&["lighten_up"]],
     };
     pub const ADVENTURE_REVAULTING: &Self = &Self {
         id: Identifier::vanilla_static("adventure/revaulting"),
@@ -21983,9 +18953,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["revaulting"]],
-        },
+        requirements: &[&["revaulting"]],
     };
     pub const ADVENTURE_SPYGLASS_AT_DRAGON: &Self = &Self {
         id: Identifier::vanilla_static("adventure/spyglass_at_dragon"),
@@ -22010,9 +18978,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["spyglass_at_dragon"]],
-        },
+        requirements: &[&["spyglass_at_dragon"]],
     };
     pub const END_DRAGON_BREATH: &Self = &Self {
         id: Identifier::vanilla_static("end/dragon_breath"),
@@ -22034,9 +19000,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["dragon_breath"]],
-        },
+        requirements: &[&["dragon_breath"]],
     };
     pub const END_DRAGON_EGG: &Self = &Self {
         id: Identifier::vanilla_static("end/dragon_egg"),
@@ -22058,9 +19022,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["dragon_egg"]],
-        },
+        requirements: &[&["dragon_egg"]],
     };
     pub const END_ENTER_END_GATEWAY: &Self = &Self {
         id: Identifier::vanilla_static("end/enter_end_gateway"),
@@ -22082,9 +19044,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["entered_end_gateway"]],
-        },
+        requirements: &[&["entered_end_gateway"]],
     };
     pub const END_FIND_END_CITY: &Self = &Self {
         id: Identifier::vanilla_static("end/find_end_city"),
@@ -22109,9 +19069,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["in_city"]],
-        },
+        requirements: &[&["in_city"]],
     };
     pub const END_LEVITATE: &Self = &Self {
         id: Identifier::vanilla_static("end/levitate"),
@@ -22133,9 +19091,7 @@ impl Advancement {
             experience: 50i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["levitated"]],
-        },
+        requirements: &[&["levitated"]],
     };
     pub const HUSBANDRY_ALLAY_DELIVER_CAKE_TO_NOTE_BLOCK: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/allay_deliver_cake_to_note_block"),
@@ -22160,9 +19116,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["allay_deliver_cake_to_note_block"]],
-        },
+        requirements: &[&["allay_deliver_cake_to_note_block"]],
     };
     pub const HUSBANDRY_AXOLOTL_IN_A_BUCKET: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/axolotl_in_a_bucket"),
@@ -22187,9 +19141,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["axolotl_bucket"]],
-        },
+        requirements: &[&["axolotl_bucket"]],
     };
     pub const HUSBANDRY_BALANCED_DIET: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/balanced_diet"),
@@ -22211,50 +19163,48 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["apple"],
-                &["mushroom_stew"],
-                &["bread"],
-                &["porkchop"],
-                &["cooked_porkchop"],
-                &["golden_apple"],
-                &["enchanted_golden_apple"],
-                &["cod"],
-                &["salmon"],
-                &["tropical_fish"],
-                &["pufferfish"],
-                &["cooked_cod"],
-                &["cooked_salmon"],
-                &["cookie"],
-                &["melon_slice"],
-                &["beef"],
-                &["cooked_beef"],
-                &["chicken"],
-                &["cooked_chicken"],
-                &["rotten_flesh"],
-                &["spider_eye"],
-                &["carrot"],
-                &["potato"],
-                &["baked_potato"],
-                &["poisonous_potato"],
-                &["golden_carrot"],
-                &["pumpkin_pie"],
-                &["rabbit"],
-                &["cooked_rabbit"],
-                &["rabbit_stew"],
-                &["mutton"],
-                &["cooked_mutton"],
-                &["chorus_fruit"],
-                &["beetroot"],
-                &["beetroot_soup"],
-                &["dried_kelp"],
-                &["suspicious_stew"],
-                &["sweet_berries"],
-                &["honey_bottle"],
-                &["glow_berries"],
-            ],
-        },
+        requirements: &[
+            &["apple"],
+            &["mushroom_stew"],
+            &["bread"],
+            &["porkchop"],
+            &["cooked_porkchop"],
+            &["golden_apple"],
+            &["enchanted_golden_apple"],
+            &["cod"],
+            &["salmon"],
+            &["tropical_fish"],
+            &["pufferfish"],
+            &["cooked_cod"],
+            &["cooked_salmon"],
+            &["cookie"],
+            &["melon_slice"],
+            &["beef"],
+            &["cooked_beef"],
+            &["chicken"],
+            &["cooked_chicken"],
+            &["rotten_flesh"],
+            &["spider_eye"],
+            &["carrot"],
+            &["potato"],
+            &["baked_potato"],
+            &["poisonous_potato"],
+            &["golden_carrot"],
+            &["pumpkin_pie"],
+            &["rabbit"],
+            &["cooked_rabbit"],
+            &["rabbit_stew"],
+            &["mutton"],
+            &["cooked_mutton"],
+            &["chorus_fruit"],
+            &["beetroot"],
+            &["beetroot_soup"],
+            &["dried_kelp"],
+            &["suspicious_stew"],
+            &["sweet_berries"],
+            &["honey_bottle"],
+            &["glow_berries"],
+        ],
     };
     pub const HUSBANDRY_BRED_ALL_ANIMALS: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/bred_all_animals"),
@@ -22279,36 +19229,34 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:horse"],
-                &["minecraft:donkey"],
-                &["minecraft:mule"],
-                &["minecraft:sheep"],
-                &["minecraft:cow"],
-                &["minecraft:mooshroom"],
-                &["minecraft:pig"],
-                &["minecraft:chicken"],
-                &["minecraft:wolf"],
-                &["minecraft:ocelot"],
-                &["minecraft:rabbit"],
-                &["minecraft:llama"],
-                &["minecraft:cat"],
-                &["minecraft:panda"],
-                &["minecraft:fox"],
-                &["minecraft:bee"],
-                &["minecraft:hoglin"],
-                &["minecraft:strider"],
-                &["minecraft:goat"],
-                &["minecraft:axolotl"],
-                &["minecraft:camel"],
-                &["minecraft:armadillo"],
-                &["minecraft:nautilus"],
-                &["minecraft:turtle"],
-                &["minecraft:frog"],
-                &["minecraft:sniffer"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:horse"],
+            &["minecraft:donkey"],
+            &["minecraft:mule"],
+            &["minecraft:sheep"],
+            &["minecraft:cow"],
+            &["minecraft:mooshroom"],
+            &["minecraft:pig"],
+            &["minecraft:chicken"],
+            &["minecraft:wolf"],
+            &["minecraft:ocelot"],
+            &["minecraft:rabbit"],
+            &["minecraft:llama"],
+            &["minecraft:cat"],
+            &["minecraft:panda"],
+            &["minecraft:fox"],
+            &["minecraft:bee"],
+            &["minecraft:hoglin"],
+            &["minecraft:strider"],
+            &["minecraft:goat"],
+            &["minecraft:axolotl"],
+            &["minecraft:camel"],
+            &["minecraft:armadillo"],
+            &["minecraft:nautilus"],
+            &["minecraft:turtle"],
+            &["minecraft:frog"],
+            &["minecraft:sniffer"],
+        ],
     };
     pub const HUSBANDRY_FEED_SNIFFLET: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/feed_snifflet"),
@@ -22333,9 +19281,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["feed_snifflet"]],
-        },
+        requirements: &[&["feed_snifflet"]],
     };
     pub const HUSBANDRY_FROGLIGHTS: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/froglights"),
@@ -22360,9 +19306,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["froglights"]],
-        },
+        requirements: &[&["froglights"]],
     };
     pub const HUSBANDRY_KILL_AXOLOTL_TARGET: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/kill_axolotl_target"),
@@ -22387,9 +19331,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["kill_axolotl_target"]],
-        },
+        requirements: &[&["kill_axolotl_target"]],
     };
     pub const HUSBANDRY_OBTAIN_NETHERITE_HOE: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/obtain_netherite_hoe"),
@@ -22411,9 +19353,7 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["netherite_hoe"]],
-        },
+        requirements: &[&["netherite_hoe"]],
     };
     pub const HUSBANDRY_PLANT_ANY_SNIFFER_SEED: &Self = &Self {
         id: Identifier::vanilla_static("husbandry/plant_any_sniffer_seed"),
@@ -22438,9 +19378,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["torchflower", "pitcher_pod"]],
-        },
+        requirements: &[&["torchflower", "pitcher_pod"]],
     };
     pub const NETHER_BREW_POTION: &Self = &Self {
         id: Identifier::vanilla_static("nether/brew_potion"),
@@ -22465,9 +19403,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["potion"]],
-        },
+        requirements: &[&["potion"]],
     };
     pub const NETHER_CHARGE_RESPAWN_ANCHOR: &Self = &Self {
         id: Identifier::vanilla_static("nether/charge_respawn_anchor"),
@@ -22492,9 +19428,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["charge_respawn_anchor"]],
-        },
+        requirements: &[&["charge_respawn_anchor"]],
     };
     pub const NETHER_CREATE_BEACON: &Self = &Self {
         id: Identifier::vanilla_static("nether/create_beacon"),
@@ -22516,9 +19450,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["beacon"]],
-        },
+        requirements: &[&["beacon"]],
     };
     pub const NETHER_CREATE_FULL_BEACON: &Self = &Self {
         id: Identifier::vanilla_static("nether/create_full_beacon"),
@@ -22540,9 +19472,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["beacon"]],
-        },
+        requirements: &[&["beacon"]],
     };
     pub const NETHER_EXPLORE_NETHER: &Self = &Self {
         id: Identifier::vanilla_static("nether/explore_nether"),
@@ -22564,15 +19494,13 @@ impl Advancement {
             experience: 500i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[
-                &["minecraft:nether_wastes"],
-                &["minecraft:soul_sand_valley"],
-                &["minecraft:crimson_forest"],
-                &["minecraft:warped_forest"],
-                &["minecraft:basalt_deltas"],
-            ],
-        },
+        requirements: &[
+            &["minecraft:nether_wastes"],
+            &["minecraft:soul_sand_valley"],
+            &["minecraft:crimson_forest"],
+            &["minecraft:warped_forest"],
+            &["minecraft:basalt_deltas"],
+        ],
     };
     pub const NETHER_NETHERITE_ARMOR: &Self = &Self {
         id: Identifier::vanilla_static("nether/netherite_armor"),
@@ -22597,9 +19525,7 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["netherite_armor"]],
-        },
+        requirements: &[&["netherite_armor"]],
     };
     pub const STORY_SMELT_IRON: &Self = &Self {
         id: Identifier::vanilla_static("story/smelt_iron"),
@@ -22621,9 +19547,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["iron"]],
-        },
+        requirements: &[&["iron"]],
     };
     pub const END_ELYTRA: &Self = &Self {
         id: Identifier::vanilla_static("end/elytra"),
@@ -22645,9 +19569,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["elytra"]],
-        },
+        requirements: &[&["elytra"]],
     };
     pub const NETHER_ALL_POTIONS: &Self = &Self {
         id: Identifier::vanilla_static("nether/all_potions"),
@@ -22669,9 +19591,7 @@ impl Advancement {
             experience: 100i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["all_effects"]],
-        },
+        requirements: &[&["all_effects"]],
     };
     pub const STORY_IRON_TOOLS: &Self = &Self {
         id: Identifier::vanilla_static("story/iron_tools"),
@@ -22693,9 +19613,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["iron_pickaxe"]],
-        },
+        requirements: &[&["iron_pickaxe"]],
     };
     pub const STORY_LAVA_BUCKET: &Self = &Self {
         id: Identifier::vanilla_static("story/lava_bucket"),
@@ -22717,9 +19635,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["lava_bucket"]],
-        },
+        requirements: &[&["lava_bucket"]],
     };
     pub const STORY_MINE_DIAMOND: &Self = &Self {
         id: Identifier::vanilla_static("story/mine_diamond"),
@@ -22741,9 +19657,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["diamond"]],
-        },
+        requirements: &[&["diamond"]],
     };
     pub const STORY_OBTAIN_ARMOR: &Self = &Self {
         id: Identifier::vanilla_static("story/obtain_armor"),
@@ -22765,14 +19679,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "iron_helmet",
-                "iron_chestplate",
-                "iron_leggings",
-                "iron_boots",
-            ]],
-        },
+        requirements: &[&[
+            "iron_helmet",
+            "iron_chestplate",
+            "iron_leggings",
+            "iron_boots",
+        ]],
     };
     pub const STORY_SHINY_GEAR: &Self = &Self {
         id: Identifier::vanilla_static("story/shiny_gear"),
@@ -22794,14 +19706,12 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&[
-                "diamond_helmet",
-                "diamond_chestplate",
-                "diamond_leggings",
-                "diamond_boots",
-            ]],
-        },
+        requirements: &[&[
+            "diamond_helmet",
+            "diamond_chestplate",
+            "diamond_leggings",
+            "diamond_boots",
+        ]],
     };
     pub const NETHER_ALL_EFFECTS: &Self = &Self {
         id: Identifier::vanilla_static("nether/all_effects"),
@@ -22823,9 +19733,7 @@ impl Advancement {
             experience: 1000i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["all_effects"]],
-        },
+        requirements: &[&["all_effects"]],
     };
     pub const STORY_DEFLECT_ARROW: &Self = &Self {
         id: Identifier::vanilla_static("story/deflect_arrow"),
@@ -22847,9 +19755,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["deflected_projectile"]],
-        },
+        requirements: &[&["deflected_projectile"]],
     };
     pub const STORY_ENCHANT_ITEM: &Self = &Self {
         id: Identifier::vanilla_static("story/enchant_item"),
@@ -22871,9 +19777,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["enchanted_item"]],
-        },
+        requirements: &[&["enchanted_item"]],
     };
     pub const STORY_FORM_OBSIDIAN: &Self = &Self {
         id: Identifier::vanilla_static("story/form_obsidian"),
@@ -22895,9 +19799,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["obsidian"]],
-        },
+        requirements: &[&["obsidian"]],
     };
     pub const STORY_ENTER_THE_NETHER: &Self = &Self {
         id: Identifier::vanilla_static("story/enter_the_nether"),
@@ -22919,9 +19821,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["entered_nether"]],
-        },
+        requirements: &[&["entered_nether"]],
     };
     pub const STORY_FOLLOW_ENDER_EYE: &Self = &Self {
         id: Identifier::vanilla_static("story/follow_ender_eye"),
@@ -22946,9 +19846,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["in_stronghold"]],
-        },
+        requirements: &[&["in_stronghold"]],
     };
     pub const STORY_CURE_ZOMBIE_VILLAGER: &Self = &Self {
         id: Identifier::vanilla_static("story/cure_zombie_villager"),
@@ -22973,9 +19871,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["cured_zombie"]],
-        },
+        requirements: &[&["cured_zombie"]],
     };
     pub const STORY_ENTER_THE_END: &Self = &Self {
         id: Identifier::vanilla_static("story/enter_the_end"),
@@ -23000,9 +19896,7 @@ impl Advancement {
             experience: 0i32,
             recipes: &[],
         },
-        requirements: AdvancementRequirement {
-            requirements: &[&["entered_end"]],
-        },
+        requirements: &[&["entered_end"]],
     };
     pub fn option_name(&self) -> Option<TextComponent> {
         match self.display {
