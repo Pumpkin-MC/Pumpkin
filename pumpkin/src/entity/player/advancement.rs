@@ -487,7 +487,9 @@ mod tests {
         let mut pa = PlayerAdvancement::new(manager, id);
         // Create a JSON file with advancement data
         let adv = Advancement::STORY_ROOT;
-        let progress = pa.progress.get_mut_or_start_progress(adv);
+        let mut progress = AdvancementProgress::default();
+        progress.update(AdvancementRequirement::from_const(adv.requirements));
+        progress.grant_progress("crafting_table");
         let data = serde_json::json!({ adv.id.to_string():progress });
         std::fs::write(&pa.path, data.to_string()).unwrap();
 
@@ -495,9 +497,9 @@ mod tests {
         assert!(pa.load().is_ok(), "Load should succeed");
 
         // Verify the advancement was loaded
-        let progress = pa.progress.get_mut_or_start_progress(adv);
+        let loaded_progress = pa.progress.get_mut_or_start_progress(adv);
         assert!(
-            progress.is_done(),
+            loaded_progress.is_done(),
             "Loaded advancement should be marked complete"
         );
     }
