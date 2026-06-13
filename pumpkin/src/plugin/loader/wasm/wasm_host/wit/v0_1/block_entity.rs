@@ -9,6 +9,7 @@ use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpa
 use crate::block::entities::sign::{
     DyeColor as InternalDyeColor, SignBlockEntity as InternalSignBlockEntity, Text as InternalText,
 };
+use crate::block::entities::trapped_chest::TrappedChestBlockEntity as InternalTrappedChestBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::{
     state::{BlockEntityResource, PluginHostState},
     wit::v0_1::pumpkin::{
@@ -21,6 +22,7 @@ use crate::plugin::loader::wasm::wasm_host::{
                 MobSpawnerBlockEntity, SignBlockEntity, SignText,
             },
             common::BlockPos as WitBlockPos,
+            item_stack::ItemStack as WitItemStack,
         },
     },
 };
@@ -465,13 +467,68 @@ impl HostChestBlockEntity for PluginHostState {
 
     async fn viewer_count(&mut self, res: Resource<ChestBlockEntity>) -> wasmtime::Result<u32> {
         let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
+        if let Some(chest) = entity.as_any().downcast_ref::<InternalChestBlockEntity>() {
+            Ok(chest.get_viewer_count() as u32)
+        } else if let Some(chest) = entity
             .as_any()
-            .downcast_ref::<InternalChestBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a chest block entity")),
-                |chest| Ok(chest.get_viewer_count() as u32),
-            )
+            .downcast_ref::<InternalTrappedChestBlockEntity>()
+        {
+            Ok(chest.get_viewer_count() as u32)
+        } else {
+            Err(wasmtime::Error::msg("Not a chest block entity"))
+        }
+    }
+
+    async fn size(&mut self, res: Resource<ChestBlockEntity>) -> wasmtime::Result<u32> {
+        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
+        let inventory = entity
+            .get_inventory()
+            .ok_or_else(|| wasmtime::Error::msg("Chest block entity has no inventory"))?;
+        Ok(inventory.size() as u32)
+    }
+
+    async fn get_item(
+        &mut self,
+        res: Resource<ChestBlockEntity>,
+        slot: u32,
+    ) -> wasmtime::Result<Option<Resource<WitItemStack>>> {
+        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
+        let inventory = entity
+            .get_inventory()
+            .ok_or_else(|| wasmtime::Error::msg("Chest block entity has no inventory"))?;
+        let slot = slot as usize;
+        if slot >= inventory.size() {
+            return Err(wasmtime::Error::msg("Chest inventory slot is out of range"));
+        }
+        let stack = inventory.get_stack(slot).await;
+        if stack.lock().await.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add_item_stack(stack)?))
+        }
+    }
+
+    async fn set_item(
+        &mut self,
+        res: Resource<ChestBlockEntity>,
+        slot: u32,
+        item: Option<Resource<WitItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
+        let inventory = entity
+            .get_inventory()
+            .ok_or_else(|| wasmtime::Error::msg("Chest block entity has no inventory"))?;
+        let slot = slot as usize;
+        if slot >= inventory.size() {
+            return Err(wasmtime::Error::msg("Chest inventory slot is out of range"));
+        }
+        let stack = if let Some(item) = item {
+            self.get_item_stack(&item)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+        inventory.set_stack(slot, stack).await;
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<ChestBlockEntity>) -> wasmtime::Result<()> {

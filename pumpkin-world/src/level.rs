@@ -124,6 +124,75 @@ pub struct LevelFolder {
 }
 
 impl Level {
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn new_for_lighting_bench(root_folder: PathBuf) -> Arc<Self> {
+        let level_config = LevelConfig::default();
+        let region_folder = root_folder.join("region");
+        let entities_folder = root_folder.join("entities");
+
+        std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
+        std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
+
+        let level_folder = Arc::new(LevelFolder {
+            root_folder,
+            region_folder,
+            entities_folder,
+        });
+
+        let seed = Seed(0);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD).into();
+
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
+            ChunkConfig::Linear => Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(())),
+            ChunkConfig::Anvil(config) => Arc::new(
+                ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
+            ),
+            ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkData>>::new(())),
+        };
+        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
+            ChunkConfig::Linear => {
+                Arc::new(ChunkFileManager::<LinearV2File<ChunkEntityData>>::new(()))
+            }
+            ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
+                AnvilChunkFile<ChunkEntityData>,
+            >::new(config.clone())),
+            ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkEntityData>>::new(())),
+        };
+
+        let level_channel = Arc::new(LevelChannel::new());
+        let listener = Arc::new(ChunkListener::new());
+
+        Arc::new(Self {
+            seed,
+            world_portal: ArcSwap::new(Arc::new(None)),
+            world_gen,
+            level_folder,
+            lighting_config: level_config.lighting,
+            light_engine: DynamicLightEngine::new(),
+            chunk_saver,
+            entity_saver,
+            schedule_tick_counts: AtomicU64::new(0),
+            loaded_chunks: Arc::new(DashMap::new()),
+            loaded_entity_chunks: Arc::new(DashMap::new()),
+            chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
+            chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
+            chunk_watchers: Arc::new(DashMap::new()),
+            tasks: TaskTracker::new(),
+            chunk_system_tasks: TaskTracker::new(),
+            cancel_token: CancellationToken::new(),
+            shut_down_chunk_system: AtomicBool::new(false),
+            should_save: AtomicBool::new(false),
+            should_unload: AtomicBool::new(false),
+            autosave_ticks: level_config.autosave_ticks,
+            pending_entity_generations: Arc::new(DashMap::new()),
+            level_channel,
+            thread_tracker: Mutex::new(Vec::new()),
+            chunk_listener: listener,
+            gen_pool: None,
+        })
+    }
+
     #[must_use]
     pub fn from_root_folder(
         level_config: &LevelConfig,

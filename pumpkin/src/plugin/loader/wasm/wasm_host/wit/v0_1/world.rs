@@ -13,11 +13,13 @@ use crate::block::entities::command_block::CommandBlockEntity as InternalCommand
 use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
+use crate::block::entities::trapped_chest::TrappedChestBlockEntity as InternalTrappedChestBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
-    BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
-    Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
-    PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
+    BlockChange as WitBlockChange, BlockDirection as WitBlockDirection, BlockEntity,
+    BlockEntityType, BlockFlags as WitBlockFlags, BlockPos as WitBlockPos,
+    BlockState as WitBlockState, BoundingBox as WitBoundingBox, Chunk as WitChunk,
+    NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
+    WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{
@@ -79,6 +81,35 @@ pub(crate) const fn to_wit_bounding_box(
         min: (bb.min.x, bb.min.y, bb.min.z),
         max: (bb.max.x, bb.max.y, bb.max.z),
     }
+}
+
+fn to_internal_block_flags(update_flags: WitBlockFlags) -> BlockFlags {
+    let mut internal_flags = BlockFlags::empty();
+    if update_flags.contains(WitBlockFlags::NOTIFY_NEIGHBORS) {
+        internal_flags |= BlockFlags::NOTIFY_NEIGHBORS;
+    }
+    if update_flags.contains(WitBlockFlags::NOTIFY_LISTENERS) {
+        internal_flags |= BlockFlags::NOTIFY_LISTENERS;
+    }
+    if update_flags.contains(WitBlockFlags::FORCE_STATE) {
+        internal_flags |= BlockFlags::FORCE_STATE;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_DROPS) {
+        internal_flags |= BlockFlags::SKIP_DROPS;
+    }
+    if update_flags.contains(WitBlockFlags::MOVED) {
+        internal_flags |= BlockFlags::MOVED;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT) {
+        internal_flags |= BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+        internal_flags |= BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
+        internal_flags |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
+    }
+    internal_flags
 }
 
 // --- Trapping Helpers ---
@@ -172,6 +203,10 @@ impl PluginHostState {
             .as_any()
             .downcast_ref::<InternalChestBlockEntity>()
             .is_some()
+            || be
+                .as_any()
+                .downcast_ref::<InternalTrappedChestBlockEntity>()
+                .is_some()
         {
             let res: Resource<BlockEntity> = self.add_block_entity(be)?;
             Ok(Some(BlockEntityType::ChestBlockEntity(Resource::new_own(
@@ -308,38 +343,38 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
-
-        let mut internal_flags = BlockFlags::empty();
-        if update_flags.contains(WitBlockFlags::NOTIFY_NEIGHBORS) {
-            internal_flags |= BlockFlags::NOTIFY_NEIGHBORS;
-        }
-        if update_flags.contains(WitBlockFlags::NOTIFY_LISTENERS) {
-            internal_flags |= BlockFlags::NOTIFY_LISTENERS;
-        }
-        if update_flags.contains(WitBlockFlags::FORCE_STATE) {
-            internal_flags |= BlockFlags::FORCE_STATE;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_DROPS) {
-            internal_flags |= BlockFlags::SKIP_DROPS;
-        }
-        if update_flags.contains(WitBlockFlags::MOVED) {
-            internal_flags |= BlockFlags::MOVED;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT) {
-            internal_flags |= BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
-            internal_flags |= BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
-            internal_flags |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
-        }
+        let internal_flags = to_internal_block_flags(update_flags);
 
         world_ref
             .provider
             .clone()
             .set_block_state(&internal_pos, state, internal_flags)
             .await;
+        Ok(())
+    }
+
+    async fn set_block_states(
+        &mut self,
+        world: Resource<World>,
+        changes: Vec<WitBlockChange>,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<()> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let internal_flags = to_internal_block_flags(update_flags);
+        let internal_changes = changes
+            .into_iter()
+            .map(|change| {
+                (
+                    BlockPos::new(change.pos.x, change.pos.y, change.pos.z),
+                    change.state,
+                )
+            })
+            .collect();
+
+        world_provider
+            .set_block_states(internal_changes, internal_flags)
+            .await;
+
         Ok(())
     }
 

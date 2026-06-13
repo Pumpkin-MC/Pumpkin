@@ -11,13 +11,104 @@ use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 use std::io::Write;
 
+pub struct ChunkBlockEntityData {
+    pub position: pumpkin_util::math::position::BlockPos,
+    pub type_id: i32,
+    pub nbt: pumpkin_nbt::compound::NbtCompound,
+}
+
 /// Sent by the server to provide the client with the full data for a chunk.
 ///
 /// This includes heightmaps, the actual block and biome data (organized into sections),
 /// block entities (like signs or chests), and the light level information for both
 /// sky and block light.
 #[java_packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
-pub struct CChunkData<'a>(pub &'a ChunkData);
+pub struct CChunkData<'a> {
+    chunk: &'a ChunkData,
+    live_block_entities: &'a [ChunkBlockEntityData],
+}
+
+pub(crate) fn write_chunk_light_data(
+    chunk: &ChunkData,
+    mut write: impl Write,
+) -> Result<(), WritingError> {
+    // Light masks include sections from -1 (below world) to num_sections (above world).
+    let light_engine = chunk
+        .light_engine
+        .lock()
+        .map_err(|_| WritingError::Message("light_engine lock poisoned".into()))?;
+    let num_sections = light_engine.sky_light.len();
+
+    let mut sky_light_empty_mask = 1u64;
+    let mut block_light_empty_mask = 1u64;
+    let mut sky_light_mask = 0u64;
+    let mut block_light_mask = 0u64;
+
+    for section_index in 0..num_sections {
+        let bit_index = section_index + 1;
+
+        if let LightContainer::Full(_) = &light_engine.sky_light[section_index] {
+            sky_light_mask |= 1 << bit_index;
+        } else {
+            sky_light_empty_mask |= 1 << bit_index;
+        }
+
+        if let LightContainer::Full(_) = &light_engine.block_light[section_index] {
+            block_light_mask |= 1 << bit_index;
+        } else {
+            block_light_empty_mask |= 1 << bit_index;
+        }
+    }
+
+    sky_light_empty_mask |= 1 << (num_sections + 1);
+    block_light_empty_mask |= 1 << (num_sections + 1);
+
+    write.write_bitset(&BitSet(Box::new([sky_light_mask as i64])))?;
+    write.write_bitset(&BitSet(Box::new([block_light_mask as i64])))?;
+    write.write_bitset(&BitSet(Box::new([sky_light_empty_mask as i64])))?;
+    write.write_bitset(&BitSet(Box::new([block_light_empty_mask as i64])))?;
+
+    let light_data_size = VarInt(LightContainer::ARRAY_SIZE as i32);
+
+    write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;
+    for section in &light_engine.sky_light {
+        if let LightContainer::Full(data) = section {
+            write.write_var_int(&light_data_size)?;
+            write.write_slice(data)?;
+        }
+    }
+
+    write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
+    for section in &light_engine.block_light {
+        if let LightContainer::Full(data) = section {
+            write.write_var_int(&light_data_size)?;
+            write.write_slice(data)?;
+        }
+    }
+
+    Ok(())
+}
+
+impl<'a> CChunkData<'a> {
+    #[must_use]
+    pub const fn new(chunk: &'a ChunkData) -> Self {
+        Self {
+            chunk,
+            live_block_entities: &[],
+        }
+    }
+
+    #[must_use]
+    pub const fn with_block_entities(
+        chunk: &'a ChunkData,
+        live_block_entities: &'a [ChunkBlockEntityData],
+    ) -> Self {
+        Self {
+            chunk,
+            live_block_entities,
+        }
+    }
+}
 
 impl ClientPacket for CChunkData<'_> {
     #[expect(clippy::too_many_lines)]
@@ -27,12 +118,12 @@ impl ClientPacket for CChunkData<'_> {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         // Chunk X
-        write.write_i32_be(self.0.x)?;
+        write.write_i32_be(self.chunk.x)?;
         // Chunk Z
-        write.write_i32_be(self.0.z)?;
+        write.write_i32_be(self.chunk.z)?;
 
         let heightmaps = self
-            .0
+            .chunk
             .heightmap
             .lock()
             .map_err(|_| WritingError::Message("heightmap lock poisoned".into()))?;
@@ -66,11 +157,11 @@ impl ClientPacket for CChunkData<'_> {
         {
             let mut blocks_and_biomes_buf = Vec::new();
             let block_sections =
-                self.0.section.block_sections.read().map_err(|_| {
+                self.chunk.section.block_sections.read().map_err(|_| {
                     WritingError::Message("block_sections read lock poisoned".into())
                 })?;
             let biome_sections =
-                self.0.section.biome_sections.read().map_err(|_| {
+                self.chunk.section.biome_sections.read().map_err(|_| {
                     WritingError::Message("biome_sections read lock poisoned".into())
                 })?;
 
@@ -193,12 +284,30 @@ impl ClientPacket for CChunkData<'_> {
         };
 
         let block_entities = self
-            .0
+            .chunk
             .pending_block_entities
             .lock()
             .map_err(|_| WritingError::Message("block_entities lock poisoned".into()))?;
-        write.write_var_int(&VarInt(block_entities.len() as i32))?;
+        let persisted_count = block_entities
+            .keys()
+            .filter(|pos| {
+                !self
+                    .live_block_entities
+                    .iter()
+                    .any(|entity| entity.position == **pos)
+            })
+            .count();
+        write.write_var_int(&VarInt(
+            (persisted_count + self.live_block_entities.len()) as i32,
+        ))?;
         for (pos, nbt) in block_entities.iter() {
+            if self
+                .live_block_entities
+                .iter()
+                .any(|entity| entity.position == *pos)
+            {
+                continue;
+            }
             let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
 
             write.write_u8(local_xz as u8)?;
@@ -215,76 +324,19 @@ impl ClientPacket for CChunkData<'_> {
             write.write_var_int(&VarInt(id as i32))?;
             write.write_nbt(nbt.clone().into())?;
         }
+        drop(block_entities);
 
-        {
-            // Light masks include sections from -1 (below world) to num_sections (above world)
-            // This means we need to account for 2 extra sections in the bitset
-            let light_engine = self
-                .0
-                .light_engine
-                .lock()
-                .map_err(|_| WritingError::Message("light_engine lock poisoned".into()))?;
-            let num_sections = light_engine.sky_light.len();
+        for entity in self.live_block_entities {
+            let pos = entity.position;
+            let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
 
-            let mut sky_light_empty_mask = 0u64;
-            let mut block_light_empty_mask = 0u64;
-            let mut sky_light_mask = 0u64;
-            let mut block_light_mask = 0u64;
-
-            // Bit 0 represents the section below the world (always empty)
-            sky_light_empty_mask |= 1 << 0;
-            block_light_empty_mask |= 1 << 0;
-
-            // Bits 1..=num_sections represent the actual world sections
-            for section_index in 0..num_sections {
-                let bit_index = section_index + 1; // Offset by 1 for the below-world section
-
-                if let LightContainer::Full(_) = &light_engine.sky_light[section_index] {
-                    sky_light_mask |= 1 << bit_index;
-                } else {
-                    sky_light_empty_mask |= 1 << bit_index;
-                }
-
-                if let LightContainer::Full(_) = &light_engine.block_light[section_index] {
-                    block_light_mask |= 1 << bit_index;
-                } else {
-                    block_light_empty_mask |= 1 << bit_index;
-                }
-            }
-
-            // Bit num_sections+1 represents the section above the world (always empty)
-            sky_light_empty_mask |= 1 << (num_sections + 1);
-            block_light_empty_mask |= 1 << (num_sections + 1);
-
-            // Write Sky Light Mask
-            write.write_bitset(&BitSet(Box::new([sky_light_mask as i64])))?;
-            // Write Block Light Mask
-            write.write_bitset(&BitSet(Box::new([block_light_mask as i64])))?;
-            // Write Empty Sky Light Mask
-            write.write_bitset(&BitSet(Box::new([sky_light_empty_mask as i64])))?;
-            // Write Empty Block Light Mask
-            write.write_bitset(&BitSet(Box::new([block_light_empty_mask as i64])))?;
-
-            let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
-
-            // Write Sky Light arrays
-            write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;
-            for section_index in 0..num_sections {
-                if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
-                    write.write_var_int(&light_data_size)?;
-                    write.write_slice(data.as_ref())?;
-                }
-            }
-
-            // Write Block Light arrays
-            write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
-            for section_index in 0..num_sections {
-                if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
-                    write.write_var_int(&light_data_size)?;
-                    write.write_slice(data.as_ref())?;
-                }
-            }
+            write.write_u8(local_xz as u8)?;
+            write.write_i16_be(pos.0.y as i16)?;
+            write.write_var_int(&VarInt(entity.type_id))?;
+            write.write_nbt(entity.nbt.clone().into())?;
         }
+
+        write_chunk_light_data(self.chunk, &mut write)?;
         Ok(())
     }
 }

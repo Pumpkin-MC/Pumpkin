@@ -603,6 +603,125 @@ impl ChunkData {
         old
     }
 
+    /// Sets many blocks in this chunk and returns the changed entries with their old state IDs.
+    ///
+    /// This keeps the block-section, random-tick, and heightmap locks held once for the batch
+    /// instead of re-taking them for every block.
+    pub fn set_blocks_absolute_y(
+        &self,
+        changes: &[(usize, usize, i32, usize, BlockStateId)],
+    ) -> Vec<(usize, BlockStateId)> {
+        let min_y = self.section.min_y;
+        let mut changed = Vec::new();
+        let mut sections = self.section.block_sections.write().unwrap();
+        let mut random_tick_sections_guard = self.section.random_tick_sections.write().unwrap();
+        let mut heightmap = self.heightmap.lock().unwrap();
+        let mut ticking_mask = self
+            .section
+            .randomly_ticking_mask
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        for &(index, relative_x, y, relative_z, block_state_id) in changes {
+            let y_rel = y - min_y;
+            if y_rel < 0 {
+                if block_state_id != Block::AIR.default_state.id {
+                    changed.push((index, Block::AIR.default_state.id));
+                }
+                continue;
+            }
+
+            let relative_y = y_rel as usize;
+            let section_index = relative_y / BlockPalette::SIZE;
+            let section_y = relative_y % BlockPalette::SIZE;
+
+            let replaced_block_state_id = {
+                let Some(section) = sections.get_mut(section_index) else {
+                    if block_state_id != Block::AIR.default_state.id {
+                        changed.push((index, Block::AIR.default_state.id));
+                    }
+                    continue;
+                };
+                section.set(relative_x, section_y, relative_z, block_state_id)
+            };
+
+            if replaced_block_state_id == block_state_id {
+                continue;
+            }
+
+            if (has_random_ticks(block_state_id) || has_random_ticking_fluid(block_state_id))
+                && random_tick_sections_guard.is_none()
+            {
+                let new_cache =
+                    vec![RandomTickSectionCache::default(); self.section.count].into_boxed_slice();
+                *random_tick_sections_guard = Some(new_cache);
+            }
+
+            if let Some(random_tick_sections) = random_tick_sections_guard.as_mut() {
+                let random_tick_cache = &mut random_tick_sections[section_index];
+                if has_random_ticks(replaced_block_state_id) {
+                    random_tick_cache.random_ticking_block_count = random_tick_cache
+                        .random_ticking_block_count
+                        .saturating_sub(1);
+                }
+                if has_random_ticking_fluid(replaced_block_state_id) {
+                    random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                        .random_ticking_fluid_count
+                        .saturating_sub(1);
+                }
+
+                if has_random_ticks(block_state_id) {
+                    random_tick_cache.random_ticking_block_count = random_tick_cache
+                        .random_ticking_block_count
+                        .saturating_add(1);
+                }
+                if has_random_ticking_fluid(block_state_id) {
+                    random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                        .random_ticking_fluid_count
+                        .saturating_add(1);
+                }
+
+                if random_tick_cache.is_randomly_ticking() {
+                    ticking_mask |= 1 << section_index;
+                } else {
+                    ticking_mask &= !(1 << section_index);
+                }
+            }
+
+            let state = BlockState::from_id(block_state_id);
+            let x = relative_x as i32;
+            let z = relative_z as i32;
+            for &hm_type in &[
+                ChunkHeightmapType::WorldSurface,
+                ChunkHeightmapType::MotionBlocking,
+                ChunkHeightmapType::MotionBlockingNoLeaves,
+            ] {
+                heightmap.update(hm_type, x, z, y, state, min_y, |y_at| {
+                    let y_rel = y_at - min_y;
+                    if y_rel < 0 {
+                        return BlockState::from_id(Block::AIR.default_state.id);
+                    }
+
+                    let relative_y = y_rel as usize;
+                    let section_index = relative_y / BlockPalette::SIZE;
+                    let section_y = relative_y % BlockPalette::SIZE;
+                    let id = sections
+                        .get(section_index)
+                        .map(|section| section.get(relative_x, section_y, relative_z))
+                        .unwrap_or(Block::AIR.default_state.id);
+                    BlockState::from_id(id)
+                });
+            }
+
+            changed.push((index, replaced_block_state_id));
+        }
+
+        self.section
+            .randomly_ticking_mask
+            .store(ticking_mask, std::sync::atomic::Ordering::Relaxed);
+
+        changed
+    }
+
     fn update_heightmap(
         &self,
         relative_x: usize,
