@@ -1,12 +1,15 @@
 use crate::item_stack::ItemStack;
 use crate::potion_brewing::ItemRecipe;
+use crate::translation::java::{
+    CHAT_TYPE_ADVANCEMENT_CHALLENGE, CHAT_TYPE_ADVANCEMENT_GOAL, CHAT_TYPE_ADVANCEMENT_TASK,
+};
 use crate::{ADVANCEMENT_TREE, Advancement};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
@@ -85,11 +88,11 @@ impl FrameType {
         }
     }
 
-    pub fn get_name(&self) -> &'static str {
+    pub fn get_translation(&self) -> &'static str {
         match self {
-            FrameType::Task => "task",
-            FrameType::Challenge => "challenge",
-            FrameType::Goal => "goal",
+            FrameType::Task => CHAT_TYPE_ADVANCEMENT_TASK,
+            FrameType::Challenge => CHAT_TYPE_ADVANCEMENT_CHALLENGE,
+            FrameType::Goal => CHAT_TYPE_ADVANCEMENT_GOAL,
         }
     }
 }
@@ -190,8 +193,48 @@ pub struct Criteria {
     pub criterion_id: Identifier,
     pub achieve_date: Option<i64>,
 }
-
+/// Represents the requirements needed to complete an advancement.
+/// To mark as done, at least one criterion from each requirement group must be satisfied.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AdvancementRequirement {
-    pub requirements: &'static [&'static [&'static str]],
+    pub requirements: Vec<Vec<Arc<str>>>,
+}
+
+impl AdvancementRequirement {
+    pub fn from_const(static_requirements: &[&[&str]]) -> Self {
+        let requirements = static_requirements
+            .iter()
+            .map(|inner| inner.iter().map(|s| Arc::from(*s)).collect())
+            .collect();
+        AdvancementRequirement { requirements }
+    }
+
+    /// test if the requirements is complete
+    pub fn test(&self, predicate: impl Fn(&str) -> bool) -> bool {
+        if self.requirements.is_empty() {
+            false
+        } else {
+            for requirement in &self.requirements {
+                if !Self::any_match(requirement, &predicate) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+
+    /// check if any test pass
+    fn any_match(requirements: &Vec<Arc<str>>, predicate: impl Fn(&str) -> bool) -> bool {
+        for requirement in requirements {
+            if predicate(requirement) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn names(&self) -> Vec<Arc<str>> {
+        self.requirements.iter().flatten().cloned().collect()
+    }
 }
 pub trait Criterion {}
