@@ -1,5 +1,8 @@
 use crate::item_stack::ItemStack;
 use crate::potion_brewing::ItemRecipe;
+use crate::translation::java::{
+    CHAT_TYPE_ADVANCEMENT_CHALLENGE, CHAT_TYPE_ADVANCEMENT_GOAL, CHAT_TYPE_ADVANCEMENT_TASK,
+};
 use crate::{ADVANCEMENT_TREE, Advancement};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_location::ResourceLocation;
@@ -11,7 +14,6 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use crate::translation::java::{CHAT_TYPE_ADVANCEMENT_CHALLENGE, CHAT_TYPE_ADVANCEMENT_GOAL, CHAT_TYPE_ADVANCEMENT_TASK};
 
 #[derive(Clone)]
 pub struct AdvancementDisplay {
@@ -193,21 +195,22 @@ pub struct Criteria {
 }
 /// Represents the requirements needed to complete an advancement.
 /// To mark as done, at least one criterion from each requirement group must be satisfied.
-#[derive(Serialize,Deserialize,Clone,Debug,Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AdvancementRequirement {
     pub requirements: Vec<Vec<Arc<str>>>,
 }
 
 impl AdvancementRequirement {
-    pub fn from_const(static_requirements: &[&[&str]]) -> Self{
-        let requirements = static_requirements.iter()
+    pub fn from_const(static_requirements: &[&[&str]]) -> Self {
+        let requirements = static_requirements
+            .iter()
             .map(|inner| inner.iter().map(|s| Arc::from(*s)).collect())
             .collect();
         AdvancementRequirement { requirements }
     }
 
     /// test if the requirements is complete
-    pub fn test(&self,predicate: impl Fn(&str) -> bool) -> bool {
+    pub fn test(&self, predicate: impl Fn(&str) -> bool) -> bool {
         if self.requirements.is_empty() {
             false
         } else {
@@ -221,7 +224,7 @@ impl AdvancementRequirement {
     }
 
     /// check if any test pass
-    fn any_match(requirements: &Vec<Arc<str>>,predicate: impl Fn(&str) -> bool) -> bool {
+    fn any_match(requirements: &Vec<Arc<str>>, predicate: impl Fn(&str) -> bool) -> bool {
         for requirement in requirements {
             if predicate(requirement) {
                 return true;
