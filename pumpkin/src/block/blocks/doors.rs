@@ -202,6 +202,10 @@ impl BlockBehaviour for DoorBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if args.player.gamemode.load() == GameMode::Spectator {
+                return BlockActionResult::Pass;
+            }
+
             if !can_open_door(args.block) {
                 return BlockActionResult::Pass;
             }
