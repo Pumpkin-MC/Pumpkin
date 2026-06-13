@@ -1,4 +1,4 @@
 [toolchain]
 # Anything in the latest stable version of Rust is fine to use.
-channel = "stable"
+channel = "stable-x86_64-pc-windows-gnu"
 components = ["rust-analyzer", "rust-src"]
