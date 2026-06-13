@@ -34,11 +34,24 @@ impl PluginLoader for NativePluginLoader {
                 });
             }
 
-            // 2. Extract Metadata (METADATA)
-            let metadata = unsafe {
-                &**library
-                    .get::<*const PluginMetadata>(b"METADATA")
-                    .map_err(|_| LoaderError::MetadataMissing)?
+            // 2. Extract Metadata.
+            //
+            // Prefer a `get_metadata() -> *const PluginMetadata` function export: it works
+            // with `LazyLock<PluginMetadata>` (the idiomatic Rust way to have a static with
+            // heap-allocated fields) because the function can initialise the lazy cell and
+            // return a stable pointer to the inner value.
+            //
+            // Fall back to reading `METADATA` as a `*const PluginMetadata` for plugins that
+            // export the static directly (only works when the static itself IS the pointer,
+            // e.g. a C plugin or a plugin using unsafe pointer transmutation).
+            let metadata: &PluginMetadata = unsafe {
+                if let Ok(get_fn) = library.get::<fn() -> *const PluginMetadata>(b"get_metadata") {
+                    &*get_fn()
+                } else {
+                    &**library
+                        .get::<*const PluginMetadata>(b"METADATA")
+                        .map_err(|_| LoaderError::MetadataMissing)?
+                }
             };
 
             // 3. Extract Plugin Factory (plugin)

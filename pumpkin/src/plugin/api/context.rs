@@ -17,13 +17,16 @@ use tracing::Level;
 
 use crate::{
     entity::player::Player,
-    plugin::{EventHandler, HandlerMap, PluginManager, TypedEventHandler},
+    plugin::{DynEventHandler, EventHandler, HandlerMap, PluginManager, TypedEventHandler},
     server::Server,
 };
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use super::{EventPriority, Payload};
+
+type CommandRegistrar = Arc<dyn Fn(crate::command::tree::CommandTree, String) + Send + Sync>;
+type HandlerRegistrar = Arc<dyn Fn(&'static str, Box<dyn DynEventHandler>) + Send + Sync>;
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -39,6 +42,18 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
     pub logger: Arc<OnceLock<LoggerOption>>,
+    // Commands and event handlers registered during `on_load`.
+    //
+    // Native plugins are dylibs that compile their own copy of pumpkin (and thus their
+    // own copy of hashbrown). Calling `HashMap::entry` from plugin code on data
+    // structures owned by the server binary causes infinite
+    // probe loops / permanent lock failures on macOS due to `Group::static_empty()`
+    // being at a different address in each binary.
+    //
+    // These callbacks are built by the server binary, keeping the hashmap work on
+    // the side where the right hashbrown copy is in scope.
+    command_registrar: CommandRegistrar,
+    handler_registrar: HandlerRegistrar,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -57,6 +72,8 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
+        command_registrar: CommandRegistrar,
+        handler_registrar: HandlerRegistrar,
     ) -> Self {
         let permission_manager = server.permission_manager.clone();
         Self {
@@ -66,6 +83,8 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
+            command_registrar,
+            handler_registrar,
         }
     }
 
@@ -152,6 +171,53 @@ impl Context {
         let services = self.plugin_manager.services.read().await;
         let service = services.get(name)?.clone();
         <dyn Payload>::downcast_arc::<T>(service)
+    }
+
+    /// Registers a command during plugin initialisation (`on_load`).
+    ///
+    /// Inserts the command tree through a server-owned callback. This keeps the
+    /// `HashMap` work inside the server binary, avoiding cross-binary hashbrown
+    /// sentinel mismatches on macOS.
+    ///
+    /// For registering commands *after* the server is fully started (e.g. from
+    /// an event handler) use [`register_command`] instead.
+    pub fn register_command_sync<P: Into<String>>(
+        &self,
+        tree: crate::command::tree::CommandTree,
+        permission: P,
+    ) {
+        let permission = permission.into();
+        let full_permission_node = if permission.contains(':') {
+            permission
+        } else {
+            format!("{}:{permission}", self.metadata.name)
+        };
+        (self.command_registrar)(tree, full_permission_node);
+    }
+
+    /// Registers an event handler during plugin initialisation (`on_load`).
+    ///
+    /// Inserts the handler through a server-owned callback. See
+    /// [`register_command_sync`] for why this is needed.
+    ///
+    /// For registering handlers *after* the server is fully started use
+    /// [`register_event`] instead.
+    pub fn register_event_sync<E: Payload + 'static, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        blocking: bool,
+    ) where
+        H: EventHandler<E> + 'static,
+    {
+        let typed = TypedEventHandler {
+            handler,
+            priority,
+            blocking,
+            _phantom: std::marker::PhantomData::<E>,
+        };
+        let boxed: Box<dyn DynEventHandler> = Box::new(typed);
+        (self.handler_registrar)(E::get_name_static(), boxed);
     }
 
     /// Asynchronously registers a command with the server.
