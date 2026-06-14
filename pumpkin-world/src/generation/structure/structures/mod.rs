@@ -8,6 +8,8 @@ use pumpkin_util::{
     BlockDirection,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
+    text::TextComponent,
+    translation::log_translation,
 };
 use tracing::trace;
 
@@ -411,7 +413,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            trace!("Structure out of bounds");
+            trace!("{}", log_translation("pumpkin:log.pumpkin.trace_structure_out_of_bounds", &[]));
             return Block::AIR.default_state;
         }
 
@@ -431,7 +433,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            trace!("Structure out of bounds");
+            trace!("{}", log_translation("pumpkin:log.pumpkin.trace_structure_out_of_bounds", &[]));
             return;
         }
 
@@ -624,7 +626,7 @@ impl StructurePiecesCollector {
         }
 
         let bbox = BlockBox::encompass_all(self.pieces.iter().map(|p| p.bounding_box()))
-            .expect("Structure must have at least one piece to calculate a bounding box");
+            .expect(&log_translation("pumpkin:log.pumpkin.structure_must_have_one_piece", &[]));
 
         self.cached_box = Some(bbox);
         bbox

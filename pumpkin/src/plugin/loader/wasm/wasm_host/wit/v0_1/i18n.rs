@@ -35,7 +35,7 @@ impl Host for PluginHostState {
                 extra: vec![],
             })
             .collect();
-        Ok(get_translation_text(key, util_locale, with))
+        Ok(get_translation_text(key, util_locale, &with))
     }
 
     async fn load_translations(

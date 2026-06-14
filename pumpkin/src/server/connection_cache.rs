@@ -8,6 +8,8 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::log_translation;
 use std::{fs, path::Path};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -22,14 +24,18 @@ fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error:
         let height = u32::from_be_bytes([buf[20], buf[21], buf[22], buf[23]]);
 
         if width != 64 || height != 64 {
-            return Err("Invalid favicon dimensions (must be 64x64)".into());
+            return Err(log_translation("pumpkin:log.pumpkin.invalid_favicon_dimensions", &[]).into());
         }
     }
     Ok(load_icon_from_bytes(&buf))
 }
 
 fn load_icon_from_bytes(png_data: &[u8]) -> String {
-    assert!(!png_data.is_empty(), "PNG data is empty");
+    assert!(
+        !png_data.is_empty(),
+        "{}",
+        log_translation("pumpkin:log.pumpkin.png_data_empty", &[])
+    );
     let mut result = "data:image/png;base64,".to_owned();
     general_purpose::STANDARD.encode_string(png_data, &mut result);
     result
@@ -90,7 +96,7 @@ impl CachedStatus {
             version.protocol = client_protocol as u32;
         }
 
-        let json = serde_json::to_string(&response).expect("Failed to serialize status response");
+        let json = serde_json::to_string(&response).expect(&log_translation("pumpkin:log.pumpkin.failed_serialize_status_response", &[]));
 
         CStatusResponse::new(json)
     }
@@ -139,7 +145,7 @@ impl CachedStatus {
         let favicon = if config.use_favicon {
             config.favicon_path.as_ref().map_or_else(
                 || {
-                    debug!("Loading default icon");
+                    debug!("{}", log_translation("pumpkin:log.pumpkin.loading_default_icon", &[]));
 
                     // Attempt to load default icon
                     Some(load_icon_from_bytes(DEFAULT_ICON))
@@ -149,25 +155,48 @@ impl CachedStatus {
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
                     {
-                        warn!("Favicon is not a PNG-image, using default.");
+                        warn!("{}", log_translation("pumpkin:log.pumpkin.favicon_not_png", &[]));
                         return Some(load_icon_from_bytes(DEFAULT_ICON));
                     }
-                    debug!("Attempting to load server favicon from '{icon_path}'");
+                    debug!(
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.attempting_load_favicon",
+                            &[TextComponent::text(icon_path.to_string()).0],
+                        )
+                    );
 
                     match load_icon_from_file(icon_path) {
                         Ok(icon) => Some(icon),
                         Err(e) => {
                             let error_message = e.downcast_ref::<std::io::Error>().map_or_else(
-                                || format!("other error: {e}; using default."),
+                                || {
+                                    log_translation(
+                                        "pumpkin:log.pumpkin.favicon_other_error",
+                                        &[TextComponent::text(e.to_string()).0],
+                                    )
+                                },
                                 |io_err| {
                                     if io_err.kind() == std::io::ErrorKind::NotFound {
-                                        "not found; using default.".to_string()
+                                        log_translation("pumpkin:log.pumpkin.favicon_not_found", &[])
                                     } else {
-                                        format!("I/O error: {io_err}; using default.")
+                                        log_translation(
+                                            "pumpkin:log.pumpkin.favicon_io_error",
+                                            &[TextComponent::text(io_err.to_string()).0],
+                                        )
                                     }
                                 },
                             );
-                            warn!("Failed to load favicon from '{icon_path}': {error_message}");
+                            warn!(
+                                "{}",
+                                log_translation(
+                                    "pumpkin:log.pumpkin.failed_load_favicon",
+                                    &[
+                                        TextComponent::text(icon_path.to_string()).0,
+                                        TextComponent::text(error_message).0,
+                                    ],
+                                )
+                            );
 
                             Some(load_icon_from_bytes(DEFAULT_ICON))
                         }
@@ -175,7 +204,7 @@ impl CachedStatus {
                 },
             )
         } else {
-            info!("Favicon usage is disabled.");
+            info!("{}", log_translation("pumpkin:log.pumpkin.favicon_disabled", &[]));
             None
         };
 

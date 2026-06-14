@@ -24,7 +24,9 @@ use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::translation::log_translation;
 use pumpkin_world::dimension::into_level;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
@@ -35,7 +37,6 @@ use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
@@ -165,12 +166,12 @@ impl Server {
                 WorldInfoError::InfoNotFound => (),
                 WorldInfoError::UnsupportedDataVersion(_version)
                 | WorldInfoError::UnsupportedLevelVersion(_version) => {
-                    error!("Failed to load world info!");
+                    error!("{}", log_translation("pumpkin:log.pumpkin.failed_load_world_info", &[]));
                     error!("{error}");
-                    panic!("Unsupported world version! See the logs for more info.");
+                    panic!("{}", log_translation("pumpkin:log.pumpkin.unsupported_world_version", &[]));
                 }
                 e => {
-                    panic!("World Error {e}");
+                    panic!("{}", log_translation("pumpkin:log.pumpkin.world_error", &[TextComponent::text(e.to_string()).0]));
                 }
             }
         } else {
@@ -181,10 +182,22 @@ impl Server {
             }
         }
         let level_info = level_info.unwrap_or_else(|err| {
-            warn!("Failed to get level_info, using default instead: {err}");
+            warn!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.failed_get_level_info",
+                    &[TextComponent::text(err.to_string()).0],
+                )
+            );
             let default_data = LevelData::default(basic_config.seed);
             if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                error!("Failed to save level.dat: {err}");
+                error!(
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.failed_save_level_dat",
+                        &[TextComponent::text(err.to_string()).0],
+                    )
+                );
             }
             default_data
         });
@@ -212,7 +225,13 @@ impl Server {
             async move {
                 if allow_chat {
                     fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.failed_fetch_mojang_keys",
+                                &[TextComponent::text(e.to_string()).0],
+                            )
+                        );
                         Vec::new()
                     })
                 } else {
@@ -232,11 +251,17 @@ impl Server {
             dimensions
         };
         info!(
-            "Enabled dimensions: {:?}",
-            dimensions
-                .iter()
-                .map(|d| d.minecraft_name)
-                .collect::<Vec<_>>()
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.enabled_dimensions",
+                &[TextComponent::text(
+                    format!(
+                        "{:?}",
+                        dimensions.iter().map(|d| d.minecraft_name).collect::<Vec<_>>()
+                    )
+                )
+                .0],
+            )
         );
 
         let server = Self {
@@ -284,7 +309,7 @@ impl Server {
             rayon::ThreadPoolBuilder::new()
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
-                .expect("Failed to build generation thread pool"),
+                .expect(&log_translation("pumpkin:log.pumpkin.failed_build_gen_pool", &[])),
         );
 
         let server_clone = server.clone();
@@ -305,10 +330,13 @@ impl Server {
 
             tokio::task::spawn_blocking(move || {
                 info!(
-                    "Loading {}",
-                    TextComponent::text(dim.minecraft_name.to_string())
-                        .color_named(NamedColor::DarkGreen)
-                        .to_pretty_console()
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.loading",
+                        &[TextComponent::text(dim.minecraft_name.to_string())
+                            .color_named(NamedColor::DarkGreen)
+                            .0],
+                    ),
                 );
                 let level = into_level(dim.clone(), &config, path, seed, Some(pool));
                 let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
@@ -318,7 +346,7 @@ impl Server {
             })
         };
 
-        info!("Starting parallel world load...");
+        info!("{}", log_translation("pumpkin:log.pumpkin.starting_parallel_world_load", &[]));
         let mut world_futures = Vec::new();
         for dim in &server.dimensions {
             world_futures.push(world_loader(dim.clone()));
@@ -329,7 +357,10 @@ impl Server {
 
         let mut worlds_vec = Vec::new();
         for world_result in worlds_results {
-            worlds_vec.push(world_result.expect("World loading panicked"));
+            worlds_vec.push(world_result.expect(&log_translation(
+                "pumpkin:log.pumpkin.world_loading_panicked",
+                &[],
+            )));
         }
 
         server.worlds.store(Arc::new(worlds_vec));
@@ -337,7 +368,7 @@ impl Server {
             server.mojang_public_keys.store(Arc::new(k));
         }
 
-        info!("All worlds loaded successfully.");
+        info!("{}", log_translation("pumpkin:log.pumpkin.all_worlds_loaded", &[]));
 
         if server.basic_config.online_mode {
             let server_clone = server.clone();
@@ -347,7 +378,13 @@ impl Server {
                     .get_or_init(|| async {
                         tokio::task::block_in_place(|| {
                             pumpkin_util::jwt::fetch_oidc_jwks().unwrap_or_else(|e| {
-                                error!("Failed to fetch Bedrock OIDC keys: {e}");
+                                error!(
+                                    "{}",
+                                    log_translation(
+                                        "pumpkin:log.pumpkin.failed_fetch_bedrock_oidc_keys",
+                                        &[TextComponent::text(e.to_string()).0],
+                                    )
+                                );
                                 (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
                             })
                         })
@@ -378,7 +415,7 @@ impl Server {
                 self.worlds
                     .load()
                     .first()
-                    .expect("Default world should exist")
+                    .expect(&log_translation("pumpkin:log.pumpkin.default_world_should_exist", &[]))
                     .clone()
             })
     }
@@ -424,7 +461,7 @@ impl Server {
             world
         })
         .await
-        .expect("World creation panicked")
+        .expect(&log_translation("pumpkin:log.pumpkin.world_creation_panicked", &[]))
     }
 
     /// Adds a new player to the server.
@@ -467,12 +504,21 @@ impl Server {
                         let world = self.get_world_from_dimension(dimension);
                         (world, Some(data))
                     } else {
-                        warn!("Invalid dimension key in player data: {dimension_key}");
+                        warn!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.invalid_dimension_key",
+                                &[TextComponent::text(dimension_key.to_string()).0],
+                            )
+                        );
                         let default_world = self
                             .worlds
                             .load()
                             .first()
-                            .expect("Default world should exist")
+                        .expect(&log_translation(
+                            "pumpkin:log.pumpkin.default_world_should_exist",
+                            &[],
+                        ))
                             .clone();
                         (default_world, Some(data))
                     }
@@ -482,7 +528,7 @@ impl Server {
                         .worlds
                         .load()
                         .first()
-                        .expect("Default world should exist")
+                        .expect(&log_translation("pumpkin:log.pumpkin.default_world_should_exist", &[]))
                         .clone();
                     (default_world, Some(data))
                 }
@@ -492,7 +538,7 @@ impl Server {
                     .worlds
                     .load()
                     .first()
-                    .expect("Default world should exist")
+                    .expect(&log_translation("pumpkin:log.pumpkin.default_world_should_exist", &[]))
                     .clone();
                 (default_world, None)
             };
@@ -514,14 +560,26 @@ impl Server {
         let player = Arc::new(player);
         let mut advancements = player.advancements.lock().await;
         if let Err(e) = advancements.load() {
-            warn!("Error loading player {}: {e}", player.gameprofile.id);
+            warn!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.error_loading_player",
+                    &[
+                        TextComponent::text(player.gameprofile.id.to_string()).0,
+                        TextComponent::text(e.to_string()).0,
+                    ],
+                )
+            );
         }
         advancements.player = Arc::downgrade(&player);
         drop(advancements);
 
         send_cancellable! {{
             self;
-            PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
+            PlayerLoginEvent::new(player.clone(), TextComponent::text(log_translation(
+                "pumpkin:log.pumpkin.you_have_been_kicked",
+                &[],
+            )));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
                 if world
@@ -565,11 +623,11 @@ impl Server {
 
     pub async fn shutdown(&self) {
         self.tasks.close();
-        debug!("Awaiting tasks for server");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.awaiting_tasks", &[]));
         self.tasks.wait().await;
-        debug!("Done awaiting tasks for server");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.done_awaiting_tasks", &[]));
 
-        info!("Starting worlds");
+        info!("{}", log_translation("pumpkin:log.pumpkin.starting_worlds", &[]));
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
@@ -580,9 +638,15 @@ impl Server {
             .world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())
         {
-            error!("Failed to save level.dat: {err}");
+            error!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.failed_save_level_dat",
+                    &[TextComponent::text(err.to_string()).0],
+                )
+            );
         }
-        info!("Completed worlds");
+        info!("{}", log_translation("pumpkin:log.pumpkin.completed_worlds", &[]));
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -895,7 +959,13 @@ impl Server {
 
         // Global tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
-            error!("Error ticking player data: {e}");
+            error!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.error_ticking_player_data",
+                    &[TextComponent::text(e.to_string()).0],
+                )
+            );
         }
     }
 
@@ -967,7 +1037,7 @@ impl Server {
                 .map_or_else(Vec::new, |player| vec![player]),
         };
 
-        let player_type = EntityType::from_name("player").expect("entity type player must exist");
+        let player_type = EntityType::from_name("player").expect(&log_translation("pumpkin:log.pumpkin.entity_type_player_must_exist", &[]));
         let type_included = target_selector
             .conditions
             .iter()

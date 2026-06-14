@@ -5,6 +5,8 @@ use std::{
     sync::{LazyLock, Mutex, OnceLock},
 };
 
+use bumpalo::Bump;
+
 /// TODO List
 /// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Add support for translations on commands descriptions
@@ -124,14 +126,20 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
 /// # Arguments
 /// * `translation`: The raw translation string containing placeholders.
 /// * `with`: Substitution components to insert into the placeholders.
+/// * `bump`: Bump allocator for temporary allocations.
 ///
 /// # Returns
-/// A tuple containing the reordered components and their substitution ranges.
+/// A tuple containing the reordered components and their substitution ranges,
+/// both allocated on the provided bump.
 #[must_use]
-pub fn reorder_substitutions(
+pub fn reorder_substitutions<'bump>(
     translation: &str,
-    with: Vec<TextComponentBase>,
-) -> (Vec<TextComponentBase>, Vec<SubstitutionRange>) {
+    with: &[TextComponentBase],
+    bump: &'bump Bump,
+) -> (
+    bumpalo::collections::Vec<'bump, TextComponentBase>,
+    bumpalo::collections::Vec<'bump, SubstitutionRange>,
+) {
     let indices: Vec<usize> = translation
         .match_indices('%')
         .filter(|(i, _)| *i == 0 || translation.as_bytes()[i - 1] != b'\\')
@@ -139,27 +147,31 @@ pub fn reorder_substitutions(
         .collect();
 
     if translation.matches("%s").count() == indices.len() {
-        return (
-            with,
-            indices
-                .iter()
-                .map(|&i| SubstitutionRange {
-                    start: i,
-                    end: i + 1,
-                })
-                .collect(),
-        );
+        let mut substitutions = bumpalo::collections::Vec::with_capacity_in(with.len(), bump);
+        for item in with {
+            substitutions.push(item.clone());
+        }
+        let mut ranges = bumpalo::collections::Vec::with_capacity_in(indices.len(), bump);
+        for &i in &indices {
+            ranges.push(SubstitutionRange {
+                start: i,
+                end: i + 1,
+            });
+        }
+        return (substitutions, ranges);
     }
 
-    let mut substitutions: Vec<TextComponentBase> = indices
-        .iter()
-        .map(|_| TextComponentBase {
+    let mut substitutions: bumpalo::collections::Vec<'bump, TextComponentBase> =
+        bumpalo::collections::Vec::with_capacity_in(indices.len(), bump);
+    for _ in 0..indices.len() {
+        substitutions.push(TextComponentBase {
             content: Box::new(TextContent::Text { text: "".into() }),
             style: Box::new(Style::default()),
             extra: vec![],
-        })
-        .collect();
-    let mut ranges: Vec<SubstitutionRange> = vec![];
+        });
+    }
+    let mut ranges: bumpalo::collections::Vec<'bump, SubstitutionRange> =
+        bumpalo::collections::Vec::with_capacity_in(indices.len(), bump);
 
     let bytes = translation.as_bytes();
     let mut next_idx = 0usize;
@@ -204,14 +216,15 @@ pub fn reorder_substitutions(
 pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     namespaced_key: P,
     locale: Locale,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> String {
     let translation = get_translation(&namespaced_key.into(), locale);
     if with.is_empty() || !translation.contains('%') {
         return translation;
     }
 
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
+    let bump = Bump::new();
+    let (substitutions, indices) = reorder_substitutions(&translation, with, &bump);
     let mut result = String::new();
     let mut pos = 0;
 
@@ -240,14 +253,15 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
 pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     namespaced_key: P,
     locale: Locale,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> String {
     let translation = get_translation(&namespaced_key.into(), locale);
     if with.is_empty() || !translation.contains('%') {
         return translation;
     }
 
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
+    let bump = Bump::new();
+    let (substitutions, indices) = reorder_substitutions(&translation, with, &bump);
     let mut result = String::new();
     let mut pos = 0;
 
@@ -275,7 +289,7 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
 /// The resolved and formatted translation string.
 pub fn log_translation<P: Into<Cow<'static, str>>>(
     namespaced_key: P,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> String {
     let locale = SERVER_LOG_LOCALE.get().copied().unwrap_or(Locale::EnUs);
     translation_to_pretty(namespaced_key, locale, with)

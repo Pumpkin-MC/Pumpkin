@@ -112,13 +112,13 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => log_translation(format!("minecraft:{translate}"), with),
+            } => log_translation(format!("minecraft:{translate}"), &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => log_translation(key, with),
+            TextContent::Custom { key, with, .. } => log_translation(key, &with),
         };
         let style = self.style;
         let color = style.color;
@@ -227,13 +227,13 @@ impl TextComponentBase {
                 text.push_str(&get_translation_text(
                     translate.to_string(),
                     locale,
-                    with.clone(),
+                    &with,
                 ));
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
             TextContent::Custom { key, with, .. } => {
-                text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
+                text.push_str(&get_translation_text(key.clone(), locale, &with));
             }
         }
 
@@ -263,13 +263,13 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => get_translation_text(format!("minecraft:{translate}"), locale, with),
+            } => get_translation_text(format!("minecraft:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
+            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, &with),
         };
 
         // Recursively append the text of all child components
@@ -354,7 +354,8 @@ impl TextComponentBase {
                         extra: self.extra,
                     }
                 } else {
-                    let (substitutions, ranges) = reorder_substitutions(&translation, with);
+                    let bump = bumpalo::Bump::new();
+                    let (substitutions, ranges) = reorder_substitutions(&translation, &with, &bump);
                     let first_seg = translation[..ranges[0].start].to_string();
                     let extra_cap =
                         ranges.len().saturating_mul(2) + self.extra.len();

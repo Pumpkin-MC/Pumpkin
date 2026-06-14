@@ -23,7 +23,7 @@ use pumpkin_protocol::{
         },
     },
 };
-use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::{Hand, text::TextComponent, translation::log_translation, version::JavaMinecraftVersion};
 use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
@@ -33,11 +33,9 @@ impl JavaClient {
         &self,
         client_information: SClientInformationConfig,
     ) {
-        debug!("Handling client settings");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.handling_client_settings", &[]));
         if client_information.view_distance <= 0 {
-            self.kick(TextComponent::text(
-                "Cannot have zero or negative view distance!",
-            ))
+            self.kick(TextComponent::text(log_translation("pumpkin:log.pumpkin.cannot_zero_negative_view_distance", &[])))
             .await;
             return;
         }
@@ -58,15 +56,15 @@ impl JavaClient {
                 server_listing: client_information.server_listing,
             });
         } else {
-            self.kick(TextComponent::text("Invalid hand or chat type"))
+            self.kick(TextComponent::text(log_translation("pumpkin:log.pumpkin.invalid_hand_or_chat_type", &[])))
                 .await;
         }
     }
 
     pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {
-        debug!("Handling plugin message");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.handling_plugin_message", &[]));
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
-            debug!("Got a client brand");
+            debug!("{}", log_translation("pumpkin:log.pumpkin.got_client_brand", &[]));
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
@@ -87,59 +85,50 @@ impl JavaClient {
             if packet.uuid == expected_uuid {
                 match packet.response_result() {
                     ResourcePackResponseResult::DownloadSuccess => {
-                        trace!(
-                            "Client {} successfully downloaded the resource pack",
-                            self.id
-                        );
+                        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_client_downloaded_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::DownloadFail => {
-                        warn!(
-                            "Client {} failed to downloaded the resource pack. Is it available on the internet?",
-                            self.id
-                        );
+                        warn!("{}", log_translation("pumpkin:log.pumpkin.client_download_failed_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::Downloaded => {
-                        trace!("Client {} already has the resource pack", self.id);
+                        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_client_has_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::Accepted => {
-                        trace!("Client {} accepted the resource pack", self.id);
+                        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_client_accepted_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
 
                         // Return here to wait for the next response update
                         return;
                     }
                     ResourcePackResponseResult::Declined => {
-                        trace!("Client {} declined the resource pack", self.id);
+                        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_client_declined_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::InvalidUrl => {
-                        warn!(
-                            "Client {} reported that the resource pack URL is invalid!",
-                            self.id
-                        );
+                        warn!("{}", log_translation("pumpkin:log.pumpkin.client_invalid_resource_pack_url", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::ReloadFailed => {
-                        trace!("Client {} failed to reload the resource pack", self.id);
+                        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_client_failed_reload_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::Discarded => {
-                        trace!("Client {} discarded the resource pack", self.id);
+                        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_client_discarded_resource_pack", &[TextComponent::text(self.id.to_string()).0]));
                     }
                     ResourcePackResponseResult::Unknown(result) => {
                         warn!(
-                            "Client {} responded with a bad result: {}!",
-                            self.id, result
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.client_bad_resource_pack_result",
+                                &[
+                                    TextComponent::text(self.id.to_string()).0,
+                                    TextComponent::text(result.to_string()).0,
+                                ],
+                            )
                         );
                     }
                 }
             } else {
-                warn!(
-                    "Client {} returned a response for a resource pack we did not set!",
-                    self.id
-                );
+                warn!("{}", log_translation("pumpkin:log.pumpkin.client_unset_resource_pack_response", &[TextComponent::text(self.id.to_string()).0]));
             }
         } else {
-            warn!(
-                "Client {} returned a response for a resource pack that was not enabled!",
-                self.id
-            );
+            warn!("{}", log_translation("pumpkin:log.pumpkin.client_disabled_resource_pack_response", &[TextComponent::text(self.id.to_string()).0]));
         }
         self.send_known_packs().await;
     }
@@ -147,10 +136,15 @@ impl JavaClient {
     pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse) {
         // TODO: allow plugins to access this
         debug!(
-            "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{:?}\"",
-            packet.key,
-            packet.has_payload,
-            packet.payload.as_ref().map(|p| p.len()),
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.received_cookie_response",
+                &[
+                    TextComponent::text(packet.key.to_string()).0,
+                    TextComponent::text(packet.has_payload.to_string()).0,
+                    TextComponent::text(format!("{:?}", packet.payload.as_ref().map(|p| p.len()))).0,
+                ],
+            ),
         );
     }
 
@@ -159,7 +153,7 @@ impl JavaClient {
         _config_acknowledged: SKnownPacks,
         server: &Arc<Server>,
     ) -> Option<PacketHandlerResult> {
-        debug!("Handling known packs");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.handling_known_packs", &[]));
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();
         let registry = Registry::get_synced(version);
@@ -228,7 +222,7 @@ impl JavaClient {
             return Some(self.handle_config_acknowledged(server).await);
         }
 
-        debug!("Finished config");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.finished_config", &[]));
         None
     }
 
@@ -247,7 +241,7 @@ impl JavaClient {
     }
 
     pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {
-        debug!("Handling config acknowledgement");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.handling_config_acknowledgement", &[]));
         self.connection_state.store(ConnectionState::Play);
 
         let profile = self.gameprofile.lock().await.clone();

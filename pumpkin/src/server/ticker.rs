@@ -5,6 +5,7 @@ use crate::{
     },
     server::Server,
 };
+use pumpkin_util::translation::log_translation;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -73,6 +74,6 @@ impl Ticker {
             }
         }
 
-        debug!("Ticker stopped");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.ticker_stopped", &[]));
     }
 }

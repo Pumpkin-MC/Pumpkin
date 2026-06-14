@@ -1,5 +1,7 @@
 use pumpkin_inventory::InventoryError;
 use pumpkin_protocol::ser::ReadingError;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::log_translation;
 use pumpkin_world::data::player_data::PlayerDataError;
 use std::fmt::Display;
 use tracing::Level;
@@ -80,8 +82,14 @@ impl PumpkinError for PlayerDataError {
 
     fn client_kick_reason(&self) -> Option<String> {
         match self {
-            Self::Io(err) => Some(format!("Failed to load player data: {err}")),
-            Self::Nbt(err) => Some(format!("Failed to parse player data: {err}")),
+            Self::Io(err) => Some(log_translation(
+                "pumpkin:log.pumpkin.failed_load_player_data",
+                &[TextComponent::text(err.to_string()).0],
+            )),
+            Self::Nbt(err) => Some(log_translation(
+                "pumpkin:log.pumpkin.failed_parse_player_data",
+                &[TextComponent::text(err.to_string()).0],
+            )),
         }
     }
 }

@@ -120,7 +120,7 @@ impl GzipRollingLogger {
                 "{}",
                 log_translation(
                     "pumpkin:log.pumpkin.existing_log_found",
-                    vec![TextComponent::text(latest_path.display().to_string()).0],
+                    &[TextComponent::text(latest_path.display().to_string()).0],
                 )
             );
 
@@ -192,7 +192,7 @@ impl GzipRollingLogger {
                 "{}",
                 log_translation(
                     "pumpkin:log.pumpkin.max_log_ids_used",
-                    vec![
+                    &[
                         TextComponent::text(MAX_ATTEMPTS.to_string()).0,
                         TextComponent::text(date_format.clone()).0,
                         TextComponent::text(path.display().to_string()).0,
@@ -205,7 +205,7 @@ impl GzipRollingLogger {
         Err(
             log_translation(
                 "pumpkin:log.pumpkin.unique_filename_failed",
-                vec![
+                &[
                     TextComponent::text(date_format.clone()).0,
                     TextComponent::text(MAX_ATTEMPTS.to_string()).0,
                 ],
@@ -308,7 +308,7 @@ where
                         "{}",
                         log_translation(
                             "pumpkin:log.pumpkin.failed_to_rotate",
-                            vec![TextComponent::text(e.to_string()).0],
+                            &[TextComponent::text(e.to_string()).0],
                         )
                     );
                 }

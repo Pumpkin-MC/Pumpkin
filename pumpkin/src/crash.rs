@@ -111,7 +111,7 @@ impl CrashReport {
             "{}",
             TextComponent::text(log_translation(
                 "pumpkin:log.pumpkin.panic_encountered",
-                vec![],
+                &[],
             ))
             .color(RED)
             .bold()
@@ -125,21 +125,25 @@ impl CrashReport {
 
         let message = self.panic_location.as_ref().map_or_else(
             || {
-                let thread_name = self.thread.name().unwrap_or("<unnamed>");
+                let thread_name = self.thread.name().map(ToString::to_string).unwrap_or_else(|| {
+                    log_translation("pumpkin:log.pumpkin.crash_unnamed_thread", &[])
+                });
                 log_translation(
                     "pumpkin:log.pumpkin.thread_panicked",
-                    vec![
-                        TextComponent::text(thread_name.to_string()).0,
+                    &[
+                        TextComponent::text(thread_name).0,
                         TextComponent::text(format!("{:?}", thread_id)).0,
                     ],
                 )
             },
             |location| {
-                let thread_name = self.thread.name().unwrap_or("<unnamed>");
+                let thread_name = self.thread.name().map(ToString::to_string).unwrap_or_else(|| {
+                    log_translation("pumpkin:log.pumpkin.crash_unnamed_thread", &[])
+                });
                 log_translation(
                     "pumpkin:log.pumpkin.thread_panicked_at",
-                    vec![
-                        TextComponent::text(thread_name.to_string()).0,
+                    &[
+                        TextComponent::text(thread_name).0,
                         TextComponent::text(format!("{:?}", thread_id)).0,
                         TextComponent::text(location.to_string()).0,
                     ],
@@ -164,7 +168,7 @@ impl CrashReport {
                     "{}",
                     RED.console_color(&log_translation(
                         "pumpkin:log.pumpkin.backtracing_unsupported",
-                        vec![],
+                        &[],
                     ))
                 );
             }
@@ -175,7 +179,7 @@ impl CrashReport {
                     "{}",
                     RED.console_color(&log_translation(
                         "pumpkin:log.pumpkin.backtrace_in_report",
-                        vec![],
+                        &[],
                     ))
                 );
 
@@ -184,7 +188,7 @@ impl CrashReport {
                         "{}\n{}",
                         RED.console_color(&log_translation(
                             "pumpkin:log.pumpkin.backtrace_label",
-                            vec![],
+                            &[],
                         )),
                         self.captured_backtrace
                     );
@@ -195,7 +199,7 @@ impl CrashReport {
                     "{}",
                     RED.console_color(&log_translation(
                         "pumpkin:log.pumpkin.backtrace_unknown_status",
-                        vec![],
+                        &[],
                     ))
                 );
             }
@@ -207,71 +211,143 @@ impl CrashReport {
     pub fn generate_file_content(&self) -> String {
         let mut output = String::new();
 
-        writeln_output!(&mut output, "====== Pumpkin Crash Report ======");
+        writeln_output!(&mut output, "{}", log_translation("pumpkin:log.pumpkin.crash_report_header", &[]));
         writeln_output!(&mut output);
-        writeln_output!(&mut output, "Time: {}", self.utc_time);
         writeln_output!(
             &mut output,
-            "Message: {}",
-            self.payload.as_deref().unwrap_or("<unknown>")
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_time",
+                &[TextComponent::text(self.utc_time.to_string()).0],
+            )
+        );
+        let unknown_text = log_translation("pumpkin:log.pumpkin.crash_unknown", &[]);
+        let payload_msg = self.payload.clone().unwrap_or(unknown_text.clone());
+        writeln_output!(
+            &mut output,
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_message",
+                &[TextComponent::text(payload_msg).0],
+            )
         );
 
         if let Some(panic_location) = &self.panic_location {
-            writeln_output!(&mut output, "Panic Location: {}", panic_location);
+            writeln_output!(
+                &mut output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_panic_location",
+                    &[TextComponent::text(panic_location.to_string()).0],
+                )
+            );
         }
 
         writeln_output!(&mut output);
-        writeln_output!(&mut output, "--- Panicking Thread ---");
-        writeln_output!(&mut output, "ID: {:?}", self.thread.id());
+        writeln_output!(&mut output, "{}", log_translation("pumpkin:log.pumpkin.crash_panicking_thread", &[]));
+        writeln_output!(
+            &mut output,
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_thread_id",
+                &[TextComponent::text(format!("{:?}", self.thread.id())).0],
+            )
+        );
         if let Some(thread_name) = self.thread.name() {
-            writeln_output!(&mut output, "Name: {}", thread_name);
+            writeln_output!(
+                &mut output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_thread_name",
+                    &[TextComponent::text(thread_name.to_string()).0],
+                )
+            );
         }
-        writeln_output!(&mut output, "Backtrace:");
+        writeln_output!(
+            &mut output,
+            "{}",
+            log_translation("pumpkin:log.pumpkin.crash_backtrace_label", &[]),
+        );
         writeln_output!(&mut output, "{}", self.full_backtrace());
 
-        writeln_output!(&mut output, "--- Server Details ---");
+        writeln_output!(&mut output, "{}", log_translation("pumpkin:log.pumpkin.crash_server_details", &[]));
 
         writeln_output!(
             &mut output,
-            "Pumpkin Version: {}",
-            Self::get_pumpkin_version()
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_pumpkin_version",
+                &[TextComponent::text(Self::get_pumpkin_version()).0],
+            )
         );
-        writeln_output!(&mut output, "Minecraft Version: {}", CURRENT_MC_VERSION);
         writeln_output!(
             &mut output,
-            "Server compiled with Rust {}",
-            rustc_version_runtime::version()
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_minecraft_version",
+                &[TextComponent::text(CURRENT_MC_VERSION.to_string()).0],
+            )
+        );
+        writeln_output!(
+            &mut output,
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_compiled_with",
+                &[TextComponent::text(rustc_version_runtime::version().to_string()).0],
+            )
         );
 
         if sysinfo::IS_SUPPORTED_SYSTEM {
-            writeln_output!(&mut output, "\n--- System Details ---");
+            writeln_output!(&mut output, "{}", log_translation("pumpkin:log.pumpkin.crash_system_details", &[]));
 
             let mut sys = System::new_all();
             sys.refresh_all();
 
             writeln_output!(
                 &mut output,
-                "Operating System: {}",
-                System::long_os_version().unwrap_or("Unknown".to_string())
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_os",
+                    &[TextComponent::text(
+                        System::long_os_version().unwrap_or_else(|| unknown_text.clone()),
+                    )
+                    .0],
+                )
             );
             writeln_output!(
                 &mut output,
-                "Kernel: {}",
-                System::kernel_version().unwrap_or_else(|| "Unknown".to_string())
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_kernel",
+                    &[TextComponent::text(
+                        System::kernel_version().unwrap_or_else(|| unknown_text.clone()),
+                    )
+                    .0],
+                )
             );
             writeln_output!(
                 &mut output,
-                "Physical Memory: {} MiB/{} MiB used, {} MiB free",
-                sys.used_memory() / BYTES_PER_MEBIBYTE,
-                sys.total_memory() / BYTES_PER_MEBIBYTE,
-                sys.free_memory() / BYTES_PER_MEBIBYTE
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_physical_memory",
+                    &[
+                        TextComponent::text((sys.used_memory() / BYTES_PER_MEBIBYTE).to_string()).0,
+                        TextComponent::text((sys.total_memory() / BYTES_PER_MEBIBYTE).to_string()).0,
+                        TextComponent::text((sys.free_memory() / BYTES_PER_MEBIBYTE).to_string()).0,
+                    ],
+                )
             );
             writeln_output!(
                 &mut output,
-                "Swap Memory: {} MiB/{} MiB used, {} MiB free",
-                sys.used_swap() / BYTES_PER_MEBIBYTE,
-                sys.total_swap() / BYTES_PER_MEBIBYTE,
-                sys.free_swap() / BYTES_PER_MEBIBYTE
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_swap_memory",
+                    &[
+                        TextComponent::text((sys.used_swap() / BYTES_PER_MEBIBYTE).to_string()).0,
+                        TextComponent::text((sys.total_swap() / BYTES_PER_MEBIBYTE).to_string()).0,
+                        TextComponent::text((sys.free_swap() / BYTES_PER_MEBIBYTE).to_string()).0,
+                    ],
+                )
             );
 
             Self::write_cpus(&mut output, &sys);
@@ -284,12 +360,18 @@ impl CrashReport {
         writeln_output!(output);
         let cpus = sys.cpus();
 
-        writeln_output!(output, "Total cores: {}", cpus.len());
+        writeln_output!(
+            output,
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.crash_total_cores",
+                &[TextComponent::text(cpus.len().to_string()).0],
+            )
+        );
         writeln_output!(output);
 
         let mut different_brands: FxHashMap<(&str, &str), Vec<&Cpu>> = FxHashMap::default();
 
-        // `sysinfo` provides us a CPU for each core, so we try to group them.
         for cpu in cpus {
             different_brands
                 .entry((cpu.brand(), cpu.vendor_id()))
@@ -309,11 +391,46 @@ impl CrashReport {
 
             let avg_freq = cpus.iter().map(|cpu| cpu.frequency()).sum::<u64>() / cpus.len() as u64;
 
-            writeln_output!(output, "|{prefix} Cores: {}", cpus.len());
-            writeln_output!(output, "|{padded} Names: {}", names);
-            writeln_output!(output, "|{padded} Brand: {}", brand);
-            writeln_output!(output, "|{padded} Average Frequency: {} MHz", avg_freq);
-            writeln_output!(output, "|{padded} Vendor ID: {}", vendor_id);
+            writeln_output!(
+                output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_cpu_cores",
+                    &[TextComponent::text(format!("|{prefix} {}", cpus.len())).0],
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_cpu_names",
+                    &[TextComponent::text(format!("|{padded} {names}")).0],
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_cpu_brand",
+                    &[TextComponent::text(format!("|{padded} {brand}")).0],
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_cpu_frequency",
+                    &[TextComponent::text(format!("|{padded} {avg_freq}")).0],
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.crash_cpu_vendor",
+                    &[TextComponent::text(format!("|{padded} {vendor_id}")).0],
+                )
+            );
             writeln_output!(output);
         }
     }
@@ -325,11 +442,13 @@ impl CrashReport {
         } else {
             "release"
         };
-        format!(
-            "{} (Commit: {}/{})",
-            env!("CARGO_PKG_VERSION"),
-            env!("GIT_HASH"),
-            profile
+        log_translation(
+            "pumpkin:log.pumpkin.crash_version_format",
+            &[
+                TextComponent::text(env!("CARGO_PKG_VERSION")).0,
+                TextComponent::text(env!("GIT_HASH")).0,
+                TextComponent::text(profile).0,
+            ],
         )
     }
 
@@ -364,7 +483,7 @@ impl CrashReport {
                     "{} {}",
                     Color::Named(NamedColor::Green)
                         .console_color(&log_translation(
-                            "pumpkin:log.pumpkin.crash_report_saved", vec![],
+                            "pumpkin:log.pumpkin.crash_report_saved", &[],
                         )),
                     path.display()
                 );
@@ -374,7 +493,7 @@ impl CrashReport {
                 tracing::error!(
                     "{} {}",
                     Color::Named(NamedColor::Red).console_color(&log_translation(
-                        "pumpkin:log.pumpkin.crash_report_save_failed", vec![],
+                        "pumpkin:log.pumpkin.crash_report_save_failed", &[],
                     )),
                     error
                 );

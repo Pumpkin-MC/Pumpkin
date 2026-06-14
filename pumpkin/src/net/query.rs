@@ -10,6 +10,7 @@ use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::translation::log_translation;
 use pumpkin_world::CURRENT_MC_VERSION;
 use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
@@ -21,7 +22,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
         UdpSocket::bind(query_addr)
             .await
-            .expect("Unable to bind to address"),
+            .expect(&log_translation("pumpkin:log.pumpkin.unable_to_bind_address", &[])),
     );
 
     // Challenge tokens are bound to the IP address and port
@@ -38,16 +39,19 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     });
 
     info!(
-        "Server query running on port {}",
-        TextComponent::text(format!(
-            "{}",
-            socket
-                .local_addr()
-                .expect("Unable to find running address!")
-                .port()
-        ))
-        .color_named(NamedColor::DarkBlue)
-        .to_pretty_console()
+        "{}",
+        log_translation(
+            "pumpkin:log.pumpkin.query_running_on_port",
+            &[TextComponent::text(
+                socket
+                    .local_addr()
+                    .expect(&log_translation("pumpkin:log.pumpkin.unable_to_find_running_address", &[]))
+                    .port()
+                    .to_string(),
+            )
+            .color_named(NamedColor::DarkBlue)
+            .0],
+        ),
     );
 
     while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -78,7 +82,13 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             )
             .await
             {
-                error!("Interior 0 bytes found! Cannot encode query response! {err}");
+                error!(
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.query_encode_error",
+                        &[TextComponent::text(err.to_string()).0],
+                    )
+                );
             }
         });
     }
@@ -123,6 +133,7 @@ async fn handle_packet(
                         .get(&packet.challenge_token)
                         .is_some_and(|token_bound_ip: &SocketAddr| token_bound_ip == &addr)
                 {
+                    let default_world = log_translation("pumpkin:log.pumpkin.default_world_name", &[]);
                     if packet.is_full_request {
                         // Get 4 players
                         let mut players: Vec<CString> = Vec::new();
@@ -155,17 +166,17 @@ async fn handle_packet(
                             .unwrap_or_default();
 
                         let response = CFullStatus {
-                            session_id: packet.session_id,
-                            hostname: CString::new(server.basic_config.motd.as_str())?,
-                            version: CString::new(CURRENT_MC_VERSION)?,
-                            plugins: CString::new(plugins)?,
-                            map: CString::new(
-                                server
-                                    .worlds
-                                    .load()
-                                    .first()
-                                    .map_or("world", |w| w.get_world_name()),
-                            )?,
+                        session_id: packet.session_id,
+                        hostname: CString::new(server.basic_config.motd.as_str())?,
+                        version: CString::new(CURRENT_MC_VERSION)?,
+                        plugins: CString::new(plugins)?,
+                        map: CString::new(
+                            server
+                                .worlds
+                                .load()
+                                .first()
+                                .map_or(&*default_world, |w| w.get_world_name()),
+                        )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
@@ -185,7 +196,7 @@ async fn handle_packet(
                                     .worlds
                                     .load()
                                     .first()
-                                    .map_or("world", |w| w.get_world_name()),
+                                    .map_or(&*default_world, |w| w.get_world_name()),
                             )?,
                             num_players: server.get_player_count(),
                             max_players: server.basic_config.max_players as usize,

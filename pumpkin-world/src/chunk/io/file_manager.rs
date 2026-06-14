@@ -6,6 +6,8 @@ use std::{
 
 use futures::future::join_all;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::log_translation;
 use tokio::{
     join,
     sync::{OnceCell, RwLock, mpsc},
@@ -99,16 +101,16 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     }
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
-        trace!("Opening file from disk: {}", self.path.display());
+        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_opening_file", &[TextComponent::text(self.path.display().to_string()).0]));
 
         match tokio::fs::read(&self.path).await {
             Ok(bytes) => {
                 let value = S::read(bytes.into())?;
-                trace!("Successfully read file from disk: {}", self.path.display());
+                trace!("{}", log_translation("pumpkin:log.pumpkin.trace_read_file", &[TextComponent::text(self.path.display().to_string()).0]));
                 Ok(value)
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                trace!("File not found, using default for: {}", self.path.display());
+                trace!("{}", log_translation("pumpkin:log.pumpkin.trace_file_not_found_default", &[TextComponent::text(self.path.display().to_string()).0]));
                 Ok(S::default())
             }
             Err(err) => Err(ChunkReadingError::IoError(err)),
@@ -178,11 +180,14 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
 
         if removable {
             locks.remove(path);
-            trace!("Evicted serializer cache for {}", path.display());
+            trace!("{}", log_translation("pumpkin:log.pumpkin.trace_evicted_serializer_cache", &[TextComponent::text(path.display().to_string()).0]));
         } else {
             trace!(
-                "Skipping eviction for {} — references still live",
-                path.display()
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.trace_skipping_eviction",
+                    &[TextComponent::text(path.display().to_string()).0],
+                )
             );
         }
     }
@@ -327,17 +332,23 @@ where
                 .into_iter()
                 .map(|(file_name, chunk_locks)| async move {
                     let path = P::file_path(folder, &file_name);
-                    trace!("Saving chunks into {}", path.display());
+                    trace!("{}", log_translation("pumpkin:log.pumpkin.trace_saving_chunks_into", &[TextComponent::text(path.display().to_string()).0]));
 
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(s) => s,
                         Err(ChunkReadingError::ChunkNotExist) => {
                             return Err(ChunkWritingError::IoError(std::io::Error::other(
-                                "get_serializer returned ChunkNotExist",
+                                log_translation("pumpkin:log.pumpkin.serializer_chunk_not_exist", &[]),
                             )));
                         }
                         Err(ChunkReadingError::IoError(err)) => {
-                            error!("I/O error reading region before write: {err}");
+                            error!(
+                                "{}",
+                                log_translation(
+                                    "pumpkin:log.pumpkin.io_error_reading_region",
+                                    &[TextComponent::text(err.to_string()).0],
+                                )
+                            );
                             return Err(ChunkWritingError::IoError(err));
                         }
                         Err(err) => {
@@ -363,7 +374,7 @@ where
                         // Write-lock released here — flush can proceed under a read-lock.
                     }
 
-                    trace!("Chunk data updated for {}", path.display());
+                    trace!("{}", log_translation("pumpkin:log.pumpkin.trace_chunk_data_updated", &[TextComponent::text(path.display().to_string()).0]));
 
                     // We check watchers *after* releasing the write-lock to honour
                     // lock ordering (serializer lock → watchers, never the reverse).
@@ -377,7 +388,13 @@ where
                         // applied all mutations above.
                         {
                             let serializer = chunk_serializer.read().await;
-                            debug!("Flushing {} to disk", path.display());
+                            debug!(
+                                "{}",
+                                log_translation(
+                                    "pumpkin:log.pumpkin.flushing_to_disk",
+                                    &[TextComponent::text(path.display().to_string()).0],
+                                )
+                            );
                             serializer
                                 .write(&path)
                                 .await

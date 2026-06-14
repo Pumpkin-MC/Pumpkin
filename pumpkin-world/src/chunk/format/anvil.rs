@@ -4,6 +4,8 @@ use itertools::Itertools;
 use lz4_java_wrc::Context;
 use pumpkin_config::chunk::AnvilChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::log_translation;
 use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
@@ -251,10 +253,12 @@ impl AnvilChunkData {
 
         if length > bytes.len() {
             return Err(ChunkReadingError::ParsingError(
-                ChunkParsingError::ErrorDeserializingChunk(format!(
-                    "Chunk length is greater than available bytes ({} vs {})",
-                    length,
-                    bytes.len()
+                ChunkParsingError::ErrorDeserializingChunk(log_translation(
+                    "pumpkin:log.pumpkin.chunk_length_exceeds_bytes",
+                    &[
+                        TextComponent::text(length.to_string()).0,
+                        TextComponent::text(bytes.len().to_string()).0,
+                    ],
                 )),
             ));
         }
@@ -353,7 +357,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     where
         I: IntoIterator<Item = usize>,
     {
-        trace!("Writing in place: {}", path.display());
+        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_writing_in_place", &[pumpkin_util::text::TextComponent::text(path.display().to_string()).0]));
 
         let file = tokio::fs::OpenOptions::new()
             .write(true)
@@ -396,7 +400,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
                     index,
                     self.chunks_data[index]
                         .as_ref()
-                        .expect("We are trying to write a chunk, but it does not exist!"),
+                        .expect(&log_translation("pumpkin:log.pumpkin.chunk_not_exist_for_write", &[])),
                 )
             })
             .collect::<Vec<_>>();
@@ -415,14 +419,19 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         for (index, chunk) in chunks {
             debug_assert!(
                 current_sector <= chunk.file_sector_offset,
-                "Current sector is {} but we want to write to {}!",
-                current_sector,
-                chunk.file_sector_offset
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.assert_current_sector",
+                    &[
+                        TextComponent::text(current_sector.to_string()).0,
+                        TextComponent::text(chunk.file_sector_offset.to_string()).0,
+                    ],
+                ),
             );
 
             // Seek only if we need to
             if chunk.file_sector_offset != current_sector {
-                trace!("Seeking to sector {}", chunk.file_sector_offset);
+                trace!("{}", log_translation("pumpkin:log.pumpkin.trace_seeking_sector", &[pumpkin_util::text::TextComponent::text(chunk.file_sector_offset.to_string()).0]));
                 let _ = write
                     .seek(SeekFrom::Start(
                         chunk.file_sector_offset as u64 * SECTOR_BYTES as u64,
@@ -431,10 +440,15 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
                 current_sector = chunk.file_sector_offset;
             }
             trace!(
-                "Writing chunk {} - {}:{}",
-                index,
-                current_sector,
-                chunk.serialized_data.sector_count()
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.trace_writing_chunk",
+                    &[
+                        TextComponent::text(index.to_string()).0,
+                        TextComponent::text(current_sector.to_string()).0,
+                        TextComponent::text(chunk.serialized_data.sector_count().to_string()).0,
+                    ],
+                )
             );
 
             current_sector += chunk.serialized_data.sector_count();
@@ -448,7 +462,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     /// Write entire file, disregarding saved offsets
     async fn write_all(&self, path: &Path) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        trace!("Writing tmp file to disk: {temp_path:?}");
+        trace!("{}", log_translation("pumpkin:log.pumpkin.trace_writing_tmp_file", &[pumpkin_util::text::TextComponent::text(format!("{:?}", temp_path)).0]));
 
         let file = tokio::fs::File::create(&temp_path).await?;
         let mut write = BufWriter::new(file);
@@ -531,8 +545,11 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         match &*write_action {
             WriteAction::Pass => {
                 debug!(
-                    "Skipping write for {}, as there were no dirty chunks",
-                    path.display()
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.skipping_write_no_dirty",
+                        &[TextComponent::text(path.display().to_string()).0],
+                    )
                 );
                 Ok(())
             }
@@ -582,11 +599,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
             if bytes_offset + bytes_count > raw_file_bytes.len() {
                 return Err(ChunkReadingError::ParsingError(
-                    ChunkParsingError::ErrorDeserializingChunk(format!(
-                        "Not enough bytes available for the chunk {} ({} vs {})",
-                        i,
-                        bytes_count,
-                        raw_file_bytes.len().saturating_sub(bytes_offset)
+                    ChunkParsingError::ErrorDeserializingChunk(log_translation(
+                        "pumpkin:log.pumpkin.not_enough_bytes_for_chunk",
+                        &[
+                            TextComponent::text(i.to_string()).0,
+                            TextComponent::text(bytes_count.to_string()).0,
+                            TextComponent::text(raw_file_bytes.len().saturating_sub(bytes_offset).to_string()).0,
+                        ],
                     )),
                 ));
             }
@@ -631,7 +650,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
         match &*write_action {
             WriteAction::All => {
-                trace!("Write action is all: setting chunk in place");
+                trace!("{}", log_translation("pumpkin:log.pumpkin.trace_write_action_all", &[]));
                 // Doesn't matter, just add the data
                 self.chunks_data[index] = Some(AnvilChunkMetadata {
                     serialized_data: new_chunk_data,
@@ -643,10 +662,15 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 match self.chunks_data[index].as_ref() {
                     None => {
                         trace!(
-                            "Chunk {} does not exist, appending to EOF: {}:{}",
-                            index,
-                            self.end_sector,
-                            new_chunk_data.sector_count()
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.trace_chunk_not_exist_append_eof",
+                                &[
+                                    TextComponent::text(index.to_string()).0,
+                                    TextComponent::text(self.end_sector.to_string()).0,
+                                    TextComponent::text(new_chunk_data.sector_count().to_string()).0,
+                                ],
+                            )
                         );
                         // This chunk didn't exist before; append to EOF
                         let new_eof = self.end_sector + new_chunk_data.sector_count();
@@ -662,10 +686,15 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                         if old_chunk.serialized_data.sector_count() == new_chunk_data.sector_count()
                         {
                             trace!(
-                                "Chunk {} exists, writing in place: {}:{}",
-                                index,
-                                old_chunk.file_sector_offset,
-                                new_chunk_data.sector_count()
+                                "{}",
+                                log_translation(
+                                    "pumpkin:log.pumpkin.trace_chunk_exists_write_in_place",
+                                    &[
+                                        TextComponent::text(index.to_string()).0,
+                                        TextComponent::text(old_chunk.file_sector_offset.to_string()).0,
+                                        TextComponent::text(new_chunk_data.sector_count().to_string()).0,
+                                    ],
+                                )
                             );
                             // We can just add it
                             self.chunks_data[index] = Some(AnvilChunkMetadata {
@@ -710,7 +739,11 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
                             if chunks_to_shift.last().is_none_or(|chunk| chunk.0 == index) {
                                 trace!(
-                                    "Unable to find a chunk to swap with; falling back to serialize all",
+                                    "{}",
+                                    log_translation(
+                                        "pumpkin:log.pumpkin.trace_unable_find_chunk_swap",
+                                        &[],
+                                    )
                                 );
 
                                 // give up...
@@ -725,7 +758,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 // reversed it) and shift the rest down
                                 let swap = chunks_to_shift
                                     .pop()
-                                    .expect("We just checked that this exists");
+                                    .expect(&log_translation("pumpkin:log.pumpkin.chunk_just_checked_exists", &[]));
 
                                 let indices_to_shift = chunks_to_shift
                                     .iter()
@@ -745,7 +778,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
                                 self.chunks_data[swapped_index]
                                     .as_mut()
-                                    .expect("We checked if this was none")
+                                    .expect(&log_translation("pumpkin:log.pumpkin.chunk_checked_not_none", &[]))
                                     .file_sector_offset = old_offset;
                                 write_action.maybe_update_chunk_index(swapped_index);
 
@@ -755,13 +788,22 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 let offset = new_sectors as i64 - swapped_sectors as i64;
 
                                 trace!(
-                                    "Swapping {index} with {swapped_index}, shifting all chunks {swapped_index} and after by {offset}"
+                                    "{}",
+                                    log_translation(
+                                        "pumpkin:log.pumpkin.trace_swapping_chunk",
+                                        &[
+                                            TextComponent::text(index.to_string()).0,
+                                            TextComponent::text(swapped_index.to_string()).0,
+                                            TextComponent::text(swapped_index.to_string()).0,
+                                            TextComponent::text(offset.to_string()).0,
+                                        ],
+                                    )
                                 );
 
                                 for shift_index in indices_to_shift {
                                     let chunk_data = self.chunks_data[shift_index]
                                         .as_mut()
-                                        .expect("We checked if this was none");
+                                        .expect(&log_translation("pumpkin:log.pumpkin.chunk_checked_not_none", &[]));
                                     let new_offset = chunk_data.file_sector_offset as i64 + offset;
                                     chunk_data.file_sector_offset = new_offset as u32;
                                     write_action.maybe_update_chunk_index(shift_index);
@@ -928,7 +970,7 @@ mod tests {
             region_folder: temp_dir.path().join("region"),
             entities_folder: PathBuf::from("entities"),
         };
-        fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
+        fs::create_dir(&level_folder.region_folder).expect(&log_translation("pumpkin:log.pumpkin.couldnt_create_region_folder", &[]));
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let block_registry = Arc::new(BlockRegistry);
 
@@ -953,7 +995,7 @@ mod tests {
         chunk_saver
             .save_chunks(&level_folder, chunks.clone())
             .await
-            .expect("Failed to write chunk");
+            .expect(&log_translation("pumpkin:log.pumpkin.failed_write_chunk", &[]));
 
         // Create a new manager to ensure nothing is cached
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
@@ -1011,7 +1053,7 @@ mod tests {
         chunk_saver
             .save_chunks(&level_folder, chunks.clone())
             .await
-            .expect("Failed to write chunk");
+            .expect(&log_translation("pumpkin:log.pumpkin.failed_write_chunk", &[]));
 
         // Create a new manager to ensure nothing is cached
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
@@ -1084,7 +1126,7 @@ mod tests {
         chunk_saver
             .save_chunks(&level_folder, chunks.clone())
             .await
-            .expect("Failed to write chunk");
+            .expect(&log_translation("pumpkin:log.pumpkin.failed_write_chunk", &[]));
 
         // Create a new manager to ensure nothing is cached
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
@@ -1145,7 +1187,7 @@ mod tests {
         chunk_saver
             .save_chunks(&level_folder, chunks.clone())
             .await
-            .expect("Failed to write chunk");
+            .expect(&log_translation("pumpkin:log.pumpkin.failed_write_chunk", &[]));
 
         // Create a new manager to ensure nothing is cached
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
@@ -1204,7 +1246,7 @@ mod tests {
             region_folder: temp_dir.path().join("region"),
             entities_folder: PathBuf::from("entities"),
         };
-        fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
+        fs::create_dir(&level_folder.region_folder).expect(&log_translation("pumpkin:log.pumpkin.couldnt_create_region_folder", &[]));
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let block_registry = Arc::new(BlockRegistry);
 
@@ -1234,7 +1276,7 @@ mod tests {
             chunk_saver
                 .save_chunks(&level_folder, chunks.clone())
                 .await
-                .expect("Failed to write chunk");
+                .expect(&log_translation("pumpkin:log.pumpkin.failed_write_chunk", &[]));
 
             // Create a new manager to ensure nothing is cached
             let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();

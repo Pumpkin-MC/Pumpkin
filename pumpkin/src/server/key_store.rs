@@ -2,6 +2,8 @@ use std::time::Instant;
 
 use num_bigint::BigInt;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::log_translation;
 use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 use sha1::Sha1;
@@ -19,18 +21,24 @@ impl KeyStore {
     #[must_use]
     pub fn new() -> Self {
         let instant = Instant::now();
-        debug!("Creating encryption keys...");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.creating_encryption_keys", &[]));
         let private_key = Self::generate_private_key();
 
         let public_key = private_key.to_public_key();
 
         let public_key_der = public_key
             .to_public_key_der()
-            .expect("Failed to encode public key to SPKI DER")
+            .expect(&log_translation("pumpkin:log.pumpkin.failed_encode_public_key", &[]))
             .into_vec()
             .into_boxed_slice();
 
-        debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());
+        debug!(
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.created_rsa_keys",
+                &[TextComponent::text(instant.elapsed().as_millis().to_string()).0],
+            )
+        );
 
         Self {
             private_key,
@@ -41,7 +49,8 @@ impl KeyStore {
     fn generate_private_key() -> RsaPrivateKey {
         let mut rng = rand::rng();
 
-        RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
+        RsaPrivateKey::new(&mut rng, 1024)
+            .expect(&log_translation("pumpkin:log.pumpkin.failed_generate_key", &[]))
     }
 
     pub fn encryption_request<'a>(

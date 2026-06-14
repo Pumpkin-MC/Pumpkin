@@ -90,7 +90,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         } else {
             Some(
                 GzipRollingLogger::new(level, advanced_config.logging.file.clone())
-                    .expect("Failed to initialize file logger."),
+                    .expect(&log_translation("pumpkin:log.pumpkin.failed_init_file_logger", &[])),
             )
         };
 
@@ -112,7 +112,11 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
                 }
                 Err(e) => {
                     eprintln!(
-                        "Failed to initialize console input ({e}); falling back to simple logger"
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.failed_init_console_input",
+                            &[TextComponent::text(e.to_string()).0],
+                        )
                     );
                     (Box::new(std::io::stdout()), None)
                 }
@@ -167,7 +171,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 
     assert!(
         LOGGER_IMPL.set(logger).is_ok(),
-        "Failed to set logger. already initialized"
+        "{}",
+        log_translation("pumpkin:log.pumpkin.logger_already_initialized", &[])
     );
 
     let resolved = resolve_locale(&advanced_config.locale.log);
@@ -229,7 +234,7 @@ impl PumpkinServer {
                 "{}",
                 log_translation(
                     "pumpkin:log.pumpkin.rcon_warning",
-                    vec![],
+                    &[],
                 )
             );
             let rcon_server = server.clone();
@@ -248,13 +253,13 @@ impl PumpkinServer {
                         error!(
                             "{}",
                             log_translation(
-                                "pumpkin:log.pumpkin.address_in_use", vec![TextComponent::text(address.to_string()).0],
+                                "pumpkin:log.pumpkin.address_in_use", &[TextComponent::text(address.to_string()).0],
                             )
                         );
                         error!(
                             "{}",
                             log_translation(
-                                "pumpkin:log.pumpkin.ensure_not_running", vec![],
+                                "pumpkin:log.pumpkin.ensure_not_running", &[],
                             )
                         );
                         std::process::exit(1);
@@ -263,13 +268,13 @@ impl PumpkinServer {
                         error!(
                             "{}",
                             log_translation(
-                                "pumpkin:log.pumpkin.permission_denied_bind", vec![TextComponent::text(address.to_string()).0],
+                                "pumpkin:log.pumpkin.permission_denied_bind", &[TextComponent::text(address.to_string()).0],
                             )
                         );
                         error!(
                             "{}",
                             log_translation(
-                                "pumpkin:log.pumpkin.need_sudo_privileges", vec![],
+                                "pumpkin:log.pumpkin.need_sudo_privileges", &[],
                             )
                         );
                         std::process::exit(1);
@@ -279,7 +284,7 @@ impl PumpkinServer {
                             "{}",
                             log_translation(
                                 "pumpkin:log.pumpkin.address_not_available",
-                                vec![TextComponent::text(address.to_string()).0],
+                                &[TextComponent::text(address.to_string()).0],
                             )
                         );
                         std::process::exit(1);
@@ -289,7 +294,7 @@ impl PumpkinServer {
                             "{}",
                             log_translation(
                                 "pumpkin:log.pumpkin.failed_to_start_tcp",
-                                vec![
+                                &[
                                     TextComponent::text(address.to_string()).0,
                                     TextComponent::text(e.to_string()).0,
                                 ],
@@ -302,14 +307,14 @@ impl PumpkinServer {
             // In the event the user puts 0 for their port, this will allow us to know what port it is running on
             let addr = listener
                 .local_addr()
-                .expect("Unable to get the address of the server!");
+                .expect(&log_translation("pumpkin:log.pumpkin.unable_to_get_server_address", &[]));
 
             if server.advanced_config.networking.query.enabled {
                 info!(
                     "{}",
                     log_translation(
                         "pumpkin:log.pumpkin.query_enabled",
-                        vec![],
+                        &[],
                     )
                 );
                 server.spawn_task(query::start_query_handler(
@@ -323,7 +328,7 @@ impl PumpkinServer {
                     "{}",
                     log_translation(
                         "pumpkin:log.pumpkin.lan_broadcast_enabled",
-                        vec![],
+                        &[],
                     )
                 );
 
@@ -351,7 +356,7 @@ impl PumpkinServer {
             Some(Arc::new(
                 UdpSocket::bind(server.basic_config.bedrock_edition_address)
                     .await
-                    .expect("Failed to bind UDP Socket"),
+                    .expect(&log_translation("pumpkin:log.pumpkin.failed_bind_udp_socket", &[])),
             ))
         } else {
             None
@@ -387,14 +392,14 @@ impl PumpkinServer {
             error!(
                 "{}",
                 log_translation(
-                    "pumpkin:log.pumpkin.error_unloading_plugins", vec![TextComponent::text(err.to_string()).0],
+                    "pumpkin:log.pumpkin.error_unloading_plugins", &[TextComponent::text(err.to_string()).0],
                 )
             );
         } else {
             info!(
                 "{}",
                 log_translation(
-                    "pumpkin:log.pumpkin.plugins_unloaded", vec![],
+                    "pumpkin:log.pumpkin.plugins_unloaded", &[],
                 )
             );
         }
@@ -412,7 +417,7 @@ impl PumpkinServer {
                         "{}",
                         log_translation(
                             "pumpkin:log.pumpkin.tty_fallback",
-                            vec![],
+                            &[],
                         )
                     );
                 }
@@ -443,7 +448,7 @@ impl PumpkinServer {
                 "{}",
                 TextComponent::text(log_translation(
                     "pumpkin:log.pumpkin.shutting_down",
-                    vec![],
+                    &[],
                 ))
                 .color(Color::Named(NamedColor::Green))
                 .to_pretty_console()
@@ -456,7 +461,7 @@ impl PumpkinServer {
             "{}",
             log_translation(
                 "pumpkin:log.pumpkin.stopped_accepting",
-                vec![],
+                &[],
             )
         );
 
@@ -470,12 +475,12 @@ impl PumpkinServer {
                 "{}",
                 log_translation(
                     "pumpkin:log.pumpkin.failed_save_players_shutdown",
-                    vec![TextComponent::text(e.to_string()).0],
+                    &[TextComponent::text(e.to_string()).0],
                 )
             );
         }
 
-        let kick_message = TextComponent::text("Server stopped");
+        let kick_message = TextComponent::text(log_translation("pumpkin:log.pumpkin.server_stopped_kick", &[]));
         for player in self.server.get_all_players() {
             player
                 .kick(DisconnectReason::Shutdown, kick_message.clone())
@@ -486,7 +491,7 @@ impl PumpkinServer {
             "{}",
             log_translation(
                 "pumpkin:log.pumpkin.ending_tasks",
-                vec![],
+                &[],
             )
         );
 
@@ -499,7 +504,7 @@ impl PumpkinServer {
             "{}",
             log_translation(
                 "pumpkin:log.pumpkin.saving_world",
-                vec![],
+                &[],
             )
         );
 
@@ -509,7 +514,7 @@ impl PumpkinServer {
             "{}",
             log_translation(
                 "pumpkin:log.pumpkin.save_complete",
-                vec![],
+                &[],
             )
         );
 
@@ -539,7 +544,7 @@ impl PumpkinServer {
                                 "{}",
                                 log_translation(
                                     "pumpkin:log.pumpkin.failed_set_tcp_nodelay",
-                                    vec![TextComponent::text(e.to_string()).0],
+                                    &[TextComponent::text(e.to_string()).0],
                                 )
                             );
                         }
@@ -552,7 +557,16 @@ impl PumpkinServer {
                         } else {
                             format!("{client_addr}")
                         };
-                        debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
+                        debug!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.accepted_java_connection",
+                                &[
+                                    TextComponent::text(formatted_address).0,
+                                    TextComponent::text(client_id.to_string()).0,
+                                ],
+                            )
+                        );
                         let server_clone = self.server.clone();
 
                         tasks.spawn(async move {
@@ -590,7 +604,7 @@ impl PumpkinServer {
                                                 "{}",
                                                 log_translation(
                                                     "pumpkin:log.pumpkin.failed_save_player_data",
-                                                    vec![TextComponent::text(e.to_string()).0],
+                                                    &[TextComponent::text(e.to_string()).0],
                                                 )
                                             );
                                         }
@@ -604,7 +618,7 @@ impl PumpkinServer {
                             "{}",
                             log_translation(
                                 "pumpkin:log.pumpkin.failed_accept_java",
-                                vec![TextComponent::text(e.to_string()).0],
+                                &[TextComponent::text(e.to_string()).0],
                             )
                         );
                         sleep(Duration::from_millis(50)).await;
@@ -668,7 +682,7 @@ impl PumpkinServer {
                                                                 "{}",
                                                                 log_translation(
                                                                     "pumpkin:log.pumpkin.failed_save_player_data",
-                                                                    vec![TextComponent::text(e.to_string()).0],
+                                                                    &[TextComponent::text(e.to_string()).0],
                                                                 )
                                                             );
                                                         }
@@ -699,7 +713,7 @@ impl PumpkinServer {
                         "{}",
                         log_translation(
                             "pumpkin:log.pumpkin.udp_socket_error",
-                            vec![TextComponent::text(e.to_string()).0],
+                            &[TextComponent::text(e.to_string()).0],
                         )
                     ),
                 }
@@ -733,12 +747,12 @@ fn setup_stdin_console(server: Arc<Server>) {
                     "{}",
                     log_translation(
                         "pumpkin:log.pumpkin.console_no_newline",
-                        vec![],
+                        &[],
                     )
                 );
             }
             rt.block_on(tx.send(line.trim().to_string()))
-                .expect("Failed to send command to server");
+                .expect(&log_translation("pumpkin:log.pumpkin.failed_send_command", &[]));
         }
     });
     tokio::spawn(async move {
@@ -772,7 +786,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
 
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
-            let readline = rl.readline("$ ");
+            let readline = rl.readline(&log_translation("pumpkin:log.pumpkin.console_prompt", &[]));
             match readline {
                 Ok(line) => {
                     let _ = rl.add_history_entry(line.clone());
@@ -787,7 +801,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     info!(
                         "{}",
                         log_translation(
-                            "pumpkin:log.pumpkin.ctrlc", vec![],
+                            "pumpkin:log.pumpkin.ctrlc", &[],
                         )
                     );
                     stop_or_exit_server();
@@ -797,7 +811,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     info!(
                         "{}",
                         log_translation(
-                            "pumpkin:log.pumpkin.ctrld", vec![],
+                            "pumpkin:log.pumpkin.ctrld", &[],
                         )
                     );
                     stop_server();
@@ -808,7 +822,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                         "{}",
                         log_translation(
                             "pumpkin:log.pumpkin.console_read_error",
-                            vec![TextComponent::text(err.to_string()).0],
+                            &[TextComponent::text(err.to_string()).0],
                         )
                     );
                     break;
@@ -848,7 +862,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
             }
         }
         drop(rx);
-        debug!("Stopped console commands task");
+        debug!("{}", log_translation("pumpkin:log.pumpkin.stopped_console_commands_task", &[]));
     });
 }
 

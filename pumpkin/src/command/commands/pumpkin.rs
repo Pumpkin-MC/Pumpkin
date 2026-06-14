@@ -2,7 +2,7 @@ use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_util::translation::get_translation_text;
+use pumpkin_util::translation::{get_translation_text, translation_to_pretty};
 use serde::Deserialize;
 use std::borrow::Cow;
 
@@ -83,16 +83,19 @@ impl CommandExecutor for Executor {
                 .join(", ");
             let locale = sender.get_locale();
             let profile = if cfg!(debug_assertions) {
-                "debug"
+                translation_to_pretty("pumpkin:log.pumpkin.debug_build", locale, &[])
             } else {
-                "release"
+                translation_to_pretty("pumpkin:log.pumpkin.release_build", locale, &[])
             };
-            let version_string = format!(
-                "{} (Commit: {}/{}) - {} Contributors",
-                CARGO_PKG_VERSION,
-                GIT_HASH,
-                profile,
-                contributors.len()
+            let version_string = translation_to_pretty(
+                "pumpkin:log.pumpkin.version_format",
+                locale,
+                &[
+                    TextComponent::text(CARGO_PKG_VERSION).0,
+                    TextComponent::text(GIT_HASH).0,
+                    TextComponent::text(profile).0,
+                    TextComponent::text(contributors.len().to_string()).0,
+                ],
             );
             sender
                 .send_message(
@@ -103,8 +106,12 @@ impl CommandExecutor for Executor {
                         vec![TextComponent::text(version_string.clone())],
                     )
                     .hover_event(HoverEvent::show_text(
-                        TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n"))
-                            .add_child(
+                        TextComponent::text(translation_to_pretty(
+                            "pumpkin:log.pumpkin.commit_info",
+                            locale,
+                            &[TextComponent::text(GIT_HASH_FULL).0],
+                        ))
+                        .add_child(
                                 TextComponent::text(contributor_names)
                                     .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
                                     .new_line(),
@@ -114,8 +121,7 @@ impl CommandExecutor for Executor {
                         value: Cow::from(
                             get_translation_text(
                                 "pumpkin:commands.pumpkin.version",
-                                locale,
-                                vec![TextComponent::text(version_string).0],
+                                locale, &[TextComponent::text(version_string).0],
                             )
                             .replace('\n', ""),
                         ),
@@ -132,8 +138,7 @@ impl CommandExecutor for Executor {
                             value: Cow::from(
                                 get_translation_text(
                                     "pumpkin:commands.pumpkin.description",
-                                    locale,
-                                    vec![],
+                                    locale, &[],
                                 )
                                 .replace('\n', ""),
                             ),
@@ -162,8 +167,7 @@ impl CommandExecutor for Executor {
                             value: Cow::from(
                                 get_translation_text(
                                     "pumpkin:commands.pumpkin.minecraft_version",
-                                    locale,
-                                    vec![
+                                    locale, &[
                                         TextComponent::text(CURRENT_MC_VERSION.to_string()).0,
                                         TextComponent::text(
                                             CURRENT_MC_VERSION.protocol_version().to_string(),
@@ -201,12 +205,12 @@ impl CommandExecutor for Executor {
                     // Spacing
                     .add_child(TextComponent::text("  "))
                     .add_child(
-                        TextComponent::text("[Donate]")
+                        TextComponent::text(translation_to_pretty("pumpkin:log.pumpkin.donate", locale, &[]))
                             .click_event(ClickEvent::OpenUrl {
                                 url: Cow::from("https://pumpkinmc.org/donate/"),
                             })
                             .hover_event(HoverEvent::show_text(TextComponent::text(
-                                "Click to open Donate",
+                                translation_to_pretty("pumpkin:log.pumpkin.click_to_open_donate", locale, &[]),
                             )))
                             .rainbow()
                             .bold()
