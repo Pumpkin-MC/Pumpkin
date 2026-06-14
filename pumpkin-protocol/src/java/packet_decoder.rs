@@ -154,14 +154,10 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
                 expected_uncompressed_packet_data_len = Some(decompressed_length);
                 match algorithm {
                     CompressionAlgorithm::ZLib => {
-                        DecompressionReader::Zlib(ZlibDecoder::new(BufReader::new(
-                            bounded_reader,
-                        )))
+                        DecompressionReader::Zlib(ZlibDecoder::new(BufReader::new(bounded_reader)))
                     }
                     CompressionAlgorithm::Zstd => {
-                        DecompressionReader::Zstd(ZstdDecoder::new(BufReader::new(
-                            bounded_reader,
-                        )))
+                        DecompressionReader::Zstd(ZstdDecoder::new(BufReader::new(bounded_reader)))
                     }
                 }
             } else {

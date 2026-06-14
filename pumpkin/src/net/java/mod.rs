@@ -24,7 +24,8 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, CompressionAlgorithm, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, CompressionAlgorithm, ConnectionState, PacketDecodeError, RawPacket,
+    ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
@@ -206,15 +207,12 @@ impl JavaClient {
             .await
             .set_compression(threshold, algorithm);
 
-        self.network_writer
-            .lock()
-            .await
-            .set_compression(
-                threshold,
-                compression.level,
-                algorithm,
-                compression.max_threads,
-            );
+        self.network_writer.lock().await.set_compression(
+            threshold,
+            compression.level,
+            algorithm,
+            compression.max_threads,
+        );
     }
 
     /// Processes all packets received from the connected client in a loop.

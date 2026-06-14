@@ -125,10 +125,8 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 let mut comp = zstd::bulk::Compressor::new(zstd_level)
                     .expect("failed to create zstd compressor");
                 if max_threads > 1 {
-                    comp.set_parameter(zstd::zstd_safe::CParameter::NbWorkers(
-                        max_threads,
-                    ))
-                    .expect("failed to set zstd worker count");
+                    comp.set_parameter(zstd::zstd_safe::CParameter::NbWorkers(max_threads))
+                        .expect("failed to set zstd worker count");
                 }
                 self.zstd_compressor = Some((level, comp));
             }
