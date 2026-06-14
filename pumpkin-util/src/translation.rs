@@ -264,6 +264,23 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     result
 }
 
+/// Convenience wrapper around `translation_to_pretty` that uses `SERVER_LOG_LOCALE`
+/// with a fallback to `Locale::EnUs`.
+///
+/// # Arguments
+/// * `namespaced_key`: The fully qualified `namespace:key`.
+/// * `with`: Substitution components used to replace placeholders.
+///
+/// # Returns
+/// The resolved and formatted translation string.
+pub fn log_translation<P: Into<Cow<'static, str>>>(
+    namespaced_key: P,
+    with: Vec<TextComponentBase>,
+) -> String {
+    let locale = SERVER_LOG_LOCALE.get().copied().unwrap_or(Locale::EnUs);
+    translation_to_pretty(namespaced_key, locale, with)
+}
+
 pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
     LazyLock::new(|| {
         let mut array: [HashMap<String, String>; Locale::COUNT] =

@@ -1,6 +1,6 @@
 use crate::text::color::{ARGBColor, hsv_to_rgb};
 use crate::translation::{
-    Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
+    Locale, get_translation, get_translation_text, log_translation, reorder_substitutions,
 };
 use click::ClickEvent;
 use color::Color;
@@ -112,13 +112,13 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with),
+            } => log_translation(format!("minecraft:{translate}"), with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
+            TextContent::Custom { key, with, .. } => log_translation(key, with),
         };
         let style = self.style;
         let color = style.color;

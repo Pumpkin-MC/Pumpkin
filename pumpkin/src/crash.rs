@@ -11,6 +11,7 @@ use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_util::translation::log_translation;
 use pumpkin_world::CURRENT_MC_VERSION;
 use rustc_hash::FxHashMap;
 use sysinfo::{Cpu, System};
@@ -108,21 +109,42 @@ impl CrashReport {
 
         error!(
             "{}",
-            TextComponent::text("Pumpkin has encountered a panic!")
-                .color(RED)
-                .bold()
-                .to_pretty_console()
+            TextComponent::text(log_translation(
+                "pumpkin:log.pumpkin.panic_encountered",
+                vec![],
+            ))
+            .color(RED)
+            .bold()
+            .to_pretty_console()
         );
 
         error!("");
 
         // Printing panic info.
-        let thread_name = self.thread.name().unwrap_or("<unnamed>");
         let thread_id = self.thread.id();
 
         let message = self.panic_location.as_ref().map_or_else(
-            || format!("Thread '{thread_name}' {thread_id:?} panicked"),
-            |location| format!("Thread '{thread_name}' with {thread_id:?} panicked at {location}"),
+            || {
+                let thread_name = self.thread.name().unwrap_or("<unnamed>");
+                log_translation(
+                    "pumpkin:log.pumpkin.thread_panicked",
+                    vec![
+                        TextComponent::text(thread_name.to_string()).0,
+                        TextComponent::text(format!("{:?}", thread_id)).0,
+                    ],
+                )
+            },
+            |location| {
+                let thread_name = self.thread.name().unwrap_or("<unnamed>");
+                log_translation(
+                    "pumpkin:log.pumpkin.thread_panicked_at",
+                    vec![
+                        TextComponent::text(thread_name.to_string()).0,
+                        TextComponent::text(format!("{:?}", thread_id)).0,
+                        TextComponent::text(location.to_string()).0,
+                    ],
+                )
+            },
         );
 
         if let Some(payload) = &self.payload {
@@ -140,7 +162,10 @@ impl CrashReport {
             BacktraceStatus::Unsupported => {
                 error!(
                     "{}",
-                    RED.console_color("Backtracing is not supported for this platform.")
+                    RED.console_color(&log_translation(
+                        "pumpkin:log.pumpkin.backtracing_unsupported",
+                        vec![],
+                    ))
                 );
             }
             // It cannot possibly be BacktraceStatus::Disabled
@@ -148,19 +173,31 @@ impl CrashReport {
             BacktraceStatus::Captured => {
                 error!(
                     "{}",
-                    RED.console_color("The full backtrace will be printed to the crash report.")
+                    RED.console_color(&log_translation(
+                        "pumpkin:log.pumpkin.backtrace_in_report",
+                        vec![],
+                    ))
                 );
 
                 if self.captured_backtrace.status() == BacktraceStatus::Captured {
                     eprintln!(
                         "{}\n{}",
-                        RED.console_color("Backtrace:"),
+                        RED.console_color(&log_translation(
+                            "pumpkin:log.pumpkin.backtrace_label",
+                            vec![],
+                        )),
                         self.captured_backtrace
                     );
                 }
             }
             _ => {
-                error!("{}", RED.console_color("Backtrace status is unknown, so no backtrace will be generated for the crash report."));
+                error!(
+                    "{}",
+                    RED.console_color(&log_translation(
+                        "pumpkin:log.pumpkin.backtrace_unknown_status",
+                        vec![],
+                    ))
+                );
             }
         }
     }
@@ -326,7 +363,9 @@ impl CrashReport {
                 tracing::info!(
                     "{} {}",
                     Color::Named(NamedColor::Green)
-                        .console_color("Successfully saved the crash report to file:"),
+                        .console_color(&log_translation(
+                            "pumpkin:log.pumpkin.crash_report_saved", vec![],
+                        )),
                     path.display()
                 );
                 true
@@ -334,7 +373,9 @@ impl CrashReport {
             Err(error) => {
                 tracing::error!(
                     "{} {}",
-                    Color::Named(NamedColor::Red).console_color("Could not save the crash report:"),
+                    Color::Named(NamedColor::Red).console_color(&log_translation(
+                        "pumpkin:log.pumpkin.crash_report_save_failed", vec![],
+                    )),
                     error
                 );
                 false
