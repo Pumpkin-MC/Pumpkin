@@ -8,7 +8,6 @@ use pumpkin_util::{
     BlockDirection,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
-    text::TextComponent,
     translation::log_translation,
 };
 use tracing::trace;
