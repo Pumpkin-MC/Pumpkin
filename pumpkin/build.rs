@@ -1,6 +1,13 @@
 use std::process::Command;
 
 fn main() {
+    // Sync submodules
+    Command::new("git")
+        .args(["submodule", "update", "--init"])
+        .current_dir("..")
+        .output()
+        .expect("Failed to update submodules");
+
     // Get short hash (7 chars) for display
     let short_output = Command::new("git")
         .args(["rev-parse", "--short=7", "HEAD"])
