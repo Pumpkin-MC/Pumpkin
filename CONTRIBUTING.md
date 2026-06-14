@@ -29,6 +29,22 @@ There are several ways you can contribute to Pumpkin:
   Ensure your code adheres to our project structure and style guidelines.
   Write clear and concise commit messages that describe your changes.
 
+### Local setup
+
+Pumpkin uses a Git submodule for the plugin WIT files. Clone with submodules, or initialize them after cloning:
+
+```sh
+git clone --recursive https://github.com/Pumpkin-MC/Pumpkin.git
+git submodule update --init --recursive
+```
+
+You also need a working Rust toolchain and platform linker. On Windows, install the Visual Studio Build Tools with the C++ workload, or use a GNU Rust toolchain with MinGW available on `PATH`.
+
+```sh
+cargo build -p pumpkin
+cargo run -p pumpkin
+```
+
 ### Docs
 
 The Documentation of Pumpkin can be found at <https://pumpkinmc.org/>
