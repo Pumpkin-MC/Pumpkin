@@ -326,17 +326,13 @@ impl TextComponentBase {
     /// A new component with all translations resolved.
     #[must_use]
     pub fn to_translated(self) -> Self {
-        // NOTE: Divide the translation into slices and inserts the substitutions.
         let component = match *self.content {
             TextContent::Translate {
                 translate,
                 bedrock_translate,
                 with,
             } => {
-                let mut translated_with = vec![];
-                for w in with {
-                    translated_with.push(w.to_translated());
-                }
+                let translated_with: Vec<_> = with.into_iter().map(Self::to_translated).collect();
                 Self {
                     content: Box::new(TextContent::Translate {
                         translate,
@@ -349,58 +345,64 @@ impl TextComponentBase {
             }
             TextContent::Custom { key, with, locale } => {
                 let translation = get_translation(&key, locale);
-                let mut translation_parent = translation.clone();
-                let mut translation_slices = vec![];
-
-                if translation.contains('%') {
+                if with.is_empty() || !translation.contains('%') {
+                    Self {
+                        content: Box::new(TextContent::Text {
+                            text: translation.into(),
+                        }),
+                        style: self.style,
+                        extra: self.extra,
+                    }
+                } else {
                     let (substitutions, ranges) = reorder_substitutions(&translation, with);
-                    for (idx, &range) in ranges.iter().enumerate() {
-                        if idx == 0 {
-                            translation_parent = translation[..range.start].to_string();
+                    let first_seg = translation[..ranges[0].start].to_string();
+                    let extra_cap =
+                        ranges.len().saturating_mul(2) + self.extra.len();
+                    let mut extra = Vec::with_capacity(extra_cap);
+                    let mut cursor = ranges[0].end + 1;
+                    extra.push(substitutions[0].clone());
+                    for (idx, &range) in ranges.iter().enumerate().skip(1) {
+                        if range.start > cursor {
+                            extra.push(Self {
+                                content: Box::new(TextContent::Text {
+                                    text: Cow::Owned(
+                                        translation[cursor..range.start].to_string(),
+                                    ),
+                                }),
+                                style: Box::new(Style::default()),
+                                extra: vec![],
+                            });
                         }
-                        translation_slices.push(substitutions[idx].clone());
-                        if range.end >= translation.len() - 1 {
-                            continue;
-                        }
-
-                        translation_slices.push(Self {
+                        let sub_idx = idx.clamp(0, substitutions.len().saturating_sub(1));
+                        extra.push(substitutions[sub_idx].clone());
+                        cursor = range.end + 1;
+                    }
+                    if cursor < translation.len() {
+                        extra.push(Self {
                             content: Box::new(TextContent::Text {
-                                text: if idx == ranges.len() - 1 {
-                                    // Last substitution, append the rest of the translation
-                                    Cow::Owned(translation[range.end + 1..].to_string())
-                                } else {
-                                    Cow::Owned(
-                                        translation[range.end + 1..ranges[idx + 1].start]
-                                            .to_string(),
-                                    )
-                                },
+                                text: Cow::Owned(translation[cursor..].to_string()),
                             }),
                             style: Box::new(Style::default()),
                             extra: vec![],
                         });
                     }
-                }
-                for i in self.extra {
-                    translation_slices.push(i);
-                }
-                Self {
-                    content: Box::new(TextContent::Text {
-                        text: translation_parent.into(),
-                    }),
-                    style: self.style,
-                    extra: translation_slices,
+                    extra.extend(self.extra);
+                    Self {
+                        content: Box::new(TextContent::Text {
+                            text: first_seg.into(),
+                        }),
+                        style: self.style,
+                        extra,
+                    }
                 }
             }
-            _ => self, // If not a translation, return as is
+            _ => self,
         };
-        // Ensure that the extra components are translated
         let extra = component
             .extra
             .into_iter()
             .map(Self::to_translated)
             .collect();
-
-        // If the hover event is present, it will also be translated
         let mut style = component.style;
         Self::translate_hover_event(&mut style);
 
@@ -1108,7 +1110,8 @@ pub enum TextContent {
     Translate {
         /// The translation key (e.g. "multiplayer.player.joined").
         translate: Cow<'static, str>,
-        /// Bedrock translation key. If specified, Bedrock clients receive an `SText::translation` packet.
+        /// An alternate translation key, typically for Bedrock clients.
+        /// When present, `to_bedrock_string()` prefers this over `translate`.
         #[serde(skip, default)]
         bedrock_translate: Option<Cow<'static, str>>,
         /// Substitution parameters for the translation.

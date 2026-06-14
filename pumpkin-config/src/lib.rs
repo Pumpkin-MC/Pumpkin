@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
 use tracing::{debug, warn};
 pub mod fun;
+pub mod locale;
 pub mod logging;
 pub mod networking;
 pub mod plugins;
@@ -19,6 +20,7 @@ pub mod resource_pack;
 
 pub use chat::ChatConfig;
 pub use commands::CommandsConfig;
+pub use locale::LocaleConfig;
 pub use networking::auth::AuthenticationConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
@@ -98,6 +100,8 @@ pub struct AdvancedConfiguration {
     pub recipe: RecipeConfig,
     /// Plugin-related configuration.
     pub plugins: PluginsConfig,
+    /// Locale configuration controlling display languages for commands and logs.
+    pub locale: LocaleConfig,
 }
 
 /// Basic configuration for core server settings.

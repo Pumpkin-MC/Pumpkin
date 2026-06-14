@@ -32,6 +32,7 @@ use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_util::translation::{self, Locale, resolve_locale, translation_to_pretty};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -82,6 +83,13 @@ async fn main() {
 
     pumpkin::init_logger(&config.advanced);
 
+    let _ = translation::SERVER_COMMAND_LOCALE.set(resolve_locale(&config.advanced.locale.command));
+
+    let log_locale = translation::SERVER_LOG_LOCALE
+        .get()
+        .copied()
+        .unwrap_or(Locale::EnUs);
+
     info!(
         "{}",
         TextComponent::text(format!(
@@ -124,10 +132,18 @@ async fn main() {
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);
 
     info!(
-        "Started server; took {}",
-        TextComponent::text(format!("{}ms", time_elapsed.as_millis()))
+        "{}",
+        TextComponent::text(translation_to_pretty(
+            "pumpkin:log.pumpkin.started",
+            log_locale,
+            vec![TextComponent::text(format!(
+                "{}ms",
+                time_elapsed.as_millis()
+            ))
             .color_named(NamedColor::Gold)
-            .to_pretty_console()
+            .0],
+        ))
+        .to_pretty_console()
     );
     let basic_config = &pumpkin_server.server.basic_config;
     info!(
@@ -169,43 +185,70 @@ async fn main() {
 
     info!(
         "{}",
-        TextComponent::text("The server has stopped.")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
+        TextComponent::text(translation_to_pretty(
+            "pumpkin:log.pumpkin.server_stopped",
+            log_locale,
+            vec![],
+        ))
+        .color_named(NamedColor::Red)
+        .to_pretty_console()
     );
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
 }
 fn print_support_links_and_warning() {
+    let locale = translation::SERVER_LOG_LOCALE
+        .get()
+        .copied()
+        .unwrap_or(Locale::EnUs);
     warn!(
         "{}",
-        TextComponent::text("Pumpkin is currently under heavy development!")
-            .color_named(NamedColor::DarkRed)
-            .to_pretty_console(),
+        TextComponent::text(translation_to_pretty(
+            "pumpkin:log.pumpkin.warning_dev",
+            locale,
+            vec![],
+        ))
+        .color_named(NamedColor::DarkRed)
+        .to_pretty_console(),
     );
     info!(
-        "Report issues on {}",
-        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
-            .color_named(NamedColor::DarkAqua)
-            .to_pretty_console()
+        "{}",
+        TextComponent::text(translation_to_pretty(
+            "pumpkin:log.pumpkin.report_issues",
+            locale,
+            vec![TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues").0],
+        ))
+        .color_named(NamedColor::DarkAqua)
+        .to_pretty_console()
     );
     info!(
-        "Join our {} for community support: {}",
-        TextComponent::text("Discord")
-            .color_named(NamedColor::DarkBlue)
-            .to_pretty_console(),
-        TextComponent::text("https://discord.gg/wT8XjrjKkf")
-            .color_named(NamedColor::Aqua)
-            .to_pretty_console()
+        "{}",
+        TextComponent::text(translation_to_pretty(
+            "pumpkin:log.pumpkin.community_support",
+            locale,
+            vec![
+                TextComponent::text("Discord").0,
+                TextComponent::text("https://discord.gg/wT8XjrjKkf").0,
+            ],
+        ))
+        .to_pretty_console()
     );
 }
 
 fn handle_interrupt() {
+    let locale = translation::SERVER_LOG_LOCALE
+        .get()
+        .copied()
+        .unwrap_or(Locale::EnUs);
     warn!(
         "{}",
-        TextComponent::text("Received interrupt signal; stopping server...")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
+        TextComponent::text(translation_to_pretty(
+            "pumpkin:log.pumpkin.interrupt_signal",
+            locale,
+            vec![],
+        ))
+        .color_named(NamedColor::Red)
+        .to_pretty_console()
     );
     stop_or_exit_server();
 }
@@ -236,20 +279,34 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         if let Some(crash_report) = try_set_crash_report(crash_report) {
             crash_report.print_to_console();
             crash_report.save_and_log();
+            let locale = translation::SERVER_LOG_LOCALE
+                .get()
+                .copied()
+                .unwrap_or(Locale::EnUs);
 
             tracing::error!(
                 "{}",
-                TextComponent::text("Aborting due to the main thread panicking.")
-                    .color(Color::Named(NamedColor::Red))
-                    .to_pretty_console()
+                TextComponent::text(translation_to_pretty(
+                    "pumpkin:log.pumpkin.main_thread_panic",
+                    locale,
+                    vec![],
+                ))
+                .color(Color::Named(NamedColor::Red))
+                .to_pretty_console()
             );
         } else {
             // It's a subsequent panic.
+            let locale = translation::SERVER_LOG_LOCALE
+                .get()
+                .copied()
+                .unwrap_or(Locale::EnUs);
             tracing::error!(
                 "{}: {}",
-                TextComponent::text(
-                    "The main thread panicked while stopping the server; aborting."
-                )
+                TextComponent::text(translation_to_pretty(
+                    "pumpkin:log.pumpkin.panic_while_stopping",
+                    locale,
+                    vec![],
+                ))
                 .color(Color::Named(NamedColor::Red))
                 .bold()
                 .to_pretty_console(),
@@ -269,12 +326,20 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         stop_server();
     } else {
         // It's a subsequent panic; let's just alert about it.
+        let locale = translation::SERVER_LOG_LOCALE
+            .get()
+            .copied()
+            .unwrap_or(Locale::EnUs);
         tracing::error!(
             "{}: {}",
-            TextComponent::text("Encountered panic while shutting down")
-                .color(Color::Named(NamedColor::Red))
-                .bold()
-                .to_pretty_console(),
+            TextComponent::text(translation_to_pretty(
+                "pumpkin:log.pumpkin.panic_during_shutdown",
+                locale,
+                vec![],
+            ))
+            .color(Color::Named(NamedColor::Red))
+            .bold()
+            .to_pretty_console(),
             payload
                 .downcast_ref::<&str>()
                 .copied()

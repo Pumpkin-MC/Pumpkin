@@ -14,6 +14,7 @@ use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::translation::{self, Locale, resolve_locale, translation_to_pretty};
 use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
@@ -168,6 +169,9 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         LOGGER_IMPL.set(logger).is_ok(),
         "Failed to set logger. already initialized"
     );
+
+    let resolved = resolve_locale(&advanced_config.locale.log);
+    let _ = translation::SERVER_LOG_LOCALE.set(resolved);
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -222,7 +226,15 @@ impl PumpkinServer {
 
         if rcon.enabled {
             warn!(
-                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
+                "{}",
+                translation_to_pretty(
+                    "pumpkin:log.pumpkin.rcon_warning",
+                    translation::SERVER_LOG_LOCALE
+                        .get()
+                        .copied()
+                        .unwrap_or(Locale::EnUs),
+                    vec![],
+                )
             );
             let rcon_server = server.clone();
             server.spawn_task(async move {
@@ -262,7 +274,17 @@ impl PumpkinServer {
                 .expect("Unable to get the address of the server!");
 
             if server.advanced_config.networking.query.enabled {
-                info!("Query protocol is enabled. Starting...");
+                info!(
+                    "{}",
+                    translation_to_pretty(
+                        "pumpkin:log.pumpkin.query_enabled",
+                        translation::SERVER_LOG_LOCALE
+                            .get()
+                            .copied()
+                            .unwrap_or(Locale::EnUs),
+                        vec![],
+                    )
+                );
                 server.spawn_task(query::start_query_handler(
                     server.clone(),
                     server.advanced_config.networking.query.address,
@@ -270,7 +292,17 @@ impl PumpkinServer {
             }
 
             if server.advanced_config.networking.lan_broadcast.enabled {
-                info!("LAN broadcast is enabled. Starting...");
+                info!(
+                    "{}",
+                    translation_to_pretty(
+                        "pumpkin:log.pumpkin.lan_broadcast_enabled",
+                        translation::SERVER_LOG_LOCALE
+                            .get()
+                            .copied()
+                            .unwrap_or(Locale::EnUs),
+                        vec![],
+                    )
+                );
 
                 let lan_broadcast = LANBroadcast::new(
                     &server.advanced_config.networking.lan_broadcast,
@@ -331,7 +363,18 @@ impl PumpkinServer {
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
             error!("Error unloading plugins: {err}");
         } else {
-            info!("All plugins unloaded successfully");
+            let locale = translation::SERVER_LOG_LOCALE
+                .get()
+                .copied()
+                .unwrap_or(Locale::EnUs);
+            info!(
+                "{}",
+                translation_to_pretty(
+                    "pumpkin:log.pumpkin.plugins_unloaded",
+                    locale,
+                    vec![],
+                )
+            );
         }
     }
 
@@ -344,7 +387,15 @@ impl PumpkinServer {
             } else {
                 if self.server.advanced_config.commands.use_tty {
                     warn!(
-                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                        "{}",
+                        translation_to_pretty(
+                            "pumpkin:log.pumpkin.tty_fallback",
+                            translation::SERVER_LOG_LOCALE
+                                .get()
+                                .copied()
+                                .unwrap_or(Locale::EnUs),
+                            vec![],
+                        )
                     );
                 }
                 setup_stdin_console(self.server.clone());
@@ -372,15 +423,32 @@ impl PumpkinServer {
 
             info!(
                 "{}",
-                TextComponent::text("Gracefully shutting down...")
-                    .color(Color::Named(NamedColor::Green))
-                    .to_pretty_console()
+                TextComponent::text(translation_to_pretty(
+                    "pumpkin:log.pumpkin.shutting_down",
+                    translation::SERVER_LOG_LOCALE
+                        .get()
+                        .copied()
+                        .unwrap_or(Locale::EnUs),
+                    vec![],
+                ))
+                .color(Color::Named(NamedColor::Green))
+                .to_pretty_console()
             );
 
             SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
 
-        info!("Stopped accepting incoming connections");
+        info!(
+            "{}",
+            translation_to_pretty(
+                "pumpkin:log.pumpkin.stopped_accepting",
+                translation::SERVER_LOG_LOCALE
+                    .get()
+                    .copied()
+                    .unwrap_or(Locale::EnUs),
+                vec![],
+            )
+        );
 
         if let Err(e) = self
             .server
@@ -398,18 +466,48 @@ impl PumpkinServer {
                 .await;
         }
 
-        info!("Ending player tasks");
+        info!(
+            "{}",
+            translation_to_pretty(
+                "pumpkin:log.pumpkin.ending_tasks",
+                translation::SERVER_LOG_LOCALE
+                    .get()
+                    .copied()
+                    .unwrap_or(Locale::EnUs),
+                vec![],
+            )
+        );
 
         tasks.close();
         tasks.wait().await;
 
         self.unload_plugins().await;
 
-        info!("Starting save.");
+        info!(
+            "{}",
+            translation_to_pretty(
+                "pumpkin:log.pumpkin.saving_world",
+                translation::SERVER_LOG_LOCALE
+                    .get()
+                    .copied()
+                    .unwrap_or(Locale::EnUs),
+                vec![],
+            )
+        );
 
         self.server.shutdown().await;
 
-        info!("Completed save!");
+        info!(
+            "{}",
+            translation_to_pretty(
+                "pumpkin:log.pumpkin.save_complete",
+                translation::SERVER_LOG_LOCALE
+                    .get()
+                    .copied()
+                    .unwrap_or(Locale::EnUs),
+                vec![],
+            )
+        );
 
         if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
@@ -646,12 +744,34 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     let _ = rx_reply.blocking_recv();
                 }
                 Err(ReadlineError::Interrupted) => {
-                    info!("CTRL-C");
+                    let locale = translation::SERVER_LOG_LOCALE
+                        .get()
+                        .copied()
+                        .unwrap_or(Locale::EnUs);
+                    info!(
+                        "{}",
+                        translation_to_pretty(
+                            "pumpkin:log.pumpkin.ctrlc",
+                            locale,
+                            vec![],
+                        )
+                    );
                     stop_or_exit_server();
                     break;
                 }
                 Err(ReadlineError::Eof) => {
-                    info!("CTRL-D");
+                    let locale = translation::SERVER_LOG_LOCALE
+                        .get()
+                        .copied()
+                        .unwrap_or(Locale::EnUs);
+                    info!(
+                        "{}",
+                        translation_to_pretty(
+                            "pumpkin:log.pumpkin.ctrld",
+                            locale,
+                            vec![],
+                        )
+                    );
                     stop_server();
                     break;
                 }
