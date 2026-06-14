@@ -93,7 +93,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         }
     }
 
-    pub fn set_compression(
+    pub const fn set_compression(
         &mut self,
         threshold: CompressionThreshold,
         algorithm: CompressionAlgorithm,

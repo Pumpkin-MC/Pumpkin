@@ -62,7 +62,7 @@ impl CompressionAlgorithm {
     /// Determines the algorithm from a config string.
     /// Recognizes `"zstd"` (case-insensitive); everything else defaults to `ZLib`.
     #[must_use]
-    pub fn from_config(s: &str) -> Self {
+    pub const fn from_config(s: &str) -> Self {
         if s.eq_ignore_ascii_case("zstd") {
             Self::Zstd
         } else {
@@ -76,9 +76,7 @@ impl CompressionAlgorithm {
 #[must_use]
 pub fn resolve_zstd_threads(max_threads: u32) -> u32 {
     if max_threads == 0 {
-        std::thread::available_parallelism()
-            .map(|n| n.get() as u32)
-            .unwrap_or(1)
+        std::thread::available_parallelism().map_or(1, |n| n.get() as u32)
     } else {
         max_threads
     }
