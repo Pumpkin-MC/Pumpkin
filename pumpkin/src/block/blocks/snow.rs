@@ -10,7 +10,7 @@ use pumpkin_world::{
 
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-    UseWithItemArgs, registry::BlockActionResult,
+    RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
 };
 
 #[pumpkin_block("minecraft:snow")]
@@ -86,6 +86,17 @@ impl BlockBehaviour for LayeredSnowBlock {
         })
     }
 
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let block_light_level = args.world.get_block_light_level(args.position).unwrap_or(0);
+            if melts_at_light_level(block_light_level) {
+                args.world
+                    .break_block(args.position, None, BlockFlags::empty())
+                    .await;
+            }
+        })
+    }
+
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
@@ -103,4 +114,30 @@ impl BlockBehaviour for LayeredSnowBlock {
 fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
     let state = block_accessor.get_block_state(&position.down());
     state.is_side_solid(BlockDirection::Up)
+}
+
+/// Snow melts away when exposed to a block light level greater than 11, e.g. from
+/// torches, campfires, lanterns, fire, lava, or glowstone.
+/// See <https://minecraft.wiki/w/Snow#Melting>.
+const fn melts_at_light_level(block_light_level: u8) -> bool {
+    block_light_level > 11
+}
+
+#[cfg(test)]
+mod tests {
+    use super::melts_at_light_level;
+
+    #[test]
+    fn does_not_melt_at_or_below_threshold() {
+        for light_level in 0..=11 {
+            assert!(!melts_at_light_level(light_level));
+        }
+    }
+
+    #[test]
+    fn melts_above_threshold() {
+        for light_level in 12..=15 {
+            assert!(melts_at_light_level(light_level));
+        }
+    }
 }
