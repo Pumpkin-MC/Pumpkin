@@ -2839,6 +2839,7 @@ name = "pumpkin-util"
 version = "0.1.0-dev+26.1"
 dependencies = [
  "base64 0.22.1",
+ "bumpalo",
  "bytes",
  "colored",
  "crypto-bigint 0.7.3",

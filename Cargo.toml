@@ -120,6 +120,7 @@ aes = { version = "0.9", default-features = false }
 async-compression = { version = "0.4.42", default-features = false }
 base64 = { version = "0.22.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.0", default-features = false, features = ["std"] }
+bumpalo = { version = "3.20", features = ["collections"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
 colored = { version = "3.1", default-features = false }

@@ -70,9 +70,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.19.1"
+version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
+checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bytes"
@@ -800,6 +800,7 @@ name = "pumpkin-util"
 version = "0.1.0-dev+26.1"
 dependencies = [
  "base64",
+ "bumpalo",
  "bytes",
  "colored",
  "crypto-bigint 0.7.3",
