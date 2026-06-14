@@ -59,7 +59,35 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
+const fn should_use_readline(
+    use_tty: bool,
+    stdin_is_terminal: bool,
+    stdout_is_terminal: bool,
+) -> bool {
+    use_tty && stdin_is_terminal && stdout_is_terminal
+}
+
 #[expect(clippy::print_stderr)]
+fn create_readline() -> Option<Editor<PumpkinCommandCompleter, FileHistory>> {
+    let rl_config = Config::builder()
+        .auto_add_history(true)
+        .completion_type(rustyline::CompletionType::List)
+        .edit_mode(rustyline::EditMode::Emacs)
+        .build();
+    let helper = PumpkinCommandCompleter::new();
+
+    match Editor::with_config(rl_config) {
+        Ok(mut rl) => {
+            rl.set_helper(Some(helper));
+            Some(rl)
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize console input ({e}); falling back to simple logger");
+            None
+        }
+    }
+}
+
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
     use tracing_subscriber::fmt;
@@ -96,26 +124,10 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let (logger, rl): (
             Box<dyn std::io::Write + Send + 'static>,
             Option<Editor<PumpkinCommandCompleter, FileHistory>>,
-        ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
-            let rl_config = Config::builder()
-                .auto_add_history(true)
-                .completion_type(rustyline::CompletionType::List)
-                .edit_mode(rustyline::EditMode::Emacs)
-                .build();
-            let helper = PumpkinCommandCompleter::new();
-
-            match Editor::with_config(rl_config) {
-                Ok(mut rl) => {
-                    rl.set_helper(Some(helper));
-                    (Box::new(std::io::stdout()), Some(rl))
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Failed to initialize console input ({e}); falling back to simple logger"
-                    );
-                    (Box::new(std::io::stdout()), None)
-                }
-            }
+        ) = if advanced_config.commands.use_tty
+            && should_use_readline(true, stdin().is_terminal(), std::io::stdout().is_terminal())
+        {
+            (Box::new(std::io::stdout()), create_readline())
         } else {
             (Box::new(std::io::stdout()), None)
         };
@@ -344,7 +356,7 @@ impl PumpkinServer {
             } else {
                 if self.server.advanced_config.commands.use_tty {
                     warn!(
-                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                        "Console streams are not attached to a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
                 }
                 setup_stdin_console(self.server.clone());
@@ -702,4 +714,17 @@ fn scrub_address(ip: &str) -> String {
     ip.chars()
         .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_use_readline;
+
+    #[test]
+    fn uses_readline_only_when_tty_is_enabled_and_streams_are_terminal() {
+        assert!(should_use_readline(true, true, true));
+        assert!(!should_use_readline(false, true, true));
+        assert!(!should_use_readline(true, false, true));
+        assert!(!should_use_readline(true, true, false));
+    }
 }
