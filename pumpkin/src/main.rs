@@ -32,6 +32,7 @@ use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_util::translation::{self, log_translation, resolve_locale};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -82,6 +83,9 @@ async fn main() {
 
     pumpkin::init_logger(&config.advanced);
 
+    let _ = translation::SERVER_COMMAND_LOCALE.set(resolve_locale(&config.advanced.locale.command));
+
+
     info!(
         "{}",
         TextComponent::text(format!(
@@ -112,10 +116,15 @@ async fn main() {
     );
     print_support_links_and_warning();
 
-    tokio::spawn(async {
+    tokio::spawn(async move {
         setup_sighandler()
             .await
-            .expect("Unable to setup signal handlers");
+            .expect(
+                &log_translation(
+                    "pumpkin:log.pumpkin.signal_handler_error", 
+                    vec![],
+                ),
+            );
     });
 
     let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;
@@ -124,10 +133,17 @@ async fn main() {
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);
 
     info!(
-        "Started server; took {}",
-        TextComponent::text(format!("{}ms", time_elapsed.as_millis()))
+        "{}",
+        TextComponent::text(log_translation(
+            "pumpkin:log.pumpkin.started", 
+            vec![TextComponent::text(format!(
+                "{}ms",
+                time_elapsed.as_millis()
+            ))
             .color_named(NamedColor::Gold)
-            .to_pretty_console()
+            .0],
+        ))
+        .to_pretty_console()
     );
     let basic_config = &pumpkin_server.server.basic_config;
     info!(
@@ -169,9 +185,12 @@ async fn main() {
 
     info!(
         "{}",
-        TextComponent::text("The server has stopped.")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
+        TextComponent::text(log_translation(
+            "pumpkin:log.pumpkin.server_stopped", 
+            vec![],
+        ))
+        .color_named(NamedColor::Red)
+        .to_pretty_console()
     );
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
@@ -179,33 +198,40 @@ async fn main() {
 fn print_support_links_and_warning() {
     warn!(
         "{}",
-        TextComponent::text("Pumpkin is currently under heavy development!")
-            .color_named(NamedColor::DarkRed)
-            .to_pretty_console(),
+        TextComponent::text(log_translation(
+            "pumpkin:log.pumpkin.warning_dev", vec![],
+        ))
+        .color_named(NamedColor::DarkRed)
+        .to_pretty_console(),
     );
     info!(
-        "Report issues on {}",
-        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
-            .color_named(NamedColor::DarkAqua)
-            .to_pretty_console()
+        "{}",
+        TextComponent::text(log_translation(
+            "pumpkin:log.pumpkin.report_issues", vec![TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues").0],
+        ))
+        .color_named(NamedColor::DarkAqua)
+        .to_pretty_console()
     );
     info!(
-        "Join our {} for community support: {}",
-        TextComponent::text("Discord")
-            .color_named(NamedColor::DarkBlue)
-            .to_pretty_console(),
-        TextComponent::text("https://discord.gg/wT8XjrjKkf")
-            .color_named(NamedColor::Aqua)
-            .to_pretty_console()
+        "{}",
+        TextComponent::text(log_translation(
+            "pumpkin:log.pumpkin.community_support", vec![
+                TextComponent::text("Discord").0,
+                TextComponent::text("https://discord.gg/wT8XjrjKkf").0,
+            ],
+        ))
+        .to_pretty_console()
     );
 }
 
 fn handle_interrupt() {
     warn!(
         "{}",
-        TextComponent::text("Received interrupt signal; stopping server...")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
+        TextComponent::text(log_translation(
+            "pumpkin:log.pumpkin.interrupt_signal", vec![],
+        ))
+        .color_named(NamedColor::Red)
+        .to_pretty_console()
     );
     stop_or_exit_server();
 }
@@ -239,17 +265,19 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
 
             tracing::error!(
                 "{}",
-                TextComponent::text("Aborting due to the main thread panicking.")
-                    .color(Color::Named(NamedColor::Red))
-                    .to_pretty_console()
+                TextComponent::text(log_translation(
+                    "pumpkin:log.pumpkin.main_thread_panic", vec![],
+                ))
+                .color(Color::Named(NamedColor::Red))
+                .to_pretty_console()
             );
         } else {
             // It's a subsequent panic.
             tracing::error!(
                 "{}: {}",
-                TextComponent::text(
-                    "The main thread panicked while stopping the server; aborting."
-                )
+                TextComponent::text(log_translation(
+                    "pumpkin:log.pumpkin.panic_while_stopping", vec![],
+                ))
                 .color(Color::Named(NamedColor::Red))
                 .bold()
                 .to_pretty_console(),
@@ -271,10 +299,12 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         // It's a subsequent panic; let's just alert about it.
         tracing::error!(
             "{}: {}",
-            TextComponent::text("Encountered panic while shutting down")
-                .color(Color::Named(NamedColor::Red))
-                .bold()
-                .to_pretty_console(),
+            TextComponent::text(log_translation(
+                "pumpkin:log.pumpkin.panic_during_shutdown", vec![],
+            ))
+            .color(Color::Named(NamedColor::Red))
+            .bold()
+            .to_pretty_console(),
             payload
                 .downcast_ref::<&str>()
                 .copied()

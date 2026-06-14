@@ -2,16 +2,13 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     str::FromStr,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, Mutex, OnceLock},
 };
 
 /// TODO List
-/// - Add server locale support
-/// - Use translations in the logs
 /// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Add support for translations on commands descriptions
-/// - Integrate custom translations with the plugins API
-/// - Try to optimize code of '`to_translated`'
+
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us_java.json");
@@ -265,6 +262,23 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
 
     result.push_str(&translation[pos..]);
     result
+}
+
+/// Convenience wrapper around `translation_to_pretty` that uses `SERVER_LOG_LOCALE`
+/// with a fallback to `Locale::EnUs`.
+///
+/// # Arguments
+/// * `namespaced_key`: The fully qualified `namespace:key`.
+/// * `with`: Substitution components used to replace placeholders.
+///
+/// # Returns
+/// The resolved and formatted translation string.
+pub fn log_translation<P: Into<Cow<'static, str>>>(
+    namespaced_key: P,
+    with: Vec<TextComponentBase>,
+) -> String {
+    let locale = SERVER_LOG_LOCALE.get().copied().unwrap_or(Locale::EnUs);
+    translation_to_pretty(namespaced_key, locale, with)
 }
 
 pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
@@ -673,4 +687,83 @@ impl FromStr for Locale {
             _ => Ok(Self::EnUs),             // Default to English (US) if not found
         }
     }
+}
+
+/// Server-wide locale for command output (console + player-facing messages).
+pub static SERVER_COMMAND_LOCALE: OnceLock<Locale> = OnceLock::new();
+
+/// Server-wide locale for log records.
+pub static SERVER_LOG_LOCALE: OnceLock<Locale> = OnceLock::new();
+
+/// Attempts to detect the operating system's preferred locale.
+///
+/// On Linux/macOS the `LANG`, `LC_ALL`, and `LC_MESSAGES` environment variables
+/// are checked (in that order). On Windows the Win32 `GetUserDefaultLocaleName`
+/// API is used, with a fallback to the `LANG` variable.
+///
+/// # Returns
+/// `Some("en_US")`-style string if detection succeeds, `None` otherwise.
+#[must_use]
+pub fn detect_system_locale() -> Option<String> {
+    // Unix-style environment variables (work on Linux, macOS, and some Windows setups).
+    for var in &["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(raw) = std::env::var(var) {
+            if raw.is_empty() || raw.eq_ignore_ascii_case("C") || raw.eq_ignore_ascii_case("POSIX") {
+                continue;
+            }
+            let locale = raw.split('.').next().unwrap_or(&raw);
+            if !locale.is_empty() {
+                return Some(locale.replace('-', "_"));
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(loc) = detect_windows_locale() {
+            return Some(loc);
+        }
+    }
+
+    None
+}
+
+/// Resolves a configuration string into a concrete [`Locale`].
+///
+/// * `"auto"` → calls [`detect_system_locale`] and falls back to [`Locale::EnUs`].
+/// * Any other string → parsed via [`Locale::from_str`]; falls back to [`Locale::EnUs`]
+///   if the string is not recognised.
+#[must_use]
+pub fn resolve_locale(config_str: &str) -> Locale {
+    if config_str.eq_ignore_ascii_case("auto") {
+        if let Some(detected) = detect_system_locale() {
+            let locale = Locale::from_str(&detected).unwrap_or(Locale::EnUs);
+            if locale != Locale::EnUs {
+                return locale;
+            }
+        }
+        Locale::EnUs
+    } else {
+        Locale::from_str(config_str).unwrap_or(Locale::EnUs)
+    }
+}
+
+/// Helper for Windows: calls `GetUserDefaultLocaleName` to obtain the
+/// current user locale (e.g. `"en-US"` → returned as `"en_US"`).
+#[cfg(target_os = "windows")]
+fn detect_windows_locale() -> Option<String> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+
+    extern "system" {
+        fn GetUserDefaultLocaleName(lpLocaleName: *mut u16, cchLocaleName: i32) -> i32;
+    }
+
+    let mut buffer = vec![0u16; 85]; // LOCALE_NAME_MAX_LENGTH
+    let len = unsafe { GetUserDefaultLocaleName(buffer.as_mut_ptr(), buffer.len() as i32) };
+    if len > 0 {
+        let os = OsString::from_wide(&buffer[..(len as usize - 1)]);
+        return os.into_string().ok().map(|s| s.replace('-', "_"));
+    }
+    None
 }

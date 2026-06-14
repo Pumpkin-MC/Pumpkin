@@ -23,6 +23,8 @@ use crate::command::CommandSender;
 use crate::command::string_reader::StringReader;
 use crate::command::tree::NodeType;
 use crate::server::Server;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::log_translation;
 
 #[macro_export]
 macro_rules! log_at_level {
@@ -115,8 +117,11 @@ impl GzipRollingLogger {
         // If latest.log exists, we will gzip it
         if latest_path.exists() {
             eprintln!(
-                "Found existing log file at '{}', gzipping it now...",
-                latest_path.display()
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.existing_log_found",
+                    vec![TextComponent::text(latest_path.display().to_string()).0],
+                )
             );
 
             let new_gz_path = Self::new_filename(true)?;
@@ -184,16 +189,29 @@ impl GzipRollingLogger {
 
         if let Some((path, _)) = oldest_log {
             eprintln!(
-                "Max log ids ({MAX_ATTEMPTS}) used for {date_format}; overwriting oldest log file: {}",
-                path.display()
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.max_log_ids_used",
+                    vec![
+                        TextComponent::text(MAX_ATTEMPTS.to_string()).0,
+                        TextComponent::text(date_format.clone()).0,
+                        TextComponent::text(path.display().to_string()).0,
+                    ],
+                )
             );
             return Ok(path);
         }
 
-        Err(format!(
-            "Failed to find a unique log filename for date {date_format} after {MAX_ATTEMPTS} attempts.",
+        Err(
+            log_translation(
+                "pumpkin:log.pumpkin.unique_filename_failed",
+                vec![
+                    TextComponent::text(date_format.clone()).0,
+                    TextComponent::text(MAX_ATTEMPTS.to_string()).0,
+                ],
+            )
+            .into(),
         )
-        .into())
     }
 
     fn rotate_log(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -286,7 +304,13 @@ where
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
-                    eprintln!("Failed to rotate log: {e}");
+                    eprintln!(
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.failed_to_rotate",
+                            vec![TextComponent::text(e.to_string()).0],
+                        )
+                    );
                 }
             }
         }

@@ -14,6 +14,7 @@ use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::translation::{self, log_translation, resolve_locale};
 use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
@@ -168,6 +169,9 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         LOGGER_IMPL.set(logger).is_ok(),
         "Failed to set logger. already initialized"
     );
+
+    let resolved = resolve_locale(&advanced_config.locale.log);
+    let _ = translation::SERVER_LOG_LOCALE.set(resolved);
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -222,7 +226,11 @@ impl PumpkinServer {
 
         if rcon.enabled {
             warn!(
-                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.rcon_warning",
+                    vec![],
+                )
             );
             let rcon_server = server.clone();
             server.spawn_task(async move {
@@ -237,21 +245,56 @@ impl PumpkinServer {
                 Ok(l) => l,
                 Err(e) => match e.kind() {
                     ErrorKind::AddrInUse => {
-                        error!("Error: Address {address} is already in use.");
-                        error!("Make sure another instance of the server isn't already running");
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.address_in_use", vec![TextComponent::text(address.to_string()).0],
+                            )
+                        );
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.ensure_not_running", vec![],
+                            )
+                        );
                         std::process::exit(1);
                     }
                     ErrorKind::PermissionDenied => {
-                        error!("Error: Permission denied when binding to {address}.");
-                        error!("You might need sudo/admin privileges to use ports below 1024");
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.permission_denied_bind", vec![TextComponent::text(address.to_string()).0],
+                            )
+                        );
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.need_sudo_privileges", vec![],
+                            )
+                        );
                         std::process::exit(1);
                     }
                     ErrorKind::AddrNotAvailable => {
-                        error!("Error: The address {address} is not available on this machine");
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.address_not_available",
+                                vec![TextComponent::text(address.to_string()).0],
+                            )
+                        );
                         std::process::exit(1);
                     }
                     _ => {
-                        error!("Failed to start TcpListener on {address}: {e}");
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.failed_to_start_tcp",
+                                vec![
+                                    TextComponent::text(address.to_string()).0,
+                                    TextComponent::text(e.to_string()).0,
+                                ],
+                            )
+                        );
                         std::process::exit(1);
                     }
                 },
@@ -262,7 +305,13 @@ impl PumpkinServer {
                 .expect("Unable to get the address of the server!");
 
             if server.advanced_config.networking.query.enabled {
-                info!("Query protocol is enabled. Starting...");
+                info!(
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.query_enabled",
+                        vec![],
+                    )
+                );
                 server.spawn_task(query::start_query_handler(
                     server.clone(),
                     server.advanced_config.networking.query.address,
@@ -270,7 +319,13 @@ impl PumpkinServer {
             }
 
             if server.advanced_config.networking.lan_broadcast.enabled {
-                info!("LAN broadcast is enabled. Starting...");
+                info!(
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.lan_broadcast_enabled",
+                        vec![],
+                    )
+                );
 
                 let lan_broadcast = LANBroadcast::new(
                     &server.advanced_config.networking.lan_broadcast,
@@ -329,9 +384,19 @@ impl PumpkinServer {
 
     pub async fn unload_plugins(&self) {
         if let Err(err) = self.server.plugin_manager.unload_all_plugins().await {
-            error!("Error unloading plugins: {err}");
+            error!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.error_unloading_plugins", vec![TextComponent::text(err.to_string()).0],
+                )
+            );
         } else {
-            info!("All plugins unloaded successfully");
+            info!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.plugins_unloaded", vec![],
+                )
+            );
         }
     }
 
@@ -344,7 +409,11 @@ impl PumpkinServer {
             } else {
                 if self.server.advanced_config.commands.use_tty {
                     warn!(
-                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.tty_fallback",
+                            vec![],
+                        )
                     );
                 }
                 setup_stdin_console(self.server.clone());
@@ -372,15 +441,24 @@ impl PumpkinServer {
 
             info!(
                 "{}",
-                TextComponent::text("Gracefully shutting down...")
-                    .color(Color::Named(NamedColor::Green))
-                    .to_pretty_console()
+                TextComponent::text(log_translation(
+                    "pumpkin:log.pumpkin.shutting_down",
+                    vec![],
+                ))
+                .color(Color::Named(NamedColor::Green))
+                .to_pretty_console()
             );
 
             SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
 
-        info!("Stopped accepting incoming connections");
+        info!(
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.stopped_accepting",
+                vec![],
+            )
+        );
 
         if let Err(e) = self
             .server
@@ -388,7 +466,13 @@ impl PumpkinServer {
             .save_all_players(&self.server)
             .await
         {
-            error!("Error saving all players during shutdown: {e}");
+            error!(
+                "{}",
+                log_translation(
+                    "pumpkin:log.pumpkin.failed_save_players_shutdown",
+                    vec![TextComponent::text(e.to_string()).0],
+                )
+            );
         }
 
         let kick_message = TextComponent::text("Server stopped");
@@ -398,18 +482,36 @@ impl PumpkinServer {
                 .await;
         }
 
-        info!("Ending player tasks");
+        info!(
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.ending_tasks",
+                vec![],
+            )
+        );
 
         tasks.close();
         tasks.wait().await;
 
         self.unload_plugins().await;
 
-        info!("Starting save.");
+        info!(
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.saving_world",
+                vec![],
+            )
+        );
 
         self.server.shutdown().await;
 
-        info!("Completed save!");
+        info!(
+            "{}",
+            log_translation(
+                "pumpkin:log.pumpkin.save_complete",
+                vec![],
+            )
+        );
 
         if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
@@ -433,7 +535,13 @@ impl PumpkinServer {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
                         if let Err(e) = connection.set_nodelay(true) {
-                            warn!("Failed to set TCP_NODELAY: {e}");
+                            warn!(
+                                "{}",
+                                log_translation(
+                                    "pumpkin:log.pumpkin.failed_set_tcp_nodelay",
+                                    vec![TextComponent::text(e.to_string()).0],
+                                )
+                            );
                         }
 
                         let client_id = *master_client_id_counter;
@@ -478,7 +586,13 @@ impl PumpkinServer {
                                     if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(&player)
                                         .await {
-                                            error!("Failed to save player data on disconnect: {e}");
+                                            error!(
+                                                "{}",
+                                                log_translation(
+                                                    "pumpkin:log.pumpkin.failed_save_player_data",
+                                                    vec![TextComponent::text(e.to_string()).0],
+                                                )
+                                            );
                                         }
                                     }
                                 },
@@ -486,7 +600,13 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
-                        error!("Failed to accept Java client connection: {e}");
+                        error!(
+                            "{}",
+                            log_translation(
+                                "pumpkin:log.pumpkin.failed_accept_java",
+                                vec![TextComponent::text(e.to_string()).0],
+                            )
+                        );
                         sleep(Duration::from_millis(50)).await;
                     }
                 }
@@ -544,7 +664,13 @@ impl PumpkinServer {
                                                     if let Err(e) = server_clone.player_data_storage
                                                         .handle_player_leave(&player)
                                                         .await {
-                                                            error!("Failed to save player data on disconnect: {e}");
+                                                            error!(
+                                                                "{}",
+                                                                log_translation(
+                                                                    "pumpkin:log.pumpkin.failed_save_player_data",
+                                                                    vec![TextComponent::text(e.to_string()).0],
+                                                                )
+                                                            );
                                                         }
                                                 }
                                             }
@@ -569,7 +695,13 @@ impl PumpkinServer {
                             }
                         }
                     }
-                    Err(e) => error!("UDP socket error: {e}"),
+                    Err(e) => error!(
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.udp_socket_error",
+                            vec![TextComponent::text(e.to_string()).0],
+                        )
+                    ),
                 }
             },
 
@@ -597,7 +729,13 @@ fn setup_stdin_console(server: Arc<Server>) {
                 break;
             }
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
-                warn!("Console command was not terminated with a newline");
+                warn!(
+                    "{}",
+                    log_translation(
+                        "pumpkin:log.pumpkin.console_no_newline",
+                        vec![],
+                    )
+                );
             }
             rt.block_on(tx.send(line.trim().to_string()))
                 .expect("Failed to send command to server");
@@ -646,17 +784,33 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     let _ = rx_reply.blocking_recv();
                 }
                 Err(ReadlineError::Interrupted) => {
-                    info!("CTRL-C");
+                    info!(
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.ctrlc", vec![],
+                        )
+                    );
                     stop_or_exit_server();
                     break;
                 }
                 Err(ReadlineError::Eof) => {
-                    info!("CTRL-D");
+                    info!(
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.ctrld", vec![],
+                        )
+                    );
                     stop_server();
                     break;
                 }
                 Err(err) => {
-                    error!("Error reading console input: {err}");
+                    error!(
+                        "{}",
+                        log_translation(
+                            "pumpkin:log.pumpkin.console_read_error",
+                            vec![TextComponent::text(err.to_string()).0],
+                        )
+                    );
                     break;
                 }
             }

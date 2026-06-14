@@ -36,6 +36,7 @@ use crate::{
 pub mod commands;
 pub mod events;
 pub mod forms;
+pub mod i18n;
 /// Constants for plugin permissions.
 ///
 /// Use these in your `PluginMetadata` to request access to specific host features.
@@ -53,7 +54,7 @@ pub use wit::pumpkin::plugin::{
     context::{Context, Server},
     entity,
     entity_types::EntityType,
-    gui, i18n, java_dialogs, java_packets, particles, permission, player, scoreboard, server, text,
+    gui, java_dialogs, java_packets, particles, permission, player, scoreboard, server, text,
     world,
 };
 
