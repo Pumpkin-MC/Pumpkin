@@ -9,6 +9,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
 
 pub mod block_pos;
+pub mod column_pos;
 pub mod rotation;
 pub mod vec3;
 
