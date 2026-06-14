@@ -88,6 +88,7 @@ impl PlayerAdvancement {
 
     /// Returns whether advancement saving is enabled for this player.
     #[must_use]
+    #[inline]
     pub fn is_save_enabled(&self) -> bool {
         self.manager.save_enabled
     }
@@ -132,7 +133,7 @@ impl PlayerAdvancement {
 
     /// Loads the player's advancement progress from disk.
     pub fn load(&mut self) -> Result<(), AdvancementDataError> {
-        if !self.path.exists() {
+        if !self.path.exists() || !self.is_save_enabled() {
             return Ok(());
         }
 
@@ -464,5 +465,27 @@ mod tests {
         let saved_data: HashMap<String, AdvancementProgress> =
             serde_json::from_str(&content).unwrap();
         assert_eq!(saved_data.len(), 2, "Should have saved both advancements");
+    }
+
+    #[test]
+    fn ignore_loading() {
+        let temp_dir = tempdir().unwrap();
+        let manager = Arc::new(AdvancementManager::new(temp_dir.path(), false));
+
+        let id = Uuid::new_v4();
+        let mut pa = PlayerAdvancement::new(manager, id);
+        // Create a JSON file with advancement data
+        let adv = Advancement::STORY_ROOT;
+        let data = serde_json::json!({ adv.id.to_string(): { "complete": true } });
+        std::fs::write(&pa.path, data.to_string()).unwrap();
+
+        //try load the file
+        assert!(pa.load().is_ok(), "Load should succeed");
+
+        // Verify that the advancement was not loaded
+        assert!(
+            pa.progress.is_empty(),
+            "The advancement shouldn't have been loaded"
+        );
     }
 }

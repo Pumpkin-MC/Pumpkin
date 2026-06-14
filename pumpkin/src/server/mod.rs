@@ -201,7 +201,10 @@ impl Server {
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_manager = Arc::new(AdvancementManager::new(world_path.clone(), true));
+        let advancement_manager = Arc::new(AdvancementManager::new(
+            world_path.clone(),
+            advanced_config.advancement.save_advancements,
+        ));
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
