@@ -971,6 +971,32 @@ impl Player {
         }
         damage = damage.max(0.0);
 
+        if let Some(enchantments) = item_stack
+            .lock()
+            .await
+            .get_data_component::<EnchantmentsImpl>()
+        {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                let level = *level as f64;
+                if **enchantment == Enchantment::SHARPNESS {
+                    damage += 1.0 * level;
+                } else if **enchantment == Enchantment::SMITE {
+                    if victim_entity
+                        .entity_type
+                        .has_tag(&tag::EntityType::MINECRAFT_UNDEAD)
+                    {
+                        damage += 2.5 * level;
+                    }
+                } else if **enchantment == Enchantment::BANE_OF_ARTHROPODS
+                    && victim_entity
+                        .entity_type
+                        .has_tag(&tag::EntityType::MINECRAFT_ARTHROPOD)
+                {
+                    damage += 2.5 * level;
+                }
+            }
+        }
+
         let pos = victim_entity.pos.load();
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
