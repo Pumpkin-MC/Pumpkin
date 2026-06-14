@@ -42,7 +42,10 @@ use crate::{
     net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{
+            player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent,
+        },
     },
     server::Server,
 };
@@ -3034,7 +3037,7 @@ impl World {
             };
 
         // Get target world (may be different from current world for cross-dimension respawn)
-        let target_world = if respawn_dimension == self.dimension {
+        let candidate_world = if respawn_dimension == self.dimension {
             None
         } else {
             // Cross-dimension respawn: get target world from server
@@ -3053,38 +3056,73 @@ impl World {
             )
         };
 
-        // Handle cross-dimension transfer if we found a different target world
-        let (target_world, position) = if let Some(ref new_world) = target_world {
-            debug!(
-                "Cross-dimension respawn: {} -> {}",
-                self.dimension.minecraft_name, new_world.dimension.minecraft_name
-            );
+        // Handle cross-dimension transfer if we found a different target world.
+        // If the transfer is cancelled by a plugin or the target world was not found,
+        // fall back to current world's spawn.
+        let (resolved_world, position, yaw, pitch) = if let Some(ref new_world) = candidate_world {
+            if let Some(server) = self.server.upgrade() {
+                let event = server
+                    .plugin_manager
+                    .fire(PlayerChangeWorldEvent {
+                        player: player.clone(),
+                        previous_world: self.clone(),
+                        new_world: new_world.clone(),
+                        position,
+                        yaw,
+                        pitch,
+                        cancelled: false,
+                    })
+                    .await;
 
-            // Remove player from current world
-            self.remove_player(player, false).await;
-            new_world.players.rcu(|current_list| {
-                let mut new_list = (**current_list).clone();
-                new_list.push(player.clone());
-                new_list
-            });
+                if event.cancelled {
+                    (None, position, yaw, pitch)
+                } else {
+                    let destination = event.new_world;
 
-            // Update chunk manager to target world
-            player
-                .chunk_manager
-                .lock()
-                .await
-                .change_world(&self.level, new_world.clone());
+                    if destination.uuid != self.uuid {
+                        debug!(
+                            "Cross-dimension respawn: {} -> {}",
+                            self.dimension.minecraft_name, destination.dimension.minecraft_name
+                        );
 
-            // Unload watched chunks from current world
-            player.unload_watched_chunks(self).await;
+                        // Remove player from current world
+                        self.remove_player(player, false).await;
 
-            (new_world.as_ref(), position)
+                        // Unload watched chunks and switch chunk manager before
+                        // publishing the player in the destination world
+                        player.unload_watched_chunks(self).await;
+                        player
+                            .chunk_manager
+                            .lock()
+                            .await
+                            .change_world(&self.level, destination.clone());
+
+                        destination.players.rcu(|current_list| {
+                            let mut new_list = (**current_list).clone();
+                            new_list.push(player.clone());
+                            new_list
+                        });
+                    }
+
+                    (Some(destination), event.position, event.yaw, event.pitch)
+                }
+            } else {
+                warn!("Server dropped during cross-dimension respawn");
+                (None, position, yaw, pitch)
+            }
+        } else {
+            if respawn_dimension != self.dimension {
+                warn!(
+                    "Target world {:?} not found, using world spawn in {:?}",
+                    respawn_dimension, self.dimension
+                );
+            }
+            (candidate_world, position, yaw, pitch)
+        };
+
+        let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
+            (new_world.as_ref(), position, yaw, pitch)
         } else if respawn_dimension != self.dimension {
-            // Cross-dimension failed - fall back to current world's spawn
-            warn!(
-                "Target world {:?} not found, using world spawn in {:?}",
-                respawn_dimension, self.dimension
-            );
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
             let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
@@ -3095,9 +3133,9 @@ impl World {
                 (top + 1).into(),
                 f64::from(spawn_z) + 0.5,
             );
-            (self.as_ref(), fallback_pos)
+            (self.as_ref(), fallback_pos, spawn_yaw, spawn_pitch)
         } else {
-            (self.as_ref(), position)
+            (self.as_ref(), position, yaw, pitch)
         };
 
         // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
