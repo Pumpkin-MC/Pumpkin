@@ -501,6 +501,8 @@ checksum = "ce2548391e9c1929c21bf6aa2680af86fe4c1b33e6cea9ac1cfeec0bd11218cf"
 dependencies = [
  "compression-core",
  "flate2",
+ "zstd",
+ "zstd-safe",
 ]
 
 [[package]]
@@ -2832,6 +2834,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+ "zstd",
 ]
 
 [[package]]

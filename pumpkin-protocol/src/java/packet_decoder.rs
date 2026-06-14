@@ -1,17 +1,18 @@
 use aes::cipher::KeyIvInit;
-use async_compression::tokio::bufread::ZlibDecoder;
+use async_compression::tokio::bufread::{ZlibDecoder, ZstdDecoder};
 use bytes::BytesMut;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::{
-    Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE, PacketDecodeError,
-    RawPacket, ReadingError, StreamDecryptor, VarInt,
+    Aes128Cfb8Dec, CompressionAlgorithm, CompressionThreshold, MAX_PACKET_DATA_SIZE,
+    MAX_PACKET_SIZE, PacketDecodeError, RawPacket, ReadingError, StreamDecryptor, VarInt,
 };
 
 // decrypt -> decompress -> raw
 
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
-    Decompress(ZlibDecoder<BufReader<R>>),
+    Zlib(ZlibDecoder<BufReader<R>>),
+    Zstd(ZstdDecoder<BufReader<R>>),
     None(R),
 }
 
@@ -23,7 +24,11 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecompressionReader<R> {
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
-            Self::Decompress(reader) => {
+            Self::Zlib(reader) => {
+                let reader = std::pin::Pin::new(reader);
+                reader.poll_read(cx, buf)
+            }
+            Self::Zstd(reader) => {
                 let reader = std::pin::Pin::new(reader);
                 reader.poll_read(cx, buf)
             }
@@ -71,11 +76,11 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 }
 
 /// Decoder: Client -> Server
-/// Supports `ZLib` decoding/decompression
+/// Supports `ZLib` and `Zstd` decoding/decompression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
     reader: Option<DecryptionReader<R>>,
-    compression: Option<CompressionThreshold>,
+    compression: Option<(CompressionThreshold, CompressionAlgorithm)>,
     payload_scratch: BytesMut,
 }
 
@@ -88,8 +93,12 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         }
     }
 
-    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
-        self.compression = Some(threshold);
+    pub fn set_compression(
+        &mut self,
+        threshold: CompressionThreshold,
+        algorithm: CompressionAlgorithm,
+    ) {
+        self.compression = Some((threshold, algorithm));
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
@@ -131,7 +140,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let mut expected_packet_data_len = packet_len as usize;
         let mut expected_uncompressed_packet_data_len = None;
 
-        let mut reader = if let Some(threshold) = self.compression {
+        let mut reader = if let Some((threshold, algorithm)) = self.compression {
             let decompressed_length = VarInt::decode_async(&mut bounded_reader).await?;
             let raw_packet_length = packet_len - decompressed_length.written_size() as u64;
             let decompressed_length = decompressed_length.0 as usize;
@@ -143,7 +152,18 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             if decompressed_length > 0 {
                 expected_packet_data_len = decompressed_length;
                 expected_uncompressed_packet_data_len = Some(decompressed_length);
-                DecompressionReader::Decompress(ZlibDecoder::new(BufReader::new(bounded_reader)))
+                match algorithm {
+                    CompressionAlgorithm::ZLib => {
+                        DecompressionReader::Zlib(ZlibDecoder::new(BufReader::new(
+                            bounded_reader,
+                        )))
+                    }
+                    CompressionAlgorithm::Zstd => {
+                        DecompressionReader::Zstd(ZstdDecoder::new(BufReader::new(
+                            bounded_reader,
+                        )))
+                    }
+                }
             } else {
                 // Validate that we are not less than the compression threshold
                 if raw_packet_length > threshold as u64 {
@@ -205,6 +225,7 @@ mod tests {
 
     use std::io::Write;
 
+    use crate::CompressionAlgorithm;
     use crate::ser::NetworkWriteExt;
 
     use super::*;
@@ -314,7 +335,7 @@ mod tests {
         // Initialize the decoder with compression enabled
         let mut decoder = TCPNetworkDecoder::new(packet.as_slice());
         // Larger than payload
-        decoder.set_compression(1000);
+        decoder.set_compression(1000, CompressionAlgorithm::ZLib);
 
         // Attempt to decode
         let raw_packet = decoder.get_raw_packet().await.map_err(|e| e.to_string())?;
@@ -365,7 +386,7 @@ mod tests {
 
         // Initialize the decoder with both compression and encryption enabled
         let mut decoder = TCPNetworkDecoder::new(packet.as_slice());
-        decoder.set_compression(1000);
+        decoder.set_compression(1000, CompressionAlgorithm::ZLib);
         decoder.set_encryption(&key).map_err(|e| e.to_string())?;
 
         // Attempt to decode
@@ -402,7 +423,7 @@ mod tests {
 
         // Initialize the decoder with compression enabled
         let mut decoder = TCPNetworkDecoder::new(&packet_bytes[..]);
-        decoder.set_compression(1000);
+        decoder.set_compression(1000, CompressionAlgorithm::ZLib);
 
         // Attempt to decode and expect a decompression error
         let result = decoder.get_raw_packet().await;
@@ -446,7 +467,7 @@ mod tests {
 
         // Initialize the decoder with compression enabled
         let mut decoder = TCPNetworkDecoder::new(packet.as_slice());
-        decoder.set_compression(MAX_PACKET_SIZE as usize + 1);
+        decoder.set_compression(MAX_PACKET_SIZE as usize + 1, CompressionAlgorithm::ZLib);
 
         // Attempt to decode
         let result = decoder.get_raw_packet().await;

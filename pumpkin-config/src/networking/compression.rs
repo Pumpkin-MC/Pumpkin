@@ -28,6 +28,12 @@ impl Default for CompressionConfig {
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct CompressionInfo {
+    /// The compression algorithm to use.
+    /// Supported values: `"ZLib"`, `"Zstd"`. Defaults to `"ZLib"` when empty or unrecognized.
+    pub compression: String,
+    /// The maximum number of threads for Zstd compression.
+    /// `0` means automatically determined based on available CPU cores.
+    pub max_threads: u32,
     /// The compression threshold in bytes.
     /// Packets smaller than this will not be compressed.
     pub threshold: u32,
@@ -39,6 +45,8 @@ pub struct CompressionInfo {
 impl Default for CompressionInfo {
     fn default() -> Self {
         Self {
+            compression: String::new(),
+            max_threads: 0,
             threshold: 256,
             level: 4,
         }

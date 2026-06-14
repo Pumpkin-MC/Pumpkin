@@ -3,6 +3,7 @@ use libfuzzer_sys::fuzz_target;
 use pumpkin_protocol::java::packet_encoder::TCPNetworkEncoder;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::NetworkWriteExt;
+use pumpkin_protocol::CompressionAlgorithm;
 use pumpkin_protocol::ServerPacket;
 use pumpkin_protocol::java::client::play::CPlayerPosition;
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
@@ -31,7 +32,7 @@ fuzz_target!(|data: &[u8]| {
         let mut encoder = TCPNetworkEncoder::new(&mut out);
 
         if use_compression {
-            encoder.set_compression((compression_threshold, compression_level));
+            encoder.set_compression(compression_threshold, compression_level, CompressionAlgorithm::ZLib, 0);
         }
         if use_encryption {
             encoder.set_encryption(&encryption_key);

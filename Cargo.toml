@@ -164,6 +164,7 @@ cipher = { version = "0.5.2", default-features = false }
 rustc-hash = { version = "2.1.2", default-features = false, features = ["std"] }
 rustyline = { version = "18.0.0", default-features = false, features = ["with-file-history"] }
 ruzstd = { version = "0.8.3", default-features = false, features = ["std"] }
+zstd = { version = "0.13", default-features = false, features = ["zstdmt"] }
 sha1 = { version = "=0.11.0", default-features = false, features = ["oid"] }
 sha2 = { version = "=0.11.0", default-features = false, features = ["oid"] }
 signature = { version = "3.0.0", default-features = false, features = ["std"] }

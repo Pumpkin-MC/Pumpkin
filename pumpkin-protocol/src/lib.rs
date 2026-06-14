@@ -51,6 +51,39 @@ pub type CompressionThreshold = usize;
 /// increase CPU usage.
 pub type CompressionLevel = u32;
 
+/// Supported compression algorithms for packet encoding/decoding.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CompressionAlgorithm {
+    ZLib,
+    Zstd,
+}
+
+impl CompressionAlgorithm {
+    /// Determines the algorithm from a config string.
+    /// Recognizes `"zstd"` (case-insensitive); everything else defaults to `ZLib`.
+    #[must_use]
+    pub fn from_config(s: &str) -> Self {
+        if s.eq_ignore_ascii_case("zstd") {
+            Self::Zstd
+        } else {
+            Self::ZLib
+        }
+    }
+}
+
+/// Resolves the effective number of Zstd worker threads from the config value.
+/// `0` means auto-detect based on available parallelism.
+#[must_use]
+pub fn resolve_zstd_threads(max_threads: u32) -> u32 {
+    if max_threads == 0 {
+        std::thread::available_parallelism()
+            .map(|n| n.get() as u32)
+            .unwrap_or(1)
+    } else {
+        max_threads
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ConnectionState {
     HandShake,

@@ -1,5 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
+use pumpkin_protocol::CompressionAlgorithm;
 use pumpkin_protocol::ServerPacket;
 use pumpkin_protocol::java::{
     packet_decoder::TCPNetworkDecoder,
@@ -126,7 +127,7 @@ fuzz_target!(|data: &[u8]| {
         let mut decoder = TCPNetworkDecoder::new(Cursor::new(decoder_bytes));
         match mode {
             1 => {
-                decoder.set_compression(256);
+                decoder.set_compression(256, CompressionAlgorithm::ZLib);
             }
             2 => {
                 let mut aes_key = [0u8; 16];
@@ -134,7 +135,7 @@ fuzz_target!(|data: &[u8]| {
                 decoder.set_encryption(&aes_key);
             }
             3 => {
-                decoder.set_compression(256);
+                decoder.set_compression(256, CompressionAlgorithm::ZLib);
                 let mut aes_key = [0u8; 16];
                 aes_key.copy_from_slice(key);
                 decoder.set_encryption(&aes_key);

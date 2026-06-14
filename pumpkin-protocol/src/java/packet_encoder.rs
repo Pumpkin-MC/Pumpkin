@@ -5,8 +5,8 @@ use thiserror::Error;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE,
-    PacketEncodeError, StreamEncryptor, VarInt,
+    Aes128Cfb8Enc, CompressionAlgorithm, CompressionLevel, CompressionThreshold,
+    MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE, PacketEncodeError, StreamEncryptor, VarInt,
 };
 
 // raw -> compress -> encrypt
@@ -78,14 +78,18 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 }
 
 /// Encoder: Server -> Client
-/// Supports `ZLib` endecoding/compression
+/// Supports `ZLib` and `Zstd` encoding/compression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     writer: Option<EncryptionWriter<W>>,
-    // compression and compression threshold
+    // compression threshold and level
     compression: Option<(CompressionThreshold, CompressionLevel)>,
-    // Reused compressor to avoid constructing zlib state per packet.
+    // compression algorithm choice
+    compression_algorithm: CompressionAlgorithm,
+    // Reused ZLib compressor to avoid constructing zlib state per packet.
     compressor: Option<(CompressionLevel, Compress)>,
+    // Reused Zstd compressor
+    zstd_compressor: Option<(CompressionLevel, zstd::bulk::Compressor<'static>)>,
     // Reused compression buffer to avoid allocating a new Vec for each packet.
     compression_scratch: Vec<u8>,
 }
@@ -95,16 +99,40 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         Self {
             writer: Some(EncryptionWriter::None(writer)),
             compression: None,
+            compression_algorithm: CompressionAlgorithm::ZLib,
             compressor: None,
+            zstd_compressor: None,
             compression_scratch: Vec::new(),
         }
     }
 
-    pub const fn set_compression(
+    pub fn set_compression(
         &mut self,
-        compression_info: (CompressionThreshold, CompressionLevel),
+        threshold: CompressionThreshold,
+        level: CompressionLevel,
+        algorithm: CompressionAlgorithm,
+        max_threads: u32,
     ) {
-        self.compression = Some(compression_info);
+        self.compression = Some((threshold, level));
+        self.compression_algorithm = algorithm;
+        if algorithm == CompressionAlgorithm::Zstd {
+            let zstd_level = level as i32;
+            let needs_new = match self.zstd_compressor.as_ref() {
+                Some((lvl, _)) => *lvl != level,
+                None => true,
+            };
+            if needs_new {
+                let mut comp = zstd::bulk::Compressor::new(zstd_level)
+                    .expect("failed to create zstd compressor");
+                if max_threads > 1 {
+                    comp.set_parameter(zstd::zstd_safe::CParameter::NbWorkers(
+                        max_threads,
+                    ))
+                    .expect("failed to set zstd worker count");
+                }
+                self.zstd_compressor = Some((level, comp));
+            }
+        }
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
@@ -129,6 +157,18 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         compression_level: CompressionLevel,
     ) -> Result<(), PacketEncodeError> {
         self.compression_scratch.clear();
+        match self.compression_algorithm {
+            CompressionAlgorithm::ZLib => self.compress_zlib(packet_data, compression_level)?,
+            CompressionAlgorithm::Zstd => self.compress_zstd(packet_data, compression_level)?,
+        }
+        Ok(())
+    }
+
+    fn compress_zlib(
+        &mut self,
+        packet_data: &[u8],
+        compression_level: CompressionLevel,
+    ) -> Result<(), PacketEncodeError> {
         let reserve_hint = packet_data
             .len()
             .saturating_add(packet_data.len() / 16)
@@ -167,6 +207,25 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 "Unexpected compressor status: {status:?}"
             )));
         }
+        Ok(())
+    }
+
+    fn compress_zstd(
+        &mut self,
+        packet_data: &[u8],
+        _compression_level: CompressionLevel,
+    ) -> Result<(), PacketEncodeError> {
+        let (_, compressor) = self.zstd_compressor.as_mut().ok_or_else(|| {
+            PacketEncodeError::Message(
+                "zstd compressor must be initialized via set_compression".into(),
+            )
+        })?;
+        let compressed = compressor
+            .compress(packet_data)
+            .map_err(|e| PacketEncodeError::CompressionFailed(e.to_string()))?;
+        self.compression_scratch.clear();
+        self.compression_scratch.extend_from_slice(&compressed);
+
         Ok(())
     }
 
@@ -399,8 +458,8 @@ mod tests {
     ) -> Result<Box<[u8]>, Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let mut encoder = TCPNetworkEncoder::new(&mut buf);
-        if let Some(compression_info) = compression_info {
-            encoder.set_compression(compression_info);
+        if let Some((threshold, level)) = compression_info {
+            encoder.set_compression(threshold, level, CompressionAlgorithm::ZLib, 0);
         }
 
         if let Some(key) = key {
