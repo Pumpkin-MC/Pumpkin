@@ -991,7 +991,12 @@ impl LivingEntity {
 
         let mut velo = self.entity.velocity.load();
 
+        let descending_in_fluid = self.entity.entity_type == &EntityType::PLAYER
+            && self.entity.is_sneaking()
+            && (self.entity.touching_water.load(SeqCst) || self.entity.touching_lava.load(SeqCst));
+
         if self.entity.horizontal_collision.load(SeqCst)
+            && !descending_in_fluid
             && !self
                 .entity
                 .world
