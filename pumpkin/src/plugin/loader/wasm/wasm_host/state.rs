@@ -83,7 +83,10 @@ impl PluginHostState {
     pub fn new() -> Self {
         let resource_table = ResourceTable::new();
         Self {
-            wasi_ctx: WasiCtxBuilder::new().build(),
+            wasi_ctx: WasiCtxBuilder::new()
+                .inherit_stdout() // allow messages & errors to be printed
+                .inherit_stderr() // before `on_load`, e.g. during metadata retrieval
+                .build(),
             wasi_http_ctx: WasiHttpCtx::new(),
             wasi_http_hooks: PluginHttpHooks::new(),
             resource_table,
