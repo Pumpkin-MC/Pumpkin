@@ -62,6 +62,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
+        CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
         StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
@@ -193,8 +194,34 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent
     pub name: String,
+}
+impl CustomNameImpl {
+    #[must_use]
+    pub fn from_text_component(name: TextComponent) -> Self {
+        Self {
+            name: serde_json::to_string(&name).expect("text components serialize to JSON"),
+        }
+    }
+
+    #[must_use]
+    pub fn from_plain_text(name: String) -> Self {
+        Self::from_text_component(TextComponent::text(name))
+    }
+
+    #[must_use]
+    pub fn as_text_component(&self) -> TextComponent {
+        serde_json::from_str(&self.name).unwrap_or_else(|_| TextComponent::text(self.name.clone()))
+    }
+
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        if let NbtTag::String(name) = data {
+            return Some(Self {
+                name: name.to_string(),
+            });
+        }
+        None
+    }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {

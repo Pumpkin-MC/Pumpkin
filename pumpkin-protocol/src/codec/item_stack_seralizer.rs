@@ -6,7 +6,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::version::JavaMinecraftVersion;
-use serde::ser::SerializeStruct;
+use serde::ser::{SerializeStruct, SerializeTuple};
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{self, SeqAccess},
@@ -31,6 +31,40 @@ fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
     (to_add, to_remove)
 }
 
+struct RawBytes<'a>(&'a [u8]);
+
+impl Serialize for RawBytes<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(self.0)
+    }
+}
+
+struct ComponentPayload<'a> {
+    id: DataComponent,
+    data: &'a dyn pumpkin_data::data_component_impl::DataComponentImpl,
+}
+
+impl Serialize for ComponentPayload<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut payload = Vec::new();
+        let mut payload_serializer = serializer::Serializer::new(&mut payload);
+        let mut seq = &mut payload_serializer;
+        serialize(self.id, self.data, &mut seq).map_err(serde::ser::Error::custom)?;
+
+        let len = i32::try_from(payload.len()).map_err(|_| {
+            serde::ser::Error::custom(format!(
+                "component payload is too large: {} bytes",
+                payload.len()
+            ))
+        })?;
+
+        let mut tuple = serializer.serialize_tuple(2)?;
+        tuple.serialize_element(&VarInt(len))?;
+        tuple.serialize_element(&RawBytes(&payload))?;
+        tuple.end()
+    }
+}
+
 fn serialize_item_stack_with_id<S: Serializer>(
     stack: &ItemStack,
     item_id: u16,
@@ -49,7 +83,13 @@ fn serialize_item_stack_with_id<S: Serializer>(
         for (id, data) in &stack.patch {
             if let Some(data) = data {
                 seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
-                serialize(*id, data.as_ref(), &mut seq)?;
+                seq.serialize_field(
+                    "",
+                    &ComponentPayload {
+                        id: *id,
+                        data: data.as_ref(),
+                    },
+                )?;
             }
         }
 
@@ -60,6 +100,32 @@ fn serialize_item_stack_with_id<S: Serializer>(
         }
 
         seq.end()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ser::deserializer::Deserializer;
+    use pumpkin_data::data_component_impl::CustomNameImpl;
+    use serde::Deserialize;
+
+    #[test]
+    fn custom_name_item_stack_round_trips_through_network_codec() {
+        let mut stack = ItemStack::new(1, &Item::IRON_SWORD);
+        stack.set_custom_name("Sharp".to_string());
+        let serializer = ItemStackSerializer::from(stack);
+        let mut bytes = Vec::new();
+
+        serializer
+            .write_with_version(&mut bytes, &JavaMinecraftVersion::V_26_1)
+            .unwrap();
+
+        let decoded =
+            ItemStackSerializer::deserialize(&mut Deserializer::new(bytes.as_slice())).unwrap();
+        let decoded = decoded.to_stack();
+        let name = decoded.get_data_component::<CustomNameImpl>().unwrap();
+        assert_eq!(name.name, r#"{"text":"Sharp"}"#);
     }
 }
 

@@ -7,7 +7,6 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component_impl::CustomNameImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_util::text::TextComponent;
 
 pub struct NameTagItem;
 
@@ -29,8 +28,7 @@ impl ItemBehaviour for NameTagItem {
             if entity.entity_type.saveable
                 && let Some(name) = item.get_data_component::<CustomNameImpl>()
             {
-                // TODO
-                entity.set_custom_name(TextComponent::text(name.name.clone()));
+                entity.set_custom_name(name.as_text_component());
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })

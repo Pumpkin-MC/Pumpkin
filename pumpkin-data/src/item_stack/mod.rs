@@ -395,7 +395,7 @@ impl ItemStack {
 
     pub fn set_custom_name(&mut self, name: String) {
         use crate::data_component_impl::CustomNameImpl;
-        let component = Some(CustomNameImpl { name }.to_dyn());
+        let component = Some(CustomNameImpl::from_plain_text(name).to_dyn());
         if let Some(pos) = self
             .patch
             .iter()
@@ -649,11 +649,46 @@ impl From<&RecipeResultStruct> for ItemStack {
 mod tests {
     use super::*;
     use crate::data_component::DataComponent;
-    use crate::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
+    use crate::data_component_impl::{
+        CustomNameImpl, DataComponentImpl, EnchantmentsImpl, UnbreakableImpl,
+    };
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
         ItemStack::new(1, &Item::IRON_SWORD)
+    }
+
+    #[test]
+    fn set_custom_name_stores_text_component_json() {
+        let mut stack = iron_sword();
+
+        stack.set_custom_name("Sharp".to_string());
+
+        let name = stack.get_data_component::<CustomNameImpl>().unwrap();
+        assert_eq!(name.name, r#"{"text":"Sharp"}"#);
+    }
+
+    #[test]
+    fn set_custom_name_escapes_text_component_content() {
+        let mut stack = iron_sword();
+
+        stack.set_custom_name(r#"A "quoted" name"#.to_string());
+
+        let name = stack.get_data_component::<CustomNameImpl>().unwrap();
+        assert_eq!(name.name, r#"{"text":"A \"quoted\" name"}"#);
+    }
+
+    #[test]
+    fn custom_name_survives_item_stack_nbt_round_trip() {
+        let mut stack = iron_sword();
+        stack.set_custom_name("Sharp".to_string());
+        let mut compound = NbtCompound::new();
+
+        stack.write_item_stack(&mut compound);
+        let loaded = ItemStack::read_item_stack(&compound).unwrap();
+
+        let name = loaded.get_data_component::<CustomNameImpl>().unwrap();
+        assert_eq!(name.name, r#"{"text":"Sharp"}"#);
     }
 
     // ── damage_item ───────────────────────────────────────────────

@@ -2760,6 +2760,7 @@ dependencies = [
  "pumpkin-util",
  "rand",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
