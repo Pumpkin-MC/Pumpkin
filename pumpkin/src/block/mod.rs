@@ -24,6 +24,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::server::play::SUseItemOn;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -58,6 +59,27 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
     }
 
     base_entity.velocity.store(velocity);
+}
+
+pub(crate) fn can_player_toggle_block(gamemode: GameMode) -> bool {
+    gamemode != GameMode::Spectator
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spectators_cannot_toggle_blocks() {
+        assert!(!can_player_toggle_block(GameMode::Spectator));
+    }
+
+    #[test]
+    fn non_spectators_can_toggle_blocks() {
+        assert!(can_player_toggle_block(GameMode::Survival));
+        assert!(can_player_toggle_block(GameMode::Creative));
+        assert!(can_player_toggle_block(GameMode::Adventure));
+    }
 }
 
 pub trait BlockBehaviour: Send + Sync {

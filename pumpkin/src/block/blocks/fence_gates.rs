@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::can_player_toggle_block;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
@@ -107,6 +108,10 @@ impl BlockBehaviour for FenceGateBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if !can_player_toggle_block(args.player.gamemode.load()) {
+                return BlockActionResult::Pass;
+            }
+
             toggle_fence_gate(args.world, args.position, args.player).await;
 
             BlockActionResult::Success

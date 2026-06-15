@@ -1,4 +1,5 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::can_player_toggle_block;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
@@ -69,6 +70,10 @@ pub struct TrapDoorBlock;
 impl BlockBehaviour for TrapDoorBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if !can_player_toggle_block(args.player.gamemode.load()) {
+                return BlockActionResult::Pass;
+            }
+
             if !can_open_trapdoor(args.block) {
                 return BlockActionResult::Pass;
             }
