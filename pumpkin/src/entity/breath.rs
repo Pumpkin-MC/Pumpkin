@@ -5,7 +5,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
@@ -18,6 +18,25 @@ pub const AIR_RECOVERY_RATE: i32 = 4;
 pub const AIR_DEPLETION_RATE: i32 = 1;
 pub const DROWNING_INTERVAL: i32 = 20;
 pub const DROWNING_DAMAGE: f32 = 2.0;
+
+const AIR_SUPPLY_TRACKED_DATA: TrackedId = TrackedId {
+    v1_21: TrackedData::AIR.v1_21,
+    v1_21_2: TrackedData::AIR.v1_21_2,
+    v1_21_4: TrackedData::AIR.v1_21_4,
+    v1_21_5: TrackedData::AIR.v1_21_5,
+    v1_21_6: TrackedData::AIR.v1_21_6,
+    v1_21_7: TrackedData::AIR.v1_21_7,
+    v1_21_9: TrackedData::AIR.v1_21_9,
+    v1_21_11: TrackedData::AIR.v1_21_11,
+    v26_1: TrackedData::AIR_SUPPLY_ID.v26_1,
+};
+
+const fn air_supply_metadata(air: i32) -> [Metadata<VarInt>; 2] {
+    [
+        Metadata::new(AIR_SUPPLY_TRACKED_DATA, MetaDataType::INTEGER, VarInt(air)),
+        Metadata::new(AIR_SUPPLY_TRACKED_DATA, MetaDataType::INT, VarInt(air)),
+    ]
+}
 
 pub struct BreathManager {
     pub air_supply: AtomicI32,
@@ -152,16 +171,46 @@ impl BreathManager {
     pub fn send_air_supply(&self, player: &Player) {
         let air = self.air_supply.load(Ordering::Relaxed).clamp(0, MAX_AIR);
 
-        player.get_entity().send_meta_data(&[Metadata::new(
-            TrackedData::AIR_SUPPLY_ID,
-            MetaDataType::INTEGER,
-            VarInt(air),
-        )]);
+        player
+            .get_entity()
+            .send_meta_data(&air_supply_metadata(air));
     }
 
     pub fn reset(&self, player: &Player) {
         self.air_supply.store(MAX_AIR, Ordering::Relaxed);
         self.send_air_supply(player);
         self.drowning_tick.store(0, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    #[test]
+    fn air_supply_metadata_writes_entity_air_index() {
+        let versions = [
+            JavaMinecraftVersion::V_1_21,
+            JavaMinecraftVersion::V_1_21_2,
+            JavaMinecraftVersion::V_1_21_4,
+            JavaMinecraftVersion::V_1_21_5,
+            JavaMinecraftVersion::V_1_21_6,
+            JavaMinecraftVersion::V_1_21_7,
+            JavaMinecraftVersion::V_1_21_9,
+            JavaMinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_26_1,
+        ];
+
+        for version in versions {
+            assert_eq!(AIR_SUPPLY_TRACKED_DATA.get(&version), 1);
+
+            let mut buf = Vec::new();
+            for metadata in air_supply_metadata(MAX_AIR) {
+                metadata.write(&mut buf, &version).unwrap();
+            }
+
+            assert_eq!(buf, vec![1, 1, 0xac, 0x02]);
+        }
     }
 }
