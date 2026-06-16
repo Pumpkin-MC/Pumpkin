@@ -13,6 +13,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
+use pumpkin_util::text::TextComponent;
 use serde::de;
 use serde::de::SeqAccess;
 use serde::ser::SerializeStruct;
@@ -349,14 +350,14 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 
 impl DataComponentCodec<Self> for CustomNameImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
-        seq.serialize_field::<String>("", &self.name)
+        seq.serialize_field("", &self.as_text_component())
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         let name = seq
-            .next_element::<String>()?
-            .ok_or(de::Error::custom("No CustomNameImpl name string!"))?;
-        Ok(Self { name })
+            .next_element::<TextComponent>()?
+            .ok_or(de::Error::custom("No CustomNameImpl text component!"))?;
+        Ok(Self::from_text_component(name))
     }
 }
 

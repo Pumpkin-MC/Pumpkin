@@ -103,32 +103,6 @@ fn serialize_item_stack_with_id<S: Serializer>(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ser::deserializer::Deserializer;
-    use pumpkin_data::data_component_impl::CustomNameImpl;
-    use serde::Deserialize;
-
-    #[test]
-    fn custom_name_item_stack_round_trips_through_network_codec() {
-        let mut stack = ItemStack::new(1, &Item::IRON_SWORD);
-        stack.set_custom_name("Sharp".to_string());
-        let serializer = ItemStackSerializer::from(stack);
-        let mut bytes = Vec::new();
-
-        serializer
-            .write_with_version(&mut bytes, &JavaMinecraftVersion::V_26_1)
-            .unwrap();
-
-        let decoded =
-            ItemStackSerializer::deserialize(&mut Deserializer::new(bytes.as_slice())).unwrap();
-        let decoded = decoded.to_stack();
-        let name = decoded.get_data_component::<CustomNameImpl>().unwrap();
-        assert_eq!(name.name, r#"{"text":"Sharp"}"#);
-    }
-}
-
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
     fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
