@@ -85,7 +85,7 @@ mod tests {
     fn invalid_locale_falls_back_to_en_us() {
         let cfg = LocaleConfig {
             logging: "not_a_real_locale".into(),
-            command: "".into(),
+            command: String::new(),
         };
         assert_eq!(cfg.logging_locale(), Locale::EnUs);
         assert_eq!(cfg.command_locale(), Locale::EnUs);
