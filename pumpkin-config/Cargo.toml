@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+pumpkin-i18n.workspace = true
 pumpkin-util.workspace = true
 serde.workspace = true
 tracing.workspace = true

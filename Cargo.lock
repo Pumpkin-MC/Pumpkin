@@ -2743,6 +2743,7 @@ dependencies = [
 name = "pumpkin-config"
 version = "0.1.0-dev+26.1"
 dependencies = [
+ "pumpkin-i18n",
  "pumpkin-util",
  "serde",
  "toml 1.1.2+spec-1.1.0",

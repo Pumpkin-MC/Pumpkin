@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    env,
     str::FromStr,
     sync::{LazyLock, Mutex},
 };
@@ -181,6 +182,83 @@ pub fn reorder_substitutions<T: Clone>(
         }
     }
     (substitutions, ranges)
+}
+
+// ---------------------------------------------------------------------------
+// System-locale detection (cross‑platform: Linux / macOS / Windows / Android)
+// ---------------------------------------------------------------------------
+
+/// Detects the system locale from the OS environment.
+///
+/// **Linux / macOS / Android:** checks `LC_ALL`, `LC_MESSAGES`, `LANG`.
+///
+/// **Windows:** first checks the same POSIX-style variables (MSYS2, Git Bash,
+/// WSL interop). If none is set, calls `GetUserDefaultLocaleName` from
+/// kernel32 to obtain the native Windows locale.
+///
+/// Falls back to [`Locale::EnUs`] when no valid locale can be determined.
+#[must_use]
+pub fn detect_system_locale() -> Locale {
+    detect_locale_string()
+        .and_then(|s| Locale::from_str(&s).ok())
+        .unwrap_or(Locale::EnUs)
+}
+
+/// Raw locale string from the environment / OS, e.g. `"zh_CN"` or `"de_DE"`.
+fn detect_locale_string() -> Option<String> {
+    // POSIX path (works on Linux, macOS, Android, and Windows with MSYS2/WSL)
+    for var in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(raw) = env::var(var) {
+            // Strip encoding suffix: "en_US.UTF-8" → "en_US", "C.UTF-8" → "C"
+            let locale = raw.split('.').next().unwrap_or(&raw);
+            if locale != "C" && locale != "POSIX" {
+                return Some(locale.to_string());
+            }
+        }
+    }
+
+    // Windows native fallback
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(wl) = windows_user_locale() {
+            return Some(wl);
+        }
+    }
+
+    None
+}
+
+/// Calls `GetUserDefaultLocaleName` on Windows and converts the BCP‑47 tag
+/// (e.g. `"zh-CN"`) into the POSIX form (`"zh_CN"`).
+#[cfg(target_os = "windows")]
+fn windows_user_locale() -> Option<String> {
+    extern "system" {
+        fn GetUserDefaultLocaleName(lpLocaleName: *mut u16, cchLocaleName: i32) -> i32;
+    }
+    let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
+    let len = unsafe { GetUserDefaultLocaleName(buf.as_mut_ptr(), buf.len() as i32) };
+    if len > 0 {
+        let s = String::from_utf16_lossy(&buf[..len as usize - 1]);
+        Some(s.replace('-', "_"))
+    } else {
+        None
+    }
+}
+
+/// Resolves a locale configuration value into a concrete [`Locale`].
+///
+/// When the setting is `"auto"` (case-insensitive), the system locale is
+/// detected via [`detect_system_locale`]. Otherwise the value is parsed
+/// directly. Falls back to [`Locale::EnUs`] on any failure.
+///
+/// # Arguments
+/// * `setting`: The locale configuration string (e.g. `"auto"`, `"zh_cn"`).
+#[must_use]
+pub fn resolve_locale(setting: &str) -> Locale {
+    if setting.eq_ignore_ascii_case("auto") {
+        return detect_system_locale();
+    }
+    Locale::from_str(setting).unwrap_or(Locale::EnUs)
 }
 
 pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
