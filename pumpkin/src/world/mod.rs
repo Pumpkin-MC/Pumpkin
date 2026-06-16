@@ -591,7 +591,7 @@ impl World {
             _ => SText::system_message(
                 message
                     .0
-                    .to_bedrock_legacy(pumpkin_util::translation::Locale::EnUs),
+                    .to_bedrock_legacy(pumpkin_i18n::Locale::EnUs),
             ),
         }
     }

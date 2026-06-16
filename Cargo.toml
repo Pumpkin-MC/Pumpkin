@@ -4,6 +4,7 @@ members = [
     "pumpkin-api-macros",
     "pumpkin-config",
     "pumpkin-util",
+    "pumpkin-i18n",
     "pumpkin-inventory",
     "pumpkin-macros/",
     "pumpkin-protocol/",
@@ -155,6 +156,7 @@ pumpkin-inventory = { path = "pumpkin-inventory", default-features = false }
 pumpkin-macros = { path = "pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "pumpkin-nbt", default-features = false }
 pumpkin-protocol = { path = "pumpkin-protocol", default-features = false }
+pumpkin-i18n = { path = "pumpkin-i18n", default-features = false }
 pumpkin-util = { path = "pumpkin-util", default-features = false }
 pumpkin-world = { path = "pumpkin-world", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }

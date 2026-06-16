@@ -2686,6 +2686,7 @@ dependencies = [
  "pumpkin-codecs",
  "pumpkin-config",
  "pumpkin-data",
+ "pumpkin-i18n",
  "pumpkin-inventory",
  "pumpkin-macros",
  "pumpkin-nbt",
@@ -2760,6 +2761,14 @@ dependencies = [
  "pumpkin-util",
  "rand",
  "serde",
+]
+
+[[package]]
+name = "pumpkin-i18n"
+version = "0.1.0-dev+26.1"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2850,6 +2859,7 @@ dependencies = [
  "p384",
  "proc-macro2",
  "pumpkin-codecs",
+ "pumpkin-i18n",
  "pumpkin-nbt",
  "quote",
  "rsa",

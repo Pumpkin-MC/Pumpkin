@@ -1,12 +1,11 @@
 use crate::text::color::{ARGBColor, hsv_to_rgb};
-use crate::translation::{
-    Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
-};
+use crate::text::translation::{get_translation_text, translation_to_pretty};
 use click::ClickEvent;
 use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
+use pumpkin_i18n::{Locale, get_translation, reorder_substitutions};
 use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -20,6 +19,7 @@ pub mod click;
 pub mod color;
 pub mod hover;
 pub mod style;
+pub mod translation;
 
 /// Represents a Minecraft chat component.
 ///
@@ -353,7 +353,15 @@ impl TextComponentBase {
                 let mut translation_slices = vec![];
 
                 if translation.contains('%') {
-                    let (substitutions, ranges) = reorder_substitutions(&translation, with);
+                    let (substitutions, ranges) = reorder_substitutions(
+                        &translation,
+                        with,
+                        Self {
+                            content: Box::new(TextContent::Text { text: "".into() }),
+                            style: Box::new(Style::default()),
+                            extra: vec![],
+                        },
+                    );
                     for (idx, &range) in ranges.iter().enumerate() {
                         if idx == 0 {
                             translation_parent = translation[..range.start].to_string();

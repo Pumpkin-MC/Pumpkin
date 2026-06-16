@@ -22,7 +22,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::translation::Locale;
+use pumpkin_i18n::Locale;
 
 pub mod args;
 pub mod argument_builder;

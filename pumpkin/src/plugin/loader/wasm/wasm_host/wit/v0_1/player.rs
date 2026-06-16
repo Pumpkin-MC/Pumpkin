@@ -38,7 +38,7 @@ use pumpkin_protocol::java::client::dialog::{
     DialogBody as ProtocolDialogBody, DialogInput as ProtocolDialogInput, DialogLink, DialogNBT,
 };
 use pumpkin_util::permission::PermissionLvl;
-use pumpkin_util::translation::Locale;
+use pumpkin_i18n::Locale;
 use std::str::FromStr;
 
 use pumpkin_protocol::bedrock::client::set_actor_data::{

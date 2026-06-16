@@ -3,7 +3,7 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_fr
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::forms::{
     CustomForm, CustomFormElement, Host, ImageType, ModalForm, SimpleForm,
 };
-use pumpkin_util::translation::Locale;
+use pumpkin_i18n::Locale;
 use serde_json::{Value, json};
 use wasmtime::component::Resource;
 
