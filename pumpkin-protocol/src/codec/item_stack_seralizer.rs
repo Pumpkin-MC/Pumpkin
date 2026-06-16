@@ -6,7 +6,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::version::JavaMinecraftVersion;
-use serde::ser::{SerializeStruct, SerializeTuple};
+use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{self, SeqAccess},
@@ -31,6 +31,11 @@ fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
     (to_add, to_remove)
 }
 
+struct ComponentPayload<'a> {
+    id: DataComponent,
+    data: &'a dyn pumpkin_data::data_component_impl::DataComponentImpl,
+}
+
 struct RawBytes<'a>(&'a [u8]);
 
 impl Serialize for RawBytes<'_> {
@@ -39,29 +44,13 @@ impl Serialize for RawBytes<'_> {
     }
 }
 
-struct ComponentPayload<'a> {
-    id: DataComponent,
-    data: &'a dyn pumpkin_data::data_component_impl::DataComponentImpl,
-}
-
 impl Serialize for ComponentPayload<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut payload = Vec::new();
         let mut payload_serializer = serializer::Serializer::new(&mut payload);
         let mut seq = &mut payload_serializer;
         serialize(self.id, self.data, &mut seq).map_err(serde::ser::Error::custom)?;
-
-        let len = i32::try_from(payload.len()).map_err(|_| {
-            serde::ser::Error::custom(format!(
-                "component payload is too large: {} bytes",
-                payload.len()
-            ))
-        })?;
-
-        let mut tuple = serializer.serialize_tuple(2)?;
-        tuple.serialize_element(&VarInt(len))?;
-        tuple.serialize_element(&RawBytes(&payload))?;
-        tuple.end()
+        RawBytes(&payload).serialize(serializer)
     }
 }
 
@@ -100,6 +89,39 @@ fn serialize_item_stack_with_id<S: Serializer>(
         }
 
         seq.end()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_nbt::COMPOUND_ID;
+    use std::io::{Cursor, Read};
+
+    #[test]
+    fn custom_name_component_payload_starts_with_nbt_compound_tag() {
+        let mut stack = ItemStack::new(1, &Item::IRON_SWORD);
+        stack.set_custom_name("Sharp".to_string());
+        let serializer = ItemStackSerializer::from(stack);
+        let mut bytes = Vec::new();
+
+        serializer
+            .write_with_version(&mut bytes, &JavaMinecraftVersion::V_26_1)
+            .unwrap();
+
+        let mut cursor = Cursor::new(bytes);
+        assert_eq!(VarInt::decode(&mut cursor).unwrap().0, 1);
+        let _item_id = VarInt::decode(&mut cursor).unwrap();
+        assert_eq!(VarInt::decode(&mut cursor).unwrap().0, 1);
+        assert_eq!(VarInt::decode(&mut cursor).unwrap().0, 0);
+        assert_eq!(
+            VarInt::decode(&mut cursor).unwrap().0,
+            i32::from(DataComponent::CustomName.to_id())
+        );
+
+        let mut first_payload_byte = [0u8; 1];
+        cursor.read_exact(&mut first_payload_byte).unwrap();
+        assert_eq!(first_payload_byte[0], COMPOUND_ID);
     }
 }
 
@@ -153,11 +175,6 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                     let id = DataComponent::try_from_id(id_val as u8).ok_or_else(|| {
                         de::Error::custom(format!("Unknown component ID: {id_val}"))
                     })?;
-
-                    // Minecraft protocol sends a byte length for the component data here
-                    let _byte_len = seq
-                        .next_element::<VarInt>()?
-                        .ok_or_else(|| de::Error::custom("No data len VarInt!"))?;
 
                     let component_impl = deserialize(id, &mut seq)?;
 
