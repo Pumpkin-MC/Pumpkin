@@ -232,7 +232,7 @@ fn detect_locale_string() -> Option<String> {
 /// (e.g. `"zh-CN"`) into the POSIX form (`"zh_CN"`).
 #[cfg(target_os = "windows")]
 fn windows_user_locale() -> Option<String> {
-    extern "system" {
+    unsafe extern "system" {
         fn GetUserDefaultLocaleName(lpLocaleName: *mut u16, cchLocaleName: i32) -> i32;
     }
     let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
