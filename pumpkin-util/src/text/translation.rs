@@ -33,8 +33,7 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
         return translation;
     }
 
-    let (substitutions, indices) =
-        reorder_substitutions(&translation, with, empty_component());
+    let (substitutions, indices) = reorder_substitutions(&translation, with, empty_component());
     let mut result = String::new();
     let mut pos = 0;
 
@@ -70,8 +69,7 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
         return translation;
     }
 
-    let (substitutions, indices) =
-        reorder_substitutions(&translation, with, empty_component());
+    let (substitutions, indices) = reorder_substitutions(&translation, with, empty_component());
     let mut result = String::new();
     let mut pos = 0;
 

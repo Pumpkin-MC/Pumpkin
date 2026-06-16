@@ -18,11 +18,11 @@ use pumpkin_data::{
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
     dimension::Dimension,
 };
+use pumpkin_i18n::Locale;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
-use pumpkin_i18n::Locale;
 
 pub mod args;
 pub mod argument_builder;

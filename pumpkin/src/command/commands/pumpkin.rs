@@ -1,8 +1,8 @@
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::text::translation::get_translation_text;
+use pumpkin_util::text::{TextComponent, color::NamedColor};
 use serde::Deserialize;
 use std::borrow::Cow;
 

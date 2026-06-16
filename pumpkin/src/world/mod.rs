@@ -588,11 +588,7 @@ impl World {
                     .collect();
                 SText::translation(key.to_string(), parameters)
             }
-            _ => SText::system_message(
-                message
-                    .0
-                    .to_bedrock_legacy(pumpkin_i18n::Locale::EnUs),
-            ),
+            _ => SText::system_message(message.0.to_bedrock_legacy(pumpkin_i18n::Locale::EnUs)),
         }
     }
 

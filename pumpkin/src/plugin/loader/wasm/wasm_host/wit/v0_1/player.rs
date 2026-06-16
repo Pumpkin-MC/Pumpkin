@@ -30,6 +30,7 @@ use crate::{
         },
     },
 };
+use pumpkin_i18n::Locale;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::Property;
 use pumpkin_protocol::bedrock::client::modal_form_request::CModalFormRequest;
@@ -38,7 +39,6 @@ use pumpkin_protocol::java::client::dialog::{
     DialogBody as ProtocolDialogBody, DialogInput as ProtocolDialogInput, DialogLink, DialogNBT,
 };
 use pumpkin_util::permission::PermissionLvl;
-use pumpkin_i18n::Locale;
 use std::str::FromStr;
 
 use pumpkin_protocol::bedrock::client::set_actor_data::{
