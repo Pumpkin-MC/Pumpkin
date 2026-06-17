@@ -64,6 +64,10 @@ impl SubstitutionRange {
 /// * `key`: The translation key without namespace.
 /// * `translation`: The localized translation string.
 /// * `locale`: The locale the translation belongs to.
+///
+/// # Panics
+///
+/// Panics if the global translations [`RwLock`] is poisoned.
 pub fn add_translation<P: Into<String>>(namespace: P, key: P, translation: P, locale: Locale) {
     let mut translations = TRANSLATIONS.write().unwrap();
     let namespaced_key = format!("{}:{}", namespace.into(), key.into()).to_lowercase();
@@ -76,6 +80,10 @@ pub fn add_translation<P: Into<String>>(namespace: P, key: P, translation: P, lo
 /// * `namespace`: The namespace applied to all loaded keys.
 /// * `file_path`: A JSON string containing a flat key-value translation map.
 /// * `locale`: The locale the translations belong to.
+///
+/// # Panics
+///
+/// Panics if the global translations [`RwLock`] is poisoned.
 pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale: Locale) {
     let translations_map: HashMap<String, String> =
         serde_json::from_str(&file_path.into()).unwrap_or(HashMap::new());
@@ -109,6 +117,10 @@ static SYSTEM_LOCALE: OnceLock<Locale> = OnceLock::new();
 ///
 /// # Returns
 /// The localized translation.
+///
+/// # Panics
+///
+/// Panics if the global translations [`RwLock`] is poisoned.
 pub fn get_translation(key: &str, locale: Locale) -> String {
     // Try the original key first (keys are already stored lowercase).
     // Only allocate `to_lowercase()` as a fallback.

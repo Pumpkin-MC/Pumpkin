@@ -28,6 +28,10 @@ static PLAYER_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Locale>>> =
 ///
 /// Returns the resolved [`Locale`] so the caller can use it immediately
 /// without a second lookup.
+///
+/// # Panics
+///
+/// Panics if the player cache [`Mutex`] is poisoned.
 pub fn set_player_locale(player_id: &str, player_lang: &str, edition_setting: &str) -> Locale {
     let locale = resolve_client_locale(player_lang, edition_setting);
     PLAYER_CACHE
@@ -38,12 +42,20 @@ pub fn set_player_locale(player_id: &str, player_lang: &str, edition_setting: &s
 }
 
 /// Returns the cached locale for a player, if any.
+///
+/// # Panics
+///
+/// Panics if the player cache [`Mutex`] is poisoned.
 #[must_use]
 pub fn get_player_locale(player_id: &str) -> Option<Locale> {
     PLAYER_CACHE.lock().unwrap().get(player_id).copied()
 }
 
 /// Removes a player from the cache (call on disconnect).
+///
+/// # Panics
+///
+/// Panics if the player cache [`Mutex`] is poisoned.
 pub fn remove_player_locale(player_id: &str) {
     PLAYER_CACHE.lock().unwrap().remove(player_id);
 }
@@ -204,26 +216,26 @@ mod tests {
         let config_bedrock = "auto";
 
         // ── 2. 玩家 A（Java 版, 英语）加入 ────────────────────────────
-        let player_a_id = "550e8400-e29b-41d4-a716-446655440000"; // uuid
-        let player_a_lang = "en_us";
-        let locale_a = setup_java_player(player_a_id, player_a_lang, config_java);
+        let java_id = "550e8400-e29b-41d4-a716-446655440000"; // uuid
+        let java_lang = "en_us";
+        let locale_a = setup_java_player(java_id, java_lang, config_java);
         assert_eq!(locale_a, Locale::EnUs);
-        assert_eq!(player_locale(player_a_id), Locale::EnUs);
+        assert_eq!(player_locale(java_id), Locale::EnUs);
 
         // ── 3. 玩家 B（Bedrock 版, 简体中文）加入 ──────────────────────
-        let player_b_id = "660e8400-e29b-41d4-a716-446655440001";
-        let player_b_lang = "zh_CN"; // Bedrock 大写
-        let locale_b = setup_bedrock_player(player_b_id, player_b_lang, config_bedrock);
+        let bedrock_id = "660e8400-e29b-41d4-a716-446655440001";
+        let bedrock_lang = "zh_CN"; // Bedrock 大写
+        let locale_b = setup_bedrock_player(bedrock_id, bedrock_lang, config_bedrock);
         assert_eq!(locale_b, Locale::ZhCn);
-        assert_eq!(player_locale(player_b_id), Locale::ZhCn);
+        assert_eq!(player_locale(bedrock_id), Locale::ZhCn);
 
         // ── 4. 两个玩家执行 /pumpkin 命令 ─────────────────────────────
         // 用 get_translation 模拟 TextComponent::custom 的服务器端解析
 
         let key = "pumpkin:commands.pumpkin.description";
 
-        let msg_a = crate::get_translation(key, player_locale(player_a_id));
-        let msg_b = crate::get_translation(key, player_locale(player_b_id));
+        let msg_a = crate::get_translation(key, player_locale(java_id));
+        let msg_b = crate::get_translation(key, player_locale(bedrock_id));
 
         // 玩家 A 收到英文
         assert!(
@@ -241,15 +253,15 @@ mod tests {
         assert_ne!(msg_a, msg_b, "Same key different languages must differ");
 
         // ── 5. 玩家 B 断开连接 ────────────────────────────────────────
-        teardown_player(player_b_id);
-        assert_eq!(get_player_locale(player_b_id), None);
+        teardown_player(bedrock_id);
+        assert_eq!(get_player_locale(bedrock_id), None);
 
         // 玩家 A 仍然在缓存中
-        assert_eq!(player_locale(player_a_id), Locale::EnUs);
+        assert_eq!(player_locale(java_id), Locale::EnUs);
 
         // ── 6. 玩家 A 断开连接 ────────────────────────────────────────
-        teardown_player(player_a_id);
-        assert_eq!(get_player_locale(player_a_id), None);
+        teardown_player(java_id);
+        assert_eq!(get_player_locale(java_id), None);
     }
 
     #[test]
