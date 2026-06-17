@@ -115,7 +115,11 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
     fn try_get<'a>(table: &'a HashMap<String, String>, key: &str) -> Option<&'a String> {
         table.get(key).or_else(|| {
             let lower = key.to_lowercase();
-            if lower == *key { None } else { table.get(&lower) }
+            if lower == *key {
+                None
+            } else {
+                table.get(&lower)
+            }
         })
     }
 
