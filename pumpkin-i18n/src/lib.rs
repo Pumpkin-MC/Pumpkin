@@ -263,21 +263,8 @@ fn windows_user_locale() -> Option<String> {
     }
 }
 
-/// Resolves a locale configuration value into a concrete [`Locale`].
-///
-/// When the setting is `"auto"` (case-insensitive), the system locale is
-/// detected via [`detect_system_locale`]. Otherwise the value is parsed
-/// directly. Falls back to [`Locale::EnUs`] on any failure.
-///
-/// # Arguments
-/// * `setting`: The locale configuration string (e.g. `"auto"`, `"zh_cn"`).
-#[must_use]
-pub fn resolve_locale(setting: &str) -> Locale {
-    if setting.eq_ignore_ascii_case("auto") {
-        return detect_system_locale();
-    }
-    Locale::from_str(setting).unwrap_or(Locale::EnUs)
-}
+pub mod client;
+pub mod server;
 
 pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
     LazyLock::new(|| {
