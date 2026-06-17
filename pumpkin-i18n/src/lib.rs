@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env,
     str::FromStr,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, OnceLock, RwLock},
 };
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us_java.json");
@@ -65,7 +65,7 @@ impl SubstitutionRange {
 /// * `translation`: The localized translation string.
 /// * `locale`: The locale the translation belongs to.
 pub fn add_translation<P: Into<String>>(namespace: P, key: P, translation: P, locale: Locale) {
-    let mut translations = TRANSLATIONS.lock().unwrap();
+    let mut translations = TRANSLATIONS.write().unwrap();
     let namespaced_key = format!("{}:{}", namespace.into(), key.into()).to_lowercase();
     translations[locale as usize].insert(namespaced_key, translation.into());
 }
@@ -84,7 +84,7 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
         return;
     }
 
-    let mut translations = TRANSLATIONS.lock().unwrap();
+    let mut translations = TRANSLATIONS.write().unwrap();
     let namespace = namespace.into();
     for (key, translation) in translations_map {
         let namespaced_key = format!("{namespace}:{key}").to_lowercase();
@@ -92,11 +92,16 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
     }
 }
 
+/// Cached system locale — detected once and reused.
+static SYSTEM_LOCALE: OnceLock<Locale> = OnceLock::new();
+
 /// Retrieves a translation for the given key and locale.
 ///
 /// When the key is not found in the requested locale, falls back to
 /// [`Locale::EnUs`]. If the key is missing there as well the raw key
 /// itself is returned. A warning is emitted in each fallback case.
+///
+/// Uses a [`RwLock`] so concurrent reads do not contend.
 ///
 /// # Arguments
 /// * `key`: The fully qualified `namespace:key`.
@@ -105,18 +110,41 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
 /// # Returns
 /// The localized translation.
 pub fn get_translation(key: &str, locale: Locale) -> String {
-    let translations = TRANSLATIONS.lock().unwrap();
-    let lower = key.to_lowercase();
+    let translations = TRANSLATIONS.read().unwrap();
+
+    // Try the original key first (keys are already stored lowercase).
+    // Only allocate `to_lowercase()` as a fallback.
+    let lookup = |k: &str| -> Option<&String> {
+        translations[locale as usize].get(k).or_else(|| {
+            // Rare path: key wasn't lowercased by the caller.
+            let lower = k.to_lowercase();
+            if lower != *k {
+                translations[locale as usize].get(&lower)
+            } else {
+                None
+            }
+        })
+    };
 
     // 1. Try the requested locale
-    if let Some(value) = translations[locale as usize].get(&lower) {
+    if let Some(value) = lookup(key) {
         return value.clone();
     }
 
-    // 2. Fall back to English
-    if let Some(value) = translations[Locale::EnUs as usize].get(&lower) {
+    // 2. Fall back to English (use same lookup on en_us table)
+    let en_table = &translations[Locale::EnUs as usize];
+    let en_value = en_table.get(key).or_else(|| {
+        let lower = key.to_lowercase();
+        if lower != *key {
+            en_table.get(&lower)
+        } else {
+            None
+        }
+    });
+
+    if let Some(value) = en_value {
         tracing::warn!(
-            key = %lower,
+            key = %key,
             locale = ?locale,
             "translation key not found – falling back to English (en_us)"
         );
@@ -125,10 +153,10 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
 
     // 3. Missing entirely — return the key itself
     tracing::error!(
-        key = %lower,
+        key = %key,
         "translation key not found in any locale – returning raw key"
     );
-    lower
+    key.to_owned()
 }
 
 /// Reorders substitution placeholders within a translation string.
@@ -208,6 +236,8 @@ pub fn reorder_substitutions<T: Clone>(
 
 /// Detects the system locale from the OS environment.
 ///
+/// Result is cached on first call — subsequent calls return instantly.
+///
 /// **Linux / macOS / Android:** checks `LC_ALL`, `LC_MESSAGES`, `LANG`.
 ///
 /// **Windows:** first checks the same POSIX-style variables (MSYS2, Git Bash,
@@ -217,9 +247,11 @@ pub fn reorder_substitutions<T: Clone>(
 /// Falls back to [`Locale::EnUs`] when no valid locale can be determined.
 #[must_use]
 pub fn detect_system_locale() -> Locale {
-    detect_locale_string()
-        .and_then(|s| Locale::from_str(&s).ok())
-        .unwrap_or(Locale::EnUs)
+    *SYSTEM_LOCALE.get_or_init(|| {
+        detect_locale_string()
+            .and_then(|s| Locale::from_str(&s).ok())
+            .unwrap_or(Locale::EnUs)
+    })
 }
 
 /// Raw locale string from the environment / OS, e.g. `"zh_CN"` or `"de_DE"`.
@@ -266,7 +298,7 @@ fn windows_user_locale() -> Option<String> {
 pub mod client;
 pub mod server;
 
-pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
+pub static TRANSLATIONS: LazyLock<RwLock<[HashMap<String, String>; Locale::COUNT]>> =
     LazyLock::new(|| {
         let mut array: [HashMap<String, String>; Locale::COUNT] =
             std::array::from_fn(|_| HashMap::new());
@@ -396,7 +428,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         for (key, value) in pumpkin_zh_tw {
             array[Locale::ZhTw as usize].insert(format!("pumpkin:{key}"), value);
         }
-        Mutex::new(array)
+        RwLock::new(array)
     });
 
 /// Supported locales for translations.

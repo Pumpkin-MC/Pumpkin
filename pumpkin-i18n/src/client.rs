@@ -194,4 +194,98 @@ mod tests {
         set_player_locale(id, "ja_jp", "auto");
         assert_eq!(get_player_locale(id), Some(Locale::JaJp));
     }
+
+    // -- full integration flow ------------------------------------------------
+
+    #[test]
+    fn full_flow_two_players_join_execute_command_disconnect() {
+        // ── 1. 服务器配置 ─────────────────────────────────────────────
+        let config_java = "auto";
+        let config_bedrock = "auto";
+
+        // ── 2. 玩家 A（Java 版, 英语）加入 ────────────────────────────
+        let player_a_id = "550e8400-e29b-41d4-a716-446655440000"; // uuid
+        let player_a_lang = "en_us";
+        let locale_a = setup_java_player(player_a_id, player_a_lang, config_java);
+        assert_eq!(locale_a, Locale::EnUs);
+        assert_eq!(player_locale(player_a_id), Locale::EnUs);
+
+        // ── 3. 玩家 B（Bedrock 版, 简体中文）加入 ──────────────────────
+        let player_b_id = "660e8400-e29b-41d4-a716-446655440001";
+        let player_b_lang = "zh_CN"; // Bedrock 大写
+        let locale_b = setup_bedrock_player(player_b_id, player_b_lang, config_bedrock);
+        assert_eq!(locale_b, Locale::ZhCn);
+        assert_eq!(player_locale(player_b_id), Locale::ZhCn);
+
+        // ── 4. 两个玩家执行 /pumpkin 命令 ─────────────────────────────
+        // 用 get_translation 模拟 TextComponent::custom 的服务器端解析
+
+        let key = "pumpkin:commands.pumpkin.description";
+
+        let msg_a = crate::get_translation(key, player_locale(player_a_id));
+        let msg_b = crate::get_translation(key, player_locale(player_b_id));
+
+        // 玩家 A 收到英文
+        assert!(
+            msg_a.contains("Empowering everyone"),
+            "Player A should get English, got: {msg_a}"
+        );
+
+        // 玩家 B 收到简体中文
+        assert!(
+            msg_b.contains("让每个人都能搭建"),
+            "Player B should get Chinese, got: {msg_b}"
+        );
+
+        // 同一个 key，不同语言 → 不同内容
+        assert_ne!(msg_a, msg_b, "Same key different languages must differ");
+
+        // ── 5. 玩家 B 断开连接 ────────────────────────────────────────
+        teardown_player(player_b_id);
+        assert_eq!(get_player_locale(player_b_id), None);
+
+        // 玩家 A 仍然在缓存中
+        assert_eq!(player_locale(player_a_id), Locale::EnUs);
+
+        // ── 6. 玩家 A 断开连接 ────────────────────────────────────────
+        teardown_player(player_a_id);
+        assert_eq!(get_player_locale(player_a_id), None);
+    }
+
+    #[test]
+    fn forced_edition_override_flow() {
+        // 服务器强制 Java 版使用德语
+        let forced_de = "de_de";
+        let player_id = "770e8400-e29b-41d4-a716-446655440002";
+
+        // 玩家说中文，但服务器强制德语
+        let locale = setup_java_player(player_id, "zh_cn", forced_de);
+        assert_eq!(locale, Locale::DeDe);
+
+        let key = "pumpkin:commands.pumpkin.description";
+        let msg = crate::get_translation(key, player_locale(player_id));
+
+        assert!(
+            msg.contains("Ermöglicht es jedem"),
+            "Should get German (forced by config), got: {msg}"
+        );
+
+        teardown_player(player_id);
+    }
+
+    #[test]
+    fn player_unknown_language_falls_back_to_english() {
+        let player_id = "880e8400-e29b-41d4-a716-446655440003";
+        let locale = setup_java_player(player_id, "xx_xx", "auto");
+        assert_eq!(locale, Locale::EnUs);
+
+        let key = "pumpkin:commands.pumpkin.description";
+        let msg = crate::get_translation(key, player_locale(player_id));
+        assert!(
+            msg.contains("Empowering everyone"),
+            "Unknown lang should fall back to English"
+        );
+
+        teardown_player(player_id);
+    }
 }
