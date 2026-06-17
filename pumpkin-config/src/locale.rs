@@ -46,7 +46,7 @@ impl LocaleConfig {
         if value.is_empty() || value.eq_ignore_ascii_case("auto") {
             return pumpkin_i18n::detect_system_locale();
         }
-        pumpkin_i18n::Locale::from_str(value).unwrap_or_else(|_| {
+        pumpkin_i18n::Locale::from_str(value).unwrap_or_else(|()| {
             tracing::error!(
                 "[locale].{label} = \"{value}\" is not a recognised locale – \
                  falling back to English (en_us)"
