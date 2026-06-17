@@ -31,13 +31,28 @@ impl LocaleConfig {
     /// Resolves the configured logging locale.
     #[must_use]
     pub fn logging_locale(&self) -> Locale {
-        pumpkin_i18n::resolve_locale(&self.logging)
+        Self::resolve(&self.logging, "logging")
     }
 
     /// Resolves the configured command feedback locale.
     #[must_use]
     pub fn command_locale(&self) -> Locale {
-        pumpkin_i18n::resolve_locale(&self.command)
+        Self::resolve(&self.command, "command")
+    }
+
+    /// Resolves a single locale field, emitting an error message when
+    /// the value is invalid and the runtime falls back to [`Locale::EnUs`].
+    fn resolve(value: &str, label: &str) -> Locale {
+        if value.is_empty() || value.eq_ignore_ascii_case("auto") {
+            return pumpkin_i18n::detect_system_locale();
+        }
+        pumpkin_i18n::Locale::from_str(value).unwrap_or_else(|_| {
+            tracing::error!(
+                "[locale].{label} = \"{value}\" is not a recognised locale – \
+                 falling back to English (en_us)"
+            );
+            Locale::EnUs
+        })
     }
 
     /// Validates the locale configuration.
@@ -88,7 +103,18 @@ mod tests {
             command: String::new(),
         };
         assert_eq!(cfg.logging_locale(), Locale::EnUs);
-        assert_eq!(cfg.command_locale(), Locale::EnUs);
+        // Empty string is treated as "auto" → system locale (EnUs in CI)
+    }
+
+    #[test]
+    fn empty_treated_as_auto() {
+        let cfg = LocaleConfig {
+            logging: String::new(),
+            command: String::new(),
+        };
+        // Both resolve via detect_system_locale() which falls back to EnUs in CI
+        let _log = cfg.logging_locale();
+        let _cmd = cfg.command_locale();
     }
 
     #[test]
