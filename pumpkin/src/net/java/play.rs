@@ -2073,7 +2073,6 @@ impl JavaClient {
         };
 
         //TODO this.player.resetLastActionTime();
-        //TODO this.gameModeForPlayer == GameType.SPECTATOR
 
         let inventory = player.inventory();
         let held_item = inventory.held_item();
@@ -2110,6 +2109,30 @@ impl JavaClient {
                 return Ok(());
             }
         }}
+
+        // Spectators may only interact with blocks that expose a menu provider
+        // (containers, workstations, ...). Every other interaction is ignored.
+        // Mirrors the `GameType.SPECTATOR` branch of `ServerPlayerGameMode#useItemOn`,
+        // which opens the block's menu provider (if any) and otherwise passes.
+        if player.gamemode.load() == GameMode::Spectator {
+            if server.block_registry.has_menu_provider(block) {
+                server
+                    .block_registry
+                    .on_use(
+                        block,
+                        player,
+                        &position,
+                        &BlockHitResult {
+                            face: &face,
+                            cursor_pos: &cursor_pos,
+                        },
+                        server,
+                        &world,
+                    )
+                    .await;
+            }
+            return Ok(());
+        }
 
         let sneaking = player.get_entity().is_sneaking();
 

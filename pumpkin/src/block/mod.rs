@@ -72,6 +72,16 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { BlockActionResult::PassToDefaultBlockAction })
     }
 
+    /// Whether this block exposes a menu (e.g. a container or workstation screen)
+    /// when used. Mirrors `BlockState#getMenuProvider` in vanilla.
+    ///
+    /// Spectators are only allowed to interact with blocks that have a menu
+    /// provider; every other interaction is ignored (see the spectator gate in
+    /// `handle_use_item_on`).
+    fn has_menu_provider(&self) -> bool {
+        false
+    }
+
     fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }

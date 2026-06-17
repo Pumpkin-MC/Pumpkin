@@ -83,6 +83,10 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
 pub struct FurnaceBlock;
 
 impl BlockBehaviour for FurnaceBlock {
+    fn has_menu_provider(&self) -> bool {
+        true
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position)

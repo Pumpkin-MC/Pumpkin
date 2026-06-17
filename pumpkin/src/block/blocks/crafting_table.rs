@@ -16,6 +16,10 @@ use tokio::sync::Mutex;
 pub struct CraftingTableBlock;
 
 impl BlockBehaviour for CraftingTableBlock {
+    fn has_menu_provider(&self) -> bool {
+        true
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player

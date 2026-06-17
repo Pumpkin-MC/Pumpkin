@@ -923,6 +923,15 @@ impl BlockRegistry {
         self.blocks.get(&block)
     }
 
+    /// Whether the given block exposes a menu provider (container / workstation
+    /// screen). Mirrors `BlockState#getMenuProvider != null` in vanilla and is
+    /// used to gate spectator interactions.
+    #[must_use]
+    pub fn has_menu_provider(&self, block: &Block) -> bool {
+        self.get_pumpkin_block(block.id)
+            .is_some_and(|b| b.has_menu_provider())
+    }
+
     #[must_use]
     pub fn get_pumpkin_fluid(&self, fluid_id: u16) -> Option<&Arc<dyn FluidBehaviour>> {
         self.fluids.get(&fluid_id).or_else(|| {

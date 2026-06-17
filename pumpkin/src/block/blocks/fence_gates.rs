@@ -15,7 +15,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
@@ -108,10 +107,6 @@ impl BlockBehaviour for FenceGateBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if args.player.gamemode.load() == GameMode::Spectator {
-                return BlockActionResult::Pass;
-            }
-
             toggle_fence_gate(args.world, args.position, args.player).await;
 
             BlockActionResult::Success

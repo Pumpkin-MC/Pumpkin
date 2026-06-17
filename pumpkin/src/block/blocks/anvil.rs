@@ -23,6 +23,10 @@ use tokio::sync::Mutex;
 pub struct AnvilBlock;
 
 impl BlockBehaviour for AnvilBlock {
+    fn has_menu_provider(&self) -> bool {
+        true
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
