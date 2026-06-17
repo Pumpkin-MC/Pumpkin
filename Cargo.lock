@@ -2769,6 +2769,7 @@ name = "pumpkin-i18n"
 version = "0.1.0-dev+26.1"
 dependencies = [
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

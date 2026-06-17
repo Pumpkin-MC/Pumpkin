@@ -94,23 +94,41 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
 
 /// Retrieves a translation for the given key and locale.
 ///
+/// When the key is not found in the requested locale, falls back to
+/// [`Locale::EnUs`]. If the key is missing there as well the raw key
+/// itself is returned. A warning is emitted in each fallback case.
+///
 /// # Arguments
 /// * `key`: The fully qualified `namespace:key`.
 /// * `locale`: The requested locale.
 ///
 /// # Returns
-/// The localized translation. Falls back to `en_us` or the key itself if not found.
+/// The localized translation.
 pub fn get_translation(key: &str, locale: Locale) -> String {
     let translations = TRANSLATIONS.lock().unwrap();
-    let key = key.to_lowercase();
-    translations[locale as usize].get(&key).map_or_else(
-        || {
-            translations[Locale::EnUs as usize]
-                .get(&key)
-                .map_or(key, Clone::clone)
-        },
-        Clone::clone,
-    )
+    let lower = key.to_lowercase();
+
+    // 1. Try the requested locale
+    if let Some(value) = translations[locale as usize].get(&lower) {
+        return value.clone();
+    }
+
+    // 2. Fall back to English
+    if let Some(value) = translations[Locale::EnUs as usize].get(&lower) {
+        tracing::warn!(
+            key = %lower,
+            locale = ?locale,
+            "translation key not found – falling back to English (en_us)"
+        );
+        return value.clone();
+    }
+
+    // 3. Missing entirely — return the key itself
+    tracing::error!(
+        key = %lower,
+        "translation key not found in any locale – returning raw key"
+    );
+    lower
 }
 
 /// Reorders substitution placeholders within a translation string.
