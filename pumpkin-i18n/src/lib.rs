@@ -114,33 +114,24 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
 
     // Try the original key first (keys are already stored lowercase).
     // Only allocate `to_lowercase()` as a fallback.
-    let lookup = |k: &str| -> Option<&String> {
-        translations[locale as usize].get(k).or_else(|| {
-            // Rare path: key wasn't lowercased by the caller.
-            let lower = k.to_lowercase();
-            if lower != *k {
-                translations[locale as usize].get(&lower)
-            } else {
+    fn try_get<'a>(table: &'a HashMap<String, String>, key: &str) -> Option<&'a String> {
+        table.get(key).or_else(|| {
+            let lower = key.to_lowercase();
+            if lower == *key {
                 None
+            } else {
+                table.get(&lower)
             }
         })
-    };
+    }
 
     // 1. Try the requested locale
-    if let Some(value) = lookup(key) {
+    if let Some(value) = try_get(&translations[locale as usize], key) {
         return value.clone();
     }
 
-    // 2. Fall back to English (use same lookup on en_us table)
-    let en_table = &translations[Locale::EnUs as usize];
-    let en_value = en_table.get(key).or_else(|| {
-        let lower = key.to_lowercase();
-        if lower != *key {
-            en_table.get(&lower)
-        } else {
-            None
-        }
-    });
+    // 2. Fall back to English
+    let en_value = try_get(&translations[Locale::EnUs as usize], key);
 
     if let Some(value) = en_value {
         tracing::warn!(
