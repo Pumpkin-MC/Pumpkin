@@ -110,20 +110,16 @@ static SYSTEM_LOCALE: OnceLock<Locale> = OnceLock::new();
 /// # Returns
 /// The localized translation.
 pub fn get_translation(key: &str, locale: Locale) -> String {
-    let translations = TRANSLATIONS.read().unwrap();
-
     // Try the original key first (keys are already stored lowercase).
     // Only allocate `to_lowercase()` as a fallback.
     fn try_get<'a>(table: &'a HashMap<String, String>, key: &str) -> Option<&'a String> {
         table.get(key).or_else(|| {
             let lower = key.to_lowercase();
-            if lower == *key {
-                None
-            } else {
-                table.get(&lower)
-            }
+            if lower == *key { None } else { table.get(&lower) }
         })
     }
+
+    let translations = TRANSLATIONS.read().unwrap();
 
     // 1. Try the requested locale
     if let Some(value) = try_get(&translations[locale as usize], key) {
