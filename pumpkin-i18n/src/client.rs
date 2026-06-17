@@ -49,6 +49,35 @@ pub fn remove_player_locale(player_id: &str) {
 }
 
 // ---------------------------------------------------------------------------
+// Convenience: setup / lookup / teardown for editions
+// ---------------------------------------------------------------------------
+
+/// Resolves the locale for a Java Edition player using the server
+/// `[locale].client_java_edition` setting.
+#[must_use]
+pub fn setup_java_player(player_id: &str, player_lang: &str, edition_setting: &str) -> Locale {
+    set_player_locale(player_id, player_lang, edition_setting)
+}
+
+/// Resolves the locale for a Bedrock Edition player using the server
+/// `[locale].client_bedrock_edition` setting.
+#[must_use]
+pub fn setup_bedrock_player(player_id: &str, player_lang: &str, edition_setting: &str) -> Locale {
+    set_player_locale(player_id, player_lang, edition_setting)
+}
+
+/// Returns the cached locale for a player (defaults to [`Locale::EnUs`]).
+#[must_use]
+pub fn player_locale(player_id: &str) -> Locale {
+    get_player_locale(player_id).unwrap_or(Locale::EnUs)
+}
+
+/// Removes a player from the cache (call on disconnect).
+pub fn teardown_player(player_id: &str) {
+    remove_player_locale(player_id);
+}
+
+// ---------------------------------------------------------------------------
 // Resolution logic
 // ---------------------------------------------------------------------------
 
@@ -79,6 +108,29 @@ pub fn resolve_client_locale(player_lang: &str, edition_setting: &str) -> Locale
     // Both "en_US" (Bedrock) and "en_us" (Java) are accepted by the
     // case-insensitive FromStr impl.
     Locale::from_str(player_lang).unwrap_or(Locale::EnUs)
+}
+
+// ---------------------------------------------------------------------------
+// Validation (called by pumpkin-config at startup)
+// ---------------------------------------------------------------------------
+
+/// Logs a warning for every client edition field that is neither `"auto"`,
+/// empty, nor a recognised locale identifier.
+pub fn validate_locale_config(java_setting: &str, bedrock_setting: &str) {
+    for (label, value) in [
+        ("client_java_edition", java_setting),
+        ("client_bedrock_edition", bedrock_setting),
+    ] {
+        if value.eq_ignore_ascii_case("auto") || value.is_empty() {
+            continue;
+        }
+        if Locale::from_str(value).is_err() {
+            tracing::warn!(
+                "[locale].{label} = \"{value}\" is not a recognised locale – \
+                 falling back to English (en_us)"
+            );
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

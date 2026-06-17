@@ -23,6 +23,37 @@ pub fn resolve_server_locale(setting: &str) -> Locale {
     Locale::from_str(setting).unwrap_or(Locale::EnUs)
 }
 
+/// Resolves the locale for command feedback from the `[locale].server_command` setting.
+#[must_use]
+pub fn command_locale(setting: &str) -> Locale {
+    resolve_server_locale(setting)
+}
+
+/// Resolves the locale for log output from the `[locale].server_logging` setting.
+#[must_use]
+pub fn logging_locale(setting: &str) -> Locale {
+    resolve_server_locale(setting)
+}
+
+/// Logs a warning for every server-side field that is neither `"auto"`,
+/// empty, nor a recognised locale identifier.
+pub fn validate_locale_config(command_setting: &str, logging_setting: &str) {
+    for (label, value) in [
+        ("server_command", command_setting),
+        ("server_logging", logging_setting),
+    ] {
+        if value.eq_ignore_ascii_case("auto") || value.is_empty() {
+            continue;
+        }
+        if Locale::from_str(value).is_err() {
+            tracing::warn!(
+                "[locale].{label} = \"{value}\" is not a recognised locale – \
+                 falling back to English (en_us)"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
