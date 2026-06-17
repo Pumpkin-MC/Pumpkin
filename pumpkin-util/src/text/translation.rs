@@ -6,7 +6,7 @@ use crate::text::{TextComponentBase, TextContent, style::Style};
 
 /// A default empty `TextComponentBase` used as a fallback when a substitution
 /// placeholder has no matching value.
-fn empty_component() -> TextComponentBase {
+pub(crate) fn empty_component() -> TextComponentBase {
     TextComponentBase {
         content: Box::new(TextContent::Text { text: "".into() }),
         style: Box::new(Style::default()),

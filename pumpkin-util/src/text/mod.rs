@@ -285,39 +285,25 @@ impl TextComponentBase {
     /// # Returns
     /// A new component with all translations resolved.
     fn translate_hover_event(style: &mut Style) {
-        if let Some(ref hover) = style.hover_event {
-            style.hover_event = match hover {
-                HoverEvent::ShowText { value } => {
-                    let mut hover_components = vec![];
-                    for hover_component in value {
-                        hover_components.push(hover_component.to_owned().to_translated());
-                    }
-                    Some(HoverEvent::ShowText {
-                        value: hover_components,
-                    })
-                }
-                HoverEvent::ShowEntity { name, id, uuid } => name.as_ref().map_or_else(
-                    || {
-                        Some(HoverEvent::ShowEntity {
-                            name: None,
-                            id: id.clone(),
-                            uuid: uuid.clone(),
-                        })
-                    },
-                    |name| {
-                        Some(HoverEvent::ShowEntity {
-                            name: Some(name.iter().map(|x| x.to_owned().to_translated()).collect()),
-                            id: id.clone(),
-                            uuid: uuid.clone(),
-                        })
-                    },
-                ),
-                HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem {
-                    id: id.clone(),
-                    count: count.to_owned(),
-                }),
-            };
-        }
+        let Some(ref hover) = style.hover_event else {
+            return;
+        };
+        style.hover_event = match hover {
+            HoverEvent::ShowText { value } => Some(HoverEvent::ShowText {
+                value: value.iter().map(|c| c.to_owned().to_translated()).collect(),
+            }),
+            HoverEvent::ShowEntity { name, id, uuid } => Some(HoverEvent::ShowEntity {
+                name: name
+                    .as_ref()
+                    .map(|n| n.iter().map(|c| c.to_owned().to_translated()).collect()),
+                id: id.clone(),
+                uuid: uuid.clone(),
+            }),
+            HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem {
+                id: id.clone(),
+                count: count.to_owned(),
+            }),
+        };
     }
 
     /// Converts this component by resolving all translations.
@@ -326,96 +312,86 @@ impl TextComponentBase {
     /// A new component with all translations resolved.
     #[must_use]
     pub fn to_translated(self) -> Self {
-        // NOTE: Divide the translation into slices and inserts the substitutions.
         let component = match *self.content {
             TextContent::Translate {
                 translate,
                 bedrock_translate,
                 with,
-            } => {
-                let mut translated_with = vec![];
-                for w in with {
-                    translated_with.push(w.to_translated());
-                }
-                Self {
-                    content: Box::new(TextContent::Translate {
-                        translate,
-                        bedrock_translate,
-                        with: translated_with,
-                    }),
-                    style: self.style,
-                    extra: self.extra,
-                }
-            }
+            } => Self {
+                content: Box::new(TextContent::Translate {
+                    translate,
+                    bedrock_translate,
+                    with: with.into_iter().map(Self::to_translated).collect(),
+                }),
+                style: self.style,
+                extra: self.extra,
+            },
             TextContent::Custom { key, with, locale } => {
                 let translation = get_translation(&key, locale);
-                let mut translation_parent = translation.clone();
-                let mut translation_slices = vec![];
+                if !translation.contains('%') {
+                    return Self {
+                        content: Box::new(TextContent::Text {
+                            text: translation.into(),
+                        }),
+                        style: self.style,
+                        extra: with
+                            .into_iter()
+                            .map(Self::to_translated)
+                            .chain(self.extra.into_iter().map(Self::to_translated))
+                            .collect(),
+                    };
+                }
 
-                if translation.contains('%') {
-                    let (substitutions, ranges) = reorder_substitutions(
-                        &translation,
-                        with,
-                        Self {
-                            content: Box::new(TextContent::Text { text: "".into() }),
-                            style: Box::new(Style::default()),
-                            extra: vec![],
-                        },
-                    );
-                    for (idx, &range) in ranges.iter().enumerate() {
-                        if idx == 0 {
-                            translation_parent = translation[..range.start].to_string();
-                        }
-                        translation_slices.push(substitutions[idx].clone());
-                        if range.end >= translation.len() - 1 {
-                            continue;
-                        }
+                let (substitutions, ranges) = reorder_substitutions(
+                    &translation,
+                    with,
+                    crate::text::translation::empty_component(),
+                );
+                let translation_parent = translation[..ranges[0].start].to_string();
+                let mut extra = Vec::with_capacity(ranges.len() * 2 + self.extra.len());
 
-                        translation_slices.push(Self {
-                            content: Box::new(TextContent::Text {
-                                text: if idx == ranges.len() - 1 {
-                                    // Last substitution, append the rest of the translation
-                                    Cow::Owned(translation[range.end + 1..].to_string())
-                                } else {
-                                    Cow::Owned(
-                                        translation[range.end + 1..ranges[idx + 1].start]
-                                            .to_string(),
-                                    )
-                                },
-                            }),
-                            style: Box::new(Style::default()),
-                            extra: vec![],
-                        });
+                for (idx, &range) in ranges.iter().enumerate() {
+                    extra.push(substitutions[idx].clone());
+                    if range.end >= translation.len() - 1 {
+                        continue;
                     }
+                    extra.push(Self {
+                        content: Box::new(TextContent::Text {
+                            text: Cow::Owned(if idx == ranges.len() - 1 {
+                                translation[range.end + 1..].to_string()
+                            } else {
+                                translation[range.end + 1..ranges[idx + 1].start].to_string()
+                            }),
+                        }),
+                        style: Box::new(Style::default()),
+                        extra: vec![],
+                    });
                 }
-                for i in self.extra {
-                    translation_slices.push(i);
-                }
+                extra.extend(self.extra);
+
                 Self {
                     content: Box::new(TextContent::Text {
                         text: translation_parent.into(),
                     }),
                     style: self.style,
-                    extra: translation_slices,
+                    extra,
                 }
             }
-            _ => self, // If not a translation, return as is
+            _ => self,
         };
-        // Ensure that the extra components are translated
-        let extra = component
-            .extra
-            .into_iter()
-            .map(Self::to_translated)
-            .collect();
-
-        // If the hover event is present, it will also be translated
-        let mut style = component.style;
-        Self::translate_hover_event(&mut style);
 
         Self {
             content: component.content,
-            style,
-            extra,
+            style: {
+                let mut style = component.style;
+                Self::translate_hover_event(&mut style);
+                style
+            },
+            extra: component
+                .extra
+                .into_iter()
+                .map(Self::to_translated)
+                .collect(),
         }
     }
 }
