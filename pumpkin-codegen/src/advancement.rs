@@ -5,7 +5,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::Translate;
 use quote::{ToTokens, format_ident, quote};
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::PartialEq;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
@@ -430,9 +430,7 @@ pub(crate) fn build() -> TokenStream {
                 send_telemetry : #send_telemetry,
                 display : #display,
                 reward : &#reward,
-                requirements: AdvancementRequirement{
-                    requirements : &[#(#requirements),*]
-                }
+                requirements: &[#(#requirements),*],
             };
         }]);
         let minecraft_name = identifier.to_string();
@@ -463,7 +461,7 @@ pub(crate) fn build() -> TokenStream {
             pub send_telemetry : bool,
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
-            pub requirements: AdvancementRequirement,
+            pub requirements: &'static[&'static[&'static str]],
         }
 
         impl Display for Advancement {
