@@ -331,7 +331,7 @@ impl TextComponentBase {
                 if !translation.contains('%') {
                     return Self {
                         content: Box::new(TextContent::Text {
-                            text: translation.into(),
+                            text: Cow::Owned(translation.to_string()),
                         }),
                         style: self.style,
                         extra: with

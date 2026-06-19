@@ -8,7 +8,7 @@ use std::str::FromStr;
 impl Host for PluginHostState {
     async fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
         let util_locale = wit_to_util_locale(locale);
-        Ok(get_translation(&key, util_locale))
+        Ok(get_translation(&key, util_locale).to_string())
     }
 
     async fn load_translations(

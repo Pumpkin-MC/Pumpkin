@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+arc-swap.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
