@@ -12,7 +12,7 @@ pub struct Statistics {
 impl Statistics {
     pub fn increment(&mut self, category: StatisticCategory, stat: i32, amount: i32) {
         let entry = self.stats.entry((category as i32, stat)).or_insert(0);
-        *entry += amount;
+        *entry = entry.saturating_add(amount);
     }
 
     pub fn increment_custom(&mut self, stat: CustomStatistic, amount: i32) {

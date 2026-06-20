@@ -8,7 +8,7 @@ pub struct DoublePerlinNoiseParameters {
     pub amplitude: f64,
 }
 impl DoublePerlinNoiseParameters {
-    pub const COUNT: usize = 62usize;
+    pub const COUNT: usize = 63usize;
     pub const fn new(
         id: usize,
         first_octave: i32,
@@ -87,6 +87,7 @@ impl DoublePerlinNoiseParameters {
             "spaghetti_3d_thickness" => &Self::SPAGHETTI_3D_THICKNESS,
             "spaghetti_roughness" => &Self::SPAGHETTI_ROUGHNESS,
             "spaghetti_roughness_modulator" => &Self::SPAGHETTI_ROUGHNESS_MODULATOR,
+            "sulfur_cave_gradient" => &Self::SULFUR_CAVE_GRADIENT,
             "surface" => &Self::SURFACE,
             "surface_secondary" => &Self::SURFACE_SECONDARY,
             "surface_swamp" => &Self::SURFACE_SWAMP,
@@ -567,8 +568,16 @@ impl DoublePerlinNoiseParameters {
             14613561992896323587u64,
             0.8333333333333333f64,
         );
-    pub const SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+    pub const SULFUR_CAVE_GRADIENT: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         55usize,
+        -5i32,
+        &[1f64, 0f64, 1f64],
+        18337577454901213776u64,
+        11718438542783181498u64,
+        1.25f64,
+    );
+    pub const SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        56usize,
         -6i32,
         &[1f64, 1f64, 1f64],
         5417997184927261100u64,
@@ -576,7 +585,7 @@ impl DoublePerlinNoiseParameters {
         1.25f64,
     );
     pub const SURFACE_SECONDARY: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        56usize,
+        57usize,
         -6i32,
         &[1f64, 1f64, 0f64, 1f64],
         2051559389371867033u64,
@@ -584,7 +593,7 @@ impl DoublePerlinNoiseParameters {
         1.3333333333333333f64,
     );
     pub const SURFACE_SWAMP: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        57usize,
+        58usize,
         -2i32,
         &[1f64],
         14388971182144335831u64,
@@ -592,7 +601,7 @@ impl DoublePerlinNoiseParameters {
         0.8333333333333333f64,
     );
     pub const TEMPERATURE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        58usize,
+        59usize,
         -10i32,
         &[1.5f64, 0f64, 1f64, 0f64, 0f64, 0f64],
         6664882324328353151u64,
@@ -600,7 +609,7 @@ impl DoublePerlinNoiseParameters {
         1.25f64,
     );
     pub const TEMPERATURE_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        59usize,
+        60usize,
         -12i32,
         &[1.5f64, 0f64, 1f64, 0f64, 0f64, 0f64],
         10685635038780148187u64,
@@ -608,7 +617,7 @@ impl DoublePerlinNoiseParameters {
         1.25f64,
     );
     pub const VEGETATION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        60usize,
+        61usize,
         -8i32,
         &[1f64, 1f64, 0f64, 0f64, 0f64, 0f64],
         9348150263868561038u64,
@@ -616,7 +625,7 @@ impl DoublePerlinNoiseParameters {
         1.111111111111111f64,
     );
     pub const VEGETATION_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        61usize,
+        62usize,
         -10i32,
         &[1f64, 1f64, 0f64, 0f64, 0f64, 0f64],
         8194488175179944705u64,

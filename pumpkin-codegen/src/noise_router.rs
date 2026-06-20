@@ -312,35 +312,6 @@ impl UnaryOperation {
     }
 }
 
-/// Rarity-value mapper used by the `WeirdScaled` density function.
-#[derive(Deserialize, Hash, Copy, Clone)]
-enum WeirdScaledMapper {
-    /// Cave-type scaling curve (TYPE2).
-    #[serde(rename(deserialize = "TYPE2"))]
-    Caves,
-    /// Tunnel-type scaling curve (TYPE1).
-    #[serde(rename(deserialize = "TYPE1"))]
-    Tunnels,
-}
-
-impl WeirdScaledMapper {
-    /// Emits the token stream for this mapper variant.
-    fn into_token_stream(self) -> TokenStream {
-        match self {
-            Self::Caves => {
-                quote! {
-                    WeirdScaledMapper::Caves
-                }
-            }
-            Self::Tunnels => {
-                quote! {
-                    WeirdScaledMapper::Tunnels
-                }
-            }
-        }
-    }
-}
-
 /// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
@@ -416,17 +387,6 @@ struct ShiftedNoiseData {
     /// Resource location ID of the noise generator.
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
-}
-
-/// Deserialized parameters for a weird-scaled-sampler density function.
-#[derive(Deserialize, Hash, Clone)]
-struct WeirdScaledData {
-    /// Resource location ID of the noise generator.
-    #[serde(rename(deserialize = "noise"))]
-    noise_id: String,
-    /// The rarity-value mapper that scales the noise output.
-    #[serde(rename(deserialize = "rarityValueMapper"))]
-    mapper: WeirdScaledMapper,
 }
 
 /// Deserialized parameters for the interpolated noise sampler density function.
@@ -630,13 +590,11 @@ enum DensityFunctionRepr {
         data: InterpolatedNoiseSamplerData,
     },
     /// Scales an input density function by a cave/tunnel rarity curve.
-    #[serde(rename(deserialize = "WeirdScaledSampler"))]
-    WeirdScaled {
-        /// The density function to scale.
+    #[serde(rename(deserialize = "IntervalSelect"))]
+    IntervalSelect {
         input: Box<Self>,
-        /// Noise ID and mapper type for scaling.
-        #[serde(flatten)]
-        data: WeirdScaledData,
+        thresholds: Box<[HashableF64]>,
+        functions: Box<[Self]>,
     },
     /// Wraps an inner function with a caching or interpolation layer.
     // The wrapped function is wrapped in a new wrapper at runtime
@@ -1008,19 +966,23 @@ impl DensityFunctionRepr {
                     }
                 }
             }
-            Self::WeirdScaled { input, data } => {
+            Self::IntervalSelect {
+                input,
+                thresholds,
+                functions,
+            } => {
                 let input_index = input.get_index_for_component(stack, hash_to_index_map);
-
-                let noise_id = quote::format_ident!("{}", data.noise_id.to_shouty_snake_case());
-                let action = data.mapper.into_token_stream();
+                let functions_indices = functions
+                    .iter()
+                    .map(|f| f.get_index_for_component(stack, hash_to_index_map))
+                    .collect::<Vec<_>>();
+                let thresholds = thresholds.iter().map(|t| t.0).collect::<Vec<_>>();
 
                 quote! {
-                    BaseNoiseFunctionComponent::WeirdScaled {
+                    BaseNoiseFunctionComponent::IntervalSelect {
                         input_index: #input_index,
-                        data: &WeirdScaledData {
-                            noise_id: DoublePerlinNoiseParameters::#noise_id,
-                            mapper: #action,
-                        },
+                        thresholds: &[#(#thresholds),*],
+                        functions_indices: &[#(#functions_indices),*],
                     }
                 }
             }
@@ -1270,59 +1232,6 @@ pub fn build() -> TokenStream {
             pub noise_id: DoublePerlinNoiseParameters,
         }
 
-        #[derive(Copy, Clone)]
-        pub enum WeirdScaledMapper {
-            Caves,
-            Tunnels,
-        }
-
-        impl WeirdScaledMapper {
-            #[inline]
-            #[must_use]
-            pub const fn max_multiplier(&self) -> f64 {
-                match self {
-                    Self::Tunnels => 2.0,
-                    Self::Caves => 3.0,
-                }
-            }
-
-            #[inline]
-            #[must_use]
-            #[allow(clippy::too_many_lines)]
-            pub const fn scale(&self, value: f64) -> f64 {
-                match self {
-                    Self::Tunnels => {
-                        if value < -0.5 {
-                            0.75
-                        } else if value < 0.0 {
-                            1.0
-                        } else if value < 0.5 {
-                            1.5
-                        } else {
-                            2.0
-                        }
-                    }
-                    Self::Caves => {
-                        if value < -0.75 {
-                            0.5
-                        } else if value < -0.5 {
-                            0.75
-                        } else if value < 0.5 {
-                            1.0
-                        } else if value < 0.75 {
-                            2.0
-                        } else {
-                            3.0
-                        }
-                    }
-                }
-            }
-        }
-
-        pub struct WeirdScaledData {
-            pub noise_id: DoublePerlinNoiseParameters,
-            pub mapper: WeirdScaledMapper,
-        }
 
         pub struct InterpolatedNoiseSamplerData {
             pub scaled_xz_scale: f64,
@@ -1496,9 +1405,10 @@ pub fn build() -> TokenStream {
             InterpolatedNoiseSampler {
                 data: &'static InterpolatedNoiseSamplerData,
             },
-            WeirdScaled {
+            IntervalSelect {
                 input_index: usize,
-                data: &'static WeirdScaledData,
+                thresholds: &'static [f64],
+                functions_indices: &'static [usize],
             },
             // The wrapped function is wrapped in a new wrapper at runtime
             Wrapper {

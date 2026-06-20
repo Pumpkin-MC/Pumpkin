@@ -11,6 +11,7 @@ use std::{
 
 mod advancement;
 mod attributes;
+mod bedrock_creative;
 mod biome;
 mod bitsets;
 mod block;
@@ -78,6 +79,7 @@ pub fn main() {
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (advancement::build, "advancement.rs"),
+        (bedrock_creative::build, "bedrock_creative.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),

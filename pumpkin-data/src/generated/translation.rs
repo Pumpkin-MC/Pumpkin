@@ -4,6 +4,9 @@ pub mod java {
     #[doc = "Accessibility Settings..."]
     pub const ACCESSIBILITY_ONBOARDING_ACCESSIBILITY_BUTTON: &str =
         "accessibility.onboarding.accessibility.button";
+    #[doc = "Accessibility Settings"]
+    pub const ACCESSIBILITY_ONBOARDING_ACCESSIBILITY_BUTTON_NARRATION: &str =
+        "accessibility.onboarding.accessibility.button.narration";
     #[doc = "Press enter to enable the narrator"]
     pub const ACCESSIBILITY_ONBOARDING_SCREEN_NARRATOR: &str =
         "accessibility.onboarding.screen.narrator";
@@ -548,6 +551,11 @@ pub mod java {
     #[doc = "Best Friends Forever"]
     pub const ADVANCEMENTS_HUSBANDRY_TAME_AN_ANIMAL_TITLE: &str =
         "advancements.husbandry.tame_an_animal.title";
+    #[doc = "Have a Sulfur Cube absorb a TNT block"]
+    pub const ADVANCEMENTS_HUSBANDRY_UH_OH_DESCRIPTION: &str =
+        "advancements.husbandry.uh_oh.description";
+    #[doc = "Uh Oh"]
+    pub const ADVANCEMENTS_HUSBANDRY_UH_OH_TITLE: &str = "advancements.husbandry.uh_oh.title";
     #[doc = "Scrape Wax off of a Copper block!"]
     pub const ADVANCEMENTS_HUSBANDRY_WAX_OFF_DESCRIPTION: &str =
         "advancements.husbandry.wax_off.description";
@@ -729,7 +737,7 @@ pub mod java {
     #[doc = "The End?"]
     pub const ADVANCEMENTS_STORY_ENTER_THE_END_TITLE: &str =
         "advancements.story.enter_the_end.title";
-    #[doc = "Build, light and enter a Nether Portal"]
+    #[doc = "Build, light, and enter a Nether Portal"]
     pub const ADVANCEMENTS_STORY_ENTER_THE_NETHER_DESCRIPTION: &str =
         "advancements.story.enter_the_nether.description";
     #[doc = "We Need to Go Deeper"]
@@ -1021,7 +1029,7 @@ pub mod java {
     #[doc = "Failed to parse structure: %s"]
     pub const ARGUMENT_RESOURCE_OR_ID_FAILED_TO_PARSE: &str =
         "argument.resource_or_id.failed_to_parse";
-    #[doc = "Invalid id or tag"]
+    #[doc = "Invalid ID or tag"]
     pub const ARGUMENT_RESOURCE_OR_ID_INVALID: &str = "argument.resource_or_id.invalid";
     #[doc = "Can't find element '%s' in registry '%s'"]
     pub const ARGUMENT_RESOURCE_OR_ID_NO_SUCH_ELEMENT: &str =
@@ -1111,6 +1119,8 @@ pub mod java {
     pub const ATTRIBUTE_MODIFIER_TAKE_1: &str = "attribute.modifier.take.1";
     #[doc = "-%s%% %s"]
     pub const ATTRIBUTE_MODIFIER_TAKE_2: &str = "attribute.modifier.take.2";
+    #[doc = "Air Drag Modifier"]
+    pub const ATTRIBUTE_NAME_AIR_DRAG_MODIFIER: &str = "attribute.name.air_drag_modifier";
     #[doc = "Armor"]
     pub const ATTRIBUTE_NAME_ARMOR: &str = "attribute.name.armor";
     #[doc = "Armor Toughness"]
@@ -1121,11 +1131,15 @@ pub mod java {
     pub const ATTRIBUTE_NAME_ATTACK_KNOCKBACK: &str = "attribute.name.attack_knockback";
     #[doc = "Attack Speed"]
     pub const ATTRIBUTE_NAME_ATTACK_SPEED: &str = "attribute.name.attack_speed";
+    #[doc = "Name Tag Score Distance"]
+    pub const ATTRIBUTE_NAME_BELOW_NAME_DISTANCE: &str = "attribute.name.below_name_distance";
     #[doc = "Block Break Speed"]
     pub const ATTRIBUTE_NAME_BLOCK_BREAK_SPEED: &str = "attribute.name.block_break_speed";
     #[doc = "Block Interaction Range"]
     pub const ATTRIBUTE_NAME_BLOCK_INTERACTION_RANGE: &str =
         "attribute.name.block_interaction_range";
+    #[doc = "Bounciness"]
+    pub const ATTRIBUTE_NAME_BOUNCINESS: &str = "attribute.name.bounciness";
     #[doc = "Burning Time"]
     pub const ATTRIBUTE_NAME_BURNING_TIME: &str = "attribute.name.burning_time";
     #[doc = "Camera Distance"]
@@ -1142,6 +1156,8 @@ pub mod java {
     pub const ATTRIBUTE_NAME_FLYING_SPEED: &str = "attribute.name.flying_speed";
     #[doc = "Mob Follow Range"]
     pub const ATTRIBUTE_NAME_FOLLOW_RANGE: &str = "attribute.name.follow_range";
+    #[doc = "Friction Modifier"]
+    pub const ATTRIBUTE_NAME_FRICTION_MODIFIER: &str = "attribute.name.friction_modifier";
     #[doc = "Armor"]
     pub const ATTRIBUTE_NAME_GENERIC_ARMOR: &str = "attribute.name.generic.armor";
     #[doc = "Armor Toughness"]
@@ -1222,6 +1238,8 @@ pub mod java {
     pub const ATTRIBUTE_NAME_MOVEMENT_EFFICIENCY: &str = "attribute.name.movement_efficiency";
     #[doc = "Speed"]
     pub const ATTRIBUTE_NAME_MOVEMENT_SPEED: &str = "attribute.name.movement_speed";
+    #[doc = "Name Tag Distance"]
+    pub const ATTRIBUTE_NAME_NAMEPLATE_DISTANCE: &str = "attribute.name.nameplate_distance";
     #[doc = "Oxygen Bonus"]
     pub const ATTRIBUTE_NAME_OXYGEN_BONUS: &str = "attribute.name.oxygen_bonus";
     #[doc = "Block Break Speed"]
@@ -1379,6 +1397,8 @@ pub mod java {
     pub const BIOME_MINECRAFT_STONY_PEAKS: &str = "biome.minecraft.stony_peaks";
     #[doc = "Stony Shore"]
     pub const BIOME_MINECRAFT_STONY_SHORE: &str = "biome.minecraft.stony_shore";
+    #[doc = "Sulfur Caves"]
+    pub const BIOME_MINECRAFT_SULFUR_CAVES: &str = "biome.minecraft.sulfur_caves";
     #[doc = "Sunflower Plains"]
     pub const BIOME_MINECRAFT_SUNFLOWER_PLAINS: &str = "biome.minecraft.sunflower_plains";
     #[doc = "Swamp"]
@@ -3662,6 +3682,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_CHIPPED_ANVIL: &str = "block.minecraft.chipped_anvil";
     #[doc = "Chiseled Bookshelf"]
     pub const BLOCK_MINECRAFT_CHISELED_BOOKSHELF: &str = "block.minecraft.chiseled_bookshelf";
+    #[doc = "Chiseled Cinnabar"]
+    pub const BLOCK_MINECRAFT_CHISELED_CINNABAR: &str = "block.minecraft.chiseled_cinnabar";
     #[doc = "Chiseled Copper"]
     pub const BLOCK_MINECRAFT_CHISELED_COPPER: &str = "block.minecraft.chiseled_copper";
     #[doc = "Chiseled Deepslate"]
@@ -3683,6 +3705,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_CHISELED_SANDSTONE: &str = "block.minecraft.chiseled_sandstone";
     #[doc = "Chiseled Stone Bricks"]
     pub const BLOCK_MINECRAFT_CHISELED_STONE_BRICKS: &str = "block.minecraft.chiseled_stone_bricks";
+    #[doc = "Chiseled Sulfur"]
+    pub const BLOCK_MINECRAFT_CHISELED_SULFUR: &str = "block.minecraft.chiseled_sulfur";
     #[doc = "Chiseled Tuff"]
     pub const BLOCK_MINECRAFT_CHISELED_TUFF: &str = "block.minecraft.chiseled_tuff";
     #[doc = "Chiseled Tuff Bricks"]
@@ -3691,6 +3715,22 @@ pub mod java {
     pub const BLOCK_MINECRAFT_CHORUS_FLOWER: &str = "block.minecraft.chorus_flower";
     #[doc = "Chorus Plant"]
     pub const BLOCK_MINECRAFT_CHORUS_PLANT: &str = "block.minecraft.chorus_plant";
+    #[doc = "Cinnabar"]
+    pub const BLOCK_MINECRAFT_CINNABAR: &str = "block.minecraft.cinnabar";
+    #[doc = "Cinnabar Brick Slab"]
+    pub const BLOCK_MINECRAFT_CINNABAR_BRICK_SLAB: &str = "block.minecraft.cinnabar_brick_slab";
+    #[doc = "Cinnabar Brick Stairs"]
+    pub const BLOCK_MINECRAFT_CINNABAR_BRICK_STAIRS: &str = "block.minecraft.cinnabar_brick_stairs";
+    #[doc = "Cinnabar Brick Wall"]
+    pub const BLOCK_MINECRAFT_CINNABAR_BRICK_WALL: &str = "block.minecraft.cinnabar_brick_wall";
+    #[doc = "Cinnabar Bricks"]
+    pub const BLOCK_MINECRAFT_CINNABAR_BRICKS: &str = "block.minecraft.cinnabar_bricks";
+    #[doc = "Cinnabar Slab"]
+    pub const BLOCK_MINECRAFT_CINNABAR_SLAB: &str = "block.minecraft.cinnabar_slab";
+    #[doc = "Cinnabar Stairs"]
+    pub const BLOCK_MINECRAFT_CINNABAR_STAIRS: &str = "block.minecraft.cinnabar_stairs";
+    #[doc = "Cinnabar Wall"]
+    pub const BLOCK_MINECRAFT_CINNABAR_WALL: &str = "block.minecraft.cinnabar_wall";
     #[doc = "Clay"]
     pub const BLOCK_MINECRAFT_CLAY: &str = "block.minecraft.clay";
     #[doc = "Closed Eyeblossom"]
@@ -4866,6 +4906,17 @@ pub mod java {
     #[doc = "Polished Blackstone Wall"]
     pub const BLOCK_MINECRAFT_POLISHED_BLACKSTONE_WALL: &str =
         "block.minecraft.polished_blackstone_wall";
+    #[doc = "Polished Cinnabar"]
+    pub const BLOCK_MINECRAFT_POLISHED_CINNABAR: &str = "block.minecraft.polished_cinnabar";
+    #[doc = "Polished Cinnabar Slab"]
+    pub const BLOCK_MINECRAFT_POLISHED_CINNABAR_SLAB: &str =
+        "block.minecraft.polished_cinnabar_slab";
+    #[doc = "Polished Cinnabar Stairs"]
+    pub const BLOCK_MINECRAFT_POLISHED_CINNABAR_STAIRS: &str =
+        "block.minecraft.polished_cinnabar_stairs";
+    #[doc = "Polished Cinnabar Wall"]
+    pub const BLOCK_MINECRAFT_POLISHED_CINNABAR_WALL: &str =
+        "block.minecraft.polished_cinnabar_wall";
     #[doc = "Polished Deepslate"]
     pub const BLOCK_MINECRAFT_POLISHED_DEEPSLATE: &str = "block.minecraft.polished_deepslate";
     #[doc = "Polished Deepslate Slab"]
@@ -4891,6 +4942,15 @@ pub mod java {
     #[doc = "Polished Granite Stairs"]
     pub const BLOCK_MINECRAFT_POLISHED_GRANITE_STAIRS: &str =
         "block.minecraft.polished_granite_stairs";
+    #[doc = "Polished Sulfur"]
+    pub const BLOCK_MINECRAFT_POLISHED_SULFUR: &str = "block.minecraft.polished_sulfur";
+    #[doc = "Polished Sulfur Slab"]
+    pub const BLOCK_MINECRAFT_POLISHED_SULFUR_SLAB: &str = "block.minecraft.polished_sulfur_slab";
+    #[doc = "Polished Sulfur Stairs"]
+    pub const BLOCK_MINECRAFT_POLISHED_SULFUR_STAIRS: &str =
+        "block.minecraft.polished_sulfur_stairs";
+    #[doc = "Polished Sulfur Wall"]
+    pub const BLOCK_MINECRAFT_POLISHED_SULFUR_WALL: &str = "block.minecraft.polished_sulfur_wall";
     #[doc = "Polished Tuff"]
     pub const BLOCK_MINECRAFT_POLISHED_TUFF: &str = "block.minecraft.polished_tuff";
     #[doc = "Polished Tuff Slab"]
@@ -4903,6 +4963,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_POPPY: &str = "block.minecraft.poppy";
     #[doc = "Potatoes"]
     pub const BLOCK_MINECRAFT_POTATOES: &str = "block.minecraft.potatoes";
+    #[doc = "Potent Sulfur"]
+    pub const BLOCK_MINECRAFT_POTENT_SULFUR: &str = "block.minecraft.potent_sulfur";
     #[doc = "Potted Acacia Sapling"]
     pub const BLOCK_MINECRAFT_POTTED_ACACIA_SAPLING: &str = "block.minecraft.potted_acacia_sapling";
     #[doc = "Potted Allium"]
@@ -5383,6 +5445,24 @@ pub mod java {
     pub const BLOCK_MINECRAFT_STRUCTURE_VOID: &str = "block.minecraft.structure_void";
     #[doc = "Sugar Cane"]
     pub const BLOCK_MINECRAFT_SUGAR_CANE: &str = "block.minecraft.sugar_cane";
+    #[doc = "Sulfur"]
+    pub const BLOCK_MINECRAFT_SULFUR: &str = "block.minecraft.sulfur";
+    #[doc = "Sulfur Brick Slab"]
+    pub const BLOCK_MINECRAFT_SULFUR_BRICK_SLAB: &str = "block.minecraft.sulfur_brick_slab";
+    #[doc = "Sulfur Brick Stairs"]
+    pub const BLOCK_MINECRAFT_SULFUR_BRICK_STAIRS: &str = "block.minecraft.sulfur_brick_stairs";
+    #[doc = "Sulfur Brick Wall"]
+    pub const BLOCK_MINECRAFT_SULFUR_BRICK_WALL: &str = "block.minecraft.sulfur_brick_wall";
+    #[doc = "Sulfur Bricks"]
+    pub const BLOCK_MINECRAFT_SULFUR_BRICKS: &str = "block.minecraft.sulfur_bricks";
+    #[doc = "Sulfur Slab"]
+    pub const BLOCK_MINECRAFT_SULFUR_SLAB: &str = "block.minecraft.sulfur_slab";
+    #[doc = "Sulfur Spike"]
+    pub const BLOCK_MINECRAFT_SULFUR_SPIKE: &str = "block.minecraft.sulfur_spike";
+    #[doc = "Sulfur Stairs"]
+    pub const BLOCK_MINECRAFT_SULFUR_STAIRS: &str = "block.minecraft.sulfur_stairs";
+    #[doc = "Sulfur Wall"]
+    pub const BLOCK_MINECRAFT_SULFUR_WALL: &str = "block.minecraft.sulfur_wall";
     #[doc = "Sunflower"]
     pub const BLOCK_MINECRAFT_SUNFLOWER: &str = "block.minecraft.sunflower";
     #[doc = "Suspicious Gravel"]
@@ -5831,9 +5911,9 @@ pub mod java {
     pub const BOOK_VIEW_TITLE: &str = "book.view.title";
     #[doc = "%s is under spawn protection"]
     pub const BUILD_SPAWN_PROTECTION: &str = "build.spawn_protection";
-    #[doc = "Height limit for building is %s"]
+    #[doc = "The height limit for building is %s"]
     pub const BUILD_TOOHIGH: &str = "build.tooHigh";
-    #[doc = "Minimum height for building is %s"]
+    #[doc = "The minimum height for building is %s"]
     pub const BUILD_TOOLOW: &str = "build.tooLow";
     #[doc = "Cannot send chat message"]
     pub const CHAT_CANNOTSEND: &str = "chat.cannotSend";
@@ -6006,7 +6086,7 @@ pub mod java {
     pub const COMMAND_EXCEPTION: &str = "command.exception";
     #[doc = "Expected whitespace to end one argument, but found trailing data"]
     pub const COMMAND_EXPECTED_SEPARATOR: &str = "command.expected.separator";
-    #[doc = "An unexpected error occurred trying to execute that command"]
+    #[doc = "An unexpected error occurred while trying to execute that command"]
     pub const COMMAND_FAILED: &str = "command.failed";
     #[doc = "Maximum number of contexts (%s) reached"]
     pub const COMMAND_FORKLIMIT: &str = "command.forkLimit";
@@ -6601,11 +6681,11 @@ pub mod java {
     pub const COMMANDS_LIST_NAMEANDID: &str = "commands.list.nameAndId";
     #[doc = "There are %s of a max of %s players online: %s"]
     pub const COMMANDS_LIST_PLAYERS: &str = "commands.list.players";
-    #[doc = "Could not find a biome of type \"%s\" within reasonable distance"]
+    #[doc = "Could not find a biome of type \"%s\" within a reasonable distance"]
     pub const COMMANDS_LOCATE_BIOME_NOT_FOUND: &str = "commands.locate.biome.not_found";
     #[doc = "The nearest %s is at %s (%s blocks away)"]
     pub const COMMANDS_LOCATE_BIOME_SUCCESS: &str = "commands.locate.biome.success";
-    #[doc = "Could not find a point of interest of type \"%s\" within reasonable distance"]
+    #[doc = "Could not find a point of interest of type \"%s\" within a reasonable distance"]
     pub const COMMANDS_LOCATE_POI_NOT_FOUND: &str = "commands.locate.poi.not_found";
     #[doc = "The nearest %s is at %s (%s blocks away)"]
     pub const COMMANDS_LOCATE_POI_SUCCESS: &str = "commands.locate.poi.success";
@@ -6669,7 +6749,7 @@ pub mod java {
     pub const COMMANDS_PLACE_STRUCTURE_SUCCESS: &str = "commands.place.structure.success";
     #[doc = "Failed to place template"]
     pub const COMMANDS_PLACE_TEMPLATE_FAILED: &str = "commands.place.template.failed";
-    #[doc = "There is no template with id \"%s\""]
+    #[doc = "There is no template with ID \"%s\""]
     pub const COMMANDS_PLACE_TEMPLATE_INVALID: &str = "commands.place.template.invalid";
     #[doc = "Loaded template \"%s\" at %s, %s, %s"]
     pub const COMMANDS_PLACE_TEMPLATE_SUCCESS: &str = "commands.place.template.success";
@@ -6686,9 +6766,9 @@ pub mod java {
         "commands.profile_fetch.failed_to_serialize";
     #[doc = "Give Item"]
     pub const COMMANDS_PROFILE_FETCH_GIVE_ITEM: &str = "commands.profile_fetch.give_item";
-    #[doc = "Failed to resolved profile for id %s"]
+    #[doc = "Failed to resolve profile for ID %s"]
     pub const COMMANDS_PROFILE_FETCH_ID_FAILURE: &str = "commands.profile_fetch.id.failure";
-    #[doc = "Resolved profile for id %s: %s"]
+    #[doc = "Resolved profile for ID %s: %s"]
     pub const COMMANDS_PROFILE_FETCH_ID_SUCCESS: &str = "commands.profile_fetch.id.success";
     #[doc = "Failed to resolve profile for name %s"]
     pub const COMMANDS_PROFILE_FETCH_NAME_FAILURE: &str = "commands.profile_fetch.name.failure";
@@ -6696,10 +6776,19 @@ pub mod java {
     pub const COMMANDS_PROFILE_FETCH_NAME_SUCCESS: &str = "commands.profile_fetch.name.success";
     #[doc = "Multiplayer game is already hosted on port %s"]
     pub const COMMANDS_PUBLISH_ALREADYPUBLISHED: &str = "commands.publish.alreadyPublished";
+    #[doc = "Local game is already hosted on port %s"]
+    pub const COMMANDS_PUBLISH_ALREADYPUBLISHED_LAN: &str = "commands.publish.alreadyPublished.lan";
+    #[doc = "Online game is already hosted"]
+    pub const COMMANDS_PUBLISH_ALREADYPUBLISHED_ONLINE: &str =
+        "commands.publish.alreadyPublished.online";
     #[doc = "Unable to host local game"]
     pub const COMMANDS_PUBLISH_FAILED: &str = "commands.publish.failed";
     #[doc = "Local game hosted on port %s"]
     pub const COMMANDS_PUBLISH_STARTED: &str = "commands.publish.started";
+    #[doc = "Local game hosted on port %s"]
+    pub const COMMANDS_PUBLISH_STARTED_LAN: &str = "commands.publish.started.lan";
+    #[doc = "Online game hosted"]
+    pub const COMMANDS_PUBLISH_STARTED_ONLINE: &str = "commands.publish.started.online";
     #[doc = "Multiplayer game is now hosted on port %s"]
     pub const COMMANDS_PUBLISH_SUCCESS: &str = "commands.publish.success";
     #[doc = "The range of the random value must be at most 2147483646"]
@@ -6764,9 +6853,9 @@ pub mod java {
     pub const COMMANDS_SAVE_SAVING: &str = "commands.save.saving";
     #[doc = "Saved the game"]
     pub const COMMANDS_SAVE_SUCCESS: &str = "commands.save.success";
-    #[doc = "No schedules with id %s"]
+    #[doc = "No schedules with ID %s"]
     pub const COMMANDS_SCHEDULE_CLEARED_FAILURE: &str = "commands.schedule.cleared.failure";
-    #[doc = "Removed %s schedule(s) with id %s"]
+    #[doc = "Removed %s schedule(s) with ID %s"]
     pub const COMMANDS_SCHEDULE_CLEARED_SUCCESS: &str = "commands.schedule.cleared.success";
     #[doc = "Scheduled function '%s' in %s tick(s) at gametime %s"]
     pub const COMMANDS_SCHEDULE_CREATED_FUNCTION: &str = "commands.schedule.created.function";
@@ -7055,6 +7144,9 @@ pub mod java {
     #[doc = "Nothing changed. Collision rule is already that value"]
     pub const COMMANDS_TEAM_OPTION_COLLISIONRULE_UNCHANGED: &str =
         "commands.team.option.collisionRule.unchanged";
+    #[doc = "Cleared the color for team %s"]
+    pub const COMMANDS_TEAM_OPTION_COLOR_CLEAR_SUCCESS: &str =
+        "commands.team.option.color.clear.success";
     #[doc = "Updated the color for team %s to %s"]
     pub const COMMANDS_TEAM_OPTION_COLOR_SUCCESS: &str = "commands.team.option.color.success";
     #[doc = "Nothing changed. That team already has that color"]
@@ -7279,6 +7371,10 @@ pub mod java {
     pub const COMMANDS_TRIGGER_SET_SUCCESS: &str = "commands.trigger.set.success";
     #[doc = "Triggered %s"]
     pub const COMMANDS_TRIGGER_SIMPLE_SUCCESS: &str = "commands.trigger.simple.success";
+    #[doc = "No multiplayer game published"]
+    pub const COMMANDS_UNPUBLISH_NOTPUBLISHED: &str = "commands.unpublish.notPublished";
+    #[doc = "Multiplayer game is now unpublished"]
+    pub const COMMANDS_UNPUBLISH_SUCCESS: &str = "commands.unpublish.success";
     #[doc = "build_time = %s"]
     pub const COMMANDS_VERSION_BUILD_TIME: &str = "commands.version.build_time";
     #[doc = "data = %s"]
@@ -7409,6 +7505,16 @@ pub mod java {
     pub const CONNECT_JOINING: &str = "connect.joining";
     #[doc = "Negotiating..."]
     pub const CONNECT_NEGOTIATING: &str = "connect.negotiating";
+    #[doc = "Establishing connection..."]
+    pub const CONNECT_P2P_ESTABLISHING: &str = "connect.p2p.establishing";
+    #[doc = "Couldn't connect to player"]
+    pub const CONNECT_P2P_FAILED_GENERIC: &str = "connect.p2p.failed.generic";
+    #[doc = "It is not possible to connect right now.\nTry again later."]
+    pub const CONNECT_P2P_FAILED_SIGNALING: &str = "connect.p2p.failed.signaling";
+    #[doc = "Connection request timed out"]
+    pub const CONNECT_P2P_FAILED_TIMEOUT: &str = "connect.p2p.failed.timeout";
+    #[doc = "Player isn't reachable"]
+    pub const CONNECT_P2P_FAILED_UNREACHABLE: &str = "connect.p2p.failed.unreachable";
     #[doc = "Reconfiguring..."]
     pub const CONNECT_RECONFIGING: &str = "connect.reconfiging";
     #[doc = "Reconfiguring..."]
@@ -7618,7 +7724,7 @@ pub mod java {
         "datapackFailure.safeMode.failed.description";
     #[doc = "Failed to load world in Safe Mode."]
     pub const DATAPACKFAILURE_SAFEMODE_FAILED_TITLE: &str = "datapackFailure.safeMode.failed.title";
-    #[doc = "Errors in currently selected data packs prevented the world from loading.\nYou can either try to load it with only the vanilla data pack (\"safe mode\"), or go back to the title screen and fix it manually."]
+    #[doc = "Errors in the currently selected data pack(s) prevented the world from loading.\nYou can either try to load it with only the vanilla data pack (\"Safe Mode\"), or go back to the title screen and fix it manually."]
     pub const DATAPACKFAILURE_TITLE: &str = "datapackFailure.title";
     #[doc = "%1$s was squashed by a falling anvil"]
     pub const DEATH_ATTACK_ANVIL: &str = "death.attack.anvil";
@@ -7778,6 +7884,10 @@ pub mod java {
     pub const DEATH_ATTACK_STING_ITEM: &str = "death.attack.sting.item";
     #[doc = "%1$s was stung to death by %2$s"]
     pub const DEATH_ATTACK_STING_PLAYER: &str = "death.attack.sting.player";
+    #[doc = "%1$s died because not just the floor is lava"]
+    pub const DEATH_ATTACK_SULFURCUBEHOT: &str = "death.attack.sulfurCubeHot";
+    #[doc = "%2$s showed %1$s that not just the floor is lava"]
+    pub const DEATH_ATTACK_SULFURCUBEHOT_PLAYER: &str = "death.attack.sulfurCubeHot.player";
     #[doc = "%1$s was poked to death by a sweet berry bush"]
     pub const DEATH_ATTACK_SWEETBERRYBUSH: &str = "death.attack.sweetBerryBush";
     #[doc = "%1$s was poked to death by a sweet berry bush while trying to escape %2$s"]
@@ -8051,6 +8161,9 @@ pub mod java {
     pub const EDITGAMERULE_DEFAULT: &str = "editGamerule.default";
     #[doc = "Edit Game Rules..."]
     pub const EDITGAMERULE_INGAME_BUTTON: &str = "editGamerule.inGame.button";
+    #[doc = "Cannot change game rules in a hardcore world."]
+    pub const EDITGAMERULE_INGAME_DISABLED_HARDCORE_TOOLTIP: &str =
+        "editGamerule.inGame.disabled.hardcore.tooltip";
     #[doc = "Updating game rules requires operator permissions."]
     pub const EDITGAMERULE_INGAME_DISABLED_TOOLTIP: &str = "editGamerule.inGame.disabled.tooltip";
     #[doc = "Are you sure you want to discard your pending game rule changes?"]
@@ -8539,6 +8652,10 @@ pub mod java {
     pub const ENTITY_MINECRAFT_STRAY: &str = "entity.minecraft.stray";
     #[doc = "Strider"]
     pub const ENTITY_MINECRAFT_STRIDER: &str = "entity.minecraft.strider";
+    #[doc = "Sulfur Cube"]
+    pub const ENTITY_MINECRAFT_SULFUR_CUBE: &str = "entity.minecraft.sulfur_cube";
+    #[doc = "Contains: %s"]
+    pub const ENTITY_MINECRAFT_SULFUR_CUBE_CONTENT: &str = "entity.minecraft.sulfur_cube.content";
     #[doc = "Tadpole"]
     pub const ENTITY_MINECRAFT_TADPOLE: &str = "entity.minecraft.tadpole";
     #[doc = "Text Display"]
@@ -8744,7 +8861,7 @@ pub mod java {
     pub const FILLED_MAP_EXPLORER_JUNGLE: &str = "filled_map.explorer_jungle";
     #[doc = "Swamp Explorer Map"]
     pub const FILLED_MAP_EXPLORER_SWAMP: &str = "filled_map.explorer_swamp";
-    #[doc = "Id #%s"]
+    #[doc = "ID #%s"]
     pub const FILLED_MAP_ID: &str = "filled_map.id";
     #[doc = "(Level %s/%s)"]
     pub const FILLED_MAP_LEVEL: &str = "filled_map.level";
@@ -8932,7 +9049,7 @@ pub mod java {
     pub const GAMERULE_KEEPINVENTORY: &str = "gamerule.keepInventory";
     #[doc = "Lava converts to source"]
     pub const GAMERULE_LAVASOURCECONVERSION: &str = "gamerule.lavaSourceConversion";
-    #[doc = "When flowing lava is surrounded on two sides by lava sources it converts into a source."]
+    #[doc = "When flowing lava is surrounded on two sides by lava sources, it converts into a source."]
     pub const GAMERULE_LAVASOURCECONVERSION_DESCRIPTION: &str =
         "gamerule.lavaSourceConversion.description";
     #[doc = "Enable player Locator Bar"]
@@ -8983,16 +9100,16 @@ pub mod java {
     pub const GAMERULE_MOBGRIEFING: &str = "gamerule.mobGriefing";
     #[doc = "Regenerate health"]
     pub const GAMERULE_NATURALREGENERATION: &str = "gamerule.naturalRegeneration";
-    #[doc = "Player's Nether portal delay in creative mode"]
+    #[doc = "Player's Nether Portal delay in creative mode"]
     pub const GAMERULE_PLAYERSNETHERPORTALCREATIVEDELAY: &str =
         "gamerule.playersNetherPortalCreativeDelay";
-    #[doc = "Time (in ticks) that a creative mode player needs to stand in a Nether portal before changing dimensions."]
+    #[doc = "Time (in ticks) that a creative mode player needs to stand in a Nether Portal before changing dimensions."]
     pub const GAMERULE_PLAYERSNETHERPORTALCREATIVEDELAY_DESCRIPTION: &str =
         "gamerule.playersNetherPortalCreativeDelay.description";
-    #[doc = "Player's Nether portal delay in non-creative mode"]
+    #[doc = "Player's Nether Portal delay in non-creative mode"]
     pub const GAMERULE_PLAYERSNETHERPORTALDEFAULTDELAY: &str =
         "gamerule.playersNetherPortalDefaultDelay";
-    #[doc = "Time (in ticks) that a non-creative mode player needs to stand in a Nether portal before changing dimensions."]
+    #[doc = "Time (in ticks) that a non-creative mode player needs to stand in a Nether Portal before changing dimensions."]
     pub const GAMERULE_PLAYERSNETHERPORTALDEFAULTDELAY_DESCRIPTION: &str =
         "gamerule.playersNetherPortalDefaultDelay.description";
     #[doc = "Sleep percentage"]
@@ -9053,7 +9170,7 @@ pub mod java {
     pub const GAMERULE_UNIVERSALANGER_DESCRIPTION: &str = "gamerule.universalAnger.description";
     #[doc = "Water converts to source"]
     pub const GAMERULE_WATERSOURCECONVERSION: &str = "gamerule.waterSourceConversion";
-    #[doc = "When flowing water is surrounded on two sides by water sources it converts into a source."]
+    #[doc = "When flowing water is surrounded on two sides by water sources, it converts into a source."]
     pub const GAMERULE_WATERSOURCECONVERSION_DESCRIPTION: &str =
         "gamerule.waterSourceConversion.description";
     #[doc = "Custom"]
@@ -9069,6 +9186,9 @@ pub mod java {
         "generator.minecraft.debug_all_block_states";
     #[doc = "Superflat"]
     pub const GENERATOR_MINECRAFT_FLAT: &str = "generator.minecraft.flat";
+    #[doc = "Flat All Dimensions"]
+    pub const GENERATOR_MINECRAFT_FLAT_ALL_DIMENSIONS: &str =
+        "generator.minecraft.flat_all_dimensions";
     #[doc = "Large Biomes"]
     pub const GENERATOR_MINECRAFT_LARGE_BIOMES: &str = "generator.minecraft.large_biomes";
     #[doc = "Default"]
@@ -9095,7 +9215,7 @@ pub mod java {
     pub const GUI_ABUSEREPORT_DISCARD_DRAFT: &str = "gui.abuseReport.discard.draft";
     #[doc = "Continue Editing"]
     pub const GUI_ABUSEREPORT_DISCARD_RETURN: &str = "gui.abuseReport.discard.return";
-    #[doc = "Discard report and comments?"]
+    #[doc = "Discard Report and Comments?"]
     pub const GUI_ABUSEREPORT_DISCARD_TITLE: &str = "gui.abuseReport.discard.title";
     #[doc = "Would you like to continue editing the existing report or discard it and create a new one?"]
     pub const GUI_ABUSEREPORT_DRAFT_CONTENT: &str = "gui.abuseReport.draft.content";
@@ -9109,9 +9229,9 @@ pub mod java {
     #[doc = "You have a draft chat report that will be lost if you quit"]
     pub const GUI_ABUSEREPORT_DRAFT_QUITTOTITLE_TITLE: &str =
         "gui.abuseReport.draft.quittotitle.title";
-    #[doc = "Edit draft chat report?"]
+    #[doc = "Edit Draft Chat Report?"]
     pub const GUI_ABUSEREPORT_DRAFT_TITLE: &str = "gui.abuseReport.draft.title";
-    #[doc = "Problem sending your report"]
+    #[doc = "Problem Sending Your Report"]
     pub const GUI_ABUSEREPORT_ERROR_TITLE: &str = "gui.abuseReport.error.title";
     #[doc = "Where did you observe the bad behavior?\nThis will help us in researching your case."]
     pub const GUI_ABUSEREPORT_MESSAGE: &str = "gui.abuseReport.message";
@@ -9223,9 +9343,9 @@ pub mod java {
     #[doc = "Unable to reach the Abuse Reporting service. Please make sure you are connected to the internet and try again."]
     pub const GUI_ABUSEREPORT_SEND_SERVICE_UNAVAILABLE: &str =
         "gui.abuseReport.send.service_unavailable";
-    #[doc = "Sending your report..."]
+    #[doc = "Sending Your Report..."]
     pub const GUI_ABUSEREPORT_SENDING_TITLE: &str = "gui.abuseReport.sending.title";
-    #[doc = "Report sent"]
+    #[doc = "Report Sent"]
     pub const GUI_ABUSEREPORT_SENT_TITLE: &str = "gui.abuseReport.sent.title";
     #[doc = "Report Player Skin"]
     pub const GUI_ABUSEREPORT_SKIN_TITLE: &str = "gui.abuseReport.skin.title";
@@ -9304,9 +9424,9 @@ pub mod java {
     pub const GUI_BANNED_SKIN_DESCRIPTION: &str = "gui.banned.skin.description";
     #[doc = "Skin Not Allowed"]
     pub const GUI_BANNED_SKIN_TITLE: &str = "gui.banned.skin.title";
-    #[doc = "Account permanently banned"]
+    #[doc = "Account Permanently Banned"]
     pub const GUI_BANNED_TITLE_PERMANENT: &str = "gui.banned.title.permanent";
-    #[doc = "Account temporarily suspended"]
+    #[doc = "Account Temporarily Suspended"]
     pub const GUI_BANNED_TITLE_TEMPORARY: &str = "gui.banned.title.temporary";
     #[doc = "Cancel"]
     pub const GUI_CANCEL: &str = "gui.cancel";
@@ -9322,7 +9442,7 @@ pub mod java {
     pub const GUI_CHATREPORT_DISCARD_DRAFT: &str = "gui.chatReport.discard.draft";
     #[doc = "Continue Editing"]
     pub const GUI_CHATREPORT_DISCARD_RETURN: &str = "gui.chatReport.discard.return";
-    #[doc = "Discard report and comments?"]
+    #[doc = "Discard Report and Comments?"]
     pub const GUI_CHATREPORT_DISCARD_TITLE: &str = "gui.chatReport.discard.title";
     #[doc = "Would you like to continue editing the existing report or discard it and create a new one?"]
     pub const GUI_CHATREPORT_DRAFT_CONTENT: &str = "gui.chatReport.draft.content";
@@ -9336,7 +9456,7 @@ pub mod java {
     #[doc = "You have a draft chat report that will be lost if you quit"]
     pub const GUI_CHATREPORT_DRAFT_QUITTOTITLE_TITLE: &str =
         "gui.chatReport.draft.quittotitle.title";
-    #[doc = "Edit draft chat report?"]
+    #[doc = "Edit Draft Chat Report?"]
     pub const GUI_CHATREPORT_DRAFT_TITLE: &str = "gui.chatReport.draft.title";
     #[doc = "Please describe what happened:"]
     pub const GUI_CHATREPORT_MORE_COMMENTS: &str = "gui.chatReport.more_comments";
@@ -9397,6 +9517,185 @@ pub mod java {
     pub const GUI_FILEDROPFAILURE_DETAIL: &str = "gui.fileDropFailure.detail";
     #[doc = "Failed to add files"]
     pub const GUI_FILEDROPFAILURE_TITLE: &str = "gui.fileDropFailure.title";
+    #[doc = "Accept"]
+    pub const GUI_FRIENDS_ACCEPT: &str = "gui.friends.accept";
+    #[doc = "Wait..."]
+    pub const GUI_FRIENDS_BUTTON_LOADING: &str = "gui.friends.button.loading";
+    #[doc = "Waiting for confirmation"]
+    pub const GUI_FRIENDS_BUTTON_LOADING_INVITE_REQUEST_PENDING: &str =
+        "gui.friends.button.loading.invite_request_pending";
+    #[doc = "Waiting for confirmation"]
+    pub const GUI_FRIENDS_BUTTON_LOADING_JOIN_REQUEST_PENDING: &str =
+        "gui.friends.button.loading.join_request_pending";
+    #[doc = "Cancel request"]
+    pub const GUI_FRIENDS_CANCEL_REQUEST: &str = "gui.friends.cancel_request";
+    #[doc = "Confirm"]
+    pub const GUI_FRIENDS_CONFIRM_TITLE: &str = "gui.friends.confirm_title";
+    #[doc = "Are you sure you want to remove this player from your Friends List?"]
+    pub const GUI_FRIENDS_CONFIRM_UNFRIEND: &str = "gui.friends.confirm_unfriend";
+    #[doc = "Copy to Clipboard"]
+    pub const GUI_FRIENDS_COPY_TO_CLIPBOARD: &str = "gui.friends.copy_to_clipboard";
+    #[doc = "Decline"]
+    pub const GUI_FRIENDS_DECLINE: &str = "gui.friends.decline";
+    #[doc = "Enter a valid profile name before sending a friend request"]
+    pub const GUI_FRIENDS_EMPTY_NICKNAME: &str = "gui.friends.empty_nickname";
+    #[doc = "Friends you add will be listed here.\n\nManage online safety with your %s."]
+    pub const GUI_FRIENDS_EMPTY_STATE: &str = "gui.friends.empty_state";
+    #[doc = "Microsoft account"]
+    pub const GUI_FRIENDS_EMPTY_STATE_LINK: &str = "gui.friends.empty_state.link";
+    #[doc = "Enter Profile Name"]
+    pub const GUI_FRIENDS_ENTER_NICKNAME: &str = "gui.friends.enter_nickname";
+    #[doc = "Friends List is not working right now.\n\nCheck your internet connection and try again."]
+    pub const GUI_FRIENDS_ERROR_CONNECTION_ISSUE: &str = "gui.friends.error.connection_issue";
+    #[doc = "Unable to send your friend request right now"]
+    pub const GUI_FRIENDS_ERROR_FAILED_MESSAGE: &str = "gui.friends.error.failed.message";
+    #[doc = "Failed to perform this friend action. It may be due to the account's privacy settings."]
+    pub const GUI_FRIENDS_ERROR_FORBIDDEN_MESSAGE: &str = "gui.friends.error.forbidden.message";
+    #[doc = "Something's wrong — with this feature, not your friends!\n\nTry again later."]
+    pub const GUI_FRIENDS_ERROR_GENERIC: &str = "gui.friends.error.generic";
+    #[doc = "You're performing Friends List actions too quickly. Please wait a moment and try again."]
+    pub const GUI_FRIENDS_ERROR_RATELIMITED_MESSAGE: &str = "gui.friends.error.rateLimited.message";
+    #[doc = "Friends List is not working right now.\n\nTry again later."]
+    pub const GUI_FRIENDS_ERROR_TEMPORARY_UNAVAILABLE: &str =
+        "gui.friends.error.temporary_unavailable";
+    #[doc = "Invalid token supplied. Restart your game and launcher, then try again"]
+    pub const GUI_FRIENDS_ERROR_UNAUTHORIZED: &str = "gui.friends.error.unauthorized";
+    #[doc = "The Friends List service is currently unavailable. Please check your connection and try again later."]
+    pub const GUI_FRIENDS_ERROR_UNAVAILABLE_MESSAGE: &str = "gui.friends.error.unavailable.message";
+    #[doc = "Update the game to access your Friends List."]
+    pub const GUI_FRIENDS_ERROR_UPGRADE_NEEDED: &str = "gui.friends.error.upgrade_needed";
+    #[doc = "There is no player with this profile name"]
+    pub const GUI_FRIENDS_ERROR_USER_MAY_LACK_ACTIVE_PROFILE: &str =
+        "gui.friends.error.user_may_lack_active_profile";
+    #[doc = "Join"]
+    pub const GUI_FRIENDS_JOIN: &str = "gui.friends.join";
+    #[doc = "Loading Friends List..."]
+    pub const GUI_FRIENDS_LOADING_FRIENDS: &str = "gui.friends.loading_friends";
+    #[doc = "Loading requests..."]
+    pub const GUI_FRIENDS_LOADING_REQUESTS: &str = "gui.friends.loading_requests";
+    #[doc = "Manage online safety with your %s"]
+    pub const GUI_FRIENDS_MANAGE_ACCOUNT_FOOTER: &str = "gui.friends.manage_account_footer";
+    #[doc = "Invite"]
+    pub const GUI_FRIENDS_MULTIPLAYER_INVITE: &str = "gui.friends.multiplayer.invite";
+    #[doc = "Accept"]
+    pub const GUI_FRIENDS_MULTIPLAYER_INVITE_ACCEPT: &str = "gui.friends.multiplayer.invite_accept";
+    #[doc = "Decline"]
+    pub const GUI_FRIENDS_MULTIPLAYER_INVITE_REJECT: &str = "gui.friends.multiplayer.invite_reject";
+    #[doc = "Ask to join"]
+    pub const GUI_FRIENDS_MULTIPLAYER_JOIN_REQUEST: &str = "gui.friends.multiplayer.join_request";
+    #[doc = "Accept"]
+    pub const GUI_FRIENDS_MULTIPLAYER_JOIN_REQUEST_ACCEPT: &str =
+        "gui.friends.multiplayer.join_request_accept";
+    #[doc = "Decline"]
+    pub const GUI_FRIENDS_MULTIPLAYER_JOIN_REQUEST_REJECT: &str =
+        "gui.friends.multiplayer.join_request_reject";
+    #[doc = "My profile name: "]
+    pub const GUI_FRIENDS_MY_PROFILE_NAME: &str = "gui.friends.my_profile_name";
+    #[doc = "Copy profile name %s to clipboard"]
+    pub const GUI_FRIENDS_MY_PROFILE_NAME_NARRATION: &str = "gui.friends.my_profile_name.narration";
+    #[doc = "Press enter to accept friend request from %s"]
+    pub const GUI_FRIENDS_NARRATION_BUTTON_ACCEPT: &str = "gui.friends.narration.button.accept";
+    #[doc = "Press enter to cancel friend request to %s"]
+    pub const GUI_FRIENDS_NARRATION_BUTTON_CANCEL_REQUEST: &str =
+        "gui.friends.narration.button.cancel_request";
+    #[doc = "Press enter to decline friend request from %s"]
+    pub const GUI_FRIENDS_NARRATION_BUTTON_DECLINE: &str = "gui.friends.narration.button.decline";
+    #[doc = "Press enter to remove %s from Friends List"]
+    pub const GUI_FRIENDS_NARRATION_BUTTON_UNFRIEND: &str = "gui.friends.narration.button.unfriend";
+    #[doc = "Friend %s"]
+    pub const GUI_FRIENDS_NARRATION_ENTRY_FRIEND: &str = "gui.friends.narration.entry.friend";
+    #[doc = "Incoming friend request from %s"]
+    pub const GUI_FRIENDS_NARRATION_ENTRY_INCOMING: &str = "gui.friends.narration.entry.incoming";
+    #[doc = "Outgoing friend request to %s"]
+    pub const GUI_FRIENDS_NARRATION_ENTRY_OUTGOING: &str = "gui.friends.narration.entry.outgoing";
+    #[doc = "Friends"]
+    pub const GUI_FRIENDS_OPEN: &str = "gui.friends.open";
+    #[doc = "Friends List"]
+    pub const GUI_FRIENDS_OPEN_NARRATION: &str = "gui.friends.open.narration";
+    #[doc = "Friends"]
+    pub const GUI_FRIENDS_OPEN_TOOLTIP: &str = "gui.friends.open.tooltip";
+    #[doc = "No pending friend requests"]
+    pub const GUI_FRIENDS_PENDING_EMPTY: &str = "gui.friends.pending.empty";
+    #[doc = "Received"]
+    pub const GUI_FRIENDS_PENDING_RECEIVED: &str = "gui.friends.pending.received";
+    #[doc = "Sent"]
+    pub const GUI_FRIENDS_PENDING_SENT: &str = "gui.friends.pending.sent";
+    #[doc = "Offline"]
+    pub const GUI_FRIENDS_PRESENCE_STATUS_OFFLINE: &str = "gui.friends.presence.status.offline";
+    #[doc = "Online"]
+    pub const GUI_FRIENDS_PRESENCE_STATUS_ONLINE: &str = "gui.friends.presence.status.online";
+    #[doc = "Online (LAN)"]
+    pub const GUI_FRIENDS_PRESENCE_STATUS_PLAYING_HOSTED_SERVER: &str =
+        "gui.friends.presence.status.playing_hosted_server";
+    #[doc = "Online (World)"]
+    pub const GUI_FRIENDS_PRESENCE_STATUS_PLAYING_OFFLINE: &str =
+        "gui.friends.presence.status.playing_offline";
+    #[doc = "Online (Realm)"]
+    pub const GUI_FRIENDS_PRESENCE_STATUS_PLAYING_REALMS: &str =
+        "gui.friends.presence.status.playing_realms";
+    #[doc = "Online (Server)"]
+    pub const GUI_FRIENDS_PRESENCE_STATUS_PLAYING_SERVER: &str =
+        "gui.friends.presence.status.playing_server";
+    #[doc = "Requests (%s)"]
+    pub const GUI_FRIENDS_REQUESTS_COUNT: &str = "gui.friends.requests_count";
+    #[doc = "Send friend request"]
+    pub const GUI_FRIENDS_SEND_REQUEST: &str = "gui.friends.send_request";
+    #[doc = "Friends"]
+    pub const GUI_FRIENDS_TAB_FRIENDS: &str = "gui.friends.tab_friends";
+    #[doc = "%s accepted your friend request"]
+    pub const GUI_FRIENDS_TOAST_FRIEND_ADDED_MESSAGE: &str =
+        "gui.friends.toast.friend_added.message";
+    #[doc = "%s has been invited to join your world."]
+    pub const GUI_FRIENDS_TOAST_FRIEND_INVITED_MESSAGE: &str =
+        "gui.friends.toast.friend_invited.message";
+    #[doc = "%s has been removed from your friends list"]
+    pub const GUI_FRIENDS_TOAST_FRIEND_REMOVED_MESSAGE: &str =
+        "gui.friends.toast.friend_removed.message";
+    #[doc = "An unexpected error occurred while updating your Friends List. Please try again later."]
+    pub const GUI_FRIENDS_TOAST_GENERIC_ERROR: &str = "gui.friends.toast.generic_error";
+    #[doc = "Invitation to %s to join this world has expired."]
+    pub const GUI_FRIENDS_TOAST_HOST_INVITE_EXPIRED_MESSAGE: &str =
+        "gui.friends.toast.host_invite_expired.message";
+    #[doc = "%s invited you to join their world. Open the friends list by pressing \"%s\" to join"]
+    pub const GUI_FRIENDS_TOAST_INVITE_FROM_FRIEND_MESSAGE: &str =
+        "gui.friends.toast.invite_from_friend.message";
+    #[doc = "Invitation to join %s's world has expired."]
+    pub const GUI_FRIENDS_TOAST_JOIN_INVITE_EXPIRED_MESSAGE: &str =
+        "gui.friends.toast.join_invite_expired.message";
+    #[doc = "%s wants to join your world. Open the Friends list with \"%s\" or from the game menu."]
+    pub const GUI_FRIENDS_TOAST_JOIN_REQUEST_MESSAGE: &str =
+        "gui.friends.toast.join_request.message";
+    #[doc = "You are now friends with %s"]
+    pub const GUI_FRIENDS_TOAST_REQUEST_ACCEPTED_MESSAGE: &str =
+        "gui.friends.toast.request_accepted.message";
+    #[doc = "%s sent you a friend request"]
+    pub const GUI_FRIENDS_TOAST_REQUEST_RECEIVED_MESSAGE: &str =
+        "gui.friends.toast.request_received.message";
+    #[doc = "Friend request sent to %s"]
+    pub const GUI_FRIENDS_TOAST_REQUEST_SENT_MESSAGE: &str =
+        "gui.friends.toast.request_sent.message";
+    #[doc = "You asked to join %s's world"]
+    pub const GUI_FRIENDS_TOAST_REQUEST_TO_JOIN_FRIEND_MESSAGE: &str =
+        "gui.friends.toast.request_to_join_friend.message";
+    #[doc = "%s friends accepted your friend requests"]
+    pub const GUI_FRIENDS_TOAST_REQUESTS_ACCEPTED_MULTIPLE_MESSAGE: &str =
+        "gui.friends.toast.requests_accepted_multiple.message";
+    #[doc = "You have received %s friend requests"]
+    pub const GUI_FRIENDS_TOAST_REQUESTS_RECEIVED_MULTIPLE_MESSAGE: &str =
+        "gui.friends.toast.requests_received_multiple.message";
+    #[doc = "Remove Friend"]
+    pub const GUI_FRIENDS_UNFRIEND: &str = "gui.friends.unfriend";
+    #[doc = "%s is already on your Friends List"]
+    pub const GUI_FRIENDS_VALIDATION_ALREADY_FRIEND: &str = "gui.friends.validation.already_friend";
+    #[doc = "%s has already sent you a friend request"]
+    pub const GUI_FRIENDS_VALIDATION_ALREADY_INCOMING: &str =
+        "gui.friends.validation.already_incoming";
+    #[doc = "You've already sent a friend request to %s"]
+    pub const GUI_FRIENDS_VALIDATION_ALREADY_OUTGOING: &str =
+        "gui.friends.validation.already_outgoing";
+    #[doc = "You cannot send a friend request to yourself"]
+    pub const GUI_FRIENDS_VALIDATION_CANNOT_ADD_SELF: &str =
+        "gui.friends.validation.cannot_add_self";
     #[doc = "Search..."]
     pub const GUI_GAME_RULE_SEARCH: &str = "gui.game_rule.search";
     #[doc = "%s hour(s)"]
@@ -9427,6 +9726,10 @@ pub mod java {
     pub const GUI_OPEN_REPORT_DIR: &str = "gui.open_report_dir";
     #[doc = "Search..."]
     pub const GUI_PACKSELECTION_SEARCH: &str = "gui.packSelection.search";
+    #[doc = "Open this link to manage your privacy and online safety settings."]
+    pub const GUI_PRIVACY_LINK_MESSAGE: &str = "gui.privacy_link.message";
+    #[doc = "Changes to Xbox settings may take some time to apply.\n\nIf they don't update, restart the game."]
+    pub const GUI_PRIVACY_LINK_TITLE: &str = "gui.privacy_link.title";
     #[doc = "Proceed"]
     pub const GUI_PROCEED: &str = "gui.proceed";
     #[doc = "Right Click for More"]
@@ -9452,6 +9755,8 @@ pub mod java {
         "gui.recipebook.toggleRecipes.smeltable";
     #[doc = "Showing Smokable"]
     pub const GUI_RECIPEBOOK_TOGGLERECIPES_SMOKABLE: &str = "gui.recipebook.toggleRecipes.smokable";
+    #[doc = "Remove"]
+    pub const GUI_REMOVE: &str = "gui.remove";
     #[doc = "Report To Server"]
     pub const GUI_REPORT_TO_SERVER: &str = "gui.report_to_server";
     #[doc = "Search..."]
@@ -10449,6 +10754,10 @@ pub mod java {
     #[doc = "C418 - blocks"]
     pub const ITEM_MINECRAFT_MUSIC_DISC_BLOCKS_DESC: &str = "item.minecraft.music_disc_blocks.desc";
     #[doc = "Music Disc"]
+    pub const ITEM_MINECRAFT_MUSIC_DISC_BOUNCE: &str = "item.minecraft.music_disc_bounce";
+    #[doc = "fingerspit - Bounce"]
+    pub const ITEM_MINECRAFT_MUSIC_DISC_BOUNCE_DESC: &str = "item.minecraft.music_disc_bounce.desc";
+    #[doc = "Music Disc"]
     pub const ITEM_MINECRAFT_MUSIC_DISC_CAT: &str = "item.minecraft.music_disc_cat";
     #[doc = "C418 - cat"]
     pub const ITEM_MINECRAFT_MUSIC_DISC_CAT_DESC: &str = "item.minecraft.music_disc_cat.desc";
@@ -11072,6 +11381,10 @@ pub mod java {
     pub const ITEM_MINECRAFT_STRING: &str = "item.minecraft.string";
     #[doc = "Sugar"]
     pub const ITEM_MINECRAFT_SUGAR: &str = "item.minecraft.sugar";
+    #[doc = "Bucket of Sulfur Cube"]
+    pub const ITEM_MINECRAFT_SULFUR_CUBE_BUCKET: &str = "item.minecraft.sulfur_cube_bucket";
+    #[doc = "Sulfur Cube Spawn Egg"]
+    pub const ITEM_MINECRAFT_SULFUR_CUBE_SPAWN_EGG: &str = "item.minecraft.sulfur_cube_spawn_egg";
     #[doc = "Suspicious Stew"]
     pub const ITEM_MINECRAFT_SUSPICIOUS_STEW: &str = "item.minecraft.suspicious_stew";
     #[doc = "Sweet Berries"]
@@ -11397,6 +11710,8 @@ pub mod java {
     pub const JUKEBOX_SONG_MINECRAFT_5: &str = "jukebox_song.minecraft.5";
     #[doc = "C418 - blocks"]
     pub const JUKEBOX_SONG_MINECRAFT_BLOCKS: &str = "jukebox_song.minecraft.blocks";
+    #[doc = "fingerspit - Bounce"]
+    pub const JUKEBOX_SONG_MINECRAFT_BOUNCE: &str = "jukebox_song.minecraft.bounce";
     #[doc = "C418 - cat"]
     pub const JUKEBOX_SONG_MINECRAFT_CAT: &str = "jukebox_song.minecraft.cat";
     #[doc = "C418 - chirp"]
@@ -11522,6 +11837,8 @@ pub mod java {
     pub const KEY_DROP: &str = "key.drop";
     #[doc = "Walk Forward"]
     pub const KEY_FORWARD: &str = "key.forward";
+    #[doc = "Friends Screen"]
+    pub const KEY_FRIENDS: &str = "key.friends";
     #[doc = "Toggle Fullscreen"]
     pub const KEY_FULLSCREEN: &str = "key.fullscreen";
     #[doc = "Hotbar Slot 1"]
@@ -12062,7 +12379,7 @@ pub mod java {
     #[doc = "Remove"]
     pub const MCO_CONFIGURE_WORLD_INVITES_REMOVE_TOOLTIP: &str =
         "mco.configure.world.invites.remove.tooltip";
-    #[doc = "If you leave this Realm you won't see it unless you are invited again"]
+    #[doc = "If you leave this Realm, you won't see it unless you are invited again"]
     pub const MCO_CONFIGURE_WORLD_LEAVE_QUESTION_LINE1: &str =
         "mco.configure.world.leave.question.line1";
     #[doc = "Are you sure you want to continue?"]
@@ -12112,7 +12429,7 @@ pub mod java {
     #[doc = "Do you want to download it and play?"]
     pub const MCO_CONFIGURE_WORLD_RESOURCEPACK_QUESTION_LINE2: &str =
         "mco.configure.world.resourcepack.question.line2";
-    #[doc = "The world will be downloaded and added to your single player worlds."]
+    #[doc = "The world will be downloaded and added to your singleplayer worlds."]
     pub const MCO_CONFIGURE_WORLD_RESTORE_DOWNLOAD_QUESTION_LINE1: &str =
         "mco.configure.world.restore.download.question.line1";
     #[doc = "Do you want to continue?"]
@@ -12476,7 +12793,7 @@ pub mod java {
     pub const MCO_SELECTSERVER_OPENSERVER: &str = "mco.selectServer.openserver";
     #[doc = "Play"]
     pub const MCO_SELECTSERVER_PLAY: &str = "mco.selectServer.play";
-    #[doc = "Realms is a safe, simple way to enjoy an online Minecraft world with up to ten friends at a time. It supports loads of minigames and plenty of custom worlds! Only the owner of the realm needs to pay."]
+    #[doc = "Realms is a safe, simple way to enjoy an online Minecraft world with up to ten friends at a time. It supports loads of minigames and plenty of custom worlds! Only the owner of the Realm needs to pay."]
     pub const MCO_SELECTSERVER_POPUP: &str = "mco.selectServer.popup";
     #[doc = "Add Realm"]
     pub const MCO_SELECTSERVER_PURCHASE: &str = "mco.selectServer.purchase";
@@ -12640,6 +12957,47 @@ pub mod java {
     pub const MENU_MODDED: &str = "menu.modded";
     #[doc = "Multiplayer"]
     pub const MENU_MULTIPLAYER: &str = "menu.multiplayer";
+    #[doc = "Apply Changes"]
+    pub const MENU_MULTIPLAYEROPTIONS_APPLYCHANGES: &str = "menu.multiplayerOptions.applyChanges";
+    #[doc = "Open to LAN"]
+    pub const MENU_MULTIPLAYEROPTIONS_BUTTON: &str = "menu.multiplayerOptions.button";
+    #[doc = "LAN"]
+    pub const MENU_MULTIPLAYEROPTIONS_LAN: &str = "menu.multiplayerOptions.lan";
+    #[doc = "Multiplayer"]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK: &str = "menu.multiplayerOptions.network";
+    #[doc = "Network"]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_HEADER: &str =
+        "menu.multiplayerOptions.network.header";
+    #[doc = "LAN"]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_LAN: &str = "menu.multiplayerOptions.network.lan";
+    #[doc = "Players on the same network can join."]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_LAN_TOOLTIP: &str =
+        "menu.multiplayerOptions.network.lan.tooltip";
+    #[doc = "OFF"]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_OFF: &str = "menu.multiplayerOptions.network.off";
+    #[doc = "Nobody can join."]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_OFF_TOOLTIP: &str =
+        "menu.multiplayerOptions.network.off.tooltip";
+    #[doc = "Online"]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_ONLINE: &str =
+        "menu.multiplayerOptions.network.online";
+    #[doc = "Friends online can join."]
+    pub const MENU_MULTIPLAYEROPTIONS_NETWORK_ONLINE_TOOLTIP: &str =
+        "menu.multiplayerOptions.network.online.tooltip";
+    #[doc = "Settings for Other Players"]
+    pub const MENU_MULTIPLAYEROPTIONS_OTHERPLAYERS_HEADER: &str =
+        "menu.multiplayerOptions.otherPlayers.header";
+    #[doc = "This world is now open to LAN. The port number is %s"]
+    pub const MENU_MULTIPLAYEROPTIONS_PUBLISH_STARTED_LAN: &str =
+        "menu.multiplayerOptions.publish.started.lan";
+    #[doc = "This world is now open to Online multiplayer."]
+    pub const MENU_MULTIPLAYEROPTIONS_PUBLISH_STARTED_ONLINE: &str =
+        "menu.multiplayerOptions.publish.started.online";
+    #[doc = "This world is no longer open to multiplayer"]
+    pub const MENU_MULTIPLAYEROPTIONS_PUBLISH_STOPPED: &str =
+        "menu.multiplayerOptions.publish.stopped";
+    #[doc = "LAN Options"]
+    pub const MENU_MULTIPLAYEROPTIONS_TITLE: &str = "menu.multiplayerOptions.title";
     #[doc = "Minecraft Realms"]
     pub const MENU_ONLINE: &str = "menu.online";
     #[doc = "Options..."]
@@ -12650,6 +13008,8 @@ pub mod java {
     pub const MENU_PLAYDEMO: &str = "menu.playdemo";
     #[doc = "Player Reporting"]
     pub const MENU_PLAYERREPORTING: &str = "menu.playerReporting";
+    #[doc = "There are no players to report in this world"]
+    pub const MENU_PLAYERREPORTING_NO_PLAYERS: &str = "menu.playerReporting.no_players";
     #[doc = "Preparing spawn area: %s%%"]
     pub const MENU_PREPARINGSPAWN: &str = "menu.preparingSpawn";
     #[doc = "Quick Actions..."]
@@ -12974,6 +13334,8 @@ pub mod java {
     pub const MUSIC_GAME_DEEPER: &str = "music.game.deeper";
     #[doc = "C418 - Dry Hands"]
     pub const MUSIC_GAME_DRY_HANDS: &str = "music.game.dry_hands";
+    #[doc = "fingerspit - Ebb"]
+    pub const MUSIC_GAME_EBB: &str = "music.game.ebb";
     #[doc = "Aaron Cherof - Echo in the Wind"]
     pub const MUSIC_GAME_ECHO_IN_THE_WIND: &str = "music.game.echo_in_the_wind";
     #[doc = "Lena Raine - Eld Unknown"]
@@ -12994,6 +13356,8 @@ pub mod java {
     pub const MUSIC_GAME_FLOATING_DREAM: &str = "music.game.floating_dream";
     #[doc = "C418 - Haggstrom"]
     pub const MUSIC_GAME_HAGGSTROM: &str = "music.game.haggstrom";
+    #[doc = "fingerspit - Home"]
+    pub const MUSIC_GAME_HOME: &str = "music.game.home";
     #[doc = "Lena Raine - Infinite Amethyst"]
     pub const MUSIC_GAME_INFINITE_AMETHYST: &str = "music.game.infinite_amethyst";
     #[doc = "C418 - Key"]
@@ -13006,6 +13370,8 @@ pub mod java {
     pub const MUSIC_GAME_LILYPAD: &str = "music.game.lilypad";
     #[doc = "C418 - Living Mice"]
     pub const MUSIC_GAME_LIVING_MICE: &str = "music.game.living_mice";
+    #[doc = "fingerspit - Memories"]
+    pub const MUSIC_GAME_MEMORIES: &str = "music.game.memories";
     #[doc = "C418 - Mice on Venus"]
     pub const MUSIC_GAME_MICE_ON_VENUS: &str = "music.game.mice_on_venus";
     #[doc = "C418 - Minecraft"]
@@ -13027,6 +13393,8 @@ pub mod java {
         "music.game.nether.soulsand_valley.so_below";
     #[doc = "C418 - Warmth"]
     pub const MUSIC_GAME_NETHER_WARMTH: &str = "music.game.nether.warmth";
+    #[doc = "fingerspit - Nightly"]
+    pub const MUSIC_GAME_NIGHTLY: &str = "music.game.nightly";
     #[doc = "Lena Raine - One More Day"]
     pub const MUSIC_GAME_ONE_MORE_DAY: &str = "music.game.one_more_day";
     #[doc = "Amos Roddy - O's Piano"]
@@ -13037,6 +13405,8 @@ pub mod java {
     pub const MUSIC_GAME_POKOPOKO: &str = "music.game.pokopoko";
     #[doc = "Aaron Cherof - Puzzlebox"]
     pub const MUSIC_GAME_PUZZLEBOX: &str = "music.game.puzzlebox";
+    #[doc = "fingerspit - Shores"]
+    pub const MUSIC_GAME_SHORES: &str = "music.game.shores";
     #[doc = "Lena Raine - Stand Tall"]
     pub const MUSIC_GAME_STAND_TALL: &str = "music.game.stand_tall";
     #[doc = "C418 - Subwoofer Lullaby"]
@@ -13105,6 +13475,10 @@ pub mod java {
     pub const NARRATION_EDIT_BOX: &str = "narration.edit_box";
     #[doc = "Item: %s"]
     pub const NARRATION_ITEM: &str = "narration.item";
+    #[doc = "Press Enter to follow the link"]
+    pub const NARRATION_LINK_USAGE_FOCUSED: &str = "narration.link.usage.focused";
+    #[doc = "Left click to follow the link"]
+    pub const NARRATION_LINK_USAGE_HOVERED: &str = "narration.link.usage.hovered";
     #[doc = "Recipe for %s"]
     pub const NARRATION_RECIPE: &str = "narration.recipe";
     #[doc = "Left click to select"]
@@ -13271,13 +13645,19 @@ pub mod java {
         "options.accessibility.text_background_opacity";
     #[doc = "Accessibility Settings"]
     pub const OPTIONS_ACCESSIBILITY_TITLE: &str = "options.accessibility.title";
+    #[doc = "Accessibility Settings"]
+    pub const OPTIONS_ACCESSIBILITY_TOOLTIP: &str = "options.accessibility.tooltip";
     #[doc = "Allow Cursor Changes"]
     pub const OPTIONS_ALLOWCURSORCHANGES: &str = "options.allowCursorChanges";
     #[doc = "Allows the mouse cursor to change shape when over certain UI elements."]
     pub const OPTIONS_ALLOWCURSORCHANGES_TOOLTIP: &str = "options.allowCursorChanges.tooltip";
+    #[doc = "Allow Requests"]
+    pub const OPTIONS_ALLOWFRIENDREQUESTS: &str = "options.allowFriendRequests";
+    #[doc = "Allow other players to send you friend requests"]
+    pub const OPTIONS_ALLOWFRIENDREQUESTS_TOOLTIP: &str = "options.allowFriendRequests.tooltip";
     #[doc = "Allow Server Listings"]
     pub const OPTIONS_ALLOWSERVERLISTING: &str = "options.allowServerListing";
-    #[doc = "Servers may list online players as part of their public status.\nWith this option off your name will not show up in such lists."]
+    #[doc = "Servers may list online players as part of their public status.\nWith this option off, your name will not show up in such lists."]
     pub const OPTIONS_ALLOWSERVERLISTING_TOOLTIP: &str = "options.allowServerListing.tooltip";
     #[doc = "Smooth Lighting"]
     pub const OPTIONS_AO: &str = "options.ao";
@@ -13423,7 +13803,7 @@ pub mod java {
     pub const OPTIONS_DIRECTIONALAUDIO: &str = "options.directionalAudio";
     #[doc = "Classic Stereo sound."]
     pub const OPTIONS_DIRECTIONALAUDIO_OFF_TOOLTIP: &str = "options.directionalAudio.off.tooltip";
-    #[doc = "Uses HRTF-based directional audio to improve the simulation of 3D sound. Requires HRTF compatible audio hardware, and is best experienced with headphones."]
+    #[doc = "Uses HRTF-based directional audio to improve the simulation of 3D sound. Requires HRTF-compatible audio hardware, and is best experienced with headphones."]
     pub const OPTIONS_DIRECTIONALAUDIO_ON_TOOLTIP: &str = "options.directionalAudio.on.tooltip";
     #[doc = "Discrete Scrolling"]
     pub const OPTIONS_DISCRETE_MOUSE_SCROLL: &str = "options.discrete_mouse_scroll";
@@ -13433,6 +13813,12 @@ pub mod java {
     pub const OPTIONS_ENTITYSHADOWS: &str = "options.entityShadows";
     #[doc = "Exclusive Fullscreen"]
     pub const OPTIONS_EXCLUSIVEFULLSCREEN: &str = "options.exclusiveFullscreen";
+    #[doc = "All input methods are expected to work in this fullscreen mode, but adaptive sync (Nvidia G-Sync, AMD FreeSync) will not work."]
+    pub const OPTIONS_EXCLUSIVEFULLSCREEN_OFF_TOOLTIP: &str =
+        "options.exclusiveFullscreen.off.tooltip";
+    #[doc = "This fullscreen mode might prevent some input methods from working, but adaptive sync (Nvidia G-Sync, AMD FreeSync) should work."]
+    pub const OPTIONS_EXCLUSIVEFULLSCREEN_ON_TOOLTIP: &str =
+        "options.exclusiveFullscreen.on.tooltip";
     #[doc = "This option might prevent some input methods from working."]
     pub const OPTIONS_EXCLUSIVEFULLSCREEN_WARNINGTOOLTIP: &str =
         "options.exclusiveFullscreen.warningTooltip";
@@ -13458,6 +13844,19 @@ pub mod java {
     pub const OPTIONS_FRAMERATELIMIT: &str = "options.framerateLimit";
     #[doc = "Unlimited"]
     pub const OPTIONS_FRAMERATELIMIT_MAX: &str = "options.framerateLimit.max";
+    #[doc = "Friends List"]
+    pub const OPTIONS_FRIENDSLIST: &str = "options.friendsList";
+    #[doc = "Use your Friends List to send and receive friend requests.\n\nManage online safety settings with your %s."]
+    pub const OPTIONS_FRIENDSLIST_CONFIRM_MESSAGE: &str = "options.friendsList.confirm.message";
+    #[doc = "Microsoft account"]
+    pub const OPTIONS_FRIENDSLIST_CONFIRM_MESSAGE_LINK: &str =
+        "options.friendsList.confirm.message.link";
+    #[doc = "Friends List"]
+    pub const OPTIONS_FRIENDSLIST_CONFIRM_TITLE: &str = "options.friendsList.confirm.title";
+    #[doc = "Turn OFF"]
+    pub const OPTIONS_FRIENDSLIST_CONFIRM_TURNOFF: &str = "options.friendsList.confirm.turnOff";
+    #[doc = "Turn ON"]
+    pub const OPTIONS_FRIENDSLIST_CONFIRM_TURNON: &str = "options.friendsList.confirm.turnOn";
     #[doc = "Fullscreen"]
     pub const OPTIONS_FULLSCREEN: &str = "options.fullscreen";
     #[doc = "Current"]
@@ -13520,6 +13919,20 @@ pub mod java {
     pub const OPTIONS_GRAPHICS_WARNING_VENDOR: &str = "options.graphics.warning.vendor";
     #[doc = "OpenGL Version detected: [%s]"]
     pub const OPTIONS_GRAPHICS_WARNING_VERSION: &str = "options.graphics.warning.version";
+    #[doc = "Graphics API"]
+    pub const OPTIONS_GRAPHICSAPI: &str = "options.graphicsApi";
+    #[doc = "Default"]
+    pub const OPTIONS_GRAPHICSAPI_DEFAULT: &str = "options.graphicsApi.default";
+    #[doc = "Prefer OpenGL"]
+    pub const OPTIONS_GRAPHICSAPI_OPENGL: &str = "options.graphicsApi.opengl";
+    #[doc = "You must restart your game to change the graphics API."]
+    pub const OPTIONS_GRAPHICSAPI_RESTART: &str = "options.graphicsApi.restart";
+    #[doc = "Which graphics API to use for rendering. Leave as Default unless you have a specific need to change this!"]
+    pub const OPTIONS_GRAPHICSAPI_TOOLTIP: &str = "options.graphicsApi.tooltip";
+    #[doc = "Experimental. Might reduce performance or cause instability on some systems."]
+    pub const OPTIONS_GRAPHICSAPI_TOOLTIP_VULKAN: &str = "options.graphicsApi.tooltip.vulkan";
+    #[doc = "Prefer Vulkan (Experimental)"]
+    pub const OPTIONS_GRAPHICSAPI_VULKAN: &str = "options.graphicsApi.vulkan";
     #[doc = "GUI Scale"]
     pub const OPTIONS_GUISCALE: &str = "options.guiScale";
     #[doc = "Auto"]
@@ -13542,6 +13955,10 @@ pub mod java {
     pub const OPTIONS_IMPROVEDTRANSPARENCY: &str = "options.improvedTransparency";
     #[doc = "An experimental approach that uses screen shaders for drawing weather, clouds, and particles behind translucent blocks and water.\nThis will impact GPU performance."]
     pub const OPTIONS_IMPROVEDTRANSPARENCY_TOOLTIP: &str = "options.improvedTransparency.tooltip";
+    #[doc = "In-Game Notification"]
+    pub const OPTIONS_INGAMENOTIFICATION: &str = "options.inGameNotification";
+    #[doc = "Show Friend notifications in-game"]
+    pub const OPTIONS_INGAMENOTIFICATION_TOOLTIP: &str = "options.inGameNotification.tooltip";
     #[doc = "Reduce FPS when"]
     pub const OPTIONS_INACTIVITYFPSLIMIT: &str = "options.inactivityFpsLimit";
     #[doc = "AFK"]
@@ -13570,8 +13987,12 @@ pub mod java {
     pub const OPTIONS_KEY_TOGGLE: &str = "options.key.toggle";
     #[doc = "Language..."]
     pub const OPTIONS_LANGUAGE: &str = "options.language";
+    #[doc = "Change Language"]
+    pub const OPTIONS_LANGUAGE_NARRATION: &str = "options.language.narration";
     #[doc = "Language"]
     pub const OPTIONS_LANGUAGE_TITLE: &str = "options.language.title";
+    #[doc = "Change Language"]
+    pub const OPTIONS_LANGUAGE_TOOLTIP: &str = "options.language.tooltip";
     #[doc = "(Language translations may not be 100%% accurate)"]
     pub const OPTIONS_LANGUAGEACCURACYWARNING: &str = "options.languageAccuracyWarning";
     #[doc = "Language translations may not be 100%% accurate"]
@@ -13608,7 +14029,7 @@ pub mod java {
     pub const OPTIONS_MOUSE_SETTINGS: &str = "options.mouse_settings";
     #[doc = "Mouse Settings"]
     pub const OPTIONS_MOUSE_SETTINGS_TITLE: &str = "options.mouse_settings.title";
-    #[doc = "Multiplayer Settings..."]
+    #[doc = "Open to LAN"]
     pub const OPTIONS_MULTIPLAYER_TITLE: &str = "options.multiplayer.title";
     #[doc = "%sx"]
     pub const OPTIONS_MULTIPLIER: &str = "options.multiplier";
@@ -13649,7 +14070,7 @@ pub mod java {
     pub const OPTIONS_NARRATOR_OFF: &str = "options.narrator.off";
     #[doc = "Narrates System"]
     pub const OPTIONS_NARRATOR_SYSTEM: &str = "options.narrator.system";
-    #[doc = "Option will be applied after restart."]
+    #[doc = "Requires a game restart to take effect."]
     pub const OPTIONS_NEEDSRESTART: &str = "options.needsRestart";
     #[doc = "Notification Time"]
     pub const OPTIONS_NOTIFICATIONS_DISPLAY_TIME: &str = "options.notifications.display_time";
@@ -13666,8 +14087,16 @@ pub mod java {
     pub const OPTIONS_ON_COMPOSED: &str = "options.on.composed";
     #[doc = "Online..."]
     pub const OPTIONS_ONLINE: &str = "options.online";
+    #[doc = "Friends List"]
+    pub const OPTIONS_ONLINE_FRIENDS_HEADER: &str = "options.online.friends.header";
+    #[doc = "Realms"]
+    pub const OPTIONS_ONLINE_REALMS_HEADER: &str = "options.online.realms.header";
+    #[doc = "Servers"]
+    pub const OPTIONS_ONLINE_SERVERS_HEADER: &str = "options.online.servers.header";
     #[doc = "Online Options"]
     pub const OPTIONS_ONLINE_TITLE: &str = "options.online.title";
+    #[doc = "Xbox Settings..."]
+    pub const OPTIONS_ONLINE_XBOXSETTINGS: &str = "options.online.xboxSettings";
     #[doc = "Only Show Secure Chat"]
     pub const OPTIONS_ONLYSHOWSECURECHAT: &str = "options.onlyShowSecureChat";
     #[doc = "Only display messages from other players that can be verified to have been sent by that player, and have not been modified."]
@@ -13710,6 +14139,8 @@ pub mod java {
     pub const OPTIONS_RAWMOUSEINPUT: &str = "options.rawMouseInput";
     #[doc = "Realms News & Invites"]
     pub const OPTIONS_REALMSNOTIFICATIONS: &str = "options.realmsNotifications";
+    #[doc = "News & Invites"]
+    pub const OPTIONS_REALMSNOTIFICATIONS_BUTTON: &str = "options.realmsNotifications.button";
     #[doc = "Fetches Realms news and invites in the title screen and displays their respective icon on the Realms button."]
     pub const OPTIONS_REALMSNOTIFICATIONS_TOOLTIP: &str = "options.realmsNotifications.tooltip";
     #[doc = "Reduced Debug Info"]
@@ -13722,13 +14153,15 @@ pub mod java {
     pub const OPTIONS_RENDERDISTANCE: &str = "options.renderDistance";
     #[doc = "Resource Packs..."]
     pub const OPTIONS_RESOURCEPACK: &str = "options.resourcepack";
+    #[doc = "Some of your changes require a game restart to be applied."]
+    pub const OPTIONS_RESTARTREQUIRED: &str = "options.restartRequired";
     #[doc = "Rotate with Minecarts"]
     pub const OPTIONS_ROTATEWITHMINECART: &str = "options.rotateWithMinecart";
     #[doc = "Whether the player's view should rotate with a turning Minecart. Only available in worlds with the 'Minecart Improvements' experimental setting turned on."]
     pub const OPTIONS_ROTATEWITHMINECART_TOOLTIP: &str = "options.rotateWithMinecart.tooltip";
     #[doc = "Distortion Effects"]
     pub const OPTIONS_SCREENEFFECTSCALE: &str = "options.screenEffectScale";
-    #[doc = "Strength of nausea and Nether portal screen distortion effects.\nAt lower values, the nausea effect is replaced with a green overlay."]
+    #[doc = "Strength of Nausea and Nether Portal screen distortion effects.\nAt lower values, the Nausea effect is replaced with a green overlay."]
     pub const OPTIONS_SCREENEFFECTSCALE_TOOLTIP: &str = "options.screenEffectScale.tooltip";
     #[doc = "Sensitivity"]
     pub const OPTIONS_SENSITIVITY: &str = "options.sensitivity";
@@ -13736,6 +14169,20 @@ pub mod java {
     pub const OPTIONS_SENSITIVITY_MAX: &str = "options.sensitivity.max";
     #[doc = "*yawn*"]
     pub const OPTIONS_SENSITIVITY_MIN: &str = "options.sensitivity.min";
+    #[doc = "Visibility"]
+    pub const OPTIONS_SHAREPRESENCE: &str = "options.sharePresence";
+    #[doc = "Full"]
+    pub const OPTIONS_SHAREPRESENCE_ALL: &str = "options.sharePresence.all";
+    #[doc = "Friends can see what you're playing."]
+    pub const OPTIONS_SHAREPRESENCE_ALL_TOOLTIP: &str = "options.sharePresence.all.tooltip";
+    #[doc = "Limited"]
+    pub const OPTIONS_SHAREPRESENCE_LIMITED: &str = "options.sharePresence.limited";
+    #[doc = "Friends can see when you're online, but not what you're playing."]
+    pub const OPTIONS_SHAREPRESENCE_LIMITED_TOOLTIP: &str = "options.sharePresence.limited.tooltip";
+    #[doc = "Hidden"]
+    pub const OPTIONS_SHAREPRESENCE_NONE: &str = "options.sharePresence.none";
+    #[doc = "Friends will always see you as offline."]
+    pub const OPTIONS_SHAREPRESENCE_NONE_TOOLTIP: &str = "options.sharePresence.none.tooltip";
     #[doc = "Show Music Toast"]
     pub const OPTIONS_SHOWNOWPLAYINGTOAST: &str = "options.showNowPlayingToast";
     #[doc = "Displays a toast whenever a song starts playing. The same toast is constantly displayed in the in-game pause menu while a song is playing."]
@@ -13776,7 +14223,7 @@ pub mod java {
     pub const OPTIONS_TEXTUREFILTERING: &str = "options.textureFiltering";
     #[doc = "Anisotropic"]
     pub const OPTIONS_TEXTUREFILTERING_ANISOTROPIC: &str = "options.textureFiltering.anisotropic";
-    #[doc = "A hardware based filtering method, but impacts performance and significantly impacts video memory usage. May not be supported on all hardware."]
+    #[doc = "A hardware-based filtering method, but impacts performance and significantly impacts video memory usage. May not be supported on all hardware."]
     pub const OPTIONS_TEXTUREFILTERING_ANISOTROPIC_TOOLTIP: &str =
         "options.textureFiltering.anisotropic.tooltip";
     #[doc = "None"]
@@ -13785,7 +14232,7 @@ pub mod java {
     pub const OPTIONS_TEXTUREFILTERING_NONE_TOOLTIP: &str = "options.textureFiltering.none.tooltip";
     #[doc = "RGSS"]
     pub const OPTIONS_TEXTUREFILTERING_RGSS: &str = "options.textureFiltering.rgss";
-    #[doc = "(Rotated Grid Super Sampling)\nA shader based filtering method that improves texture quality with a moderate performance impact."]
+    #[doc = "(Rotated Grid Super Sampling)\nA shader-based filtering method that improves texture quality with a moderate performance impact."]
     pub const OPTIONS_TEXTUREFILTERING_RGSS_TOOLTIP: &str = "options.textureFiltering.rgss.tooltip";
     #[doc = "Options"]
     pub const OPTIONS_TITLE: &str = "options.title";
@@ -13819,8 +14266,17 @@ pub mod java {
     pub const OPTIONS_WEATHERRADIUS: &str = "options.weatherRadius";
     #[doc = "Radius of the area where rain and snow effects are visible. Very low performance impact."]
     pub const OPTIONS_WEATHERRADIUS_TOOLTIP: &str = "options.weatherRadius.tooltip";
+    #[doc = "Cannot allow commands in a hardcore world."]
+    pub const OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_TOOLTIP: &str =
+        "options.worldOptions.allow_commands.disabled.tooltip";
     #[doc = "World Options..."]
     pub const OPTIONS_WORLDOPTIONS_BUTTON: &str = "options.worldOptions.button";
+    #[doc = "Changing the game mode requires operator permissions."]
+    pub const OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_OPERATOR_TOOLTIP: &str =
+        "options.worldOptions.game_mode.disabled.operator.tooltip";
+    #[doc = "Cannot change the game mode in a hardcore world."]
+    pub const OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_TOOLTIP: &str =
+        "options.worldOptions.game_mode.disabled.tooltip";
     #[doc = "World Options"]
     pub const OPTIONS_WORLDOPTIONS_TITLE: &str = "options.worldOptions.title";
     #[doc = "Minecraft has run out of memory.\n\nThis could be caused by a bug in the game or by the Java Virtual Machine not being allocated enough memory.\n\nTo prevent world corruption, the current game has quit. We've tried to free up enough memory to let you go back to the main menu and back to playing, but this may not have worked.\n\nPlease restart the game if you see this message again."]
@@ -14347,7 +14803,7 @@ pub mod java {
     pub const SELECTWORLD_BACKUPERASECACHE: &str = "selectWorld.backupEraseCache";
     #[doc = "Create Backup and Load"]
     pub const SELECTWORLD_BACKUPJOINCONFIRMBUTTON: &str = "selectWorld.backupJoinConfirmButton";
-    #[doc = "I know what I'm doing!"]
+    #[doc = "I Know What I'm Doing!"]
     pub const SELECTWORLD_BACKUPJOINSKIPBUTTON: &str = "selectWorld.backupJoinSkipButton";
     #[doc = "Customized worlds are no longer supported"]
     pub const SELECTWORLD_BACKUPQUESTION_CUSTOMIZED: &str = "selectWorld.backupQuestion.customized";
@@ -15221,6 +15677,12 @@ pub mod java {
     pub const SUBTITLES_BLOCK_PORTAL_TRAVEL: &str = "subtitles.block.portal.travel";
     #[doc = "Portal noise intensifies"]
     pub const SUBTITLES_BLOCK_PORTAL_TRIGGER: &str = "subtitles.block.portal.trigger";
+    #[doc = "Sulfur spring bursts"]
+    pub const SUBTITLES_BLOCK_POTENT_SULFUR_GEYSER_ERUPTION: &str =
+        "subtitles.block.potent_sulfur.geyser_eruption";
+    #[doc = "Noxious gas appears"]
+    pub const SUBTITLES_BLOCK_POTENT_SULFUR_NOXIOUS_GAS: &str =
+        "subtitles.block.potent_sulfur.noxious_gas";
     #[doc = "Pressure Plate clicks"]
     pub const SUBTITLES_BLOCK_PRESSURE_PLATE_CLICK: &str = "subtitles.block.pressure_plate.click";
     #[doc = "Shears carve"]
@@ -16571,6 +17033,18 @@ pub mod java {
     pub const SUBTITLES_ENTITY_SLIME_HURT: &str = "subtitles.entity.slime.hurt";
     #[doc = "Slime squishes"]
     pub const SUBTITLES_ENTITY_SLIME_SQUISH: &str = "subtitles.entity.slime.squish";
+    #[doc = "Small Sulfur Cube dies"]
+    pub const SUBTITLES_ENTITY_SMALL_SULFUR_CUBE_DEATH: &str =
+        "subtitles.entity.small_sulfur_cube.death";
+    #[doc = "Small Sulfur Cube puts on mass"]
+    pub const SUBTITLES_ENTITY_SMALL_SULFUR_CUBE_EAT: &str =
+        "subtitles.entity.small_sulfur_cube.eat";
+    #[doc = "Small Sulfur Cube hurts"]
+    pub const SUBTITLES_ENTITY_SMALL_SULFUR_CUBE_HURT: &str =
+        "subtitles.entity.small_sulfur_cube.hurt";
+    #[doc = "Small Sulfur Cube bounces"]
+    pub const SUBTITLES_ENTITY_SMALL_SULFUR_CUBE_JUMP: &str =
+        "subtitles.entity.small_sulfur_cube.jump";
     #[doc = "Sniffer dies"]
     pub const SUBTITLES_ENTITY_SNIFFER_DEATH: &str = "subtitles.entity.sniffer.death";
     #[doc = "Sniffer digs"]
@@ -16637,6 +17111,24 @@ pub mod java {
     pub const SUBTITLES_ENTITY_STRIDER_IDLE: &str = "subtitles.entity.strider.idle";
     #[doc = "Strider retreats"]
     pub const SUBTITLES_ENTITY_STRIDER_RETREAT: &str = "subtitles.entity.strider.retreat";
+    #[doc = "Sulfur Cube full"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_ABSORB: &str = "subtitles.entity.sulfur_cube.absorb";
+    #[doc = "Sulfur Cube bounces"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_BOUNCE: &str = "subtitles.entity.sulfur_cube.bounce";
+    #[doc = "Sulfur Cube dies"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_DEATH: &str = "subtitles.entity.sulfur_cube.death";
+    #[doc = "Block removed"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_EJECT: &str = "subtitles.entity.sulfur_cube.eject";
+    #[doc = "Sulfur Cube hit"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_HIT: &str = "subtitles.entity.sulfur_cube.hit";
+    #[doc = "Sulfur Cube hurts"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_HURT: &str = "subtitles.entity.sulfur_cube.hurt";
+    #[doc = "Sulfur Cube bounces"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_JUMP: &str = "subtitles.entity.sulfur_cube.jump";
+    #[doc = "Sulfur Cube pushed"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_PUSH: &str = "subtitles.entity.sulfur_cube.push";
+    #[doc = "Sulfur Cube bounces"]
+    pub const SUBTITLES_ENTITY_SULFUR_CUBE_SQUISH: &str = "subtitles.entity.sulfur_cube.squish";
     #[doc = "Tadpole dies"]
     pub const SUBTITLES_ENTITY_TADPOLE_DEATH: &str = "subtitles.entity.tadpole.death";
     #[doc = "Tadpole flops"]
@@ -17035,6 +17527,9 @@ pub mod java {
     pub const SUBTITLES_ITEM_BUCKET_FILL_AXOLOTL: &str = "subtitles.item.bucket.fill_axolotl";
     #[doc = "Fish captured"]
     pub const SUBTITLES_ITEM_BUCKET_FILL_FISH: &str = "subtitles.item.bucket.fill_fish";
+    #[doc = "Sulfur Cube scooped"]
+    pub const SUBTITLES_ITEM_BUCKET_FILL_SULFUR_CUBE: &str =
+        "subtitles.item.bucket.fill_sulfur_cube";
     #[doc = "Tadpole captured"]
     pub const SUBTITLES_ITEM_BUCKET_FILL_TADPOLE: &str = "subtitles.item.bucket.fill_tadpole";
     #[doc = "Bundle empties"]
@@ -17217,10 +17712,21 @@ pub mod java {
         "telemetry.event.game_load_times.description";
     #[doc = "Game Load Times"]
     pub const TELEMETRY_EVENT_GAME_LOAD_TIMES_TITLE: &str = "telemetry.event.game_load_times.title";
+    #[doc = "This event informs us of the capabilities of the graphics device used to play the game."]
+    pub const TELEMETRY_EVENT_GRAPHICS_CAPABILITIES_DESCRIPTION: &str =
+        "telemetry.event.graphics_capabilities.description";
+    #[doc = "Graphics Capabilities"]
+    pub const TELEMETRY_EVENT_GRAPHICS_CAPABILITIES_TITLE: &str =
+        "telemetry.event.graphics_capabilities.title";
     #[doc = "%s (Optional)"]
     pub const TELEMETRY_EVENT_OPTIONAL: &str = "telemetry.event.optional";
     #[doc = "%s (Optional) - Disabled"]
     pub const TELEMETRY_EVENT_OPTIONAL_DISABLED: &str = "telemetry.event.optional.disabled";
+    #[doc = "This event helps us understand the reliability and performance of peer-to-peer connections between players. It records whether the connection was successful, the type of Interactive Connectivity Establishment (ICE, the protocol we use to establish peer-to-peer connections) candidate used, and how long it took to establish the connection."]
+    pub const TELEMETRY_EVENT_P2P_CONNECTION_DESCRIPTION: &str =
+        "telemetry.event.p2p_connection.description";
+    #[doc = "Peer-to-peer Connection"]
+    pub const TELEMETRY_EVENT_P2P_CONNECTION_TITLE: &str = "telemetry.event.p2p_connection.title";
     #[doc = "Knowing the overall performance profile of Minecraft helps us tune and optimize the game for a wide range of machine specifications and operating systems. \nGame version is included to help us compare the performance profile for new versions of Minecraft."]
     pub const TELEMETRY_EVENT_PERFORMANCE_METRICS_DESCRIPTION: &str =
         "telemetry.event.performance_metrics.description";
@@ -17251,6 +17757,17 @@ pub mod java {
     #[doc = "Advancement ID"]
     pub const TELEMETRY_PROPERTY_ADVANCEMENT_ID_TITLE: &str =
         "telemetry.property.advancement_id.title";
+    #[doc = "Backend Creation Failure Message"]
+    pub const TELEMETRY_PROPERTY_BACKEND_FAILURE_MESSAGE_TITLE: &str =
+        "telemetry.property.backend_failure_message.title";
+    #[doc = "Backend Creation Failure Missing Capabilities"]
+    pub const TELEMETRY_PROPERTY_BACKEND_FAILURE_MISSING_CAPABILITIES_TITLE: &str =
+        "telemetry.property.backend_failure_missing_capabilities.title";
+    #[doc = "Backend Creation Failure Reason"]
+    pub const TELEMETRY_PROPERTY_BACKEND_FAILURE_REASON_TITLE: &str =
+        "telemetry.property.backend_failure_reason.title";
+    #[doc = "Backend Name"]
+    pub const TELEMETRY_PROPERTY_BACKEND_NAME_TITLE: &str = "telemetry.property.backend_name.title";
     #[doc = "Client ID"]
     pub const TELEMETRY_PROPERTY_CLIENT_ID_TITLE: &str = "telemetry.property.client_id.title";
     #[doc = "Client Modded"]
@@ -17297,6 +17814,30 @@ pub mod java {
         "telemetry.property.operating_system.title";
     #[doc = "Opt-In"]
     pub const TELEMETRY_PROPERTY_OPT_IN_TITLE: &str = "telemetry.property.opt_in.title";
+    #[doc = "Failure Stage"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_FAILURE_STAGE_TITLE: &str =
+        "telemetry.property.p2p_connection_failure_stage.title";
+    #[doc = "Interactive Connectivity Establishment (ICE) Connect Time (Milliseconds)"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_ICE_CONNECT_TIME_MS_TITLE: &str =
+        "telemetry.property.p2p_connection_ice_connect_time_ms.title";
+    #[doc = "Interactive Connectivity Establishment (ICE) Path"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_ICE_PATH_TITLE: &str =
+        "telemetry.property.p2p_connection_ice_path.title";
+    #[doc = "Local Candidate Type"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_LOCAL_CANDIDATE_TYPE_TITLE: &str =
+        "telemetry.property.p2p_connection_local_candidate_type.title";
+    #[doc = "Remote Candidate Type"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_REMOTE_CANDIDATE_TYPE_TITLE: &str =
+        "telemetry.property.p2p_connection_remote_candidate_type.title";
+    #[doc = "Signaling Connection Time (Milliseconds)"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_SIGNALING_TIME_MS_TITLE: &str =
+        "telemetry.property.p2p_connection_signaling_time_ms.title";
+    #[doc = "Connection Successful"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_SUCCESSFUL_TITLE: &str =
+        "telemetry.property.p2p_connection_successful.title";
+    #[doc = "Total Connection Time (Milliseconds)"]
+    pub const TELEMETRY_PROPERTY_P2P_CONNECTION_TOTAL_TIME_MS_TITLE: &str =
+        "telemetry.property.p2p_connection_total_time_ms.title";
     #[doc = "Platform"]
     pub const TELEMETRY_PROPERTY_PLATFORM_TITLE: &str = "telemetry.property.platform.title";
     #[doc = "Realms Map Content (Minigame Name)"]
@@ -17314,6 +17855,9 @@ pub mod java {
     #[doc = "Server Modded"]
     pub const TELEMETRY_PROPERTY_SERVER_MODDED_TITLE: &str =
         "telemetry.property.server_modded.title";
+    #[doc = "Server Session ID"]
+    pub const TELEMETRY_PROPERTY_SERVER_SESSION_ID_TITLE: &str =
+        "telemetry.property.server_session_id.title";
     #[doc = "Server Type"]
     pub const TELEMETRY_PROPERTY_SERVER_TYPE_TITLE: &str = "telemetry.property.server_type.title";
     #[doc = "Time Since Load (Ticks)"]
@@ -17446,6 +17990,8 @@ pub mod java {
     pub const TEST_ERROR_UNKNOWN: &str = "test.error.unknown";
     #[doc = "Expected %s to be %s: was %s"]
     pub const TEST_ERROR_VALUE_NOT_EQUAL: &str = "test.error.value_not_equal";
+    #[doc = "Expected %s to be in between %s and %s: was %s"]
+    pub const TEST_ERROR_VALUE_NOT_IN_BETWEEN: &str = "test.error.value_not_in_between";
     #[doc = "Wrong block entity type: %s"]
     pub const TEST_ERROR_WRONG_BLOCK_ENTITY: &str = "test.error.wrong_block_entity";
     #[doc = "Test structure missing %s block"]
@@ -17541,6 +18087,8 @@ pub mod java {
         "title.multiplayer.disabled.banned.temporary";
     #[doc = "Multiplayer (LAN)"]
     pub const TITLE_MULTIPLAYER_LAN: &str = "title.multiplayer.lan";
+    #[doc = "Multiplayer (Online)"]
+    pub const TITLE_MULTIPLAYER_ONLINE: &str = "title.multiplayer.online";
     #[doc = "Multiplayer (3rd-party Server)"]
     pub const TITLE_MULTIPLAYER_OTHER: &str = "title.multiplayer.other";
     #[doc = "Multiplayer (Realms)"]

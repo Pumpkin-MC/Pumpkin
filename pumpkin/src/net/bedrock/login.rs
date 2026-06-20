@@ -188,7 +188,7 @@ impl BedrockClient {
         if br_config.enabled {
             for pack in &br_config.packs {
                 entries.push(ResourcePackEntry {
-                    uuid: pack.uuid.to_string(),
+                    uuid: pack.uuid,
                     version: pack.version.clone(),
                     size: pack.size,
                     download_url: pack.download_url.clone(),

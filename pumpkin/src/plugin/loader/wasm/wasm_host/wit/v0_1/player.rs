@@ -121,6 +121,7 @@ const fn to_wasm_java_version(
         JavaMinecraftVersion::V_1_21_9 => pumpkin::plugin::player::JavaMinecraftVersion::V1219,
         JavaMinecraftVersion::V_1_21_11 => pumpkin::plugin::player::JavaMinecraftVersion::V12111,
         JavaMinecraftVersion::V_26_1 => pumpkin::plugin::player::JavaMinecraftVersion::V261,
+        JavaMinecraftVersion::V_26_2 => pumpkin::plugin::player::JavaMinecraftVersion::V262,
         JavaMinecraftVersion::Unknown => pumpkin::plugin::player::JavaMinecraftVersion::Unknown,
     }
 }
@@ -130,8 +131,8 @@ const fn to_wasm_bedrock_version(
 ) -> pumpkin::plugin::player::BedrockMinecraftVersion {
     match version {
         BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
-        BedrockMinecraftVersion::V_1_26_20 => {
-            pumpkin::plugin::player::BedrockMinecraftVersion::V12620
+        BedrockMinecraftVersion::V_1_26_30 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12630
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
@@ -2082,7 +2083,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                         default_input_mode: to_wasm_bedrock_input_mode(data.default_input_mode),
                         ui_profile: to_wasm_bedrock_ui_profile(data.ui_profile),
                         gui_scale: data.gui_scale,
-                        is_editor_mode: data.is_editor_mode,
+                        is_editor_mode: data.client_is_editor_capable,
                         max_view_distance: data.max_view_distance,
                         memory_tier: data.memory_tier,
                         graphics_mode: to_wasm_bedrock_graphics_mode(data.graphics_mode),

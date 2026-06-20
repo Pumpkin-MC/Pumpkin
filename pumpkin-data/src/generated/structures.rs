@@ -50,10 +50,15 @@ pub struct WeightedEntry {
     pub structure: StructureKeys,
     pub weight: u32,
 }
+pub struct ExclusionZone {
+    pub other_set: &'static str,
+    pub chunk_count: i32,
+}
 pub struct StructurePlacement {
     pub frequency_reduction_method: Option<FrequencyReductionMethod>,
     pub frequency: Option<f32>,
     pub salt: u32,
+    pub exclusion_zone: Option<ExclusionZone>,
     pub placement_type: StructurePlacementType,
 }
 #[derive(Clone, Copy)]
@@ -102,6 +107,26 @@ pub enum TerrainAdaptation {
     Bury,
     Encapsulate,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StructureType {
+    Jigsaw,
+    BuriedTreasure,
+    DesertPyramid,
+    EndCity,
+    Fortress,
+    Igloo,
+    JungleTemple,
+    WoodlandMansion,
+    Mineshaft,
+    OceanMonument,
+    NetherFossil,
+    OceanRuin,
+    RuinedPortal,
+    Shipwreck,
+    Stronghold,
+    SwampHut,
+    Unknown,
+}
 pub struct Structure {
     pub biomes: &'static str,
     pub step: GenerationStep,
@@ -113,6 +138,8 @@ pub struct Structure {
     pub max_distance_from_center: Option<i32>,
     pub liquid_settings: Option<&'static str>,
     pub dimension_padding: Option<i32>,
+    pub use_expansion_hack: Option<bool>,
+    pub structure_type: StructureType,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GenerationStep {
@@ -155,6 +182,8 @@ impl Structure {
         max_distance_from_center: Some(116i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(false),
+        structure_type: StructureType::Jigsaw,
     };
     pub const BASTION_REMNANT: Self = Structure {
         biomes: "#minecraft:has_structure/bastion_remnant",
@@ -167,6 +196,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(false),
+        structure_type: StructureType::Jigsaw,
     };
     pub const BURIED_TREASURE: Self = Structure {
         biomes: "#minecraft:has_structure/buried_treasure",
@@ -179,6 +210,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::BuriedTreasure,
     };
     pub const DESERT_PYRAMID: Self = Structure {
         biomes: "#minecraft:has_structure/desert_pyramid",
@@ -191,6 +224,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::DesertPyramid,
     };
     pub const END_CITY: Self = Structure {
         biomes: "#minecraft:has_structure/end_city",
@@ -203,6 +238,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::EndCity,
     };
     pub const FORTRESS: Self = Structure {
         biomes: "#minecraft:has_structure/nether_fortress",
@@ -215,6 +252,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Fortress,
     };
     pub const IGLOO: Self = Structure {
         biomes: "#minecraft:has_structure/igloo",
@@ -227,6 +266,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Igloo,
     };
     pub const JUNGLE_PYRAMID: Self = Structure {
         biomes: "#minecraft:has_structure/jungle_temple",
@@ -239,6 +280,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::JungleTemple,
     };
     pub const MANSION: Self = Structure {
         biomes: "#minecraft:has_structure/woodland_mansion",
@@ -251,6 +294,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::WoodlandMansion,
     };
     pub const MINESHAFT: Self = Structure {
         biomes: "#minecraft:has_structure/mineshaft",
@@ -263,6 +308,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Mineshaft,
     };
     pub const MINESHAFT_MESA: Self = Structure {
         biomes: "#minecraft:has_structure/mineshaft_mesa",
@@ -275,6 +322,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Mineshaft,
     };
     pub const MONUMENT: Self = Structure {
         biomes: "#minecraft:has_structure/ocean_monument",
@@ -287,6 +336,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::OceanMonument,
     };
     pub const NETHER_FOSSIL: Self = Structure {
         biomes: "#minecraft:has_structure/nether_fossil",
@@ -299,6 +350,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::NetherFossil,
     };
     pub const OCEAN_RUIN_COLD: Self = Structure {
         biomes: "#minecraft:has_structure/ocean_ruin_cold",
@@ -311,6 +364,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::OceanRuin,
     };
     pub const OCEAN_RUIN_WARM: Self = Structure {
         biomes: "#minecraft:has_structure/ocean_ruin_warm",
@@ -323,6 +378,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::OceanRuin,
     };
     pub const PILLAGER_OUTPOST: Self = Structure {
         biomes: "#minecraft:has_structure/pillager_outpost",
@@ -335,6 +392,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(true),
+        structure_type: StructureType::Jigsaw,
     };
     pub const RUINED_PORTAL: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_standard",
@@ -347,6 +406,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_DESERT: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_desert",
@@ -359,6 +420,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_JUNGLE: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_jungle",
@@ -371,6 +434,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_MOUNTAIN: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_mountain",
@@ -383,6 +448,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_NETHER: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_nether",
@@ -395,6 +462,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_OCEAN: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_ocean",
@@ -407,6 +476,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_SWAMP: Self = Structure {
         biomes: "#minecraft:has_structure/ruined_portal_swamp",
@@ -419,6 +490,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::RuinedPortal,
     };
     pub const SHIPWRECK: Self = Structure {
         biomes: "#minecraft:has_structure/shipwreck",
@@ -431,6 +504,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Shipwreck,
     };
     pub const SHIPWRECK_BEACHED: Self = Structure {
         biomes: "#minecraft:has_structure/shipwreck_beached",
@@ -443,6 +518,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Shipwreck,
     };
     pub const STRONGHOLD: Self = Structure {
         biomes: "#minecraft:has_structure/stronghold",
@@ -455,6 +532,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::Stronghold,
     };
     pub const SWAMP_HUT: Self = Structure {
         biomes: "#minecraft:has_structure/swamp_hut",
@@ -467,6 +546,8 @@ impl Structure {
         max_distance_from_center: None,
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: None,
+        structure_type: StructureType::SwampHut,
     };
     pub const TRAIL_RUINS: Self = Structure {
         biomes: "#minecraft:has_structure/trail_ruins",
@@ -479,6 +560,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(false),
+        structure_type: StructureType::Jigsaw,
     };
     pub const TRIAL_CHAMBERS: Self = Structure {
         biomes: "#minecraft:has_structure/trial_chambers",
@@ -491,6 +574,8 @@ impl Structure {
         max_distance_from_center: Some(116i32),
         liquid_settings: Some("ignore_waterlogging"),
         dimension_padding: Some(10i32),
+        use_expansion_hack: Some(false),
+        structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_DESERT: Self = Structure {
         biomes: "#minecraft:has_structure/village_desert",
@@ -503,6 +588,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(true),
+        structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_PLAINS: Self = Structure {
         biomes: "#minecraft:has_structure/village_plains",
@@ -515,6 +602,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(true),
+        structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_SAVANNA: Self = Structure {
         biomes: "#minecraft:has_structure/village_savanna",
@@ -527,6 +616,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(true),
+        structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_SNOWY: Self = Structure {
         biomes: "#minecraft:has_structure/village_snowy",
@@ -539,6 +630,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(true),
+        structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_TAIGA: Self = Structure {
         biomes: "#minecraft:has_structure/village_taiga",
@@ -551,6 +644,8 @@ impl Structure {
         max_distance_from_center: Some(80i32),
         liquid_settings: None,
         dimension_padding: None,
+        use_expansion_hack: Some(true),
+        structure_type: StructureType::Jigsaw,
     };
     #[must_use]
     pub const fn get(key: &StructureKeys) -> &'static Self {
@@ -598,6 +693,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 20083232u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 24i32,
                 separation: 8i32,
@@ -614,6 +710,7 @@ impl StructureSet {
             frequency_reduction_method: Some(FrequencyReductionMethod::LegacyType2),
             frequency: Some(0.01f32),
             salt: 0u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 1i32,
                 separation: 0i32,
@@ -630,6 +727,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 14357617u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 32i32,
                 separation: 8i32,
@@ -646,6 +744,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 10387313u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 20i32,
                 separation: 11i32,
@@ -662,6 +761,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 14357618u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 32i32,
                 separation: 8i32,
@@ -678,6 +778,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 14357619u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 32i32,
                 separation: 8i32,
@@ -694,6 +795,7 @@ impl StructureSet {
             frequency_reduction_method: Some(FrequencyReductionMethod::LegacyType3),
             frequency: Some(0.004f32),
             salt: 0u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 1i32,
                 separation: 0i32,
@@ -716,6 +818,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 30084232u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 27i32,
                 separation: 4i32,
@@ -738,6 +841,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 14357921u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 2i32,
                 separation: 1i32,
@@ -754,6 +858,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 10387313u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 32i32,
                 separation: 5i32,
@@ -770,6 +875,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 14357621u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 20i32,
                 separation: 8i32,
@@ -792,6 +898,10 @@ impl StructureSet {
             frequency_reduction_method: Some(FrequencyReductionMethod::LegacyType1),
             frequency: Some(0.2f32),
             salt: 165745296u32,
+            exclusion_zone: Some(ExclusionZone {
+                other_set: "minecraft:villages",
+                chunk_count: 10i32,
+            }),
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 32i32,
                 separation: 8i32,
@@ -808,6 +918,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 34222645u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 40i32,
                 separation: 15i32,
@@ -850,6 +961,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 165745295u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 24i32,
                 separation: 4i32,
@@ -872,6 +984,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 0u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::ConcentricRings(
                 ConcentricRingsStructurePlacement {
                     spread: 3i32,
@@ -891,6 +1004,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 14357620u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 32i32,
                 separation: 8i32,
@@ -907,6 +1021,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 83469867u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 34i32,
                 separation: 8i32,
@@ -923,6 +1038,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 94251327u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 34i32,
                 separation: 12i32,
@@ -939,6 +1055,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 10387312u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 34i32,
                 separation: 8i32,
@@ -973,6 +1090,7 @@ impl StructureSet {
             frequency_reduction_method: None,
             frequency: None,
             salt: 10387319u32,
+            exclusion_zone: None,
             placement_type: StructurePlacementType::RandomSpread(RandomSpreadStructurePlacement {
                 spacing: 80i32,
                 separation: 20i32,

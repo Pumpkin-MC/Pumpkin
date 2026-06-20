@@ -30,6 +30,7 @@ use pumpkin_protocol::{
         packet_encoder::UDPNetworkEncoder,
         server::{
             animate::SAnimate,
+            block_pick_request::SBlockPickRequest,
             client_cache_status::SClientCacheStatus,
             command_request::SCommandRequest,
             container_close::SContainerClose,
@@ -38,6 +39,7 @@ use pumpkin_protocol::{
             inventory_transaction::SInventoryTransaction,
             loading_screen::SLoadingScreen,
             login::SLogin,
+            mob_equipment::SMobEquipment,
             player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput,
             raknet::{
@@ -136,6 +138,7 @@ pub struct BedrockClient {
     output_ordered_index: AtomicU32,
     /// The next form ID to use for custom forms.
     pub next_form_id: AtomicU32,
+    pub inventory_opened: AtomicBool,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -184,6 +187,7 @@ impl BedrockClient {
             output_sequenced_index: AtomicU32::new(0),
             output_ordered_index: AtomicU32::new(0),
             next_form_id: AtomicU32::new(0),
+            inventory_opened: AtomicBool::new(false),
             compounds: Arc::new(Mutex::new(HashMap::new())),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
@@ -650,12 +654,11 @@ impl BedrockClient {
         }
         self.close_token.cancel();
         self.be_clients.lock().await.remove(&self.address);
+    }
+
+    pub async fn await_tasks(&self) {
         self.tasks.close();
         self.tasks.wait().await;
-
-        if let Some(player) = self.player.lock().await.as_ref() {
-            player.remove().await;
-        }
     }
 
     pub fn is_closed(&self) -> bool {
@@ -1011,6 +1014,9 @@ impl BedrockClient {
             SInventoryTransaction::PACKET_ID => {
                 self.handle_inventory_action(player, SInventoryTransaction::read(reader)?).await;
             }
+            pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::PACKET_ID => {
+                self.handle_item_stack_request(player, pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::read(reader)?).await;
+            }
             SInteraction::PACKET_ID => {
                 self.handle_interaction(player, SInteraction::read(reader)?)
                     .await;
@@ -1058,6 +1064,14 @@ impl BedrockClient {
             }
             SLoadingScreen::PACKET_ID => {
                 // Ignore for now
+            }
+            SBlockPickRequest::PACKET_ID => {
+                self.handle_block_pick_request(player, SBlockPickRequest::read(reader)?)
+                    .await;
+            }
+            SMobEquipment::PACKET_ID => {
+                self.handle_mob_equipment(player, SMobEquipment::read(reader)?)
+                    .await;
             }
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
@@ -1111,8 +1125,24 @@ impl BedrockClient {
         payload: &mut Cursor<&[u8]>,
         addr: SocketAddr,
         socket: &UdpSocket,
+        be_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
     ) -> Result<(), Error> {
-        match i32::from(packet_id) {
+        let packet_id_i32 = i32::from(packet_id);
+        if packet_id_i32 == SOpenConnectionRequest1::PACKET_ID {
+            let old_client = {
+                let mut clients_guard = be_clients.lock().await;
+                clients_guard.remove(&addr)
+            };
+            if let Some(client) = old_client {
+                debug!(
+                    "Closing old Bedrock client connection for {} due to new connection request",
+                    addr
+                );
+                client.close().await;
+            }
+        }
+
+        match packet_id_i32 {
             SUnconnectedPing::PACKET_ID => {
                 Self::handle_unconnected_ping(
                     server,

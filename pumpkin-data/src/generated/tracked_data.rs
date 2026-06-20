@@ -10,6 +10,7 @@ pub struct TrackedId {
     pub v1_21_9: u8,
     pub v1_21_11: u8,
     pub v26_1: u8,
+    pub v26_2: u8,
 }
 impl TrackedId {
     pub fn get(&self, version: &JavaMinecraftVersion) -> u8 {
@@ -23,13 +24,14 @@ impl TrackedId {
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => self.v1_21_9,
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => self.v1_21_11,
             pumpkin_util::version::JavaMinecraftVersion::V_26_1 => self.v26_1,
-            _ => self.v26_1,
+            pumpkin_util::version::JavaMinecraftVersion::V_26_2 => self.v26_2,
+            _ => self.v26_2,
         }
     }
 }
 impl From<TrackedId> for u8 {
     fn from(id: TrackedId) -> u8 {
-        id.v26_1
+        id.v26_2
     }
 }
 pub struct TrackedData;
@@ -44,6 +46,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ACTIVELY_TRAVELING: TrackedId = TrackedId {
         v1_21: 22u8,
@@ -55,6 +58,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const AGE_LOCKED: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -66,6 +70,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const AIR: TrackedId = TrackedId {
         v1_21: 1u8,
@@ -77,6 +82,7 @@ impl TrackedData {
         v1_21_9: 1u8,
         v1_21_11: 1u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const AIR_SUPPLY_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -88,6 +94,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 1u8,
+        v26_2: 1u8,
     };
     pub const ANGER: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -99,6 +106,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ANGER_END_TIME: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -110,6 +118,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 21u8,
         v26_1: 22u8,
+        v26_2: 22u8,
     };
     pub const ANGER_TIME: TrackedId = TrackedId {
         v1_21: 21u8,
@@ -121,6 +130,7 @@ impl TrackedData {
         v1_21_9: 21u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ANGRY: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -132,6 +142,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ARMADILLO_STATE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -143,6 +154,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const ARMOR_STAND_FLAGS: TrackedId = TrackedId {
         v1_21: 15u8,
@@ -154,6 +166,7 @@ impl TrackedData {
         v1_21_9: 15u8,
         v1_21_11: 15u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ARROW_COUNT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -165,6 +178,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 12u8,
+        v26_2: 12u8,
     };
     pub const ASK_FOR_BAMBOO_TICKS: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -176,6 +190,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ATTACHED_FACE: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -187,6 +202,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ATTACHED_TO_TARGET: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -198,6 +214,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const ATTACH_FACE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -209,6 +226,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const BABY: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -220,6 +238,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BABY_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -231,6 +250,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const BACKGROUND: TrackedId = TrackedId {
         v1_21: 25u8,
@@ -242,6 +262,7 @@ impl TrackedData {
         v1_21_9: 25u8,
         v1_21_11: 25u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BACKGROUND_COLOR_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -253,6 +274,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 25u8,
+        v26_2: 25u8,
     };
     pub const BAT_FLAGS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -264,6 +286,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BEAM_TARGET: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -275,6 +298,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const BEAM_TARGET_ID: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -286,6 +310,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BEE_FLAGS: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -297,6 +322,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BEGGING: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -308,6 +334,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BILLBOARD: TrackedId = TrackedId {
         v1_21: 15u8,
@@ -319,6 +346,7 @@ impl TrackedData {
         v1_21_9: 15u8,
         v1_21_11: 15u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BILLBOARD_RENDER_CONSTRAINTS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -330,6 +358,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 15u8,
+        v26_2: 15u8,
     };
     pub const BITING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -341,6 +370,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const BLAZE_FLAGS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -352,6 +382,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BLOCK_OFFSET: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -363,6 +394,7 @@ impl TrackedData {
         v1_21_9: 12u8,
         v1_21_11: 12u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BLOCK_POS: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -374,6 +406,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BLOCK_STATE: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -385,6 +418,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BLOCK_STATE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -396,6 +430,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const BOAT_TYPE: TrackedId = TrackedId {
         v1_21: 11u8,
@@ -407,6 +442,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BODY_POSE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -418,6 +454,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const BOOST_TIME: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -429,6 +466,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const BRIGHTNESS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -440,6 +478,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const BRIGHTNESS_OVERRIDE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -451,6 +490,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const BUBBLE_WOBBLE_TICKS: TrackedId = TrackedId {
         v1_21: 14u8,
@@ -462,6 +502,7 @@ impl TrackedData {
         v1_21_9: 13u8,
         v1_21_11: 13u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CAN_DUPLICATE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -473,6 +514,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const CAN_MOVE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -484,6 +526,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const CARRIED_BLOCK: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -495,6 +538,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CARRY_STATE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -506,6 +550,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const CAT_VARIANT: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -517,6 +562,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CAUGHT_FISH: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -528,6 +574,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CELEBRATING: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -539,6 +586,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CHARGED: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -550,6 +598,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CHARGING: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -561,6 +610,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CHEST: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -572,6 +622,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CHILD: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -583,6 +634,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CLIENT_ANGER_LEVEL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -594,6 +646,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const CLIENT_FLAGS: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -605,6 +658,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 15u8,
+        v26_2: 15u8,
     };
     pub const COLD: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -616,6 +670,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const COLLAR_COLOR: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -627,6 +682,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const COLOR: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -638,6 +694,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const COLOR_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -649,6 +706,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const COMMAND: TrackedId = TrackedId {
         v1_21: 14u8,
@@ -660,6 +718,7 @@ impl TrackedData {
         v1_21_9: 13u8,
         v1_21_11: 13u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CONVERTING: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -671,6 +730,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CONVERTING_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -682,6 +742,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const CONVERTING_IN_WATER: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -693,6 +754,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const COPPER_GOLEM_STATE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -704,6 +766,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const CREEPY: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -715,6 +778,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const CRUMBLING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -726,6 +790,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CUSTOM_BLOCK_ID: TrackedId = TrackedId {
         v1_21: 11u8,
@@ -737,6 +802,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CUSTOM_BLOCK_OFFSET: TrackedId = TrackedId {
         v1_21: 12u8,
@@ -748,6 +814,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CUSTOM_BLOCK_PRESENT: TrackedId = TrackedId {
         v1_21: 13u8,
@@ -759,6 +826,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CUSTOM_BLOCK_STATE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -770,6 +838,7 @@ impl TrackedData {
         v1_21_9: 11u8,
         v1_21_11: 11u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const CUSTOM_NAME: TrackedId = TrackedId {
         v1_21: 2u8,
@@ -781,6 +850,7 @@ impl TrackedData {
         v1_21_9: 2u8,
         v1_21_11: 2u8,
         v26_1: 2u8,
+        v26_2: 2u8,
     };
     pub const CUSTOM_NAME_VISIBLE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -792,6 +862,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 3u8,
+        v26_2: 3u8,
     };
     pub const DAMAGE_WOBBLE_SIDE: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -803,6 +874,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const DAMAGE_WOBBLE_STRENGTH: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -814,6 +886,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const DAMAGE_WOBBLE_TICKS: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -825,6 +898,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const DANCING: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -836,6 +910,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const DANGEROUS: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -847,6 +922,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const DARK_TICKS_REMAINING: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -858,6 +934,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const DASH: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -869,6 +946,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const DASHING: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -880,6 +958,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const DESCRIPTION: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -891,6 +970,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const DIGGING_SAND: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -902,6 +982,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const DIRECTION: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -913,6 +994,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const DRINKING: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -924,6 +1006,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const DROP_SEED_AT_TICK: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -935,6 +1018,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const DROWNED_CONVERSION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -946,6 +1030,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const EATING_TICKS: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -957,6 +1042,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const EAT_COUNTER: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -968,6 +1054,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const EFFECT_AMBIENCE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -979,6 +1066,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 11u8,
+        v26_2: 11u8,
     };
     pub const EFFECT_PARTICLES: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -990,6 +1078,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const ENCHANTED: TrackedId = TrackedId {
         v1_21: 11u8,
@@ -1001,6 +1090,7 @@ impl TrackedData {
         v1_21_9: 12u8,
         v1_21_11: 12u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const EXPLOSION_RADIUS: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1012,6 +1102,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FACING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1023,6 +1114,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FINISH_DIG_TIME: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -1034,6 +1126,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FLAGS: TrackedId = TrackedId {
         v1_21: 0u8,
@@ -1045,6 +1138,7 @@ impl TrackedData {
         v1_21_9: 0u8,
         v1_21_11: 0u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FLAGS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1056,6 +1150,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const FOX_FLAGS: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -1067,6 +1162,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FROM_BUCKET: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -1078,6 +1174,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const FROZEN_TICKS: TrackedId = TrackedId {
         v1_21: 7u8,
@@ -1089,6 +1186,7 @@ impl TrackedData {
         v1_21_9: 7u8,
         v1_21_11: 7u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FUSE: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -1100,6 +1198,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const FUSE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1111,6 +1210,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const FUSE_SPEED: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -1122,6 +1222,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const GLOW_COLOR_OVERRIDE: TrackedId = TrackedId {
         v1_21: 22u8,
@@ -1133,6 +1234,7 @@ impl TrackedData {
         v1_21_9: 22u8,
         v1_21_11: 22u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const GLOW_COLOR_OVERRIDE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1144,6 +1246,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 22u8,
+        v26_2: 22u8,
     };
     pub const GOT_FISH: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1155,6 +1258,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const HAS_EGG: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -1166,6 +1270,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const HAS_FISH: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -1177,6 +1282,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HAS_LEFT_HORN: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1188,6 +1294,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const HAS_RIGHT_HORN: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1199,6 +1306,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const HAS_ROPES: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1210,6 +1318,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HEAD_DOWN: TrackedId = TrackedId {
         v1_21: 21u8,
@@ -1221,6 +1330,7 @@ impl TrackedData {
         v1_21_9: 21u8,
         v1_21_11: 21u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HEAD_POSE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1232,6 +1342,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const HEAD_ROLLING_TIME_LEFT: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -1243,6 +1354,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HEALTH: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -1254,6 +1366,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HEALTH_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1265,6 +1378,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const HEIGHT: TrackedId = TrackedId {
         v1_21: 21u8,
@@ -1276,6 +1390,7 @@ impl TrackedData {
         v1_21_9: 21u8,
         v1_21_11: 21u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HEIGHT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1287,6 +1402,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const HIDDEN_GENE: TrackedId = TrackedId {
         v1_21: 21u8,
@@ -1298,6 +1414,7 @@ impl TrackedData {
         v1_21_9: 21u8,
         v1_21_11: 21u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HIDDEN_GENE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1309,6 +1426,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 22u8,
+        v26_2: 22u8,
     };
     pub const HOME_POS: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -1320,6 +1438,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const HOOKED_ENTITY: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1331,6 +1450,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const HOOK_ENTITY_ID: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -1342,6 +1462,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const HORSE_FLAGS: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -1353,6 +1474,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ID_ATTACK_TARGET: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1364,6 +1486,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const ID_BUBBLE_TIME: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1375,6 +1498,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 13u8,
+        v26_2: 13u8,
     };
     pub const ID_CHEST: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1386,6 +1510,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const ID_COMMAND_NAME: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1397,6 +1522,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 13u8,
+        v26_2: 13u8,
     };
     pub const ID_CUSTOM_DISPLAY_BLOCK: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1408,6 +1534,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 11u8,
+        v26_2: 11u8,
     };
     pub const ID_DAMAGE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1419,6 +1546,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const ID_DISPLAY_OFFSET: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1430,6 +1558,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 12u8,
+        v26_2: 12u8,
     };
     pub const ID_EFFECT_COLOR: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1441,6 +1570,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 11u8,
+        v26_2: 11u8,
     };
     pub const ID_FIREWORKS_ITEM: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1452,6 +1582,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const ID_FLAGS: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1463,6 +1594,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const ID_FOIL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1474,6 +1606,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 12u8,
+        v26_2: 12u8,
     };
     pub const ID_FUEL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1485,6 +1618,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 13u8,
+        v26_2: 13u8,
     };
     pub const ID_HURT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1496,6 +1630,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const ID_HURTDIR: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1507,6 +1642,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const ID_INV: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1518,6 +1654,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const ID_LAST_OUTPUT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1529,6 +1666,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 14u8,
+        v26_2: 14u8,
     };
     pub const ID_LOYALTY: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1540,6 +1678,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 11u8,
+        v26_2: 11u8,
     };
     pub const ID_MOVING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1551,6 +1690,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const ID_PADDLE_LEFT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1562,6 +1702,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 11u8,
+        v26_2: 11u8,
     };
     pub const ID_PADDLE_RIGHT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1573,6 +1714,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 12u8,
+        v26_2: 12u8,
     };
     pub const ID_SIZE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1584,6 +1726,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 18u8,
     };
     pub const ID_TYPE_VARIANT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1595,6 +1738,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const IGNITED: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -1606,6 +1750,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const IMMOVABLE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1617,6 +1762,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const IMMUNE_TO_ZOMBIFICATION: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -1628,6 +1774,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const INTERESTED_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1639,6 +1786,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const INTERPOLATION_DURATION: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -1650,6 +1798,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const INVUL_TIMER: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -1661,6 +1810,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const IN_GROUND: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1672,6 +1822,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const IN_SLEEPING_POSE: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -1683,6 +1834,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const IRON_GOLEM_FLAGS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -1694,6 +1846,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const IS_ACTIVE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1705,6 +1858,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const IS_CELEBRATING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1716,6 +1870,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const IS_CHARGING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1727,6 +1882,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const IS_CHARGING_CROSSBOW: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1738,6 +1894,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const IS_DANCING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1749,6 +1906,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const IS_IGNITED: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1760,6 +1918,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const IS_LEASH_HOLDER: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1771,6 +1930,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const IS_LYING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1782,6 +1942,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const IS_POWERED: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1793,6 +1954,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const IS_SCREAMING_GOAT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1804,6 +1966,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const IS_TEARING_DOWN: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1815,6 +1978,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const ITEM: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -1826,6 +1990,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const ITEM_DISPLAY: TrackedId = TrackedId {
         v1_21: 24u8,
@@ -1837,6 +2002,7 @@ impl TrackedData {
         v1_21_9: 24u8,
         v1_21_11: 24u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const ITEM_DISPLAY_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1848,6 +2014,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 24u8,
+        v26_2: 24u8,
     };
     pub const ITEM_STACK: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -1859,6 +2026,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const ITEM_STACK_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1870,6 +2038,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 23u8,
+        v26_2: 23u8,
     };
     pub const LAND_BOUND: TrackedId = TrackedId {
         v1_21: 21u8,
@@ -1881,6 +2050,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LAST_OUTPUT: TrackedId = TrackedId {
         v1_21: 15u8,
@@ -1892,6 +2062,7 @@ impl TrackedData {
         v1_21_9: 14u8,
         v1_21_11: 14u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LAST_POSE_CHANGE_TICK: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1903,6 +2074,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const LAST_POSE_TICK: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -1914,6 +2086,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LAYING_EGG: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1925,6 +2098,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const LEFT_ARM_POSE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1936,6 +2110,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const LEFT_HORN: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -1947,6 +2122,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LEFT_LEG_POSE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1958,6 +2134,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const LEFT_PADDLE_MOVING: TrackedId = TrackedId {
         v1_21: 12u8,
@@ -1969,6 +2146,7 @@ impl TrackedData {
         v1_21_9: 11u8,
         v1_21_11: 11u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LEFT_ROTATION: TrackedId = TrackedId {
         v1_21: 13u8,
@@ -1980,6 +2158,7 @@ impl TrackedData {
         v1_21_9: 13u8,
         v1_21_11: 13u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LEFT_ROTATION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -1991,6 +2170,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 13u8,
+        v26_2: 13u8,
     };
     pub const LINE_WIDTH: TrackedId = TrackedId {
         v1_21: 24u8,
@@ -2002,6 +2182,7 @@ impl TrackedData {
         v1_21_9: 24u8,
         v1_21_11: 24u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LINE_WIDTH_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2013,6 +2194,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 24u8,
+        v26_2: 24u8,
     };
     pub const LIT: TrackedId = TrackedId {
         v1_21: 14u8,
@@ -2024,6 +2206,7 @@ impl TrackedData {
         v1_21_9: 13u8,
         v1_21_11: 13u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LIVING_ENTITY_FLAGS: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2035,6 +2218,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const LIVING_FLAGS: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -2046,6 +2230,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const LOYALTY: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -2057,6 +2242,7 @@ impl TrackedData {
         v1_21_9: 11u8,
         v1_21_11: 11u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const MAIN_ARM_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2068,6 +2254,7 @@ impl TrackedData {
         v1_21_9: 15u8,
         v1_21_11: 15u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const MAIN_GENE: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -2079,6 +2266,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const MAIN_GENE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2090,6 +2278,19 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
+    };
+    pub const MAX_FUSE: TrackedId = TrackedId {
+        v1_21: 255u8,
+        v1_21_2: 255u8,
+        v1_21_4: 255u8,
+        v1_21_5: 255u8,
+        v1_21_6: 255u8,
+        v1_21_7: 255u8,
+        v1_21_9: 255u8,
+        v1_21_11: 255u8,
+        v26_1: 255u8,
+        v26_2: 19u8,
     };
     pub const MOB_FLAGS: TrackedId = TrackedId {
         v1_21: 15u8,
@@ -2101,6 +2302,7 @@ impl TrackedData {
         v1_21_9: 15u8,
         v1_21_11: 15u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const MOB_FLAGS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2112,6 +2314,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 15u8,
+        v26_2: 15u8,
     };
     pub const MOISTNESS: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -2123,6 +2326,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const MOISTNESS_LEVEL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2134,6 +2338,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const NAME_VISIBLE: TrackedId = TrackedId {
         v1_21: 3u8,
@@ -2145,6 +2350,7 @@ impl TrackedData {
         v1_21_9: 3u8,
         v1_21_11: 3u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const NO_GRAVITY: TrackedId = TrackedId {
         v1_21: 5u8,
@@ -2156,6 +2362,7 @@ impl TrackedData {
         v1_21_9: 5u8,
         v1_21_11: 5u8,
         v26_1: 5u8,
+        v26_2: 5u8,
     };
     pub const OTHER_TRUSTED: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -2167,6 +2374,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const OWNER: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -2178,6 +2386,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const OWNERUUID_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2189,6 +2398,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const OWNER_UUID: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -2200,6 +2410,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const OXIDATION_LEVEL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2211,6 +2422,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PAINTING_VARIANT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2222,6 +2434,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const PANDA_FLAGS: TrackedId = TrackedId {
         v1_21: 22u8,
@@ -2233,6 +2446,7 @@ impl TrackedData {
         v1_21_9: 22u8,
         v1_21_11: 22u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PARTICLE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2244,6 +2458,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const PARTICLE_ID: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -2255,6 +2470,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PEEK_AMOUNT: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -2266,6 +2482,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PEEK_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2277,6 +2494,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const PHASE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2288,6 +2506,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const PHASE_TYPE: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2299,6 +2518,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PIERCE_LEVEL: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -2310,6 +2530,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const PLAYER_MAIN_HAND: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2321,6 +2542,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 15u8,
+        v26_2: 15u8,
     };
     pub const PLAYER_MODE_CUSTOMISATION: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2332,6 +2554,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const PLAYER_MODE_CUSTOMIZATION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2343,6 +2566,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PLAYING_DEAD: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -2354,6 +2578,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const POSE: TrackedId = TrackedId {
         v1_21: 6u8,
@@ -2365,6 +2590,7 @@ impl TrackedData {
         v1_21_9: 6u8,
         v1_21_11: 6u8,
         v26_1: 6u8,
+        v26_2: 6u8,
     };
     pub const POS_ROT_INTERPOLATION_DURATION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2376,6 +2602,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const POTION_SWIRLS: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -2387,6 +2614,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const POTION_SWIRLS_AMBIENT: TrackedId = TrackedId {
         v1_21: 11u8,
@@ -2398,6 +2626,7 @@ impl TrackedData {
         v1_21_9: 11u8,
         v1_21_11: 11u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PROFILE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2409,6 +2638,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const PROJECTILE_FLAGS: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -2420,6 +2650,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PROVOKED: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -2431,6 +2662,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const PUFF_STATE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -2442,6 +2674,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const PUMPKIN_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2453,6 +2686,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const RABBIT_TYPE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -2464,6 +2698,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const RADIUS: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -2475,6 +2710,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const RELAX_STATE_ONE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2486,6 +2722,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 22u8,
+        v26_2: 22u8,
     };
     pub const RESPONSE: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -2497,6 +2734,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const RESPONSE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2508,6 +2746,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const RIGHT_ARM_POSE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2519,6 +2758,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const RIGHT_HORN: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -2530,6 +2770,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const RIGHT_LEG_POSE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2541,6 +2782,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const RIGHT_PADDLE_MOVING: TrackedId = TrackedId {
         v1_21: 13u8,
@@ -2552,6 +2794,7 @@ impl TrackedData {
         v1_21_9: 12u8,
         v1_21_11: 12u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const RIGHT_ROTATION: TrackedId = TrackedId {
         v1_21: 14u8,
@@ -2563,6 +2806,7 @@ impl TrackedData {
         v1_21_9: 14u8,
         v1_21_11: 14u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const RIGHT_ROTATION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2574,6 +2818,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 14u8,
+        v26_2: 14u8,
     };
     pub const ROTATION: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -2585,6 +2830,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const SADDLED: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -2596,6 +2842,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SCALE: TrackedId = TrackedId {
         v1_21: 12u8,
@@ -2607,6 +2854,7 @@ impl TrackedData {
         v1_21_9: 12u8,
         v1_21_11: 12u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SCALE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2618,6 +2866,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 12u8,
+        v26_2: 12u8,
     };
     pub const SCREAMING: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -2629,6 +2878,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SHADOW_RADIUS: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -2640,6 +2890,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SHADOW_RADIUS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2651,6 +2902,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const SHADOW_STRENGTH: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -2662,6 +2914,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SHADOW_STRENGTH_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2673,6 +2926,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const SHARED_FLAGS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2684,6 +2938,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 0u8,
+        v26_2: 0u8,
     };
     pub const SHEARED: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2695,6 +2950,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const SHOOTER_ENTITY_ID: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -2706,6 +2962,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SHOOTING: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2717,6 +2974,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SHOT_AT_ANGLE: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -2728,6 +2986,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 10u8,
+        v26_2: 10u8,
     };
     pub const SHOW_BOTTOM: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -2739,6 +2998,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const SILENT: TrackedId = TrackedId {
         v1_21: 4u8,
@@ -2750,6 +3010,7 @@ impl TrackedData {
         v1_21_9: 4u8,
         v1_21_11: 4u8,
         v26_1: 4u8,
+        v26_2: 4u8,
     };
     pub const SIZE: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2761,6 +3022,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SLEEPING_POSITION: TrackedId = TrackedId {
         v1_21: 14u8,
@@ -2772,6 +3034,7 @@ impl TrackedData {
         v1_21_9: 14u8,
         v1_21_11: 14u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SLEEPING_POS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2783,6 +3046,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 14u8,
+        v26_2: 14u8,
     };
     pub const SLIME_SIZE: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2794,6 +3058,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SNEEZE_COUNTER: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2805,6 +3070,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const SNEEZE_PROGRESS: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -2816,6 +3082,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SNOW_GOLEM_FLAGS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2827,6 +3094,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SOUND_VARIANT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2838,6 +3106,7 @@ impl TrackedData {
         v1_21_9: 23u8,
         v1_21_11: 23u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SOUND_VARIANT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2849,6 +3118,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 24u8,
+        v26_2: 24u8,
     };
     pub const SPECIAL_TYPE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2860,6 +3130,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const SPELL: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -2871,6 +3142,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SPELL_CASTING_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2882,6 +3154,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const SPIDER_FLAGS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2893,6 +3166,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const SPIKES_RETRACTED: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -2904,6 +3178,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const STACK: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -2915,6 +3190,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const STANDING_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2926,6 +3202,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const STARED_AT: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2937,6 +3214,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const START_INTERPOLATION: TrackedId = TrackedId {
         v1_21: 8u8,
@@ -2948,6 +3226,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const START_POS: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2959,6 +3238,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const STATE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -2970,6 +3250,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const STAYING_STILL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2981,6 +3262,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const STAYS_STILL: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -2992,6 +3274,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const STINGER_COUNT: TrackedId = TrackedId {
         v1_21: 13u8,
@@ -3003,6 +3286,7 @@ impl TrackedData {
         v1_21_9: 13u8,
         v1_21_11: 13u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const STINGER_COUNT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3014,6 +3298,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 13u8,
+        v26_2: 13u8,
     };
     pub const STRAY_CONVERSION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3025,6 +3310,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const STRENGTH: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -3036,6 +3322,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const STRENGTH_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3047,6 +3334,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const STUCK_ARROW_COUNT: TrackedId = TrackedId {
         v1_21: 12u8,
@@ -3058,6 +3346,7 @@ impl TrackedData {
         v1_21_9: 12u8,
         v1_21_11: 12u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const STYLE_FLAGS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3069,6 +3358,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 27u8,
+        v26_2: 27u8,
     };
     pub const SUFFOCATING: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3080,6 +3370,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const SWELL_DIR: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3091,6 +3382,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const TAMEABLE_FLAGS: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3102,6 +3394,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TARGET: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -3113,6 +3406,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TARGET_A: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3124,6 +3418,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const TARGET_B: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3135,6 +3430,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const TARGET_C: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3146,6 +3442,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const TELEPORT_DURATION: TrackedId = TrackedId {
         v1_21: 10u8,
@@ -3157,6 +3454,7 @@ impl TrackedData {
         v1_21_9: 10u8,
         v1_21_11: 10u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TEXT: TrackedId = TrackedId {
         v1_21: 23u8,
@@ -3168,6 +3466,7 @@ impl TrackedData {
         v1_21_9: 23u8,
         v1_21_11: 23u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TEXT_DISPLAY_FLAGS: TrackedId = TrackedId {
         v1_21: 27u8,
@@ -3179,6 +3478,7 @@ impl TrackedData {
         v1_21_9: 27u8,
         v1_21_11: 27u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TEXT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3190,6 +3490,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 23u8,
+        v26_2: 23u8,
     };
     pub const TEXT_OPACITY: TrackedId = TrackedId {
         v1_21: 26u8,
@@ -3201,6 +3502,7 @@ impl TrackedData {
         v1_21_9: 26u8,
         v1_21_11: 26u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TEXT_OPACITY_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3212,6 +3514,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 26u8,
+        v26_2: 26u8,
     };
     pub const TICKS_FROZEN: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3223,6 +3526,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 7u8,
+        v26_2: 7u8,
     };
     pub const TONGUE_TARGET_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3234,6 +3538,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 19u8,
+        v26_2: 19u8,
     };
     pub const TRACKED_ENTITY_ID_1: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -3245,6 +3550,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKED_ENTITY_ID_2: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3256,6 +3562,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKED_ENTITY_ID_3: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -3267,6 +3574,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKER_BODY_ROTATION: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3278,6 +3586,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKER_HEAD_ROTATION: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -3289,6 +3598,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKER_LEFT_ARM_ROTATION: TrackedId = TrackedId {
         v1_21: 18u8,
@@ -3300,6 +3610,7 @@ impl TrackedData {
         v1_21_9: 18u8,
         v1_21_11: 18u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKER_LEFT_LEG_ROTATION: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -3311,6 +3622,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKER_RIGHT_ARM_ROTATION: TrackedId = TrackedId {
         v1_21: 19u8,
@@ -3322,6 +3634,7 @@ impl TrackedData {
         v1_21_9: 19u8,
         v1_21_11: 19u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRACKER_RIGHT_LEG_ROTATION: TrackedId = TrackedId {
         v1_21: 21u8,
@@ -3333,6 +3646,7 @@ impl TrackedData {
         v1_21_9: 21u8,
         v1_21_11: 21u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRANSFORMATION_INTERPOLATION_DURATION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3344,6 +3658,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3355,6 +3670,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const TRANSLATION: TrackedId = TrackedId {
         v1_21: 11u8,
@@ -3366,6 +3682,7 @@ impl TrackedData {
         v1_21_9: 11u8,
         v1_21_11: 11u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRANSLATION_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3377,6 +3694,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 11u8,
+        v26_2: 11u8,
     };
     pub const TRAVEL_POS: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -3388,6 +3706,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TREASURE_POS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -3399,6 +3718,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const TRUSTED_ID_0: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3410,6 +3730,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const TRUSTED_ID_1: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3421,6 +3742,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const TRUSTING: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3432,6 +3754,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const TYPE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3443,6 +3766,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const TYPE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3454,6 +3778,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const UNHAPPY_COUNTER: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3465,6 +3790,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const UNROOTED: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3476,6 +3802,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const USING_ITEM: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3487,6 +3814,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const VALUE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3498,6 +3826,7 @@ impl TrackedData {
         v1_21_9: 8u8,
         v1_21_11: 8u8,
         v26_1: 8u8,
+        v26_2: 8u8,
     };
     pub const VARIANT: TrackedId = TrackedId {
         v1_21: 22u8,
@@ -3509,6 +3838,7 @@ impl TrackedData {
         v1_21_9: 22u8,
         v1_21_11: 20u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const VARIANT_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3520,6 +3850,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const VEX_FLAGS: TrackedId = TrackedId {
         v1_21: 16u8,
@@ -3531,6 +3862,7 @@ impl TrackedData {
         v1_21_9: 16u8,
         v1_21_11: 16u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const VIEW_RANGE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3542,6 +3874,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const VIEW_RANGE_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3553,6 +3886,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 17u8,
+        v26_2: 17u8,
     };
     pub const VILLAGER_DATA: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -3564,6 +3898,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const VILLAGER_DATA_FINALIZED: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3575,6 +3910,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
+        v26_2: 21u8,
     };
     pub const WAITING: TrackedId = TrackedId {
         v1_21: 9u8,
@@ -3586,6 +3922,7 @@ impl TrackedData {
         v1_21_9: 9u8,
         v1_21_11: 9u8,
         v26_1: 9u8,
+        v26_2: 9u8,
     };
     pub const WARNING: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3597,6 +3934,7 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const WEATHER_STATE: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3608,6 +3946,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const WIDTH: TrackedId = TrackedId {
         v1_21: 20u8,
@@ -3619,6 +3958,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
     pub const WIDTH_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3630,6 +3970,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 20u8,
+        v26_2: 20u8,
     };
     pub const WOOL_ID: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3641,6 +3982,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 18u8,
+        v26_2: 18u8,
     };
     pub const ZOMBIE_TYPE: TrackedId = TrackedId {
         v1_21: 17u8,
@@ -3652,5 +3994,6 @@ impl TrackedData {
         v1_21_9: 17u8,
         v1_21_11: 17u8,
         v26_1: 255u8,
+        v26_2: 255u8,
     };
 }

@@ -113,7 +113,6 @@ impl Player {
                     action: BossEventAction::Add {
                         title: bossbar.title.clone().get_text(),
                         health_percent: bossbar.health,
-                        screen_darken: u16::from(bossbar.flags.contains(BossbarFlags::DARKEN_SKY)),
                         color: bossbar.color.to_bedrock(),
                         overlay: bossbar.division.to_bedrock(),
                     },
@@ -182,7 +181,7 @@ impl Player {
         uuid: &Uuid,
         color: BossbarColor,
         dividers: BossbarDivisions,
-        flags: BossbarFlags,
+        _flags: BossbarFlags,
     ) {
         match &self.client {
             ClientPlatform::Java(java) => {
@@ -198,7 +197,6 @@ impl Player {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateProperties {
-                        screen_darken: u16::from(flags.contains(BossbarFlags::DARKEN_SKY)),
                         color: color.to_bedrock(),
                         overlay: dividers.to_bedrock(),
                     },
@@ -225,7 +223,6 @@ impl Player {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateProperties {
-                        screen_darken: u16::from(flags.contains(BossbarFlags::DARKEN_SKY)),
                         color: VarInt(0),
                         overlay: VarInt(0),
                     },

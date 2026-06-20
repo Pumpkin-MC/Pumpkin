@@ -5,6 +5,7 @@ use pumpkin_data::data_component_impl::DamageResistantImpl;
 use pumpkin_data::data_component_impl::DamageResistantType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::CAddItemActor;
 use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
@@ -24,7 +25,7 @@ use std::sync::{
 };
 use tokio::sync::Mutex;
 
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NBTStorage, NbtFuture, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -86,6 +87,20 @@ impl ItemEntity {
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
+            health: AtomicF32::new(5.0),
+            never_despawn: AtomicBool::new(false),
+            never_pickup: AtomicBool::new(false),
+        }
+    }
+
+    /// Creates an `ItemEntity` for restoring from NBT without random velocity.
+    /// The velocity and position will be set by `Entity::read_nbt_non_mut`.
+    pub fn new_for_restore(entity: Entity) -> Self {
+        Self {
+            entity,
+            item_stack: Mutex::new(ItemStack::new(1, &pumpkin_data::item::Item::AIR)),
+            item_age: AtomicU32::new(0),
+            pickup_delay: AtomicU8::new(10),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
@@ -364,7 +379,52 @@ impl ItemEntity {
     }
 }
 
-impl NBTStorage for ItemEntity {}
+impl NBTStorage for ItemEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.write_nbt(nbt).await;
+
+            let item = self.item_stack.lock().await;
+            let mut item_compound = NbtCompound::new();
+            item.write_item_stack(&mut item_compound);
+            nbt.put_compound("Item", item_compound);
+
+            nbt.put_short("Age", self.item_age.load(Ordering::Relaxed) as i16);
+            nbt.put_short(
+                "PickupDelay",
+                self.pickup_delay.load(Ordering::Relaxed) as i16,
+            );
+            nbt.put_short("Health", self.health.load(Relaxed) as i16);
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            self.entity.read_nbt_non_mut(nbt).await;
+
+            // Restore the item stack from the "Item" compound
+            if let Some(item_compound) = nbt.get_compound("Item")
+                && let Some(stack) = ItemStack::read_item_stack(item_compound)
+            {
+                *self.item_stack.lock().await = stack;
+            }
+
+            // Vanilla stores Age as a short
+            self.item_age
+                .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
+
+            // Vanilla stores PickupDelay as a short
+            if let Some(delay) = nbt.get_short("PickupDelay") {
+                self.pickup_delay.store(delay as u8, Ordering::Relaxed);
+            }
+
+            // Vanilla stores Health as a short
+            if let Some(health) = nbt.get_short("Health") {
+                self.health.store(health as f32, Relaxed);
+            }
+        })
+    }
+}
 
 impl EntityBase for ItemEntity {
     fn tick<'a>(

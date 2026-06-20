@@ -76,6 +76,7 @@ pub enum JavaMinecraftVersion {
     V_1_21_11,
     //  26.1: Tiny Takeover
     V_26_1,
+    V_26_2,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -137,6 +138,7 @@ impl JavaMinecraftVersion {
             Self::V_1_21_9 => 773,
             Self::V_1_21_11 => 774,
             Self::V_26_1 => 775,
+            Self::V_26_2 => 776,
             Self::Unknown => -1,
         }
     }
@@ -197,6 +199,7 @@ impl JavaMinecraftVersion {
             773 => Self::V_1_21_9,
             774 => Self::V_1_21_11,
             775 => Self::V_26_1,
+            776 => Self::V_26_2,
             _ => Self::Unknown,
         }
     }
@@ -255,6 +258,7 @@ impl std::fmt::Display for JavaMinecraftVersion {
             Self::V_1_21_9 => write!(f, "1.21.9"),
             Self::V_1_21_11 => write!(f, "1.21.11"),
             Self::V_26_1 => write!(f, "26.1"),
+            Self::V_26_2 => write!(f, "26.2"),
 
             Self::Unknown => write!(f, "unknown"),
         }
@@ -267,8 +271,8 @@ impl std::fmt::Display for JavaMinecraftVersion {
 pub enum BedrockMinecraftVersion {
     /// 1.21: Tricky Trials.
     V_1_21,
-    /// 1.26.20
-    V_1_26_20,
+    /// 1.26.30
+    V_1_26_30,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -281,7 +285,7 @@ impl BedrockMinecraftVersion {
     pub const fn protocol_version(&self) -> i32 {
         match self {
             Self::V_1_21 => 671,
-            Self::V_1_26_20 => 975,
+            Self::V_1_26_30 => 1001,
             Self::Unknown => -1,
         }
     }
@@ -293,7 +297,7 @@ impl BedrockMinecraftVersion {
     pub const fn from_protocol(protocol: u32) -> Self {
         match protocol {
             671 => Self::V_1_21,
-            975 => Self::V_1_26_20,
+            1001 => Self::V_1_26_30,
             _ => Self::Unknown,
         }
     }
@@ -303,7 +307,7 @@ impl std::fmt::Display for BedrockMinecraftVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::V_1_21 => write!(f, "1.21"),
-            Self::V_1_26_20 => write!(f, "1.26.20"),
+            Self::V_1_26_30 => write!(f, "1.26.30"),
             Self::Unknown => write!(f, "unknown"),
         }
     }

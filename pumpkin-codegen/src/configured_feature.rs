@@ -437,7 +437,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let tree = value_to_tree_feature(config);
             quote! { ConfiguredFeature::Tree(Box::new(#tree)) }
         }
-        "minecraft:pointed_dripstone" => {
+        "minecraft:pointed_dripstone" | "minecraft:speleothem" => {
             let taller = config["chance_of_taller_dripstone"].as_f64().unwrap_or(0.2) as f32;
             let dir_spread = config["chance_of_directional_spread"]
                 .as_f64()
@@ -781,8 +781,11 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:bonus_chest" => {
             quote! { ConfiguredFeature::BonusChest(crate::generation::feature::features::bonus_chest::BonusChestFeature {}) }
         }
-        "minecraft:dripstone_cluster" => {
+        "minecraft:dripstone_cluster" | "minecraft:speleothem_cluster" => {
             quote! { ConfiguredFeature::DripstoneCluster(crate::generation::feature::features::drip_stone::cluster::DripstoneClusterFeature {}) }
+        }
+        "minecraft:sequence" | "minecraft:weighted_random_selector" => {
+            quote! { ConfiguredFeature::NoOp }
         }
         "minecraft:large_dripstone" => {
             quote! { ConfiguredFeature::LargeDripstone(crate::generation::feature::features::drip_stone::large::LargeDripstoneFeature {}) }

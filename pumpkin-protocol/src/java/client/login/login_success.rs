@@ -18,6 +18,8 @@ pub struct CLoginSuccess<'a> {
     pub properties: &'a [Property],
     /// (<1.21.2) Whether strict error handling should be enabled.
     pub strict_error_handling: bool,
+    /// Added in 26.2
+    pub session_id: uuid::Uuid,
 }
 
 impl<'a> CLoginSuccess<'a> {
@@ -27,12 +29,14 @@ impl<'a> CLoginSuccess<'a> {
         username: &'a str,
         properties: &'a [Property],
         strict_error_handling: bool,
+        session_id: uuid::Uuid,
     ) -> Self {
         Self {
             uuid,
             username,
             properties,
             strict_error_handling,
+            session_id,
         }
     }
 }
@@ -62,6 +66,8 @@ impl ClientPacket for CLoginSuccess<'_> {
         })?;
         if version < &JavaMinecraftVersion::V_1_21_2 {
             write.write_bool(self.strict_error_handling)?;
+        } else if version >= &JavaMinecraftVersion::V_26_2 {
+            write.write_uuid(&self.session_id)?;
         }
         Ok(())
     }

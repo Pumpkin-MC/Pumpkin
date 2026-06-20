@@ -1,5 +1,6 @@
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::{Block, BlockDirection, block_properties::SnowLikeProperties, item::Item};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, block_properties::SnowLikeProperties, item::Item, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -101,6 +102,24 @@ impl BlockBehaviour for LayeredSnowBlock {
 }
 
 fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
-    let state = block_accessor.get_block_state(&position.down());
-    state.is_side_solid(BlockDirection::Up)
+    let below_pos = position.down();
+    let (below_block, state) = block_accessor.get_block_and_state(&below_pos);
+
+    if below_block.has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER) {
+        return false;
+    }
+    if below_block.has_tag(&tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER) {
+        return true;
+    }
+
+    // Block.isFaceFullSquare(collisionShape, Direction.UP): the collision shape must fully cover
+    // the top face, e.g. leaves are not "side solid" but do support snow layers.
+    state.get_block_collision_shapes().any(|shape| {
+        shape.max.y >= 1.0
+            && shape.min.x <= 0.0
+            && shape.max.x >= 1.0
+            && shape.min.z <= 0.0
+            && shape.max.z >= 1.0
+    }) || (below_block == &Block::SNOW
+        && SnowLikeProperties::from_state_id(state.id, below_block).layers == 8)
 }

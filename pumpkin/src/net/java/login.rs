@@ -213,7 +213,13 @@ impl JavaClient {
 
     async fn finish_login(&self, profile: &GameProfile) {
         let props = profile.properties.load();
-        let packet = CLoginSuccess::new(&profile.id, &profile.name, &props, false);
+        let packet = CLoginSuccess::new(
+            &profile.id,
+            &profile.name,
+            &props,
+            false,
+            uuid::Uuid::new_v4(),
+        );
         self.send_packet_now(&packet).await;
     }
 
@@ -399,7 +405,7 @@ impl JavaClient {
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
-            version: "26.1",
+            version: "26.2",
         }]))
         .await;
     }

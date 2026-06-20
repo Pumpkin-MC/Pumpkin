@@ -442,7 +442,8 @@ impl RemovalReason {
     }
 }
 
-static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
+// IMPORTANT: have that 1 and not 0 because fetch_add returns previous value and 0 would be invalid
+static CURRENT_ID: AtomicI32 = AtomicI32::new(1);
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -2488,7 +2489,7 @@ impl Entity {
                             MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
                         );
                         client
-                            .send_game_packet(&CSetActorData {
+                            .enqueue_packet(&CSetActorData {
                                 actor_runtime_id: VarULong(self.entity_id as u64),
                                 metadata,
                                 synced_properties: PropertySyncData {

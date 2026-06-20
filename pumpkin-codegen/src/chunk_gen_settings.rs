@@ -83,6 +83,41 @@ pub enum MaterialRuleStruct {
     Badlands,
 }
 
+fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct StringOrVec;
+
+    impl<'de> serde::de::Visitor<'de> for StringOrVec {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("string or list of strings")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(vec![value.to_owned()])
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+        where
+            S: serde::de::SeqAccess<'de>,
+        {
+            let mut vec = Vec::new();
+            while let Some(el) = seq.next_element()? {
+                vec.push(el);
+            }
+            Ok(vec)
+        }
+    }
+
+    deserializer.deserialize_any(StringOrVec)
+}
+
 /// Deserialized surface material condition that gates a material rule.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -91,6 +126,7 @@ pub enum MaterialConditionStruct {
     #[serde(rename = "minecraft:biome")]
     Biome {
         /// List of biome resource locations to match against.
+        #[serde(deserialize_with = "deserialize_string_or_vec")]
         biome_is: Vec<String>,
     },
     /// True when a named noise value is within the given range.

@@ -71,7 +71,7 @@ use pumpkin_protocol::java::client::play::{
     CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
     CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
     CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction,
-    PlayerInfoFlags, PreviousMessage, Statistic,
+    PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -120,7 +120,7 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
-pub const DATA_VERSION: i32 = 4790; // 26.1.2
+pub const DATA_VERSION: i32 = 4903; // 26.2
 
 struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
@@ -2437,8 +2437,8 @@ impl Player {
                 ));
                 self.client
                     .send_packet_now(&CRespawn::new(
-                        (new_world.dimension.id).into(),
-                        new_world.dimension.minecraft_name.to_string(),
+                        PlayerSpawnData::new(
+                        new_world.dimension.clone(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -2447,6 +2447,7 @@ impl Player {
                         Some((death_dimension, death_location)),
                         VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                         new_world.sea_level.into(),
+                        ),
                         1,
                     )).await;
 
@@ -3400,16 +3401,40 @@ impl Player {
     }
 
     pub async fn close_handled_screen(self: &Arc<Self>) {
+        let (sync_id, bedrock_window_type) = {
+            let current_handler_guard = self.current_screen_handler.lock().await;
+            let handler = current_handler_guard.lock().await;
+            let sync_id = handler.sync_id();
+            let window_type = handler.window_type();
+            let bedrock_window_type = match window_type {
+                Some(WindowType::Crafting) => 1,
+                Some(WindowType::Furnace) => 2,
+                Some(WindowType::Enchantment) => 3,
+                Some(WindowType::BrewingStand) => 4,
+                Some(WindowType::Anvil) => 5,
+                Some(WindowType::Hopper) => 8,
+                Some(WindowType::Beacon) => 13,
+                Some(WindowType::BlastFurnace) => 27,
+                Some(WindowType::Smoker) => 28,
+                Some(WindowType::Stonecutter) => 29,
+                Some(WindowType::CartographyTable) => 30,
+                Some(WindowType::Grindstone) => 26,
+                Some(WindowType::Loom) => 24,
+                Some(WindowType::Smithing) => 34,
+                _ => 0,
+            };
+            (sync_id, bedrock_window_type)
+        };
+
         self.client
-            .enqueue_packet(&CCloseContainer::new(
-                self.current_screen_handler
-                    .lock()
-                    .await
-                    .lock()
-                    .await
-                    .sync_id()
-                    .into(),
-            ))
+            .enqueue_packet_editioned(
+                &CCloseContainer::new(sync_id.into()),
+                &pumpkin_protocol::bedrock::server::container_close::SContainerClose {
+                    container_id: sync_id,
+                    container_type: bedrock_window_type,
+                    server_initiated: true,
+                },
+            )
             .await;
         self.on_handled_screen_closed().await;
     }

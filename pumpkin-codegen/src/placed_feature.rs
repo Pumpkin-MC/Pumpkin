@@ -555,6 +555,9 @@ pub fn value_to_y_offset(v: &Value) -> TokenStream {
 /// An `IntProvider` variant token stream; defaults to `IntProvider::Constant(0)` when unrecognized.
 pub fn value_to_int_provider(v: &Value) -> TokenStream {
     match v {
+        Value::Null => {
+            quote! { IntProvider::Constant(0) }
+        }
         Value::Number(n) => {
             let val = n.as_i64().unwrap_or(0) as i32;
             quote! { IntProvider::Constant(#val) }
@@ -611,11 +614,17 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     quote! { IntProvider::Object(NormalIntProvider::WeightedList(WeightedListIntProvider { distribution: vec![#(#entries),*] })) }
                 }
                 _ => {
-                    panic!("Unknown Int Provider, Seems like Mojang added a new one")
+                    panic!(
+                        "Unknown Int Provider, Seems like Mojang added a new one: {:?}",
+                        v
+                    )
                 }
             }
         }
-        _ => panic!("Unknown Int Provider, Seems like Mojang added a new one"),
+        _ => panic!(
+            "Unknown Int Provider, Seems like Mojang added a new one: {:?}",
+            v
+        ),
     }
 }
 

@@ -1,8 +1,8 @@
+use heck::ToPascalCase;
+use indexmap::IndexMap;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
-use indexmap::IndexMap;
-use heck::ToPascalCase;
 
 #[derive(Deserialize)]
 struct CustomStatisticEntry {
@@ -37,14 +37,13 @@ pub fn build() -> TokenStream {
         category_variants.push(quote! { #category_ident = #category_id });
         category_from_id_arms.push(quote! { #category_id => Some(Self::#category_ident) });
         let category_name_stripped = category_name.replace("minecraft:", "");
-        category_from_name_arms.push(quote! { #category_name_stripped => Some(Self::#category_ident) });
+        category_from_name_arms
+            .push(quote! { #category_name_stripped => Some(Self::#category_ident) });
 
         if category_name == "minecraft:custom" {
             for (stat_name, entry) in &data.entries {
-                let stat_ident = format_ident!(
-                    "{}",
-                    stat_name.replace("minecraft:", "").to_pascal_case()
-                );
+                let stat_ident =
+                    format_ident!("{}", stat_name.replace("minecraft:", "").to_pascal_case());
                 let stat_id = entry.id;
                 custom_stat_variants.push(quote! { #stat_ident = #stat_id });
                 custom_stat_from_id_arms.push(quote! { #stat_id => Some(Self::#stat_ident) });

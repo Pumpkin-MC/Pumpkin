@@ -88,7 +88,7 @@ pub struct CookingRecipeStruct {
     /// The single ingredient required by this recipe.
     ingredient: RecipeIngredientTypes,
     /// Number of ticks required to cook this recipe.
-    cookingtime: i32,
+    cookingtime: Option<i32>,
     /// Experience points awarded when the result is extracted.
     experience: f32,
     /// The item produced by this recipe.
@@ -129,7 +129,12 @@ impl CookingRecipeStruct {
     /// # Arguments
     /// – `tokens` – the token stream to extend.
     /// – `recipe_id` – the pre-generated vanilla-format recipe ID string.
-    fn to_tokens_with_id(&self, tokens: &mut TokenStream, recipe_id: &str) {
+    fn to_tokens_with_id(
+        &self,
+        tokens: &mut TokenStream,
+        recipe_id: &str,
+        default_cookingtime: i32,
+    ) {
         let category = match &self.category {
             Some(category) => category.to_token_stream(),
             None => RecipeCategoryTypes::Misc.to_token_stream(),
@@ -140,7 +145,10 @@ impl CookingRecipeStruct {
             quote! { None }
         };
         let ingredient = self.ingredient.to_token_stream();
-        let cookingtime = self.cookingtime.to_token_stream();
+        let cookingtime = self
+            .cookingtime
+            .unwrap_or(default_cookingtime)
+            .to_token_stream();
         let experience = self.experience.to_token_stream();
         let result = self.result.to_token_stream();
 
@@ -168,7 +176,7 @@ impl ToTokens for CookingRecipeStruct {
             quote! { None }
         };
         let ingredient = self.ingredient.to_token_stream();
-        let cookingtime = self.cookingtime.to_token_stream();
+        let cookingtime = self.cookingtime.unwrap_or(200).to_token_stream();
         let experience = self.experience.to_token_stream();
         let result = self.result.to_token_stream();
 
@@ -457,7 +465,7 @@ impl ToTokens for RecipeCategoryTypes {
 
 /// Reads `recipes.json` and emits the complete recipe constants and helpers `TokenStream`.
 pub fn build() -> TokenStream {
-    let recipes_assets: Vec<RecipeTypes> =
+    let recipes_assets: BTreeMap<String, RecipeTypes> =
         serde_json::from_str(&fs::read_to_string("../assets/recipes.json").unwrap())
             .expect("Failed to parse recipes.json");
 
@@ -465,12 +473,11 @@ pub fn build() -> TokenStream {
     let mut cooking_recipes = Vec::new();
     let mut stonecutting_recipes = Vec::new();
 
-    for recipe in recipes_assets {
+    for (recipe_id, recipe) in recipes_assets {
         match recipe {
             RecipeTypes::Blasting(recipe) => {
-                let recipe_id = recipe.generate_recipe_id("blasting");
                 let mut common_cooking_token = TokenStream::new();
-                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id, 100);
                 let blasting_token = quote! {
                     CookingRecipeType::Blasting (CookingRecipe {
                         #common_cooking_token
@@ -479,9 +486,8 @@ pub fn build() -> TokenStream {
                 cooking_recipes.push(blasting_token);
             }
             RecipeTypes::CampfireCooking(recipe) => {
-                let recipe_id = recipe.generate_recipe_id("campfire_cooking");
                 let mut common_cooking_token = TokenStream::new();
-                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id, 100);
                 let campfire_token = quote! {
                     CookingRecipeType::CampfireCooking (CookingRecipe {
                         #common_cooking_token
@@ -502,9 +508,8 @@ pub fn build() -> TokenStream {
                 crafting_recipes.push(recipe.to_token_stream());
             }
             RecipeTypes::Smelting(recipe) => {
-                let recipe_id = recipe.generate_recipe_id("smelting");
                 let mut common_cooking_token = TokenStream::new();
-                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id, 200);
                 let smelting_token = quote! {
                     CookingRecipeType::Smelting(CookingRecipe {
                         #common_cooking_token
@@ -515,9 +520,8 @@ pub fn build() -> TokenStream {
             RecipeTypes::SmithingTransform => {}
             RecipeTypes::SmithingTrim => {}
             RecipeTypes::Smoking(recipe) => {
-                let recipe_id = recipe.generate_recipe_id("smoking");
                 let mut common_cooking_token = TokenStream::new();
-                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id);
+                recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id, 100);
                 let smoking_token = quote! {
                     CookingRecipeType::Smoking(CookingRecipe{
                         #common_cooking_token

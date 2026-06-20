@@ -52,8 +52,13 @@ pub fn build() -> TokenStream {
         value: "../assets/viabackwards/data/mappings-26.1to1.21.11.nbt",
         child: Some(&node_1_21_9),
     };
-    let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
+    let node_26_1 = MappingNode {
         version: JavaMinecraftVersion::V_26_1,
+        value: "../assets/viabackwards/data/mappings-26.2to26.1.nbt",
+        child: Some(&node_1_21_11),
+    };
+    let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
+        version: JavaMinecraftVersion::V_26_2,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first
@@ -71,7 +76,7 @@ pub fn build() -> TokenStream {
         },
     };
 
-    let all_mappings = remapper.process(&node_1_21_11);
+    let all_mappings = remapper.process(&node_26_1);
 
     let mut static_values = TokenStream::new();
     let mut match_arms = TokenStream::new();

@@ -197,6 +197,10 @@ impl Iterator for OutwardIterator {
     }
 }
 
+/// Represents a position in a 2D block grid on the XZ plane.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct ColumnPos(pub Vector2<i32>);
+
 /// Represents a position in a 3D block grid.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct BlockPos(pub Vector3<i32>);

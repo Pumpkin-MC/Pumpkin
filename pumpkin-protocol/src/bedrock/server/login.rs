@@ -146,9 +146,10 @@ pub struct ClientData {
     pub device_model: String,
     #[serde(rename = "GuiScale", default)]
     pub gui_scale: i32,
-    #[serde(default)]
-    pub is_editor_mode: bool,
-    #[serde(default)]
+    #[serde(rename = "ClientIsEditorCapable", default)]
+    pub client_is_editor_capable: bool,
+    #[serde(rename = "ClientEditorConnectionIntent", default)]
+    pub client_editor_connection_intent: i32,
     pub max_view_distance: i32,
     #[serde(default)]
     pub memory_tier: i32,

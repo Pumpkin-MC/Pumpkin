@@ -7088,8 +7088,135 @@ impl Biome {
         },
         spawn_costs: phf::phf_map! {},
     };
-    pub const SUNFLOWER_PLAINS: Biome = Biome {
+    pub const SULFUR_CAVES: Biome = Biome {
         id: 53,
+        registry_id: "sulfur_caves",
+        weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
+        features: &[
+            &[],
+            &[
+                crate::placed_feature::PlacedFeature::LakeLavaUnderground,
+                crate::placed_feature::PlacedFeature::LakeLavaSurface,
+                crate::placed_feature::PlacedFeature::RootedSulfurSpring,
+                crate::placed_feature::PlacedFeature::SulfurPool,
+            ],
+            &[crate::placed_feature::PlacedFeature::AmethystGeode],
+            &[
+                crate::placed_feature::PlacedFeature::MonsterRoom,
+                crate::placed_feature::PlacedFeature::MonsterRoomDeep,
+            ],
+            &[],
+            &[],
+            &[
+                crate::placed_feature::PlacedFeature::OreDirt,
+                crate::placed_feature::PlacedFeature::OreGravel,
+                crate::placed_feature::PlacedFeature::OreGraniteUpper,
+                crate::placed_feature::PlacedFeature::OreGraniteLower,
+                crate::placed_feature::PlacedFeature::OreDioriteUpper,
+                crate::placed_feature::PlacedFeature::OreDioriteLower,
+                crate::placed_feature::PlacedFeature::OreAndesiteUpper,
+                crate::placed_feature::PlacedFeature::OreAndesiteLower,
+                crate::placed_feature::PlacedFeature::OreTuff,
+                crate::placed_feature::PlacedFeature::OreCoalUpper,
+                crate::placed_feature::PlacedFeature::OreCoalLower,
+                crate::placed_feature::PlacedFeature::OreIronUpper,
+                crate::placed_feature::PlacedFeature::OreIronMiddle,
+                crate::placed_feature::PlacedFeature::OreIronSmall,
+                crate::placed_feature::PlacedFeature::OreGold,
+                crate::placed_feature::PlacedFeature::OreGoldLower,
+                crate::placed_feature::PlacedFeature::OreRedstone,
+                crate::placed_feature::PlacedFeature::OreRedstoneLower,
+                crate::placed_feature::PlacedFeature::OreDiamond,
+                crate::placed_feature::PlacedFeature::OreDiamondMedium,
+                crate::placed_feature::PlacedFeature::OreDiamondLarge,
+                crate::placed_feature::PlacedFeature::OreDiamondBuried,
+                crate::placed_feature::PlacedFeature::OreLapis,
+                crate::placed_feature::PlacedFeature::OreLapisBuried,
+                crate::placed_feature::PlacedFeature::OreCopper,
+                crate::placed_feature::PlacedFeature::UnderwaterMagma,
+                crate::placed_feature::PlacedFeature::DiskSand,
+                crate::placed_feature::PlacedFeature::DiskClay,
+                crate::placed_feature::PlacedFeature::DiskGravel,
+            ],
+            &[
+                crate::placed_feature::PlacedFeature::SulfurSpikeCluster,
+                crate::placed_feature::PlacedFeature::SulfurSpike,
+            ],
+            &[
+                crate::placed_feature::PlacedFeature::SpringWater,
+                crate::placed_feature::PlacedFeature::SpringLava,
+            ],
+            &[
+                crate::placed_feature::PlacedFeature::GlowLichen,
+                crate::placed_feature::PlacedFeature::PatchTallGrass2,
+            ],
+            &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        creature_spawn_probability: 0.1f32,
+        spawners: SpawnGroups {
+            monster: &[
+                Spawner {
+                    r#type: "minecraft:sulfur_cube",
+                    min_count: 2i32,
+                    max_count: 4i32,
+                },
+                Spawner {
+                    r#type: "minecraft:creeper",
+                    min_count: 2i32,
+                    max_count: 2i32,
+                },
+                Spawner {
+                    r#type: "minecraft:skeleton",
+                    min_count: 2i32,
+                    max_count: 2i32,
+                },
+                Spawner {
+                    r#type: "minecraft:slime",
+                    min_count: 1i32,
+                    max_count: 1i32,
+                },
+                Spawner {
+                    r#type: "minecraft:cave_spider",
+                    min_count: 1i32,
+                    max_count: 1i32,
+                },
+                Spawner {
+                    r#type: "minecraft:zombie",
+                    min_count: 2i32,
+                    max_count: 2i32,
+                },
+                Spawner {
+                    r#type: "minecraft:enderman",
+                    min_count: 1i32,
+                    max_count: 1i32,
+                },
+                Spawner {
+                    r#type: "minecraft:witch",
+                    min_count: 1i32,
+                    max_count: 1i32,
+                },
+                Spawner {
+                    r#type: "minecraft:zombie_villager",
+                    min_count: 1i32,
+                    max_count: 1i32,
+                },
+            ],
+            ambient: &[Spawner {
+                r#type: "minecraft:bat",
+                min_count: 8i32,
+                max_count: 8i32,
+            }],
+            axolotls: &[],
+            creature: &[],
+            misc: &[],
+            underground_water_creature: &[],
+            water_ambient: &[],
+            water_creature: &[],
+        },
+        spawn_costs: phf::phf_map! {},
+    };
+    pub const SUNFLOWER_PLAINS: Biome = Biome {
+        id: 54,
         registry_id: "sunflower_plains",
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
@@ -7255,7 +7382,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const SWAMP: Biome = Biome {
-        id: 54,
+        id: 55,
         registry_id: "swamp",
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.9f32),
         features: &[
@@ -7425,7 +7552,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const TAIGA: Biome = Biome {
-        id: 55,
+        id: 56,
         registry_id: "taiga",
         weather: Weather::new(true, 0.25f32, TemperatureModifier::None, 0.8f32),
         features: &[
@@ -7591,7 +7718,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const THE_END: Biome = Biome {
-        id: 56,
+        id: 57,
         registry_id: "the_end",
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
@@ -7625,7 +7752,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const THE_VOID: Biome = Biome {
-        id: 57,
+        id: 58,
         registry_id: "the_void",
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
@@ -7655,7 +7782,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const WARM_OCEAN: Biome = Biome {
-        id: 58,
+        id: 59,
         registry_id: "warm_ocean",
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
@@ -7818,7 +7945,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const WARPED_FOREST: Biome = Biome {
-        id: 59,
+        id: 60,
         registry_id: "warped_forest",
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
@@ -7877,7 +8004,7 @@ impl Biome {
         spawn_costs: phf::phf_map! { "enderman" => SpawnCosts { energy_budget : 0.12f64 , charge : 1f64 , } },
     };
     pub const WINDSWEPT_FOREST: Biome = Biome {
-        id: 60,
+        id: 61,
         registry_id: "windswept_forest",
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
@@ -8033,7 +8160,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const WINDSWEPT_GRAVELLY_HILLS: Biome = Biome {
-        id: 61,
+        id: 62,
         registry_id: "windswept_gravelly_hills",
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
@@ -8189,7 +8316,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const WINDSWEPT_HILLS: Biome = Biome {
-        id: 62,
+        id: 63,
         registry_id: "windswept_hills",
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
@@ -8345,7 +8472,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const WINDSWEPT_SAVANNA: Biome = Biome {
-        id: 63,
+        id: 64,
         registry_id: "windswept_savanna",
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
@@ -8514,7 +8641,7 @@ impl Biome {
         spawn_costs: phf::phf_map! {},
     };
     pub const WOODED_BADLANDS: Biome = Biome {
-        id: 64,
+        id: 65,
         registry_id: "wooded_badlands",
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
@@ -8730,6 +8857,7 @@ impl Biome {
             "sparse_jungle" => Some(&Self::SPARSE_JUNGLE),
             "stony_peaks" => Some(&Self::STONY_PEAKS),
             "stony_shore" => Some(&Self::STONY_SHORE),
+            "sulfur_caves" => Some(&Self::SULFUR_CAVES),
             "sunflower_plains" => Some(&Self::SUNFLOWER_PLAINS),
             "swamp" => Some(&Self::SWAMP),
             "taiga" => Some(&Self::TAIGA),
@@ -8800,18 +8928,19 @@ impl Biome {
             50 => Some(&Self::SPARSE_JUNGLE),
             51 => Some(&Self::STONY_PEAKS),
             52 => Some(&Self::STONY_SHORE),
-            53 => Some(&Self::SUNFLOWER_PLAINS),
-            54 => Some(&Self::SWAMP),
-            55 => Some(&Self::TAIGA),
-            56 => Some(&Self::THE_END),
-            57 => Some(&Self::THE_VOID),
-            58 => Some(&Self::WARM_OCEAN),
-            59 => Some(&Self::WARPED_FOREST),
-            60 => Some(&Self::WINDSWEPT_FOREST),
-            61 => Some(&Self::WINDSWEPT_GRAVELLY_HILLS),
-            62 => Some(&Self::WINDSWEPT_HILLS),
-            63 => Some(&Self::WINDSWEPT_SAVANNA),
-            64 => Some(&Self::WOODED_BADLANDS),
+            53 => Some(&Self::SULFUR_CAVES),
+            54 => Some(&Self::SUNFLOWER_PLAINS),
+            55 => Some(&Self::SWAMP),
+            56 => Some(&Self::TAIGA),
+            57 => Some(&Self::THE_END),
+            58 => Some(&Self::THE_VOID),
+            59 => Some(&Self::WARM_OCEAN),
+            60 => Some(&Self::WARPED_FOREST),
+            61 => Some(&Self::WINDSWEPT_FOREST),
+            62 => Some(&Self::WINDSWEPT_GRAVELLY_HILLS),
+            63 => Some(&Self::WINDSWEPT_HILLS),
+            64 => Some(&Self::WINDSWEPT_SAVANNA),
+            65 => Some(&Self::WOODED_BADLANDS),
             _ => None,
         }
     }

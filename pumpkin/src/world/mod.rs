@@ -79,7 +79,7 @@ use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryD
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CRespawn, CSetBlockDestroyStage, CWorldEvent,
+    CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -90,7 +90,7 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             add_player::CAddPlayer,
-            creative_content::{CCreativeContent, Group},
+            creative_content::{CCreativeContent, CreativeCategory, Entry, Group},
             gamerules_changed::GameRules,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
@@ -1755,6 +1755,8 @@ impl World {
         player: Arc<Player>,
         server: &Server,
     ) {
+        static CREATIVE_CONTENT: std::sync::OnceLock<(Vec<Group>, Vec<Entry>)> =
+            std::sync::OnceLock::new();
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
         let runtime_id = player.entity_id() as u64;
@@ -1842,6 +1844,8 @@ impl World {
             override_force_experimental_gameplay_has_value: false,
             chat_restriction_level: 0,
             disable_player_interactions: false,
+            server_editor_connection_policy: VarInt(0),
+            allow_anonymous_block_drops_in_editor_worlds: false,
         };
         drop(level_info);
         drop(weather);
@@ -1879,7 +1883,8 @@ impl World {
                 world_template_id: Uuid::nil(),
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
-                server_auth_sounds: false,
+                server_auth_sounds: true,
+                is_logging_chat: false,
                 server_join_information: None,
                 telemetry: ServerTelemetryData {
                     server_id: String::new(),
@@ -1909,16 +1914,65 @@ impl World {
             })
             .await;
 
+        let (groups, entries) = CREATIVE_CONTENT.get_or_init(|| {
+            let groups = pumpkin_data::bedrock_creative::CREATIVE_GROUPS
+                .iter()
+                .map(|g| {
+                    let creative_category = match g.category {
+                        1 => CreativeCategory::Construction,
+                        2 => CreativeCategory::Nature,
+                        3 => CreativeCategory::Equipment,
+                        4 => CreativeCategory::Items,
+                        5 => CreativeCategory::CommandOnly,
+                        _ => CreativeCategory::Undefined,
+                    };
+                    let icon_item = if g.icon_item_id != 0 {
+                        NetworkItemDescriptor {
+                            id: VarInt::from(g.icon_item_id),
+                            stack_size: 1,
+                            aux_value: VarUInt(g.icon_item_aux_value),
+                            block_runtime_id: VarInt(0),
+                            nbt_data: pumpkin_nbt::Nbt::default(),
+                            place_on_blocks: Vec::new(),
+                            destroy_blocks: Vec::new(),
+                            shield_blocking_tick: 0,
+                        }
+                    } else {
+                        NetworkItemDescriptor::default()
+                    };
+
+                    Group {
+                        creative_category,
+                        name: g.name.to_string(),
+                        icon_item,
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let entries = pumpkin_data::bedrock_creative::CREATIVE_ENTRIES
+                .iter()
+                .enumerate()
+                .map(|(i, e)| Entry {
+                    id: VarUInt((i + 1) as u32),
+                    item: NetworkItemDescriptor {
+                        id: VarInt::from(e.item_id),
+                        stack_size: 1,
+                        aux_value: VarUInt(e.item_aux_value),
+                        block_runtime_id: VarInt(0),
+                        nbt_data: pumpkin_nbt::Nbt::default(),
+                        place_on_blocks: Vec::new(),
+                        destroy_blocks: Vec::new(),
+                        shield_blocking_tick: 0,
+                    },
+                    group_index: VarUInt(e.group_index),
+                })
+                .collect::<Vec<_>>();
+
+            (groups, entries)
+        });
+
         client
-            .send_game_packet(&CCreativeContent {
-                groups: &[Group {
-                    creative_category:
-                        pumpkin_protocol::bedrock::client::CreativeCategory::Construction,
-                    name: String::new(),
-                    icon_item: NetworkItemDescriptor::default(),
-                }],
-                entries: &[],
-            })
+            .send_game_packet(&CCreativeContent { groups, entries })
             .await;
 
         client
@@ -2288,18 +2342,21 @@ impl World {
                 false,
                 true,
                 false,
-                self.dimension.clone(),
-                biome::hash_seed(self.level.seed.0), // seed
-                gamemode as u8,
-                player
-                    .previous_gamemode
-                    .load()
-                    .map_or(-1, |gamemode| gamemode as i8),
-                false,
-                false,
-                None,
-                VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
-                self.sea_level.into(),
+                PlayerSpawnData::new(
+                    self.dimension.clone(),
+                    biome::hash_seed(self.level.seed.0), // seed
+                    gamemode as u8,
+                    player
+                        .previous_gamemode
+                        .load()
+                        .map_or(-1, |gamemode| gamemode as i8),
+                    false,
+                    false,
+                    None,
+                    VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
+                    self.sea_level.into(),
+                ),
+                base_config.online_mode,
                 // This should stay true even when reports are disabled.
                 // It prevents the annoying popup when joining the server.
                 true,
@@ -3104,16 +3161,17 @@ impl World {
         player
             .client
             .send_packet_now(&CRespawn::new(
-                (target_world.dimension.id).into(),
-                ResourceLocation::from(target_world.dimension.minecraft_name),
-                biome::hash_seed(target_world.level.seed.0),
-                player.gamemode.load() as u8,
-                player.gamemode.load() as i8,
-                false,
-                false,
-                Some((death_dimension, death_location)),
-                VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
-                target_world.sea_level.into(),
+                PlayerSpawnData::new(
+                    target_world.dimension.clone(),
+                    biome::hash_seed(target_world.level.seed.0),
+                    player.gamemode.load() as u8,
+                    player.gamemode.load() as i8,
+                    false,
+                    false,
+                    Some((death_dimension, death_location)),
+                    VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
+                    target_world.sea_level.into(),
+                ),
                 data_kept,
             ))
             .await;
@@ -3327,10 +3385,37 @@ impl World {
                         warn!("Entity has no valid Entity Type {id}");
                         continue;
                     };
+
+                    // Check if this entity already exists in the world (e.g. another player
+                    // is still online and tracking it). If so, just send the spawn packet
+                    // for the existing entity to the reconnecting player instead of
+                    // creating a duplicate with a different entity_id.
+                    let existing = world
+                        .entities
+                        .load()
+                        .iter()
+                        .find(|e| e.get_entity().entity_uuid == *uuid)
+                        .cloned();
+                    if let Some(existing_entity) = existing {
+                        let base_entity = existing_entity.get_entity();
+                        player
+                            .client
+                            .enqueue_packet(&base_entity.create_spawn_packet())
+                            .await;
+                        existing_entity.init_data_tracker().await;
+                        continue;
+                    }
+
                     // Pos is zero since it will read from nbt
                     let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
                     entity.read_nbt_non_mut(entity_nbt).await;
                     let base_entity = entity.get_entity();
+
+                    // Clear velocity so the client does not replay the drop animation.
+                    // Items at rest on the ground should have zero velocity; any
+                    // residual velocity from the original drop is stale data.
+                    base_entity.velocity.store(Vector3::default());
+
                     player
                         .client
                         .enqueue_packet(&base_entity.create_spawn_packet())
@@ -3803,6 +3888,18 @@ impl World {
 
     pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
+
+        // Guard against duplicate entities with the same UUID.
+        // This can happen when chunk entity data is loaded while the entity
+        // already exists in the world (e.g. another player is still tracking it).
+        let already_exists = self
+            .entities
+            .load()
+            .iter()
+            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
+        if already_exists {
+            return;
+        }
 
         let block_pos = base_entity.block_pos.load();
         let chunk_coordinate = block_pos.chunk_position();
@@ -4982,7 +5079,7 @@ impl World {
         Self::broadcast_java_grouped(je_packet, je_recipients_by_version);
 
         for recipient in bedrock_recipients {
-            recipient.send_game_packet(be_packet).await;
+            recipient.enqueue_packet(be_packet).await;
         }
     }
 }

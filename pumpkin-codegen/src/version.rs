@@ -74,6 +74,7 @@ pub enum JavaMinecraftVersion {
     V_1_21_9,
     V_1_21_11,
     V_26_1,
+    V_26_2,
 }
 
 impl JavaMinecraftVersion {
@@ -133,6 +134,7 @@ impl JavaMinecraftVersion {
             Self::V_1_21_9 => format_ident!("v1_21_9"),
             Self::V_1_21_11 => format_ident!("v1_21_11"),
             Self::V_26_1 => format_ident!("v26_1"),
+            Self::V_26_2 => format_ident!("v26_2"),
         }
     }
 }
@@ -191,6 +193,7 @@ impl ToTokens for JavaMinecraftVersion {
             Self::V_1_21_9 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 },
             Self::V_1_21_11 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 },
             Self::V_26_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_26_1 },
+            Self::V_26_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_26_2 },
         });
     }
 }

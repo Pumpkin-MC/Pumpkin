@@ -5,6 +5,13 @@ pub enum Particle {
     Block,
     BlockMarker,
     Bubble,
+    SulfurBubbles,
+    NoxiousGas,
+    NoxiousGasCloud,
+    Geyser,
+    GeyserBase,
+    GeyserPoof,
+    GeyserPlume,
     Cloud,
     CopperFireFlame,
     Crit,
@@ -118,6 +125,7 @@ pub enum Particle {
     TrialOmen,
     BlockCrumble,
     Firefly,
+    SulfurCubeGoo,
 }
 impl Particle {
     #[doc = r" Try to parse a `Particle` from a resource location string."]
@@ -129,6 +137,13 @@ impl Particle {
             "block" => Some(Self::Block),
             "block_marker" => Some(Self::BlockMarker),
             "bubble" => Some(Self::Bubble),
+            "sulfur_bubbles" => Some(Self::SulfurBubbles),
+            "noxious_gas" => Some(Self::NoxiousGas),
+            "noxious_gas_cloud" => Some(Self::NoxiousGasCloud),
+            "geyser" => Some(Self::Geyser),
+            "geyser_base" => Some(Self::GeyserBase),
+            "geyser_poof" => Some(Self::GeyserPoof),
+            "geyser_plume" => Some(Self::GeyserPlume),
             "cloud" => Some(Self::Cloud),
             "copper_fire_flame" => Some(Self::CopperFireFlame),
             "crit" => Some(Self::Crit),
@@ -242,6 +257,7 @@ impl Particle {
             "trial_omen" => Some(Self::TrialOmen),
             "block_crumble" => Some(Self::BlockCrumble),
             "firefly" => Some(Self::Firefly),
+            "sulfur_cube_goo" => Some(Self::SulfurCubeGoo),
             _ => None,
         }
     }
@@ -253,6 +269,13 @@ impl Particle {
             Self::Block => "block",
             Self::BlockMarker => "block_marker",
             Self::Bubble => "bubble",
+            Self::SulfurBubbles => "sulfur_bubbles",
+            Self::NoxiousGas => "noxious_gas",
+            Self::NoxiousGasCloud => "noxious_gas_cloud",
+            Self::Geyser => "geyser",
+            Self::GeyserBase => "geyser_base",
+            Self::GeyserPoof => "geyser_poof",
+            Self::GeyserPlume => "geyser_plume",
             Self::Cloud => "cloud",
             Self::CopperFireFlame => "copper_fire_flame",
             Self::Crit => "crit",
@@ -366,6 +389,7 @@ impl Particle {
             Self::TrialOmen => "trial_omen",
             Self::BlockCrumble => "block_crumble",
             Self::Firefly => "firefly",
+            Self::SulfurCubeGoo => "sulfur_cube_goo",
         }
     }
 }

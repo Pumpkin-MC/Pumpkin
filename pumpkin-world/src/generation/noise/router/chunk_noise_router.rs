@@ -111,8 +111,8 @@ impl ChunkNoiseFunctionComponent<'_> {
                     let b = stack[x.input2_index].display_test(stack);
                     format!("Binary({}, {})", a, b)
                 }
-                DependentProtoNoiseFunctionComponent::WeirdScaled(x) => {
-                    format!("WeirdScaled(todo)")
+                DependentProtoNoiseFunctionComponent::IntervalSelect(x) => {
+                    format!("IntervalSelect(todo)")
                 }
                 DependentProtoNoiseFunctionComponent::Clamp(x) => {
                     format!("Clamp(todo)")

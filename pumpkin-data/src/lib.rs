@@ -250,6 +250,11 @@ pub mod entity_id_remap;
 #[path = "generated/sound_id_remap.rs"]
 pub mod sound_id_remap;
 
+#[cfg(feature = "bedrock_creative")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_creative.rs"]
+pub mod bedrock_creative;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]

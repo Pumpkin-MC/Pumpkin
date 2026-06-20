@@ -69,7 +69,9 @@ pub fn build_java_mapping() -> String {
     );
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {\n");
+    output.push_str(
+        "pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {\n",
+    );
     process_packets(
         "../pumpkin-protocol/src/java/client/play",
         &mut output,
@@ -141,7 +143,9 @@ pub fn build_bedrock_mapping() -> String {
     );
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacket> {\n");
+    output.push_str(
+        "pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacket> {\n",
+    );
     process_packets(
         "../pumpkin-protocol/src/bedrock/client",
         &mut output,
@@ -199,7 +203,14 @@ fn process_packets(
         if path.extension().is_some_and(|ext| ext == "rs")
             && path.file_name().is_some_and(|name| name != "mod.rs")
         {
-            parse_packet_file(&path, output, attr_name, variant_prefix, rust_path_prefix, mode);
+            parse_packet_file(
+                &path,
+                output,
+                attr_name,
+                variant_prefix,
+                rust_path_prefix,
+                mode,
+            );
         }
     }
 }
@@ -248,7 +259,8 @@ fn parse_packet_file(
 
                     if type_ident == "DynamicRecipe" {
                         if mode == MappingMode::Serialize {
-                            field_inits.push_str(&format!("                {}: &[],\n", field_name));
+                            field_inits
+                                .push_str(&format!("                {}: &[],\n", field_name));
                         } else {
                             possible = false; // Cannot handle DynamicRecipe yet
                         }
@@ -263,49 +275,76 @@ fn parse_packet_file(
                         "String" | "str" => {
                             if mode == MappingMode::Serialize {
                                 if is_ref {
-                                    field_inits.push_str(&format!("                {}: &data.{},\n", field_name, wit_field));
+                                    field_inits.push_str(&format!(
+                                        "                {}: &data.{},\n",
+                                        field_name, wit_field
+                                    ));
                                 } else {
-                                    field_inits.push_str(&format!("                {}: data.{}.clone(),\n", field_name, wit_field));
+                                    field_inits.push_str(&format!(
+                                        "                {}: data.{}.clone(),\n",
+                                        field_name, wit_field
+                                    ));
                                 }
                             } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!("                {}: p.{}.into(),\n", wit_field, field_name));
+                                field_inits.push_str(&format!(
+                                    "                {}: p.{}.into(),\n",
+                                    wit_field, field_name
+                                ));
                             } else {
                                 // ToWit
-                                field_inits.push_str(&format!("                {}: self.{}.to_string(),\n", wit_field, field_name));
+                                field_inits.push_str(&format!(
+                                    "                {}: self.{}.to_string(),\n",
+                                    wit_field, field_name
+                                ));
                             }
-                        },
+                        }
                         "VarUInt" => {
                             if mode == MappingMode::Serialize {
                                 field_inits.push_str(&format!("                {}: pumpkin_protocol::codec::var_uint::VarUInt(data.{}.try_into().unwrap()),\n", field_name, wit_field));
                             } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!("                {}: p.{}.0.try_into().unwrap(),\n", wit_field, field_name));
+                                field_inits.push_str(&format!(
+                                    "                {}: p.{}.0.try_into().unwrap(),\n",
+                                    wit_field, field_name
+                                ));
                             } else {
-                                field_inits.push_str(&format!("                {}: self.{}.0.try_into().unwrap(),\n", wit_field, field_name));
+                                field_inits.push_str(&format!(
+                                    "                {}: self.{}.0.try_into().unwrap(),\n",
+                                    wit_field, field_name
+                                ));
                             }
-                        },
+                        }
                         "TextComponent" => {
                             if mode == MappingMode::Serialize {
                                 prep_code.push_str(&format!("            let component_{} = pumpkin_util::text::TextComponent::text(data.{}.clone());\n", wit_field, wit_field));
                                 if is_ref {
-                                    field_inits.push_str(&format!("                {}: &component_{},\n", field_name, wit_field));
+                                    field_inits.push_str(&format!(
+                                        "                {}: &component_{},\n",
+                                        field_name, wit_field
+                                    ));
                                 } else {
-                                    field_inits.push_str(&format!("                {}: component_{},\n", field_name, wit_field));
+                                    field_inits.push_str(&format!(
+                                        "                {}: component_{},\n",
+                                        field_name, wit_field
+                                    ));
                                 }
                             } else if mode == MappingMode::Deserialize {
                                 field_inits.push_str(&format!("                {}: serde_json::to_string(&p.{}).unwrap_or_default(),\n", wit_field, field_name));
                             } else {
                                 field_inits.push_str(&format!("                {}: serde_json::to_string(&self.{}).unwrap_or_default(),\n", wit_field, field_name));
                             }
-                        },
+                        }
                         "BlockPos" => {
                             if mode == MappingMode::Serialize {
                                 field_inits.push_str(&format!("                {}: pumpkin_util::math::position::BlockPos::new(data.{}.0, data.{}.1, data.{}.2),\n", field_name, wit_field, wit_field, wit_field));
                             } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!("                {}: (p.{}.0.x, p.{}.0.y, p.{}.0.z),\n", wit_field, field_name, field_name, field_name));
+                                field_inits.push_str(&format!(
+                                    "                {}: (p.{}.0.x, p.{}.0.y, p.{}.0.z),\n",
+                                    wit_field, field_name, field_name, field_name
+                                ));
                             } else {
                                 field_inits.push_str(&format!("                {}: (self.{}.0.x, self.{}.0.y, self.{}.0.z),\n", wit_field, field_name, field_name, field_name));
                             }
-                        },
+                        }
                         "Vector3" => {
                             if mode == MappingMode::Serialize {
                                 field_inits.push_str(&format!("                {}: pumpkin_util::math::vector3::Vector3::new(data.{}.0 as _, data.{}.1 as _, data.{}.2 as _),\n", field_name, wit_field, wit_field, wit_field));
@@ -314,22 +353,34 @@ fn parse_packet_file(
                             } else {
                                 field_inits.push_str(&format!("                {}: (self.{}.x as _, self.{}.y as _, self.{}.z as _),\n", wit_field, field_name, field_name, field_name));
                             }
-                        },
+                        }
                         "Uuid" => {
                             if mode == MappingMode::Serialize {
                                 if is_slice {
                                     prep_code.push_str(&format!("            let vec_{} = data.{}.iter().map(|u| uuid::Uuid::from_u64_pair(u.high, u.low)).collect::<Vec<_>>();\n", wit_field, wit_field));
                                     if is_ref {
-                                        field_inits.push_str(&format!("                {}: &vec_{},\n", field_name, wit_field));
+                                        field_inits.push_str(&format!(
+                                            "                {}: &vec_{},\n",
+                                            field_name, wit_field
+                                        ));
                                     } else {
-                                        field_inits.push_str(&format!("                {}: vec_{},\n", field_name, wit_field));
+                                        field_inits.push_str(&format!(
+                                            "                {}: vec_{},\n",
+                                            field_name, wit_field
+                                        ));
                                     }
                                 } else {
                                     prep_code.push_str(&format!("            let uuid_{} = uuid::Uuid::from_u64_pair(data.{}.high, data.{}.low);\n", wit_field, wit_field, wit_field));
                                     if is_ref {
-                                        field_inits.push_str(&format!("                {}: &uuid_{},\n", field_name, wit_field));
+                                        field_inits.push_str(&format!(
+                                            "                {}: &uuid_{},\n",
+                                            field_name, wit_field
+                                        ));
                                     } else {
-                                        field_inits.push_str(&format!("                {}: uuid_{},\n", field_name, wit_field));
+                                        field_inits.push_str(&format!(
+                                            "                {}: uuid_{},\n",
+                                            field_name, wit_field
+                                        ));
                                     }
                                 }
                             } else if mode == MappingMode::Deserialize {
@@ -346,30 +397,49 @@ fn parse_packet_file(
                                     field_inits.push_str(&format!("                {}: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: self.{}.as_u64_pair().1, low: self.{}.as_u64_pair().0 }},\n", wit_field, field_name, field_name));
                                 }
                             }
-                        },
-                        "i32" | "u32" | "i64" | "u64" | "bool" | "f32" | "f64" | "u8" | "i8" | "u16" | "i16" | "VarInt" => {
+                        }
+                        "i32" | "u32" | "i64" | "u64" | "bool" | "f32" | "f64" | "u8" | "i8"
+                        | "u16" | "i16" | "VarInt" => {
                             if mode == MappingMode::Serialize {
                                 if is_slice {
                                     if type_ident == "u8" {
-                                         if is_ref {
-                                             field_inits.push_str(&format!("                {}: &data.{},\n", field_name, wit_field));
-                                         } else {
-                                             field_inits.push_str(&format!("                {}: data.{}.clone(),\n", field_name, wit_field));
-                                         }
+                                        if is_ref {
+                                            field_inits.push_str(&format!(
+                                                "                {}: &data.{},\n",
+                                                field_name, wit_field
+                                            ));
+                                        } else {
+                                            field_inits.push_str(&format!(
+                                                "                {}: data.{}.clone(),\n",
+                                                field_name, wit_field
+                                            ));
+                                        }
                                     } else if type_ident == "VarInt" {
                                         prep_code.push_str(&format!("            let vec_{}: Vec<VarInt> = data.{}.iter().map(|v| VarInt(*v)).collect();\n", wit_field, wit_field));
                                         if is_ref {
-                                            field_inits.push_str(&format!("                {}: &vec_{},\n", field_name, wit_field));
+                                            field_inits.push_str(&format!(
+                                                "                {}: &vec_{},\n",
+                                                field_name, wit_field
+                                            ));
                                         } else {
-                                            field_inits.push_str(&format!("                {}: vec_{},\n", field_name, wit_field));
+                                            field_inits.push_str(&format!(
+                                                "                {}: vec_{},\n",
+                                                field_name, wit_field
+                                            ));
                                         }
                                     } else {
                                         field_inits.push_str(&format!("                {}: data.{}.iter().map(|v| *v as _).collect(),\n", field_name, wit_field));
                                     }
                                 } else if type_ident == "VarInt" {
-                                    field_inits.push_str(&format!("                {}: VarInt(data.{}),\n", field_name, wit_field));
+                                    field_inits.push_str(&format!(
+                                        "                {}: VarInt(data.{}),\n",
+                                        field_name, wit_field
+                                    ));
                                 } else {
-                                    field_inits.push_str(&format!("                {}: data.{}.try_into().unwrap(),\n", field_name, wit_field));
+                                    field_inits.push_str(&format!(
+                                        "                {}: data.{}.try_into().unwrap(),\n",
+                                        field_name, wit_field
+                                    ));
                                 }
                             } else if mode == MappingMode::Deserialize {
                                 if is_slice {
@@ -379,9 +449,15 @@ fn parse_packet_file(
                                         field_inits.push_str(&format!("                {}: p.{}.iter().map(|v| *v as _).collect(),\n", wit_field, field_name));
                                     }
                                 } else if type_ident == "VarInt" {
-                                    field_inits.push_str(&format!("                {}: p.{}.0.try_into().unwrap(),\n", wit_field, field_name));
+                                    field_inits.push_str(&format!(
+                                        "                {}: p.{}.0.try_into().unwrap(),\n",
+                                        wit_field, field_name
+                                    ));
                                 } else {
-                                    field_inits.push_str(&format!("                {}: p.{}.try_into().unwrap(),\n", wit_field, field_name));
+                                    field_inits.push_str(&format!(
+                                        "                {}: p.{}.try_into().unwrap(),\n",
+                                        wit_field, field_name
+                                    ));
                                 }
                             } else {
                                 // ToWit
@@ -392,12 +468,18 @@ fn parse_packet_file(
                                         field_inits.push_str(&format!("                {}: self.{}.iter().map(|v| *v as _).collect(),\n", wit_field, field_name));
                                     }
                                 } else if type_ident == "VarInt" {
-                                    field_inits.push_str(&format!("                {}: self.{}.0.try_into().unwrap(),\n", wit_field, field_name));
+                                    field_inits.push_str(&format!(
+                                        "                {}: self.{}.0.try_into().unwrap(),\n",
+                                        wit_field, field_name
+                                    ));
                                 } else {
-                                    field_inits.push_str(&format!("                {}: self.{}.try_into().unwrap(),\n", wit_field, field_name));
+                                    field_inits.push_str(&format!(
+                                        "                {}: self.{}.try_into().unwrap(),\n",
+                                        wit_field, field_name
+                                    ));
                                 }
                             }
-                        },
+                        }
                         _ => {
                             possible = false;
                             break;
@@ -432,8 +514,8 @@ fn parse_packet_file(
                 } else if mode == MappingMode::Deserialize {
                     if rust_path_prefix.contains("java") {
                         if rust_path_prefix.contains("client") {
-                             // Skip clientbound deserialization for Java for now
-                             continue;
+                            // Skip clientbound deserialization for Java for now
+                            continue;
                         }
                         output.push_str(&format!(
                             "        id if id == {}::{}::to_id(version) => {{\n",
@@ -448,14 +530,14 @@ fn parse_packet_file(
                         ));
                     } else {
                         if rust_path_prefix.contains("client") {
-                             // Skip clientbound deserialization for Bedrock for now
-                             continue;
+                            // Skip clientbound deserialization for Bedrock for now
+                            continue;
                         }
                         output.push_str(&format!(
                             "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
                             rust_path_prefix, struct_name
                         ));
-                         output.push_str(&format!(
+                        output.push_str(&format!(
                             "            use pumpkin_protocol::BServerPacket;\n"
                         ));
                         output.push_str(&format!(
@@ -474,11 +556,21 @@ fn parse_packet_file(
                 } else if mode == MappingMode::ToWit {
                     output.push_str(&format!(
                         "impl ToWitClientbound{} for {}::{} {{\n",
-                        if rust_path_prefix.contains("java") { "Java" } else { "Bedrock" }, rust_path_prefix, struct_name_with_lt
+                        if rust_path_prefix.contains("java") {
+                            "Java"
+                        } else {
+                            "Bedrock"
+                        },
+                        rust_path_prefix,
+                        struct_name_with_lt
                     ));
                     output.push_str(&format!(
                         "    fn to_wit(&self) -> {} {{\n",
-                        if rust_path_prefix.contains("java") { "ClientboundPacket" } else { "BClientboundPacket" }
+                        if rust_path_prefix.contains("java") {
+                            "ClientboundPacket"
+                        } else {
+                            "BClientboundPacket"
+                        }
                     ));
                     output.push_str(&prep_code);
                     output.push_str(&format!(
@@ -494,9 +586,7 @@ fn parse_packet_file(
                         "    if let Some(p) = any.downcast_ref::<{}::{}>() {{\n",
                         rust_path_prefix, struct_name
                     ));
-                    output.push_str(&format!(
-                        "        return Some(p.to_wit());\n"
-                    ));
+                    output.push_str(&format!("        return Some(p.to_wit());\n"));
                     output.push_str("    }\n");
                 }
             }

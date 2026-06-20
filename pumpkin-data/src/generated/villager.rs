@@ -1582,8 +1582,8 @@ pub const TRADES_FLETCHER_LEVEL_4: &[VillagerTrade] = &[
 pub const TRADES_FLETCHER_LEVEL_5: &[VillagerTrade] = &[
     VillagerTrade {
         wants: VillagerTradeItem {
-            item: &crate::item::Item::ARROW,
-            count: 5i32,
+            item: &crate::item::Item::EMERALD,
+            count: 2i32,
         },
         wants_b: None,
         gives: VillagerTradeItem {

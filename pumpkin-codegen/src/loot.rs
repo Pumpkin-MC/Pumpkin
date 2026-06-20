@@ -53,11 +53,16 @@ pub struct LootPoolStruct {
     /// Number of times the pool is rolled.
     rolls: LootNumberProviderTypes,
     /// Extra rolls granted by luck-related enchantments.
+    #[serde(default = "default_bonus_rolls")]
     bonus_rolls: LootNumberProviderTypes,
     /// Conditions that must all pass for this pool to be rolled, if any.
     conditions: Option<Vec<LootConditionStruct>>,
     /// Functions applied to the selected entries, if any.
     functions: Option<Vec<LootFunctionStruct>>,
+}
+
+fn default_bonus_rolls() -> LootNumberProviderTypes {
+    LootNumberProviderTypes::Constant(0.0)
 }
 
 impl ToTokens for LootPoolStruct {

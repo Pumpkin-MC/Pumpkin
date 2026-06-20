@@ -102,7 +102,7 @@ syn = { version = "2.0", default-features = false, features = ["printing"] }
 
 thiserror = { version = "2.0", default-features = false }
 
-bytes = { version = "1.11", default-features = false, features = ["std"] }
+bytes = { version = "1.12", default-features = false, features = ["std"] }
 
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
@@ -128,7 +128,7 @@ crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = { version = "0.8.21", default-features = false, features = ["std"] }
 crossfire = { version = "3.1.16", default-features = false, features = ["compat"] }
-crypto-bigint = { version = "0.7.3", default-features = false }
+crypto-bigint = { version = "0.7.4", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.16.9", default-features = false, features = ["std"] }
 either = { version = "1.16.0", default-features = false }
@@ -137,7 +137,7 @@ flate2 = { version = "1.1.9", default-features = false, features = ["rust_backen
 heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
-itertools = { version = "0.14.0", default-features = false, features = ["use_std"] }
+itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
 lru = { version = "0.18.0", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }

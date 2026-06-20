@@ -47,10 +47,12 @@ default = [
     "villager",
     "placed_feature",
     "configured_feature",
-    "slot_ranges"
+    "slot_ranges",
+    "bedrock_creative"
 ]
 
 advancement = []
+bedrock_creative = []
 item = []
 packet = []
 jukebox_song = []

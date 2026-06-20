@@ -1,54 +1,38 @@
 use pumpkin_data::packet::clientbound::PLAY_RESPAWN;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
-use serde::{Deserialize, Serialize};
+use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::VarInt;
+use crate::{
+    ClientPacket,
+    java::client::play::player_spawn_data::PlayerSpawnData,
+    ser::{NetworkWriteExt, WritingError},
+};
 
-#[derive(Serialize, Deserialize)]
 #[java_packet(PLAY_RESPAWN)]
 pub struct CRespawn {
-    pub dimension_type: VarInt,
-    pub dimension_name: ResourceLocation,
-    pub hashed_seed: i64,
-    pub game_mode: u8,
-    pub previous_gamemode: i8,
-    pub debug: bool,
-    pub is_flat: bool,
-    pub death_dimension_name: Option<(ResourceLocation, BlockPos)>,
-    pub portal_cooldown: VarInt,
-    pub sealevel: VarInt,
+    pub player_spawn_info: PlayerSpawnData,
     pub data_kept: u8,
 }
 
 impl CRespawn {
-    #[expect(clippy::too_many_arguments)]
     #[must_use]
-    pub const fn new(
-        dimension_type: VarInt,
-        dimension_name: ResourceLocation,
-        hashed_seed: i64,
-        game_mode: u8,
-        previous_gamemode: i8,
-        debug: bool,
-        is_flat: bool,
-        death_dimension_name: Option<(ResourceLocation, BlockPos)>,
-        portal_cooldown: VarInt,
-        sealevel: VarInt,
-        data_kept: u8,
-    ) -> Self {
+    pub const fn new(player_spawn_info: PlayerSpawnData, data_kept: u8) -> Self {
         Self {
-            dimension_type,
-            dimension_name,
-            hashed_seed,
-            game_mode,
-            previous_gamemode,
-            debug,
-            is_flat,
-            death_dimension_name,
-            portal_cooldown,
-            sealevel,
+            player_spawn_info,
             data_kept,
         }
+    }
+}
+
+impl ClientPacket for CRespawn {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        self.player_spawn_info
+            .write_packet_data(&mut write, version)?;
+        write.write_i8(self.data_kept as i8)?;
+        Ok(())
     }
 }

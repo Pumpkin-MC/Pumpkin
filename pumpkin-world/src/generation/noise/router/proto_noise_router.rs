@@ -23,7 +23,7 @@ use super::{
         StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
         beardifier::Beardifier,
         math::{Binary, Clamp, Constant, Linear, Unary},
-        misc::{ClampedYGradient, EndIsland, RangeChoice, WeirdScaled},
+        misc::{ClampedYGradient, EndIsland, IntervalSelect, RangeChoice},
         noise::{InterpolatedNoiseSampler, Noise, ShiftA, ShiftB, ShiftedNoise},
         spline::{Spline, SplineFunction, SplinePoint, SplineValue},
     },
@@ -50,7 +50,7 @@ pub enum DependentProtoNoiseFunctionComponent {
     Unary(Unary),
     Binary(Binary),
     ShiftedNoise(ShiftedNoise),
-    WeirdScaled(WeirdScaled),
+    IntervalSelect(IntervalSelect),
     FindTopSurface(FindTopSurface),
     Clamp(Clamp),
     RangeChoice(RangeChoice),
@@ -451,16 +451,31 @@ impl ProtoNoiseRouters {
                         )),
                     )
                 }
-                BaseNoiseFunctionComponent::WeirdScaled { input_index, data } => {
-                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-                        base_random_deriver,
-                        &data.noise_id,
-                    );
+                BaseNoiseFunctionComponent::IntervalSelect {
+                    input_index,
+                    thresholds,
+                    functions_indices,
+                } => {
+                    let mut min_value = f64::INFINITY;
+                    let mut max_value = f64::NEG_INFINITY;
+                    for &idx in functions_indices.iter() {
+                        let min = stack[idx].min();
+                        let max = stack[idx].max();
+                        if min < min_value {
+                            min_value = min;
+                        }
+                        if max > max_value {
+                            max_value = max;
+                        }
+                    }
+
                     ProtoNoiseFunctionComponent::Dependent(
-                        DependentProtoNoiseFunctionComponent::WeirdScaled(WeirdScaled::new(
+                        DependentProtoNoiseFunctionComponent::IntervalSelect(IntervalSelect::new(
                             *input_index,
-                            sampler,
-                            data,
+                            thresholds,
+                            functions_indices,
+                            min_value,
+                            max_value,
                         )),
                     )
                 }

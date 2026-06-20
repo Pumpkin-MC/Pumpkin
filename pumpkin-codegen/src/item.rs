@@ -944,6 +944,7 @@ pub fn build() -> TokenStream {
                 "magma_block" => "magma".into(),
                 "map" => "empty_map".into(),
                 "melon" => "melon_block".into(),
+                "music_disc_bounce" => "music_disc_13".into(),
                 "nether_brick" => "netherbrick".into(),
                 "nether_bricks" => "nether_brick".into(),
                 "nether_quartz_ore" => "quartz_ore".into(),
@@ -972,6 +973,7 @@ pub fn build() -> TokenStream {
                 "tipped_arrow" | "spectral_arrow" => "arrow".into(),
                 "waxed_copper_block" => "waxed_copper".into(),
                 "zombified_piglin_spawn_egg" => "zombie_pigman_spawn_egg".into(),
+                n if n.contains("sulfur") => "unknown".into(),
                 n => {
                     if n.ends_with("banner") {
                         "banner".into()
@@ -1146,6 +1148,11 @@ pub fn build() -> TokenStream {
         all_java_item_ids.push(id_lit);
     }
 
+    let bedrock_id_by_key: std::collections::HashMap<String, i16> = bedrock_item_definitions
+        .iter()
+        .map(|item| (item.registry_key.clone(), item.id))
+        .collect();
+
     for item in bedrock_item_definitions {
         let const_ident = format_ident!(
             "{}",
@@ -1209,6 +1216,41 @@ pub fn build() -> TokenStream {
                 bedrock_block_state: 0
             };
         });
+    }
+
+    let mut bedrock_to_java_arms = TokenStream::new();
+    let mut seen_bedrock_pairs = std::collections::HashSet::new();
+
+    let mut bedrock_id_fallback_arms = TokenStream::new();
+    let mut seen_bedrock_ids = std::collections::HashSet::new();
+
+    for (java_name, mapping) in &be_item_remaps {
+        let java_const_ident = format_ident!("{}", java_name.to_shouty_snake_case());
+        let bedrock_id = *bedrock_id_by_key
+            .get(&mapping.identifier)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Missing bedrock item for identifier: {}",
+                    mapping.identifier
+                )
+            });
+        let bedrock_data = mapping.data;
+
+        if seen_bedrock_pairs.insert((bedrock_id, bedrock_data)) {
+            let id_lit = syn::LitInt::new(&bedrock_id.to_string(), proc_macro2::Span::call_site());
+            let data_lit =
+                syn::LitInt::new(&bedrock_data.to_string(), proc_macro2::Span::call_site());
+            bedrock_to_java_arms.extend(quote! {
+                (#id_lit, #data_lit) => Some(&Self::#java_const_ident),
+            });
+        }
+
+        if seen_bedrock_ids.insert(bedrock_id) {
+            let id_lit = syn::LitInt::new(&bedrock_id.to_string(), proc_macro2::Span::call_site());
+            bedrock_id_fallback_arms.extend(quote! {
+                #id_lit => Some(&Self::#java_const_ident),
+            });
+        }
     }
 
     quote! {
@@ -1369,6 +1411,17 @@ pub fn build() -> TokenStream {
                 match item_id {
                     #( #all_java_item_ids => Some(&Self::#all_java_items), )*
                     _ => None,
+                }
+            }
+
+            #[must_use]
+            pub fn from_bedrock(bedrock_id: i16, bedrock_data: u32) -> Option<&'static Self> {
+                match (bedrock_id, bedrock_data) {
+                    #bedrock_to_java_arms
+                    _ => match bedrock_id {
+                        #bedrock_id_fallback_arms
+                        _ => None,
+                    }
                 }
             }
         }

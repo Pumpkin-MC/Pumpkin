@@ -16,7 +16,6 @@ pub enum BossEventAction {
     Add {
         title: String,
         health_percent: f32,
-        screen_darken: u16,
         color: VarInt,
         overlay: VarInt,
     },
@@ -24,7 +23,6 @@ pub enum BossEventAction {
     UpdateHealth(f32),
     UpdateTitle(String),
     UpdateProperties {
-        screen_darken: u16,
         color: VarInt,
         overlay: VarInt,
     },
@@ -33,43 +31,55 @@ pub enum BossEventAction {
 impl PacketWrite for CBossEvent {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.boss_entity_id.write(writer)?;
+        VarLong(0).write(writer)?; // player_entity_id
+
+        let event_type: u8;
+        let mut title = String::new();
+        let mut health_percent = 0.0f32;
+        let mut color: u8 = 0;
+        let mut overlay: u8 = 0;
+
         match &self.action {
             BossEventAction::Add {
-                title,
-                health_percent,
-                screen_darken,
-                color,
-                overlay,
+                title: t,
+                health_percent: hp,
+                color: c,
+                overlay: o,
             } => {
-                VarInt(0).write(writer)?;
-                title.write(writer)?;
-                health_percent.write(writer)?;
-                screen_darken.write(writer)?;
-                color.write(writer)?;
-                overlay.write(writer)?;
+                event_type = 0;
+                title.clone_from(t);
+                health_percent = *hp;
+                color = c.0 as u8;
+                overlay = o.0 as u8;
             }
             BossEventAction::Remove => {
-                VarInt(2).write(writer)?;
+                event_type = 2;
             }
             BossEventAction::UpdateHealth(health) => {
-                VarInt(3).write(writer)?;
-                health.write(writer)?;
+                event_type = 3;
+                health_percent = *health;
             }
-            BossEventAction::UpdateTitle(title) => {
-                VarInt(4).write(writer)?;
-                title.write(writer)?;
+            BossEventAction::UpdateTitle(t) => {
+                event_type = 4;
+                title.clone_from(t);
             }
             BossEventAction::UpdateProperties {
-                screen_darken,
-                color,
-                overlay,
+                color: c,
+                overlay: o,
             } => {
-                VarInt(5).write(writer)?;
-                screen_darken.write(writer)?;
-                color.write(writer)?;
-                overlay.write(writer)?;
+                event_type = 5;
+                color = c.0 as u8;
+                overlay = o.0 as u8;
             }
         }
+
+        event_type.write(writer)?;
+        title.write(writer)?; // title
+        title.write(writer)?; // filtered_title
+        health_percent.write(writer)?;
+        color.write(writer)?;
+        overlay.write(writer)?;
+
         Ok(())
     }
 }
