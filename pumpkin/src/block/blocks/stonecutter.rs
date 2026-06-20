@@ -17,11 +17,11 @@ use pumpkin_inventory::stonecutter_screen_handler::StonecutterScreenHandler;
 pub struct StonecutterBlock;
 
 impl BlockBehaviour for StonecutterBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
                 .open_handled_screen(&StonecutterScreenFactory, Some(*args.position))

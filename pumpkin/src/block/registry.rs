@@ -923,13 +923,33 @@ impl BlockRegistry {
         self.blocks.get(&block)
     }
 
-    /// Whether the given block exposes a menu provider (container / workstation
-    /// screen). Mirrors `BlockState#getMenuProvider != null` in vanilla and is
-    /// used to gate spectator interactions.
-    #[must_use]
-    pub fn has_menu_provider(&self, block: &Block) -> bool {
-        self.get_pumpkin_block(block.id)
-            .is_some_and(|b| b.has_menu_provider())
+    /// Opens the given block's menu provider (container / workstation screen)
+    /// for the player, if it has one. Mirrors the spectator branch of vanilla's
+    /// `ServerPlayerGameMode#useItemOn`, which only opens a block's menu provider
+    /// and ignores everything else. Returns the block's [`BlockActionResult`]
+    /// ([`BlockActionResult::Pass`] when the block has no menu provider).
+    pub async fn open_menu(
+        &self,
+        block: &Block,
+        player: &Arc<Player>,
+        position: &BlockPos,
+        hit: &BlockHitResult<'_>,
+        server: &Server,
+        world: &Arc<World>,
+    ) -> BlockActionResult {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            return pumpkin_block
+                .open_menu(NormalUseArgs {
+                    server,
+                    world,
+                    block,
+                    position,
+                    player,
+                    hit,
+                })
+                .await;
+        }
+        BlockActionResult::Pass
     }
 
     #[must_use]

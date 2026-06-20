@@ -51,10 +51,6 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
 pub struct BarrelBlock;
 
 impl BlockBehaviour for BarrelBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
-    }
-
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = BarrelLikeProperties::default(args.block);
@@ -64,6 +60,10 @@ impl BlockBehaviour for BarrelBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
+    }
+
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()

@@ -57,10 +57,6 @@ impl BlockMetadata for ShulkerBoxBlock {
 type EndRodLikeProperties = pumpkin_data::block_properties::EndRodLikeProperties;
 
 impl BlockBehaviour for ShulkerBoxBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
-    }
-
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = EndRodLikeProperties::default(args.block);
@@ -88,6 +84,10 @@ impl BlockBehaviour for ShulkerBoxBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
+    }
+
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()

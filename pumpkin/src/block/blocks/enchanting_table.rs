@@ -18,11 +18,11 @@ use tokio::sync::Mutex;
 pub struct EnchantingTableBlock;
 
 impl BlockBehaviour for EnchantingTableBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let mut bookshelf_count = 0;
 

@@ -72,14 +72,20 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { BlockActionResult::PassToDefaultBlockAction })
     }
 
-    /// Whether this block exposes a menu (e.g. a container or workstation screen)
-    /// when used. Mirrors `BlockState#getMenuProvider` in vanilla.
+    /// Opens this block's menu (container or workstation screen), if it has one
+    /// and it can be opened in the current world state.
     ///
-    /// Spectators are only allowed to interact with blocks that have a menu
-    /// provider; every other interaction is ignored (see the spectator gate in
-    /// `handle_use_item_on`).
-    fn has_menu_provider(&self) -> bool {
-        false
+    /// Mirrors `BlockState#getMenuProvider` + `Player#openMenu` in vanilla: a
+    /// return value other than [`BlockActionResult::Pass`] means the block does
+    /// expose a menu provider (it may still decline to open it, e.g. an
+    /// obstructed chest). [`BlockActionResult::Pass`] means there is no menu
+    /// provider at all.
+    ///
+    /// This is what the spectator interaction gate in `handle_use_item_on`
+    /// drives, and menu blocks delegate their `normal_use` to it so the
+    /// open-the-screen logic lives in a single place.
+    fn open_menu<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move { BlockActionResult::Pass })
     }
 
     fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {

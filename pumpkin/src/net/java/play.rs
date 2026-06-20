@@ -2115,22 +2115,20 @@ impl JavaClient {
         // Mirrors the `GameType.SPECTATOR` branch of `ServerPlayerGameMode#useItemOn`,
         // which opens the block's menu provider (if any) and otherwise passes.
         if player.gamemode.load() == GameMode::Spectator {
-            if server.block_registry.has_menu_provider(block) {
-                server
-                    .block_registry
-                    .on_use(
-                        block,
-                        player,
-                        &position,
-                        &BlockHitResult {
-                            face: &face,
-                            cursor_pos: &cursor_pos,
-                        },
-                        server,
-                        &world,
-                    )
-                    .await;
-            }
+            server
+                .block_registry
+                .open_menu(
+                    block,
+                    player,
+                    &position,
+                    &BlockHitResult {
+                        face: &face,
+                        cursor_pos: &cursor_pos,
+                    },
+                    server,
+                    &world,
+                )
+                .await;
             return Ok(());
         }
 

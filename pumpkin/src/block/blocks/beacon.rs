@@ -49,11 +49,11 @@ impl ScreenHandlerFactory for BeaconScreenFactory {
 pub struct BeaconBlock;
 
 impl BlockBehaviour for BeaconBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
     }
 
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let block_entity = args.world.get_block_entity(args.position);
 

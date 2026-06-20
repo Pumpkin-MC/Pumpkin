@@ -230,10 +230,6 @@ async fn broken_chest_impl(args: BrokenArgs<'_>) {
 pub struct ChestBlock;
 
 impl BlockBehaviour for ChestBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
-    }
-
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { on_place_chest_impl(&args) })
     }
@@ -250,6 +246,10 @@ impl BlockBehaviour for ChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
+    }
+
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(normal_use_chest_impl(args))
     }
 
@@ -263,10 +263,6 @@ impl BlockBehaviour for ChestBlock {
 pub struct CopperChestBlock;
 
 impl BlockBehaviour for CopperChestBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
-    }
-
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { on_place_chest_impl(&args) })
     }
@@ -283,6 +279,10 @@ impl BlockBehaviour for CopperChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
+    }
+
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(normal_use_chest_impl(args))
     }
 
@@ -455,10 +455,6 @@ fn count_neighbor_oxidation_levels(
 pub struct TrappedChestBlock;
 
 impl BlockBehaviour for TrappedChestBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
-    }
-
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { on_place_chest_impl(&args) })
     }
@@ -476,6 +472,10 @@ impl BlockBehaviour for TrappedChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
+    }
+
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(normal_use_chest_impl(args))
     }
 

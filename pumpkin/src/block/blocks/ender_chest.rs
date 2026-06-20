@@ -49,10 +49,6 @@ impl ScreenHandlerFactory for EnderChestScreenFactory {
 pub struct EnderChestBlock;
 
 impl BlockBehaviour for EnderChestBlock {
-    fn has_menu_provider(&self) -> bool {
-        true
-    }
-
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = LadderLikeProperties::default(args.block);
@@ -77,6 +73,10 @@ impl BlockBehaviour for EnderChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        self.open_menu(args)
+    }
+
+    fn open_menu<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             if is_chest_blocked(args.world, args.position) {
                 return BlockActionResult::Success;
