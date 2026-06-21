@@ -1268,6 +1268,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fst"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
+
+[[package]]
 name = "futures"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2695,6 +2701,7 @@ dependencies = [
  "pumpkin-codecs",
  "pumpkin-config",
  "pumpkin-data",
+ "pumpkin-i18n",
  "pumpkin-inventory",
  "pumpkin-macros",
  "pumpkin-nbt",
@@ -2769,6 +2776,18 @@ dependencies = [
  "pumpkin-util",
  "rand",
  "serde",
+]
+
+[[package]]
+name = "pumpkin-i18n"
+version = "0.1.0-dev+26.1"
+dependencies = [
+ "arc-swap",
+ "dashmap",
+ "fst",
+ "serde_json",
+ "tracing",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -2859,6 +2878,7 @@ dependencies = [
  "p384",
  "proc-macro2",
  "pumpkin-codecs",
+ "pumpkin-i18n",
  "pumpkin-nbt",
  "quote",
  "rsa",
@@ -2890,6 +2910,7 @@ dependencies = [
  "lz4-java-wrc",
  "pumpkin-config",
  "pumpkin-data",
+ "pumpkin-i18n",
  "pumpkin-nbt",
  "pumpkin-util",
  "rand",

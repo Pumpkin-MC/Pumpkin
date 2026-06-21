@@ -1,4 +1,5 @@
 use fun::FunConfig;
+use locale::LocaleConfig;
 use logging::LoggingConfig;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
 use tracing::{debug, warn};
 pub mod fun;
+pub mod locale;
 pub mod logging;
 pub mod networking;
 pub mod plugins;
@@ -98,6 +100,8 @@ pub struct AdvancedConfiguration {
     pub recipe: RecipeConfig,
     /// Plugin-related configuration.
     pub plugins: PluginsConfig,
+    /// Locale and language resolution configuration.
+    pub locale: LocaleConfig,
 }
 
 /// Basic configuration for core server settings.

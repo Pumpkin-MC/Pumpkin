@@ -1,12 +1,13 @@
 use crate::text::color::{ARGBColor, hsv_to_rgb};
-use crate::translation::{
-    Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
+use crate::text::translation::{
+    get_translation_text, reorder_substitutions, translation_to_pretty,
 };
 use click::ClickEvent;
 use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
+use pumpkin_i18n::{Locale, get_translation};
 use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -20,6 +21,7 @@ pub mod click;
 pub mod color;
 pub mod hover;
 pub mod style;
+pub mod translation;
 
 /// Represents a Minecraft chat component.
 ///
@@ -750,7 +752,10 @@ impl TextComponent {
             .clone()
             .to_translated()
             .serialize(&mut serializer)
-            .expect("Failed to serialize text component NBT for encode");
+            .expect(&pumpkin_i18n::get_translation(
+                "pumpkin:text.component.failed_serialize_nbt",
+                pumpkin_i18n::server_locale(),
+            ));
 
         buf.into_boxed_slice()
     }

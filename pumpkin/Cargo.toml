@@ -21,6 +21,7 @@ doctest = false
 arc-swap.workspace = true
 rayon.workspace = true
 pumpkin-util.workspace = true
+pumpkin-i18n.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
 pumpkin-inventory.workspace = true

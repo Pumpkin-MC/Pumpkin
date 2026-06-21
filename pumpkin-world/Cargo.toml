@@ -10,6 +10,7 @@ pumpkin-nbt.workspace = true
 pumpkin-util.workspace = true
 pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-i18n.workspace = true
 
 futures.workspace = true
 
