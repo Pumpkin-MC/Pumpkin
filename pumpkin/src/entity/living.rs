@@ -991,17 +991,14 @@ impl LivingEntity {
 
         let mut velo = self.entity.velocity.load();
 
-        let descending_in_fluid = self.entity.entity_type == &EntityType::PLAYER
-            && self.entity.is_sneaking()
-            && (self.entity.touching_water.load(SeqCst) || self.entity.touching_lava.load(SeqCst));
+        let colliding_with_fluid = self
+            .entity
+            .world
+            .load()
+            .check_fluid_collision(self.entity.bounding_box.load().shift(velo));
 
         if self.entity.horizontal_collision.load(SeqCst)
-            && !descending_in_fluid
-            && !self
-                .entity
-                .world
-                .load()
-                .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
+            && !colliding_with_fluid
         {
             velo.y = 0.3;
 
