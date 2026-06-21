@@ -13,7 +13,10 @@ pub struct CommandsConfig {
     /// Whether to use rusty line for tty input.
     pub use_tty: bool,
     /// Whether commands from players are logged in the console.
-    pub log_console: bool, // TODO: commands...
+    pub log_console: bool,
+    /// Whether console and RCON command output is broadcast to online operators.
+    /// Corresponds to vanilla's `broadcast-console-to-ops` server property.
+    pub broadcast_console_to_ops: bool,
     /// The `op` permission level of everyone that is not in the `ops` file.
     pub default_op_level: PermissionLvl,
 }
@@ -24,6 +27,7 @@ impl Default for CommandsConfig {
             use_console: true,
             log_console: true,
             use_tty: true,
+            broadcast_console_to_ops: true,
             default_op_level: PermissionLvl::Zero,
         }
     }
