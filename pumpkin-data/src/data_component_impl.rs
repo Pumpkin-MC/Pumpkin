@@ -3,10 +3,11 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlocksAttacks, ChargedProjectiles, Consumable, CustomData, CustomName,
-    Damage, DamageResistant, DeathProtection, Enchantable, Enchantments, Equippable,
-    FireworkExplosion, Fireworks, Food, ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage,
-    MaxStackSize, PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
+    AttributeModifiers, BlockEntityData, BlocksAttacks, BundleContents, ChargedProjectiles,
+    Consumable, Container, CustomData, CustomName, Damage, DamageResistant, DeathProtection,
+    Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel, ItemName,
+    JukeboxPlayable, MapId, MaxDamage, MaxStackSize, PotionContents, StoredEnchantments, Tool,
+    Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -69,6 +70,15 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
         DataComponent::ChargedProjectiles => {
             Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::BlockEntityData => Some(BlockEntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::BundleContents => Some(BundleContentsImpl::read_data(data)?.to_dyn()),
+        DataComponent::Container => Some(ContainerImpl::read_data(data)?.to_dyn()),
+        DataComponent::WrittenBookContent => {
+            Some(WrittenBookContentImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::WritableBookContent => {
+            Some(WritableBookContentImpl::read_data(data)?.to_dyn())
         }
         _ => None,
     }
@@ -1559,8 +1569,79 @@ impl DataComponentImpl for ChargedProjectilesImpl {
     default_impl!(ChargedProjectiles);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BundleContentsImpl;
+#[derive(Clone)]
+pub struct BundleContentsImpl {
+    pub items: Vec<crate::item_stack::ItemStack>,
+}
+impl PartialEq for BundleContentsImpl {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+impl Eq for BundleContentsImpl {}
+impl std::fmt::Debug for BundleContentsImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BundleContentsImpl")
+    }
+}
+impl BundleContentsImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut items = Vec::new();
+        if let NbtTag::List(l) = tag {
+            for item_tag in l {
+                if let NbtTag::Compound(c) = item_tag
+                    && let Some(stack) = crate::item_stack::ItemStack::read_item_stack(c)
+                {
+                    items.push(stack);
+                }
+            }
+        }
+        Some(Self { items })
+    }
+
+    pub fn get_weight(&self) -> u32 {
+        self.items
+            .iter()
+            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
+            .sum()
+    }
+
+    pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
+        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
+            return false; // Can't put bundles in bundles
+        }
+        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
+        let mut inserted_anything = false;
+
+        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
+            if let Some(top) = self.items.first_mut()
+                && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
+                && top.item_count < top.get_max_stack_size()
+            {
+                top.item_count += 1;
+                stack.item_count -= 1;
+                inserted_anything = true;
+                continue;
+            }
+            self.items.insert(0, stack.copy_with_count(1));
+            stack.item_count -= 1;
+            inserted_anything = true;
+        }
+
+        inserted_anything
+    }
+
+    pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
+        if self.items.is_empty() {
+            None
+        } else {
+            Some(self.items.remove(0))
+        }
+    }
+}
+impl DataComponentImpl for BundleContentsImpl {
+    default_impl!(BundleContents);
+}
 /// Status effect instance for potion contents
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct StatusEffectInstance {
@@ -1898,9 +1979,53 @@ pub struct PotionDurationScaleImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SuspiciousStewEffectsImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WritableBookContentImpl;
+pub struct WritableBookContentImpl {
+    pub pages: Vec<String>,
+}
+
+impl WritableBookContentImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut pages = Vec::new();
+        if let NbtTag::Compound(c) = tag
+            && let Some(NbtTag::List(l)) = c.get("pages")
+        {
+            for _ in l {
+                pages.push(String::new());
+            }
+        }
+        Some(Self { pages })
+    }
+}
+
+use crate::data_component::DataComponent::{WritableBookContent, WrittenBookContent};
+
+impl DataComponentImpl for WritableBookContentImpl {
+    default_impl!(WritableBookContent);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WrittenBookContentImpl;
+pub struct WrittenBookContentImpl {
+    pub pages: Vec<String>,
+}
+
+impl WrittenBookContentImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut pages = Vec::new();
+        if let NbtTag::Compound(c) = tag
+            && let Some(NbtTag::List(l)) = c.get("pages")
+        {
+            for _ in l {
+                pages.push(String::new());
+            }
+        }
+        Some(Self { pages })
+    }
+}
+
+impl DataComponentImpl for WrittenBookContentImpl {
+    default_impl!(WrittenBookContent);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TrimImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -1909,8 +2034,22 @@ pub struct DebugStickStateImpl;
 pub struct EntityDataImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BucketEntityDataImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockEntityDataImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockEntityDataImpl {
+    pub nbt: pumpkin_nbt::compound::NbtCompound,
+}
+impl BlockEntityDataImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        if let NbtTag::Compound(c) = tag {
+            Some(Self { nbt: c.clone() })
+        } else {
+            None
+        }
+    }
+}
+impl DataComponentImpl for BlockEntityDataImpl {
+    default_impl!(BlockEntityData);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstrumentImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -2129,8 +2268,42 @@ pub struct BannerPatternsImpl;
 pub struct BaseColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotDecorationsImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ContainerImpl;
+#[derive(Clone)]
+pub struct ContainerImpl {
+    pub items: Vec<(u8, crate::item_stack::ItemStack)>,
+}
+impl PartialEq for ContainerImpl {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+impl Eq for ContainerImpl {}
+impl std::fmt::Debug for ContainerImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ContainerImpl")
+    }
+}
+impl ContainerImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut items = Vec::new();
+        if let NbtTag::List(l) = tag {
+            for item_tag in l {
+                if let NbtTag::Compound(c) = item_tag
+                    && let Some(slot) = c.get_int("slot")
+                    && let Some(item_compound) = c.get_compound("item")
+                    && let Some(stack) =
+                        crate::item_stack::ItemStack::read_item_stack(item_compound)
+                {
+                    items.push((slot as u8, stack));
+                }
+            }
+        }
+        Some(Self { items })
+    }
+}
+impl DataComponentImpl for ContainerImpl {
+    default_impl!(Container);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlockStateImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

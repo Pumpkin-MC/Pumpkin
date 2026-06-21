@@ -7,9 +7,9 @@ use crate::codec::item_stack_seralizer::ItemStackSerializer;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MerchantOffer {
-    pub base_cost_a: ItemStackSerializer<'static>,
+    pub base_cost_a: ItemStackSerializer<'static>, // TODO: item cost
     pub output: ItemStackSerializer<'static>,
-    pub cost_b: Option<ItemStackSerializer<'static>>,
+    pub cost_b: Option<ItemStackSerializer<'static>>, // TODO: item cost
     pub is_disabled: bool,
     pub uses: i32,
     pub max_uses: i32,

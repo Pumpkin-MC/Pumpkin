@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-    UseWithItemArgs,
+    BlockBehaviour, BlockFuture, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+    PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
@@ -145,6 +145,43 @@ impl BlockBehaviour for LecternBlock {
                     let item_entity = ItemEntity::new(entity, book);
                     args.world.spawn_entity(Arc::new(item_entity)).await;
                 }
+            }
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(lectern_entity) =
+                    block_entity.as_any().downcast_ref::<LecternBlockEntity>()
+            {
+                let book_guard = lectern_entity.book.lock().await;
+                if book_guard.is_empty() {
+                    return Some(0);
+                }
+
+                let page = lectern_entity
+                    .page
+                    .load(std::sync::atomic::Ordering::Relaxed) as f32;
+                let mut pages = 1.0;
+                if let Some(comp) = book_guard.get_data_component::<pumpkin_data::data_component_impl::WrittenBookContentImpl>() {
+                    pages = comp.pages.len().max(1) as f32;
+                } else if let Some(comp) = book_guard.get_data_component::<pumpkin_data::data_component_impl::WritableBookContentImpl>() {
+                    pages = comp.pages.len().max(1) as f32;
+                }
+
+                let output: f32 = if pages > 1.0 {
+                    1.0 + 14.0 * page / (pages - 1.0)
+                } else {
+                    15.0
+                };
+
+                Some(output.floor() as u8)
+            } else {
+                Some(0)
             }
         })
     }

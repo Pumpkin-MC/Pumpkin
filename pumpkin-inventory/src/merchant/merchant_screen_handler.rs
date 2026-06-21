@@ -18,6 +18,7 @@ pub struct MerchantScreenHandler {
     behaviour: ScreenHandlerBehaviour,
     selected_offer: usize,
     pub offers: Vec<pumpkin_protocol::java::client::play::MerchantOffer>,
+    pub on_trade: Option<Box<dyn Fn(usize) + Send + Sync>>,
 }
 
 impl MerchantScreenHandler {
@@ -32,6 +33,7 @@ impl MerchantScreenHandler {
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Merchant)),
             selected_offer: 0,
             offers,
+            on_trade: None,
         };
 
         inventory.on_open().await;
@@ -183,21 +185,26 @@ impl ScreenHandler for MerchantScreenHandler {
                     let result_stack = result_slot.get_cloned_stack().await;
                     if !result_stack.is_empty() {
                         // Consume inputs
-                        let offer = &self.offers[self.selected_offer];
+                        let (count_a, count_b, offer_xp) = {
+                            let offer = &mut self.offers[self.selected_offer];
+                            offer.uses += 1;
+                            let count_b = offer.cost_b.as_ref().map(|c| c.0.item_count);
+                            (offer.base_cost_a.0.item_count, count_b, offer.xp)
+                        };
 
                         let input_a = self.inventory.get_stack(0).await;
                         let mut input_a = input_a.lock().await;
-                        input_a.decrement(offer.base_cost_a.0.item_count);
+                        input_a.decrement(count_a);
                         if input_a.is_empty() {
                             *input_a = ItemStack::EMPTY.clone();
                         }
                         drop(input_a);
                         self.get_behaviour().slots[0].mark_dirty().await;
 
-                        if let Some(cost_b) = &offer.cost_b {
+                        if let Some(count_b) = count_b {
                             let input_b = self.inventory.get_stack(1).await;
                             let mut input_b = input_b.lock().await;
-                            input_b.decrement(cost_b.0.item_count);
+                            input_b.decrement(count_b);
                             if input_b.is_empty() {
                                 *input_b = ItemStack::EMPTY.clone();
                             }
@@ -206,7 +213,11 @@ impl ScreenHandler for MerchantScreenHandler {
                         }
 
                         // Award XP
-                        player.award_experience(offer.xp).await;
+                        player.award_experience(offer_xp).await;
+
+                        if let Some(on_trade) = &self.on_trade {
+                            on_trade(self.selected_offer);
+                        }
                     }
                 }
             }

@@ -105,9 +105,11 @@ use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::projectile::small_fireball::SmallFireballEntity;
 use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
+use crate::entity::projectile::trident::TridentEntity;
 use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
+use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
@@ -238,6 +240,17 @@ pub fn from_type(
         id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_for_restore(entity)),
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
+        id if id == EntityType::TRIDENT.id => Arc::new(TridentEntity::new(entity, None)),
+        id if id == EntityType::MINECART.id
+            || id == EntityType::CHEST_MINECART.id
+            || id == EntityType::FURNACE_MINECART.id
+            || id == EntityType::TNT_MINECART.id
+            || id == EntityType::HOPPER_MINECART.id
+            || id == EntityType::COMMAND_BLOCK_MINECART.id
+            || id == EntityType::SPAWNER_MINECART.id =>
+        {
+            Arc::new(MinecartEntity::new(entity))
+        }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {

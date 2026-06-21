@@ -26,23 +26,30 @@ pub enum GossipType {
     Trading = 4,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct VillagerData {
-    pub r#type: VillagerType,
-    pub profession: VillagerProfession,
-    pub level: i32,
+    pub r#type: VarInt,
+    pub profession: VarInt,
+    pub level: VarInt,
 }
 
-impl Serialize for VillagerData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("VillagerData", 3)?;
-        state.serialize_field("type", &VarInt(self.r#type as i32))?;
-        state.serialize_field("profession", &VarInt(self.profession as i32))?;
-        state.serialize_field("level", &VarInt(self.level))?;
-        state.end()
+impl VillagerData {
+    #[must_use]
+    pub const fn new(r#type: VillagerType, profession: VillagerProfession, level: i32) -> Self {
+        Self {
+            r#type: VarInt(r#type as i32),
+            profession: VarInt(profession as i32),
+            level: VarInt(level),
+        }
+    }
+
+    #[must_use]
+    pub fn type_enum(&self) -> VillagerType {
+        VillagerType::from_i32(self.r#type.0).unwrap_or(VillagerType::Plains)
+    }
+
+    #[must_use]
+    pub fn profession_enum(&self) -> VillagerProfession {
+        VillagerProfession::from_i32(self.profession.0).unwrap_or(VillagerProfession::None)
     }
 }

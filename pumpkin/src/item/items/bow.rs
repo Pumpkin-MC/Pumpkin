@@ -98,11 +98,27 @@ impl BowItem {
 
         // Calculate power and fire
         let power = Self::get_power_for_time(use_ticks);
+
+        // Check for Infinity enchantment
+        let mut has_infinity = false;
+        let held = player.inventory().held_item();
+        if let Some(enchantments) =
+            held.lock()
+                .await
+                .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+        {
+            has_infinity = enchantments
+                .enchantment
+                .iter()
+                .any(|(e, _)| **e == pumpkin_data::Enchantment::INFINITY);
+        }
+
         Self.fire_arrow(player, power).await;
 
-        // Consume arrow (if not creative)
+        // Consume arrow (if not creative and no Infinity)
         if let Some(slot) = arrow_slot
             && gamemode != GameMode::Creative
+            && !has_infinity
         {
             player.consume_arrow(slot).await;
         }
@@ -147,7 +163,25 @@ impl BowItem {
             ArrowPickup::Allowed
         };
 
-        let arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
+        let mut arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
+
+        // Read enchantments of the held item (bow)
+        let held = player.inventory().held_item();
+        let stack = held.lock().await;
+        if let Some(enchantments) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+        {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                if **enchantment == pumpkin_data::Enchantment::POWER {
+                    arrow.base_damage *= 1.0 + 0.25 * (f64::from(*level) + 1.0);
+                } else if **enchantment == pumpkin_data::Enchantment::PUNCH {
+                    arrow.punch_level.store(*level as u8, Ordering::Relaxed);
+                } else if **enchantment == pumpkin_data::Enchantment::FLAME {
+                    arrow.is_flame.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+        drop(stack);
 
         // Set velocity based on player's look direction and power
         let (yaw, pitch) = player.rotation();

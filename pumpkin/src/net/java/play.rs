@@ -325,6 +325,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        if player.get_entity().has_vehicle().await {
+            return;
+        }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
         if player.awaiting_teleport.lock().await.is_some() {
             return;
@@ -453,6 +456,9 @@ impl JavaClient {
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        if player.get_entity().has_vehicle().await {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
@@ -978,6 +984,8 @@ impl JavaClient {
         input: SPlayerInput,
         server: &Server,
     ) {
+        player.last_input.store(input.input, Ordering::Relaxed);
+
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().is_sneaking() != sneak {
             send_cancellable! {{
@@ -1767,13 +1775,15 @@ impl JavaClient {
                         }
                         ActionType::Interact | ActionType::InteractAt => {
                             let held = player.inventory.held_item();
-                            let mut stack = held.lock().await;
-                            if !event.target.interact(player, &mut stack).await {
+                            let mut stack = held.lock().await.clone();
+                            let interacted = event.target.interact(player, &mut stack).await;
+                            if !interacted {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target)
                                     .await;
                             }
+                            *held.lock().await = stack;
                         }
                     }
                 }

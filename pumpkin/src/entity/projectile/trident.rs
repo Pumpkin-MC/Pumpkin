@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+use tokio::sync::Mutex;
 
-use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
@@ -11,52 +11,21 @@ use crate::{
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
-use pumpkin_protocol::java::client::play::CEntityVelocity;
-use pumpkin_protocol::java::client::play::CSoundEffect;
+use pumpkin_protocol::java::client::play::{CEntityVelocity, CSoundEffect};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-/// Represents the pickup rules for arrows
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArrowPickup {
-    Disallowed,
-    Allowed,
-    CreativeOnly,
-}
+use super::ProjectileHit;
+use super::arrow::ArrowPickup;
 
-impl ArrowPickup {
-    #[must_use]
-    pub const fn from_byte(byte: u8) -> Self {
-        match byte {
-            1 => Self::Allowed,
-            2 => Self::CreativeOnly,
-            _ => Self::Disallowed,
-        }
-    }
-
-    #[must_use]
-    pub const fn to_byte(self) -> u8 {
-        match self {
-            Self::Disallowed => 0,
-            Self::Allowed => 1,
-            Self::CreativeOnly => 2,
-        }
-    }
-}
-
-pub struct ArrowEntity {
+pub struct TridentEntity {
     pub entity: Entity,
     pub owner_id: Option<i32>,
-    pub base_damage: f64,
+    pub item_stack: Arc<Mutex<ItemStack>>,
     pub pickup: ArrowPickup,
-    pub is_critical: AtomicBool,
-    pub pierce_level: AtomicU8,
-    pub punch_level: AtomicU8,
-    pub is_flame: AtomicBool,
     pub in_ground: AtomicBool,
     pub in_ground_time: AtomicU32,
     pub life: AtomicU32,
@@ -65,10 +34,10 @@ pub struct ArrowEntity {
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
 }
 
-impl ArrowEntity {
-    const ARROW_BASE_DAMAGE: f64 = 2.0;
-    const WATER_INERTIA: f64 = 0.6;
+impl TridentEntity {
+    const BASE_DAMAGE: f64 = 8.0;
     const AIR_INERTIA: f64 = 0.99;
+    const WATER_INERTIA: f64 = 0.9;
     const GRAVITY: f64 = 0.05;
     const DESPAWN_TIME: u32 = 1200;
 
@@ -76,12 +45,8 @@ impl ArrowEntity {
         Self {
             entity,
             owner_id,
-            base_damage: Self::ARROW_BASE_DAMAGE,
+            item_stack: Arc::new(Mutex::new(ItemStack::new(1, &Item::TRIDENT))),
             pickup: ArrowPickup::Disallowed,
-            is_critical: AtomicBool::new(false),
-            pierce_level: AtomicU8::new(0),
-            punch_level: AtomicU8::new(0),
-            is_flame: AtomicBool::new(false),
             in_ground: AtomicBool::new(false),
             in_ground_time: AtomicU32::new(0),
             life: AtomicU32::new(0),
@@ -91,7 +56,12 @@ impl ArrowEntity {
         }
     }
 
-    pub fn new_shot(entity: Entity, shooter: &Entity, pickup: ArrowPickup) -> Self {
+    pub fn new_shot(
+        entity: Entity,
+        shooter: &Entity,
+        item_stack: ItemStack,
+        pickup: ArrowPickup,
+    ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
         entity.pos.store(owner_pos);
@@ -100,12 +70,8 @@ impl ArrowEntity {
         Self {
             entity,
             owner_id: Some(shooter.entity_id),
-            base_damage: Self::ARROW_BASE_DAMAGE,
+            item_stack: Arc::new(Mutex::new(item_stack)),
             pickup,
-            is_critical: AtomicBool::new(false),
-            pierce_level: AtomicU8::new(0),
-            punch_level: AtomicU8::new(0),
-            is_flame: AtomicBool::new(false),
             in_ground: AtomicBool::new(false),
             in_ground_time: AtomicU32::new(0),
             life: AtomicU32::new(0),
@@ -162,38 +128,35 @@ impl ArrowEntity {
         );
     }
 
-    pub fn set_critical(&self, critical: bool) {
-        self.is_critical.store(critical, Ordering::Relaxed);
-    }
+    fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
+        let other_ent = other.get_entity();
 
-    pub fn set_pierce_level(&self, level: u8) {
-        self.pierce_level.store(level, Ordering::Relaxed);
-    }
+        // Don't collide with self
+        if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
 
-    pub const fn set_base_damage(&self, _damage: f64) {
-        // TODO: implement this
-    }
+        // Skip owner for initial frames (5 ticks)
+        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+            return true;
+        }
 
-    #[allow(dead_code)]
-    fn apply_inertia(&self, inertia: f64) {
-        let velocity = self.entity.velocity.load();
-        self.entity
-            .velocity
-            .store(velocity.multiply(inertia, inertia, inertia));
-    }
+        // Skip other projectiles and item entities
+        if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::TRIDENT
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
+        {
+            return true;
+        }
 
-    #[allow(dead_code)]
-    fn apply_gravity(&self) {
-        let mut velocity = self.entity.velocity.load();
-        velocity.y -= Self::GRAVITY;
-        self.entity.velocity.store(velocity);
+        false
     }
 }
 
-impl NBTStorage for ArrowEntity {}
+impl NBTStorage for TridentEntity {}
 
-impl EntityBase for ArrowEntity {
-    #[allow(clippy::too_many_lines)]
+impl EntityBase for TridentEntity {
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
@@ -210,7 +173,6 @@ impl EntityBase for ArrowEntity {
             }
 
             if self.in_ground.load(Ordering::Relaxed) {
-                // Increment in-ground time and life
                 let _in_ground_time = self.in_ground_time.fetch_add(1, Ordering::Relaxed);
                 let life = self.life.fetch_add(1, Ordering::Relaxed);
 
@@ -221,7 +183,7 @@ impl EntityBase for ArrowEntity {
                 return;
             }
 
-            // Arrow is flying
+            // Trident is flying
             let start_pos = entity.pos.load();
             let mut velocity = entity.velocity.load();
 
@@ -245,24 +207,12 @@ impl EntityBase for ArrowEntity {
                 velocity.y.atan2(len) as f32 * 57.295_776,
             );
 
-            // Move arrow
+            // Move trident
             let new_pos = start_pos.add(&velocity);
             entity.set_pos(new_pos);
 
-            // Spawn critical particle trail while arrow is flying and critical
-            if self.is_critical.load(Ordering::Relaxed) {
-                world.spawn_particle(
-                    entity.pos.load(),
-                    Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                    0.0,
-                    1,
-                    Particle::Crit,
-                );
-            }
-
             // Broadcast velocity update
             let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-
             let chunk_pos = entity.chunk_pos.load();
             world.broadcast_to_chunk(chunk_pos, &packet);
 
@@ -334,109 +284,10 @@ impl EntityBase for ArrowEntity {
             }
 
             // Handle hit
-            if let Some(h) = hit {
-                // Ensure hit is only processed once
-                if self.has_hit.swap(true, Ordering::SeqCst) {
-                    return;
-                }
-
+            if let Some(h) = hit
+                && !self.has_hit.swap(true, Ordering::SeqCst)
+            {
                 caller.on_hit(h).await;
-            }
-        })
-    }
-
-    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async move {
-            let entity = self.get_entity();
-            let world = entity.world.load();
-
-            match hit {
-                ProjectileHit::Block {
-                    pos,
-                    face: _,
-                    hit_pos,
-                    ..
-                } => {
-                    // Arrow hit a block - stick into it
-                    self.in_ground.store(true, Ordering::Relaxed);
-                    self.shake_time.store(7, Ordering::Relaxed);
-                    *self.last_block_pos.write().unwrap() = Some(pos);
-
-                    // Stop the arrow
-                    entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
-                    entity.set_pos(hit_pos);
-
-                    // Play sound
-                    let sound_packet = CSoundEffect::new(
-                        IdOr::Id(Sound::EntityArrowHit as u16),
-                        SoundCategory::Neutral,
-                        &hit_pos,
-                        1.0,
-                        1.0,
-                        0.0,
-                    );
-                    let chunk_pos = entity.chunk_pos.load();
-                    world.broadcast_to_chunk(chunk_pos, &sound_packet);
-
-                    // Reset critical flag
-                    self.is_critical.store(false, Ordering::Relaxed);
-                }
-                ProjectileHit::Entity {
-                    entity: target,
-                    hit_pos,
-                    ..
-                } => {
-                    // Calculate damage
-                    let velocity = entity.velocity.load();
-                    let power = velocity.length();
-                    let mut damage = (power * self.base_damage).ceil() as i32;
-
-                    // Apply critical hit bonus
-                    if self.is_critical.load(Ordering::Relaxed) {
-                        let bonus = (rand::random::<u32>() % (damage / 2 + 2) as u32) as i32;
-                        damage = damage.saturating_add(bonus);
-                    }
-                    if self.is_flame.load(Ordering::Relaxed) {
-                        target.get_entity().set_on_fire_for_ticks(100);
-                    }
-
-                    target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
-                        .await;
-
-                    if target.get_living_entity().is_some() {
-                        let punch = self.punch_level.load(Ordering::Relaxed);
-                        if punch > 0
-                            && let Some(owner_id) = self.owner_id
-                            && let Some(owner_entity) = world.get_entity_by_id(owner_id)
-                        {
-                            crate::entity::combat::handle_knockback(
-                                owner_entity.get_entity(),
-                                target.get_entity(),
-                                f64::from(punch) * 0.6,
-                            );
-                        }
-
-                        // Play hit sound
-                        let sound_packet = CSoundEffect::new(
-                            IdOr::Id(Sound::EntityArrowHit as u16),
-                            SoundCategory::Neutral,
-                            &hit_pos,
-                            1.0,
-                            1.0,
-                            0.0,
-                        );
-                        world.broadcast_packet_all(&sound_packet);
-                    }
-
-                    // Check pierce level
-                    let pierce = self.pierce_level.load(Ordering::Relaxed);
-                    if pierce == 0 {
-                        // No piercing - remove arrow
-                        entity.remove().await;
-                    }
-                    // If piercing > 0, arrow continues (TODO: would need to track pierced entities)
-                }
             }
         })
     }
@@ -445,19 +296,96 @@ impl EntityBase for ArrowEntity {
         &self.entity
     }
 
-    #[allow(dead_code, clippy::unused_self)]
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
 
-    #[allow(dead_code, clippy::unused_self)]
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
 
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let world = entity.world.load();
+
+            match hit {
+                ProjectileHit::Block { pos, hit_pos, .. } => {
+                    self.in_ground.store(true, Ordering::Relaxed);
+                    self.shake_time.store(7, Ordering::Relaxed);
+                    *self.last_block_pos.write().unwrap() = Some(pos);
+
+                    // Stop the trident
+                    entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+                    entity.set_pos(hit_pos);
+
+                    // Play sound
+                    let sound_packet = CSoundEffect::new(
+                        IdOr::Id(Sound::ItemTridentHitGround as u16),
+                        SoundCategory::Neutral,
+                        &hit_pos,
+                        1.0,
+                        1.0,
+                        0.0,
+                    );
+                    let chunk_pos = entity.chunk_pos.load();
+                    world.broadcast_to_chunk(chunk_pos, &sound_packet);
+                }
+                ProjectileHit::Entity {
+                    entity: target,
+                    hit_pos,
+                    ..
+                } => {
+                    let mut damage = Self::BASE_DAMAGE;
+
+                    // Apply Impaling enchantment extra damage
+                    if let Some(enchantments) = self
+                        .item_stack
+                        .lock()
+                        .await
+                        .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>(
+                    ) {
+                        for (enchantment, level) in enchantments.enchantment.iter() {
+                            if **enchantment == pumpkin_data::Enchantment::IMPALING {
+                                let in_water =
+                                    target.get_entity().touching_water.load(Ordering::Relaxed);
+                                if in_water {
+                                    damage += 1.25 * f64::from(*level);
+                                }
+                            }
+                        }
+                    }
+
+                    target
+                        .damage(&*target, damage as f32, DamageType::TRIDENT)
+                        .await;
+
+                    // Play hit sound
+                    let sound_packet = CSoundEffect::new(
+                        IdOr::Id(Sound::ItemTridentHit as u16),
+                        SoundCategory::Neutral,
+                        &hit_pos,
+                        1.0,
+                        1.0,
+                        0.0,
+                    );
+                    world.broadcast_packet_all(&sound_packet);
+
+                    // Standard bounce/fall-back behavior
+                    entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
+                    self.has_hit.store(false, Ordering::Relaxed); // Let it hit the ground
+                }
+            }
+        })
+    }
+
     fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            // Only allow picking up grounded arrows
+            // Can only pick up when on the ground
             if !self.in_ground.load(Ordering::Relaxed) {
                 return;
             }
@@ -466,60 +394,26 @@ impl EntityBase for ArrowEntity {
                 return;
             }
 
-            // Check pickup rules
             match self.pickup {
                 ArrowPickup::Disallowed => return,
                 ArrowPickup::CreativeOnly if !player.is_creative() => return,
                 _ => {}
             }
 
-            // Try to insert an arrow into the player's inventory
-            let mut stack = ItemStack::new(1, &Item::ARROW);
+            let mut stack = self.item_stack.lock().await.clone();
             if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack).await {
                 player.living_entity.pickup(&self.entity, 1);
-
-                // Remove arrow entity after pickup
                 self.get_entity().remove().await;
             }
         })
     }
-
-    fn cast_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
-impl ArrowEntity {
-    fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
-        let other_ent = other.get_entity();
-
-        // Don't collide with self
-        if other_ent.entity_id == self_ent.entity_id {
-            return true;
-        }
-
-        // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
-            return true;
-        }
-
-        // Skip other arrows, item entities, and falling block entities
-        if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
-            || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
-            || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
-        {
-            return true;
-        }
-
-        false
-    }
-}
-
-/// Ray intersection algorithm for AABBs
+/// Ray intersection algorithm for AABBs, returning a t value
 fn calculate_ray_intersection(
     start: &Vector3<f64>,
     dir: &Vector3<f64>,
-    bb: &pumpkin_util::math::boundingbox::BoundingBox,
+    bb: &BoundingBox,
 ) -> Option<f64> {
     let mut t_min = 0.0f64;
     let mut t_max = 1.0f64;
@@ -547,22 +441,20 @@ fn calculate_ray_intersection(
 
 /// Get the face of the block that was hit
 fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> pumpkin_data::BlockDirection {
-    use pumpkin_data::BlockDirection;
-
     let local = hit_pos.sub(&block_pos.0.to_f64());
     let eps = 1.0e-4;
 
     if local.x <= eps {
-        BlockDirection::West
+        pumpkin_data::BlockDirection::West
     } else if local.x >= 1.0 - eps {
-        BlockDirection::East
+        pumpkin_data::BlockDirection::East
     } else if local.y <= eps {
-        BlockDirection::Down
+        pumpkin_data::BlockDirection::Down
     } else if local.y >= 1.0 - eps {
-        BlockDirection::Up
+        pumpkin_data::BlockDirection::Up
     } else if local.z <= eps {
-        BlockDirection::North
+        pumpkin_data::BlockDirection::North
     } else {
-        BlockDirection::South
+        pumpkin_data::BlockDirection::South
     }
 }

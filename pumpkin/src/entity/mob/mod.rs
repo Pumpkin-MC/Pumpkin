@@ -397,6 +397,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn get_home(&self) -> Option<BlockPos> {
+        None
+    }
+
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
@@ -673,6 +681,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_panicking(&self) -> bool {
         self.get_path_aware_entity()
             .is_some_and(PathAwareEntity::is_panicking)
+    }
+
+    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        <T as Mob>::get_job_site(self)
+    }
+
+    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        <T as Mob>::get_home(self)
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {

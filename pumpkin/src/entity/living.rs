@@ -2574,6 +2574,10 @@ impl EntityBase for LivingEntity {
         Some(self)
     }
 
+    fn is_pushable(&self) -> bool {
+        self.health.load() > 0.0 && !self.dead.load(Relaxed)
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }

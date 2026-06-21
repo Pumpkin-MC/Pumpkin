@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::entity::Entity;
 use crate::entity::player::Player;
+use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
@@ -80,12 +81,13 @@ impl ItemBehaviour for MinecartItem {
             let height = if is_ascending { 0.5 } else { 0.0 };
             let entity_type = Self::item_to_entity(item.item);
             let pos = location.to_f64();
-            let entity = Arc::new(Entity::new(
+            let entity = Entity::new(
                 world.clone(),
                 Vector3::new(pos.x, pos.y + 0.0625 + height, pos.z),
                 entity_type,
-            ));
-            world.spawn_entity(entity).await;
+            );
+            let minecart_entity = Arc::new(MinecartEntity::new(entity));
+            world.spawn_entity(minecart_entity).await;
         })
     }
 
