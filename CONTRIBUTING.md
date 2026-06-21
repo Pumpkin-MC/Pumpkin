@@ -30,7 +30,7 @@ There are several ways you can contribute to Pumpkin:
   Write clear and concise commit messages that describe your changes.
 - **translation key value**:
   When adding corresponding language texts, please strictly adhere to
-  our [translation key naming conventions](NAMING_CONVENTION.md).
+  our [translation key naming conventions](pumpkin-i18n/NAMING_CONVENTION.md).
 
 ### Docs
 
