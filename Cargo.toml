@@ -128,7 +128,7 @@ crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = { version = "0.8.21", default-features = false, features = ["std"] }
 crossfire = { version = "3.1.16", default-features = false, features = ["compat"] }
-crypto-bigint = { version = "0.7.4", default-features = false }
+crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.16.9", default-features = false, features = ["std"] }
 either = { version = "1.16.0", default-features = false }
@@ -146,7 +146,7 @@ num-bigint = { version = "0.4", default-features = false, features = ["std"] }
 num-derive = { version = "0.4", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.13.1", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
-phf = { version = "0.13.1", default-features = false, features = ["std"] }
+phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
 pumpkin-config = { path = "pumpkin-config", default-features = false }
@@ -190,9 +190,9 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.3", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "45.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "45.0", default-features = false, features = ["p2"] }
-wasmtime-wasi-http = { version = "45.0", default-features = false, features = ["p2", "default-send-request"] }
+wasmtime = { version = "46.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { version = "46.0", default-features = false, features = ["p2"] }
+wasmtime-wasi-http = { version = "46.0", default-features = false, features = ["p2", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.10", default-features = false }
 wit-bindgen = { version = "0.58", default-features = false, features = ["macros"] }

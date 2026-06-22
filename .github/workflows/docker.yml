@@ -41,7 +41,7 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -101,7 +101,7 @@ jobs:
           echo "REGISTRY_IMAGE=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 

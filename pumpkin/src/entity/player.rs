@@ -67,9 +67,9 @@ use pumpkin_protocol::java::client::play::{
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
     CEntityPositionSync, CGameEvent, CItemCooldown, CMapItemData, COpenScreen, CParticle,
     CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
+    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect,
+    CStopSound, CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
     CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction,
     PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
 };
@@ -422,6 +422,8 @@ pub struct Player {
     pub gamemode: AtomicCell<GameMode>,
     /// The player's previous gamemode
     pub previous_gamemode: AtomicCell<Option<GameMode>>,
+    /// The entity ID of the entity that the player is currently spectating/camera targeting.
+    pub camera_target_id: AtomicCell<Option<i32>>,
     /// The player's spawnpoint
     pub respawn_point: Mutex<Option<RespawnPoint>>,
     /// The player's sleep status
@@ -656,6 +658,7 @@ impl Player {
             stats: Mutex::new(statistics::Statistics::default()),
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
+            camera_target_id: AtomicCell::new(None),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
@@ -1859,6 +1862,32 @@ impl Player {
     // TODO Abstract the chunk sending
     #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
+        if let Some(camera_id) = self.camera_target_id.load() {
+            if camera_id == self.entity_id() {
+                self.camera_target_id.store(None);
+            } else {
+                let world = self.world();
+                let target = world
+                    .get_player_by_id(camera_id)
+                    .map(|p| Arc::clone(&p) as Arc<dyn EntityBase>)
+                    .or_else(|| world.get_entity_by_id(camera_id));
+                if let Some(target) = target {
+                    let target_pos = target.get_entity().pos.load();
+                    let player_pos = self.living_entity.entity.pos.load();
+                    if player_pos != target_pos {
+                        self.living_entity.entity.set_pos(target_pos);
+                        crate::world::chunker::update_position(self).await;
+                    }
+                } else {
+                    // Target no longer exists, reset camera back to player
+                    self.camera_target_id.store(None);
+                    self.client
+                        .send_packet_now(&CSetCamera::new(self.entity_id().into()))
+                        .await;
+                }
+            }
+        }
+
         self.current_screen_handler
             .lock()
             .await
@@ -2853,6 +2882,13 @@ impl Player {
                     if entity.is_sneaking() {
                         entity.set_sneaking(false).await;
                     }
+                }
+
+                if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {
+                    self.camera_target_id.store(None);
+                    self.client.send_packet_now(&CSetCamera::new(
+                        self.entity_id().into()
+                    )).await;
                 }
 
                 self.living_entity.entity.invulnerable.store(
