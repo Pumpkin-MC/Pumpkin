@@ -1,4 +1,5 @@
 mod attack;
+mod bundle_item_selected;
 mod change_game_mode;
 mod chat_command;
 mod chat_message;
@@ -42,11 +43,13 @@ mod set_creative_slot;
 mod set_held_item;
 mod set_jigsaw_block;
 mod swing_arm;
+mod teleport_to_entity;
 mod update_sign;
 mod use_item;
 mod use_item_on;
 
 pub use attack::*;
+pub use bundle_item_selected::*;
 pub use change_game_mode::*;
 pub use chat_command::*;
 pub use chat_message::*;
@@ -90,6 +93,13 @@ pub use set_creative_slot::*;
 pub use set_held_item::*;
 pub use set_jigsaw_block::*;
 pub use swing_arm::*;
+pub use teleport_to_entity::*;
 pub use update_sign::*;
 pub use use_item::*;
 pub use use_item_on::*;
+
+mod test_instance_block_action;
+pub use test_instance_block_action::*;
+
+mod set_test_block;
+pub use set_test_block::*;
