@@ -11,6 +11,7 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_i18n::{locale_to_log_string, remove_player_locale, set_player_locale};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -457,11 +458,28 @@ impl PumpkinServer {
                                      java_client.close();
                                      java_client.await_tasks().await;
                                 },
-                                PacketHandlerResult::ReadyToPlay(profile,config) => {
-                                     if let Some((player, world)) = server_clone
-                                     .add_player(ClientPlatform::Java(java_client), profile, Some(config))
+                                PacketHandlerResult::ReadyToPlay(profile, config) => {
+                                    let player_locale_str = config.locale.clone();
+                                    let client_locale_config = server_clone.advanced_config.locale.client_java_edition.clone();
+                                    if let Some((player, world)) = server_clone
+                                    .add_player(ClientPlatform::Java(java_client), profile, Some(config))
                                           .await
                                 {
+                                    // Register the player's locale in the i18n cache
+                                    // TODO: For testing use
+                                    let resolved_locale = set_player_locale(
+                                        &player.gameprofile.id.to_string(),
+                                        &player_locale_str,
+                                        &client_locale_config,
+                                    );
+                                    info!(
+                                        "Player {} ({}) joined with language: {} (reported: {})",
+                                        player.gameprofile.name,
+                                        player.gameprofile.id,
+                                        locale_to_log_string(resolved_locale),
+                                        player_locale_str,
+                                    );
+
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
@@ -475,6 +493,7 @@ impl PumpkinServer {
                                     }
                                     player.remove().await;
                                     server_clone.remove_player(&player).await;
+                                    remove_player_locale(&player.gameprofile.id.to_string());
                                     if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(&player)
                                         .await {
@@ -538,10 +557,26 @@ impl PumpkinServer {
                                                 client_clone.await_tasks().await;
                                             }
                                             PacketHandlerResult::ReadyToPlay(profile, config) => {
+                                                let player_locale_str = config.locale.clone();
+                                                let client_locale_config = server_clone.advanced_config.locale.client_bedrock_edition.clone();
                                                 if let Some((player, _world)) = server_clone
                                                     .add_player(ClientPlatform::Bedrock(client_clone.clone()), profile, Some(config))
                                                     .await
                                                 {
+                                                    // Register the player's locale in the i18n cache
+                                                    let resolved_locale = set_player_locale(
+                                                        &player.gameprofile.id.to_string(),
+                                                        &player_locale_str,
+                                                        &client_locale_config,
+                                                    );
+                                                    info!(
+                                                        "Player {} ({}) joined with language: {} (reported: {})",
+                                                        player.gameprofile.name,
+                                                        player.gameprofile.id,
+                                                        locale_to_log_string(resolved_locale),
+                                                        player_locale_str,
+                                                    );
+
                                                     *client_clone.player.lock().await = Some(player.clone());
 
                                                     client_clone.progress_player_packets(&player, &server_clone).await;
@@ -550,6 +585,7 @@ impl PumpkinServer {
                                                     client_clone.await_tasks().await;
                                                     player.remove().await;
                                                     server_clone.remove_player(&player).await;
+                                                    remove_player_locale(&player.gameprofile.id.to_string());
                                                     if let Err(e) = server_clone.player_data_storage
                                                         .handle_player_leave(&player)
                                                         .await {

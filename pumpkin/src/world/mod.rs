@@ -71,6 +71,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
+use pumpkin_i18n::server_locale;
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -588,11 +589,7 @@ impl World {
                     .collect();
                 SText::translation(key.to_string(), parameters)
             }
-            _ => SText::system_message(
-                message
-                    .0
-                    .to_bedrock_legacy(pumpkin_util::translation::Locale::EnUs),
-            ),
+            _ => SText::system_message(message.0.to_bedrock_legacy(server_locale())),
         }
     }
 

@@ -1,3 +1,4 @@
+use pumpkin_i18n::set_player_locale;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
@@ -1585,6 +1586,8 @@ impl JavaClient {
                     return;
                 };
 
+                let player_locale = client_information.locale.clone();
+
                 let new_config = PlayerConfig {
                     locale: client_information.locale,
                     view_distance: new_view_distance,
@@ -1598,6 +1601,15 @@ impl JavaClient {
 
                 // 4. Atomically swap the new config into the player
                 player.config.store(std::sync::Arc::new(new_config));
+
+                // Sync locale to the i18n cache in case the player changed their language
+                if let Some(server) = player.world().server.upgrade() {
+                    set_player_locale(
+                        &player.gameprofile.id.to_string(),
+                        &player_locale,
+                        &server.advanced_config.locale.client_java_edition,
+                    );
+                }
 
                 (update_settings, update_watched, main_hand_changed)
             };

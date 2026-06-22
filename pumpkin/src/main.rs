@@ -20,14 +20,15 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin::{
-    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
+    CRASH_REPORT, LoggerOption, PumpkinServer, SERVER_EXIT_CODE, SERVER_IS_STOPPING, SHOULD_STOP,
+    STOP_INTERRUPT,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
-    stop_or_exit_server,
+    stop_or_exit_server, stop_server,
 };
-use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
+use pumpkin_i18n::{self, locale_to_log_string, resolve_server_locale, set_server_locale};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -81,6 +82,15 @@ async fn main() {
     let vanilla_data = VanillaData::load();
 
     pumpkin::init_logger(&config.advanced);
+
+    // Initialize the server logging locale from config
+    let server_locale = resolve_server_locale(&config.advanced.locale.server_logging);
+    set_server_locale(server_locale);
+    info!(
+        "Server locale: {} (source: {})",
+        locale_to_log_string(server_locale),
+        config.advanced.locale.server_logging
+    );
 
     info!(
         "{}",
@@ -176,6 +186,7 @@ async fn main() {
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
 }
+
 fn print_support_links_and_warning() {
     warn!(
         "{}",

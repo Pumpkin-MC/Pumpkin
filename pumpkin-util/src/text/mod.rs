@@ -7,7 +7,7 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use pumpkin_i18n::{Locale, get_translation};
+use pumpkin_i18n::{Locale, get_translation, server_locale};
 use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -114,13 +114,13 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with),
+            } => translation_to_pretty(format!("minecraft:{translate}"), server_locale(), with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
+            TextContent::Custom { key, locale, with } => translation_to_pretty(key, locale, with),
         };
         let style = self.style;
         let color = style.color;
@@ -752,9 +752,9 @@ impl TextComponent {
             .clone()
             .to_translated()
             .serialize(&mut serializer)
-            .expect(&pumpkin_i18n::get_translation(
+            .expect(&get_translation(
                 "pumpkin:text.component.failed_serialize_nbt",
-                pumpkin_i18n::server_locale(),
+                server_locale(),
             ));
 
         buf.into_boxed_slice()
@@ -889,7 +889,7 @@ impl TextComponent {
     where
         F: Fn(usize, usize) -> color::RGBColor,
     {
-        let raw_text = self.0.clone().get_text(Locale::EnUs);
+        let raw_text = self.0.clone().get_text(server_locale());
         let chars: Vec<char> = raw_text.chars().collect();
         let len = chars.len();
 
