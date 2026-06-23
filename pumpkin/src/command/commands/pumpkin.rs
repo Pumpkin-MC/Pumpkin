@@ -115,7 +115,7 @@ impl CommandExecutor for Executor {
                             get_translation_text(
                                 "pumpkin:commands.pumpkin.version",
                                 locale,
-                                vec![TextComponent::text(version_string).0],
+                                &[TextComponent::text(version_string).0],
                             )
                             .replace('\n', ""),
                         ),
@@ -133,7 +133,7 @@ impl CommandExecutor for Executor {
                                 get_translation_text(
                                     "pumpkin:commands.pumpkin.description",
                                     locale,
-                                    vec![],
+                                    &[],
                                 )
                                 .replace('\n', ""),
                             ),
@@ -163,7 +163,7 @@ impl CommandExecutor for Executor {
                                 get_translation_text(
                                     "pumpkin:commands.pumpkin.minecraft_version",
                                     locale,
-                                    vec![
+                                    &[
                                         TextComponent::text(CURRENT_MC_VERSION.to_string()).0,
                                         TextComponent::text(
                                             CURRENT_MC_VERSION.protocol_version().to_string(),

@@ -15,7 +15,7 @@ use crate::text::{TextComponentBase, TextContent, style::Style};
 #[must_use]
 pub fn reorder_substitutions(
     translation: &str,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> (Vec<TextComponentBase>, Vec<SubstitutionRange>) {
     let placeholders = placeholder_ranges(translation);
     let mut substitutions = Vec::with_capacity(placeholders.len());
@@ -42,15 +42,15 @@ pub fn reorder_substitutions(
 ///
 /// # Returns
 /// The resolved and formatted translation string.
-pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
+pub fn translation_to_pretty<P: AsRef<str>>(
     namespaced_key: P,
     locale: Locale,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> String {
     format_translation_components(
-        namespaced_key.into(),
+        namespaced_key.as_ref(),
         locale,
-        &with,
+        with,
         TextComponentBase::to_pretty_console,
     )
 }
@@ -64,12 +64,12 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
 ///
 /// # Returns
 /// The resolved translation as plain text.
-pub fn get_translation_text<P: Into<Cow<'static, str>>>(
+pub fn get_translation_text<P: AsRef<str>>(
     namespaced_key: P,
     locale: Locale,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> String {
-    format_translation_components(namespaced_key.into(), locale, &with, |component| {
+    format_translation_components(namespaced_key.as_ref(), locale, with, |component| {
         component.get_text(locale)
     })
 }
@@ -77,7 +77,7 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
 pub(crate) fn resolve_translation_components(
     namespaced_key: &str,
     locale: Locale,
-    with: Vec<TextComponentBase>,
+    with: &[TextComponentBase],
 ) -> (String, Vec<TextComponentBase>) {
     let resolved = resolve_translation(namespaced_key, locale);
     if with.is_empty() {
@@ -110,7 +110,7 @@ pub(crate) fn resolve_translation_components(
 }
 
 fn format_translation_components<F>(
-    namespaced_key: Cow<'static, str>,
+    namespaced_key: &str,
     locale: Locale,
     with: &[TextComponentBase],
     mut render_component: F,
@@ -118,13 +118,13 @@ fn format_translation_components<F>(
 where
     F: FnMut(TextComponentBase) -> String,
 {
-    let resolved = resolve_translation(namespaced_key.as_ref(), locale);
+    let resolved = resolve_translation(namespaced_key, locale);
     if with.is_empty() {
-        return resolved_text(namespaced_key.as_ref(), &resolved);
+        return resolved_text(namespaced_key, &resolved);
     }
 
     let Some(tokens) = resolved.tokens() else {
-        return resolved_text(namespaced_key.as_ref(), &resolved);
+        return resolved_text(namespaced_key, &resolved);
     };
 
     let mut result = String::with_capacity(resolved.as_str().len());
@@ -245,11 +245,11 @@ mod tests {
         let args = vec![TextComponent::text("A").0, TextComponent::text("B").0];
 
         assert_eq!(
-            get_translation_text("test_util_translation:ordered", Locale::EnUs, args.clone()),
+            get_translation_text("test_util_translation:ordered", Locale::EnUs, &args),
             "B then A % done"
         );
         assert_eq!(
-            translation_to_pretty("test_util_translation:ordered", Locale::EnUs, args),
+            translation_to_pretty("test_util_translation:ordered", Locale::EnUs, &args),
             "B then A % done"
         );
     }
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn reorder_substitutions_handles_missing_args() {
         let (substitutions, ranges) =
-            reorder_substitutions("%s %2$s %%", vec![TextComponent::text("A").0]);
+            reorder_substitutions("%s %2$s %%", &[TextComponent::text("A").0]);
 
         assert_eq!(ranges.len(), 2);
         assert_eq!(substitutions[0].clone().get_text(Locale::EnUs), "A");

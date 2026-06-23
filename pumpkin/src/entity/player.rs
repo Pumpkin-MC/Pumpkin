@@ -3125,7 +3125,7 @@ impl Player {
     #[must_use]
     pub fn locale(&self) -> Locale {
         try_player_locale(&self.gameprofile.id.to_string()).unwrap_or_else(|| {
-            Locale::from_str(&self.config.load().locale).unwrap_or_else(|_| server_global_locale())
+            Locale::from_str(&self.config.load().locale).unwrap_or_else(|()| server_global_locale())
         })
     }
 

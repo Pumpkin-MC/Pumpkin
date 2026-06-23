@@ -123,13 +123,13 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => translation_to_pretty(format!("minecraft:{translate}"), locale, with),
+            } => translation_to_pretty(format!("minecraft:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, locale, with),
+            TextContent::Custom { key, with, .. } => translation_to_pretty(key, locale, &with),
         };
         let style = self.style;
         let color = style.color;
@@ -187,7 +187,7 @@ impl TextComponentBase {
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
             TextContent::Custom { key, with, .. } => {
-                text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
+                text.push_str(&get_translation_text(key, locale, with));
             }
         }
 
@@ -244,13 +244,13 @@ impl TextComponentBase {
                 text.push_str(&get_translation_text(
                     format!("minecraft:{translate}"),
                     locale,
-                    with.clone(),
+                    with,
                 ));
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
             TextContent::Custom { key, with, .. } => {
-                text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
+                text.push_str(&get_translation_text(key, locale, with));
             }
         }
 
@@ -280,13 +280,13 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => get_translation_text(format!("minecraft:{translate}"), locale, with),
+            } => get_translation_text(format!("minecraft:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
+            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, &with),
         };
 
         // Recursively append the text of all child components
@@ -310,7 +310,7 @@ impl TextComponentBase {
                         hover_components.push(
                             hover_component
                                 .to_owned()
-                                .to_translated_with_locale_override(locale_override),
+                                .translated_with_locale_override(locale_override),
                         );
                     }
                     Some(HoverEvent::ShowText {
@@ -331,7 +331,7 @@ impl TextComponentBase {
                                 name.iter()
                                     .map(|x| {
                                         x.to_owned()
-                                            .to_translated_with_locale_override(locale_override)
+                                            .translated_with_locale_override(locale_override)
                                     })
                                     .collect(),
                             ),
@@ -354,17 +354,17 @@ impl TextComponentBase {
     /// A new component with all translations resolved.
     #[must_use]
     pub fn to_translated(self) -> Self {
-        self.to_translated_with_locale_override(None)
+        self.translated_with_locale_override(None)
     }
 
     /// Converts this component by resolving all Pumpkin custom translations with
     /// the supplied locale.
     #[must_use]
     pub fn to_translated_with_locale(self, locale: Locale) -> Self {
-        self.to_translated_with_locale_override(Some(locale))
+        self.translated_with_locale_override(Some(locale))
     }
 
-    fn to_translated_with_locale_override(self, locale_override: Option<Locale>) -> Self {
+    fn translated_with_locale_override(self, locale_override: Option<Locale>) -> Self {
         // NOTE: Divide the translation into slices and inserts the substitutions.
         let component = match *self.content {
             TextContent::Translate {
@@ -374,7 +374,7 @@ impl TextComponentBase {
             } => {
                 let mut translated_with = vec![];
                 for w in with {
-                    translated_with.push(w.to_translated_with_locale_override(locale_override));
+                    translated_with.push(w.translated_with_locale_override(locale_override));
                 }
                 Self {
                     content: Box::new(TextContent::Translate {
@@ -389,7 +389,7 @@ impl TextComponentBase {
             TextContent::Custom { key, with, locale } => {
                 let locale = locale_override.unwrap_or(locale);
                 let (translation_parent, mut translation_slices) =
-                    resolve_translation_components(&key, locale, with);
+                    resolve_translation_components(&key, locale, &with);
                 for i in self.extra {
                     translation_slices.push(i);
                 }
@@ -407,7 +407,7 @@ impl TextComponentBase {
         let extra = component
             .extra
             .into_iter()
-            .map(|component| component.to_translated_with_locale_override(locale_override))
+            .map(|component| component.translated_with_locale_override(locale_override))
             .collect();
 
         // If the hover event is present, it will also be translated

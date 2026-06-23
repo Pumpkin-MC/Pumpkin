@@ -59,7 +59,7 @@ where
     let namespaced_key = namespaced_key(namespace.as_ref(), key.as_ref());
     let translation = translation.into();
 
-    translation_engine().add_translation(locale as usize, &namespaced_key, translation.clone());
+    translation_engine().add_translation(locale as usize, &namespaced_key, &translation);
 
     if let Some(translations) = LazyLock::get(&TRANSLATIONS) {
         let mut translations = translations.lock().unwrap();
@@ -118,6 +118,7 @@ where
 ///
 /// # Returns
 /// The localized translation, the English fallback, or the raw key.
+#[must_use]
 pub fn get_translation(key: &str, locale: Locale) -> String {
     let resolved = resolve_translation(key, locale);
     if resolved.is_missing() {

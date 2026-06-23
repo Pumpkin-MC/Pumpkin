@@ -248,6 +248,9 @@ impl TranslationEngine {
         // Tier 2 – EnUs fallback
         if locale_idx != crate::locale::Locale::EnUs as usize {
             if let Some(entry) = self.lookup_override(crate::locale::Locale::EnUs as usize, key) {
+                #[cfg(debug_assertions)]
+                Self::log_english_fallback(locale_idx, key);
+                #[cfg(not(debug_assertions))]
                 self.log_english_fallback(locale_idx, key);
                 self.cache.insert(cache_key, entry.clone());
                 return entry;
@@ -257,6 +260,9 @@ impl TranslationEngine {
                 .get(crate::locale::Locale::EnUs as usize)
                 .and_then(|store| store.lookup(key))
             {
+                #[cfg(debug_assertions)]
+                Self::log_english_fallback(locale_idx, key);
+                #[cfg(not(debug_assertions))]
                 self.log_english_fallback(locale_idx, key);
                 let resolved = Arc::new(entry.clone());
                 self.cache.insert(cache_key, resolved.clone());
@@ -265,6 +271,9 @@ impl TranslationEngine {
         }
 
         // Tier 3 – raw key
+        #[cfg(debug_assertions)]
+        Self::log_missing_translation(locale_idx, key);
+        #[cfg(not(debug_assertions))]
         self.log_missing_translation(locale_idx, key);
         let resolved = Arc::new(ResolvedTranslation::Missing(Arc::from(key)));
         self.cache.insert(cache_key, resolved.clone());
@@ -276,11 +285,11 @@ impl TranslationEngine {
     /// Overrides are checked before the immutable built-in FST stores. This
     /// keeps plugin/custom translation loading cheap and avoids rebuilding all
     /// locale data for a single write.
-    pub fn add_translation(&self, locale_idx: usize, key: &str, translation: String) {
+    pub fn add_translation(&self, locale_idx: usize, key: &str, translation: &str) {
         if let Some(store) = self.overrides.get(locale_idx) {
             store.insert(
                 key.to_owned(),
-                Arc::new(ResolvedTranslation::from_template(&translation)),
+                Arc::new(ResolvedTranslation::from_template(translation)),
             );
             self.cache.clear();
         }
@@ -336,7 +345,7 @@ impl TranslationEngine {
     }
 
     #[cfg(debug_assertions)]
-    fn log_english_fallback(&self, locale_idx: usize, key: &str) {
+    fn log_english_fallback(locale_idx: usize, key: &str) {
         warn!(
             locale_idx,
             key, "translation key not found in requested locale – falling back to English"
@@ -354,7 +363,7 @@ impl TranslationEngine {
     }
 
     #[cfg(debug_assertions)]
-    fn log_missing_translation(&self, locale_idx: usize, key: &str) {
+    fn log_missing_translation(locale_idx: usize, key: &str) {
         error!(
             locale_idx,
             key, "translation key not found in any locale – returning raw key"
