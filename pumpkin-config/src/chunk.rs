@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for chunk storage format.
 ///
 /// Supports multiple chunk formats: `Anvil`, `Linear`, `Pump`, and the
-/// read-only `Slime` (AdvancedSlimePaper `.slime`) format.
+/// read-only `Slime` (`AdvancedSlimePaper` `.slime`) format.
 #[derive(Deserialize, Default, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum ChunkConfig {
@@ -19,7 +19,7 @@ pub enum ChunkConfig {
     #[serde(rename = "pump")]
     #[default]
     Pump,
-    /// SlimeWorld (`.slime`) format, loaded read-only (AdvancedSlimePaper v13).
+    /// `SlimeWorld` (`.slime`) format, loaded read-only (`AdvancedSlimePaper` v13).
     ///
     /// The whole world is read into memory from the first `*.slime` file in the
     /// world folder; runtime changes are not written back.

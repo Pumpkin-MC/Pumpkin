@@ -71,7 +71,10 @@ impl SlimeChunkIo {
                         chunks.insert(Vector2::new(chunk.x, chunk.z), Arc::new(data));
                     }
                     Err(error) => {
-                        error!("Failed to convert slime chunk {},{}: {error}", chunk.x, chunk.z);
+                        error!(
+                            "Failed to convert slime chunk {},{}: {error}",
+                            chunk.x, chunk.z
+                        );
                     }
                 }
             }

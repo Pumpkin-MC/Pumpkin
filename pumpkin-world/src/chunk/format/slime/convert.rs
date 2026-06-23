@@ -92,7 +92,9 @@ fn uuid_from_int_array(array: &[i32]) -> Option<Uuid> {
     let [most_hi, most_lo, least_hi, least_lo] = *<&[i32; 4]>::try_from(array).ok()?;
     let most = (u64::from(most_hi.cast_unsigned()) << 32) | u64::from(most_lo.cast_unsigned());
     let least = (u64::from(least_hi.cast_unsigned()) << 32) | u64::from(least_lo.cast_unsigned());
-    Some(Uuid::from_u128((u128::from(most) << 64) | u128::from(least)))
+    Some(Uuid::from_u128(
+        (u128::from(most) << 64) | u128::from(least),
+    ))
 }
 
 /// Parse a named-compound NBT segment into `T`; empty segments yield `None`.
@@ -138,16 +140,22 @@ pub(crate) fn chunk_to_chunk_data(
         sky_lights[index] = light_container(section.sky_light.as_ref());
 
         if let Some(states) = parse_segment::<VanillaBlockStates>(&section.block_states)? {
-            let palette: Box<[u16]> =
-                states.palette.iter().map(palette_entry_to_state_id).collect();
+            let palette: Box<[u16]> = states
+                .palette
+                .iter()
+                .map(palette_entry_to_state_id)
+                .collect();
             block_palettes[index] = BlockPalette::from_disk_nbt(ChunkSectionBlockStates {
                 data: states.data,
                 palette,
             });
         }
         if let Some(biomes) = parse_segment::<VanillaBiomes>(&section.biomes)? {
-            let palette: Box<[u8]> =
-                biomes.palette.iter().map(|name| biome_name_to_id(name)).collect();
+            let palette: Box<[u8]> = biomes
+                .palette
+                .iter()
+                .map(|name| biome_name_to_id(name))
+                .collect();
             biome_palettes[index] = BiomePalette::from_disk_nbt(ChunkSectionBiomes {
                 data: biomes.data,
                 palette,
@@ -176,11 +184,12 @@ pub(crate) fn chunk_to_chunk_data(
         min_y,
     };
 
-    let heightmap = parse_segment::<ChunkHeightmaps>(&chunk.height_maps)?.unwrap_or(ChunkHeightmaps {
-        world_surface: None,
-        motion_blocking: None,
-        motion_blocking_no_leaves: None,
-    });
+    let heightmap =
+        parse_segment::<ChunkHeightmaps>(&chunk.height_maps)?.unwrap_or(ChunkHeightmaps {
+            world_surface: None,
+            motion_blocking: None,
+            motion_blocking_no_leaves: None,
+        });
 
     let mut block_entities = FxHashMap::default();
     if let Some(list) = parse_segment::<CompoundList>(&chunk.block_entities)? {
@@ -242,7 +251,9 @@ mod tests {
     use pumpkin_data::Block;
     use uuid::Uuid;
 
-    use super::{VanillaPaletteEntry, biome_name_to_id, palette_entry_to_state_id, uuid_from_int_array};
+    use super::{
+        VanillaPaletteEntry, biome_name_to_id, palette_entry_to_state_id, uuid_from_int_array,
+    };
 
     #[test]
     fn resolves_air_palette_entry() {
@@ -250,7 +261,10 @@ mod tests {
             name: "minecraft:air".to_string(),
             properties: None,
         };
-        assert_eq!(palette_entry_to_state_id(&entry), Block::AIR.default_state.id);
+        assert_eq!(
+            palette_entry_to_state_id(&entry),
+            Block::AIR.default_state.id
+        );
     }
 
     #[test]
@@ -287,12 +301,18 @@ mod tests {
             name: "modid:does_not_exist".to_string(),
             properties: None,
         };
-        assert_eq!(palette_entry_to_state_id(&entry), Block::AIR.default_state.id);
+        assert_eq!(
+            palette_entry_to_state_id(&entry),
+            Block::AIR.default_state.id
+        );
     }
 
     #[test]
     fn resolves_known_biome() {
-        assert_eq!(biome_name_to_id("minecraft:plains"), pumpkin_data::biome::Biome::PLAINS.id);
+        assert_eq!(
+            biome_name_to_id("minecraft:plains"),
+            pumpkin_data::biome::Biome::PLAINS.id
+        );
     }
 
     #[test]
