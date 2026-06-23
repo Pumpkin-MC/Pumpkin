@@ -646,6 +646,14 @@ pub fn deserialize_java_serverbound_packet(
                 entity_id: p.entity_id.0.try_into().unwrap(),
             }))
         }
+        id if id == pumpkin_protocol::java::server::play::SBundleItemSelected::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::SBundleItemSelected as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::SBundleItemSelected(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SBundleItemSelected {
+                slot_id: p.slot_id.0.try_into().unwrap(),
+                selected_item_index: p.selected_item_index.0.try_into().unwrap(),
+            }))
+        }
         id if id == pumpkin_protocol::java::server::play::SChatCommand::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SChatCommand as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
@@ -908,6 +916,13 @@ pub fn deserialize_java_serverbound_packet(
             let p = <pumpkin_protocol::java::server::play::SSwingArm as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
             Some(ServerboundPacket::SSwingArm(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSwingArm {
                 hand: p.hand.0.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::play::STeleportToEntity::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::STeleportToEntity as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::STeleportToEntity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::STeleportToEntity {
+                target: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: p.target.as_u64_pair().1, low: p.target.as_u64_pair().0 },
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SUseItem::to_id(version) => {

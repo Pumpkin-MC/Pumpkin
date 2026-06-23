@@ -61,6 +61,12 @@ pub fn find_nearest_biome(
             break;
         }
 
+        let min_limit = i32::MIN + r + 32;
+        let max_limit = i32::MAX - r - 32;
+        if px < min_limit || px > max_limit || pz < min_limit || pz > max_limit {
+            break;
+        }
+
         let perimeter_points = get_perimeter_points(px, pz, r);
         for (x, z) in perimeter_points {
             for &y in slice.iter() {
@@ -86,17 +92,21 @@ pub fn find_nearest_biome(
 }
 
 pub fn get_perimeter_points(px: i32, pz: i32, r: i32) -> impl Iterator<Item = (i32, i32)> {
+    let min_limit = i32::MIN + r + 32;
+    let max_limit = i32::MAX - r - 32;
+    let safe = r >= 0 && px >= min_limit && px <= max_limit && pz >= min_limit && pz <= max_limit;
+
     let left = (0i32..)
-        .map(move |i| pz - r + i * 32)
-        .take_while(move |&z| z <= pz + r)
+        .map(move |i| if safe { pz - r + i * 32 } else { i32::MAX })
+        .take_while(move |&z| safe && z <= pz + r)
         .flat_map(move |z| [(px - r, z), (px + r, z)]);
 
     let top_bottom = (0i32..)
-        .map(move |i| px - r + 32 + i * 32)
-        .take_while(move |&x| x <= px + r - 32)
+        .map(move |i| if safe { px - r + 32 + i * 32 } else { i32::MAX })
+        .take_while(move |&x| safe && x <= px + r - 32)
         .flat_map(move |x| [(x, pz - r), (x, pz + r)]);
 
-    let origin = (r == 0).then_some((px, pz)).into_iter();
+    let origin = if safe && r == 0 { Some((px, pz)) } else { None }.into_iter();
 
     origin.chain(left).chain(top_bottom)
 }
