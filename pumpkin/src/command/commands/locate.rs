@@ -1,11 +1,11 @@
 #![allow(clippy::too_many_lines)]
-use std::borrow::Cow;
-use std::time::Instant;
+use pumpkin_data::biome::Biome;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::structures::{StructureKeys, StructureSet};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids, get_tag_values};
 use pumpkin_data::translation::java::{
-    CHAT_COORDINATES, CHAT_COORDINATES_TOOLTIP,
-    COMMANDS_LOCATE_BIOME_NOT_FOUND, COMMANDS_LOCATE_BIOME_SUCCESS,
-    COMMANDS_LOCATE_POI_NOT_FOUND, COMMANDS_LOCATE_POI_SUCCESS,
+    CHAT_COORDINATES, CHAT_COORDINATES_TOOLTIP, COMMANDS_LOCATE_BIOME_NOT_FOUND,
+    COMMANDS_LOCATE_BIOME_SUCCESS, COMMANDS_LOCATE_POI_NOT_FOUND, COMMANDS_LOCATE_POI_SUCCESS,
     COMMANDS_LOCATE_STRUCTURE_INVALID, COMMANDS_LOCATE_STRUCTURE_NOT_FOUND,
     COMMANDS_LOCATE_STRUCTURE_SUCCESS,
 };
@@ -13,24 +13,23 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_data::tag::{RegistryKey, get_tag_ids, get_tag_values};
-use pumpkin_data::biome::Biome;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_world::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
+use pumpkin_world::generation::biome_coords;
+use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
 use pumpkin_world::generation::noise::router::multi_noise_sampler::{
     MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
 };
-use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
-use pumpkin_world::generation::biome_coords;
+use std::borrow::Cow;
+use std::time::Instant;
 
 use crate::command::args::ConsumedArgs;
-use crate::command::args::resource::structure::StructureArgumentConsumer;
+use crate::command::args::FindArg;
 use crate::command::args::resource::biome::BiomeArgumentConsumer;
 use crate::command::args::resource::poi::PoiArgumentConsumer;
-use crate::command::args::FindArg;
+use crate::command::args::resource::structure::StructureArgumentConsumer;
 use crate::command::dispatcher::CommandError;
-use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["locate"];
@@ -49,10 +48,14 @@ impl CommandExecutor for StructureExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let position = sender.position().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::text("This command can only be executed in a world context"))
+                CommandError::CommandFailed(TextComponent::text(
+                    "This command can only be executed in a world context",
+                ))
             })?;
             let world = sender.world().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::text("This command can only be executed in a world context"))
+                CommandError::CommandFailed(TextComponent::text(
+                    "This command can only be executed in a world context",
+                ))
             })?;
 
             let source_pos = BlockPos::floored_v(position);
@@ -124,9 +127,13 @@ impl CommandExecutor for StructureExecutor {
             let mut allowed_biomes_mask = [false; 256];
             for key in &target_keys {
                 let struct_config = pumpkin_data::structures::Structure::get(key);
-                let tag_name = struct_config.biomes.strip_prefix('#').unwrap_or(struct_config.biomes);
-                let tag_ids = get_tag_ids(RegistryKey::WorldgenBiome, tag_name)
-                    .or_else(|| get_tag_ids(RegistryKey::WorldgenBiome, &format!("minecraft:{tag_name}")));
+                let tag_name = struct_config
+                    .biomes
+                    .strip_prefix('#')
+                    .unwrap_or(struct_config.biomes);
+                let tag_ids = get_tag_ids(RegistryKey::WorldgenBiome, tag_name).or_else(|| {
+                    get_tag_ids(RegistryKey::WorldgenBiome, &format!("minecraft:{tag_name}"))
+                });
                 if let Some(ids) = tag_ids {
                     for &id in ids {
                         allowed_biomes_mask[id as usize] = true;
@@ -148,7 +155,7 @@ impl CommandExecutor for StructureExecutor {
                     let bz = biome_coords::from_block(pos.0.z);
                     let sampled_biome = base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
                     allowed_biomes_mask[sampled_biome.id as usize]
-                }
+                },
             );
             let elapsed = start.elapsed();
 
@@ -182,7 +189,11 @@ impl CommandExecutor for StructureExecutor {
             );
 
             sender.send_message(feedback).await;
-            tracing::info!("Locating element {} took {} ms", raw_structure, elapsed.as_millis());
+            tracing::info!(
+                "Locating element {} took {} ms",
+                raw_structure,
+                elapsed.as_millis()
+            );
 
             Ok(distance.floor() as i32)
         })
@@ -198,10 +209,14 @@ impl CommandExecutor for BiomeExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let position = sender.position().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::text("This command can only be executed in a world context"))
+                CommandError::CommandFailed(TextComponent::text(
+                    "This command can only be executed in a world context",
+                ))
             })?;
             let world = sender.world().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::text("This command can only be executed in a world context"))
+                CommandError::CommandFailed(TextComponent::text(
+                    "This command can only be executed in a world context",
+                ))
             })?;
 
             let source_pos = BlockPos::floored_v(position);
@@ -211,8 +226,9 @@ impl CommandExecutor for BiomeExecutor {
             let mut display_name = raw_biome.to_string();
 
             if let Some(tag_name) = raw_biome.strip_prefix('#') {
-                let tag_ids = get_tag_ids(RegistryKey::WorldgenBiome, tag_name)
-                    .or_else(|| get_tag_ids(RegistryKey::WorldgenBiome, &format!("minecraft:{tag_name}")));
+                let tag_ids = get_tag_ids(RegistryKey::WorldgenBiome, tag_name).or_else(|| {
+                    get_tag_ids(RegistryKey::WorldgenBiome, &format!("minecraft:{tag_name}"))
+                });
                 if let Some(ids) = tag_ids {
                     target_biome_ids = ids.iter().map(|&id| id as u8).collect();
                 } else {
@@ -298,7 +314,8 @@ impl CommandExecutor for BiomeExecutor {
                         let by = biome_coords::from_block(y);
                         let bz = biome_coords::from_block(z);
 
-                        let sampled_biome = base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
+                        let sampled_biome =
+                            base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
                         if target_biome_ids.contains(&sampled_biome.id) {
                             let dx = x - px;
                             let dy = y - py;
@@ -324,7 +341,8 @@ impl CommandExecutor for BiomeExecutor {
                 display_name = format!("minecraft:{raw_biome}");
             }
 
-            let coord_text = format_coordinates(found_pos.0.x, &found_pos.0.y.to_string(), found_pos.0.z);
+            let coord_text =
+                format_coordinates(found_pos.0.x, &found_pos.0.y.to_string(), found_pos.0.z);
             let distance_str = format!("{}", distance.floor() as i32);
 
             let feedback = TextComponent::translate_cross(
@@ -353,10 +371,14 @@ impl CommandExecutor for PoiExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let position = sender.position().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::text("This command can only be executed in a world context"))
+                CommandError::CommandFailed(TextComponent::text(
+                    "This command can only be executed in a world context",
+                ))
             })?;
             let world = sender.world().ok_or_else(|| {
-                CommandError::CommandFailed(TextComponent::text("This command can only be executed in a world context"))
+                CommandError::CommandFailed(TextComponent::text(
+                    "This command can only be executed in a world context",
+                ))
             })?;
 
             let source_pos = BlockPos::floored_v(position);
@@ -366,8 +388,13 @@ impl CommandExecutor for PoiExecutor {
             let mut display_name = raw_poi.to_string();
 
             if let Some(tag_name) = raw_poi.strip_prefix('#') {
-                let tag_vals = get_tag_values(RegistryKey::PointOfInterestType, tag_name)
-                    .or_else(|| get_tag_values(RegistryKey::PointOfInterestType, &format!("minecraft:{tag_name}")));
+                let tag_vals =
+                    get_tag_values(RegistryKey::PointOfInterestType, tag_name).or_else(|| {
+                        get_tag_values(
+                            RegistryKey::PointOfInterestType,
+                            &format!("minecraft:{tag_name}"),
+                        )
+                    });
                 if let Some(vals) = tag_vals {
                     target_names = vals.iter().map(|&s| s.to_string()).collect();
                 } else {
@@ -444,24 +471,19 @@ impl CommandExecutor for PoiExecutor {
 }
 
 fn format_coordinates(x: i32, y_str: &str, z: i32) -> TextComponent {
-    let tooltip = TextComponent::translate_cross(
-        CHAT_COORDINATES_TOOLTIP,
-        CHAT_COORDINATES_TOOLTIP,
-        [],
-    );
+    let tooltip =
+        TextComponent::translate_cross(CHAT_COORDINATES_TOOLTIP, CHAT_COORDINATES_TOOLTIP, []);
     let x_str = x.to_string();
     let z_str = z.to_string();
-    TextComponent::wrap_in_square_brackets(
-        TextComponent::translate_cross(
-            CHAT_COORDINATES,
-            CHAT_COORDINATES,
-            [
-                TextComponent::text(x_str.clone()),
-                TextComponent::text(y_str.to_string()),
-                TextComponent::text(z_str.clone()),
-            ],
-        )
-    )
+    TextComponent::wrap_in_square_brackets(TextComponent::translate_cross(
+        CHAT_COORDINATES,
+        CHAT_COORDINATES,
+        [
+            TextComponent::text(x_str.clone()),
+            TextComponent::text(y_str.to_string()),
+            TextComponent::text(z_str.clone()),
+        ],
+    ))
     .color_named(NamedColor::Green)
     .click_event(ClickEvent::SuggestCommand {
         command: Cow::from(format!("/tp @s {x_str} {y_str} {z_str}")),
@@ -475,7 +497,7 @@ fn get_perimeter_points(px: i32, pz: i32, r: i32) -> Vec<(i32, i32)> {
     }
 
     let mut points = Vec::new();
-    
+
     let mut z = pz - r;
     while z <= pz + r {
         points.push((px - r, z));
@@ -504,10 +526,7 @@ fn get_structures_by_tag(tag: &str) -> Option<Vec<StructureKeys>> {
             StructureKeys::VillageSnowy,
             StructureKeys::VillageTaiga,
         ]),
-        "mineshaft" => Some(vec![
-            StructureKeys::Mineshaft,
-            StructureKeys::MineshaftMesa,
-        ]),
+        "mineshaft" => Some(vec![StructureKeys::Mineshaft, StructureKeys::MineshaftMesa]),
         "shipwreck" => Some(vec![
             StructureKeys::Shipwreck,
             StructureKeys::ShipwreckBeached,
@@ -525,9 +544,7 @@ fn get_structures_by_tag(tag: &str) -> Option<Vec<StructureKeys>> {
             StructureKeys::OceanRuinCold,
             StructureKeys::OceanRuinWarm,
         ]),
-        "cats_spawn_in" => Some(vec![
-            StructureKeys::SwampHut,
-        ]),
+        "cats_spawn_in" => Some(vec![StructureKeys::SwampHut]),
         _ => None,
     }
 }
@@ -586,11 +603,7 @@ pub fn init_command_tree() -> CommandTree {
                 .then(argument("structure", StructureArgumentConsumer).execute(StructureExecutor)),
         )
         .then(
-            literal("biome")
-                .then(argument("biome", BiomeArgumentConsumer).execute(BiomeExecutor)),
+            literal("biome").then(argument("biome", BiomeArgumentConsumer).execute(BiomeExecutor)),
         )
-        .then(
-            literal("poi")
-                .then(argument("poi", PoiArgumentConsumer).execute(PoiExecutor)),
-        )
+        .then(literal("poi").then(argument("poi", PoiArgumentConsumer).execute(PoiExecutor)))
 }

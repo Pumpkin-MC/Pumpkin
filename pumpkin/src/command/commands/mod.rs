@@ -80,10 +80,7 @@ pub async fn default_dispatcher(
         worldborder::init_command_tree(),
         "minecraft:command.worldborder",
     );
-    dispatcher.register(
-        locate::init_command_tree(),
-        "minecraft:command.locate",
-    );
+    dispatcher.register(locate::init_command_tree(), "minecraft:command.locate");
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");

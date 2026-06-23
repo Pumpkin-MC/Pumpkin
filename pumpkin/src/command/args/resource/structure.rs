@@ -86,13 +86,17 @@ impl ArgumentConsumer for StructureArgumentConsumer {
             let is_valid = if name.starts_with('#') {
                 STRUCTURE_TAGS.iter().any(|&tag| {
                     tag.eq_ignore_ascii_case(name)
-                        || tag.strip_prefix("#minecraft:").unwrap_or(tag)
+                        || tag
+                            .strip_prefix("#minecraft:")
+                            .unwrap_or(tag)
                             .eq_ignore_ascii_case(name.strip_prefix('#').unwrap())
                 })
             } else {
                 STRUCTURES.iter().any(|&struct_name| {
                     struct_name.eq_ignore_ascii_case(name)
-                        || struct_name.strip_prefix("minecraft:").unwrap_or(struct_name)
+                        || struct_name
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(struct_name)
                             .eq_ignore_ascii_case(name)
                 })
             };
@@ -118,14 +122,14 @@ impl ArgumentConsumer for StructureArgumentConsumer {
             for s in STRUCTURES.iter().chain(STRUCTURE_TAGS.iter()) {
                 let s_lower = s.to_lowercase();
                 let mut match_found = s_lower.starts_with(&input_lower);
-                
+
                 if !match_found
                     && let Some(stripped) = s_lower.strip_prefix("minecraft:")
                     && stripped.starts_with(&input_lower)
                 {
                     match_found = true;
                 }
-                
+
                 if !match_found && s_lower.starts_with('#') {
                     let tag_name = s_lower.strip_prefix('#').unwrap();
                     let user_tag_name = input_lower.strip_prefix('#').unwrap_or(&input_lower);

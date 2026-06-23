@@ -54,16 +54,17 @@ pub fn find_nearest_structure(
         }
     }
 
-    let random_spread: Vec<(&StructurePlacement, &RandomSpreadStructurePlacement, u32)> = placements
-        .iter()
-        .filter_map(|p| {
-            if let StructurePlacementType::RandomSpread(r) = &p.placement_type {
-                Some((*p, r, p.salt))
-            } else {
-                None
-            }
-        })
-        .collect();
+    let random_spread: Vec<(&StructurePlacement, &RandomSpreadStructurePlacement, u32)> =
+        placements
+            .iter()
+            .filter_map(|p| {
+                if let StructurePlacementType::RandomSpread(r) = &p.placement_type {
+                    Some((*p, r, p.salt))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
     if !random_spread.is_empty() {
         let chunk_origin_x = origin.0.x >> 4;
@@ -182,24 +183,17 @@ fn find_nearest_random_spread_at_radius(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::generation::structure::placement::GlobalStructureCache;
     use pumpkin_data::structures::{
         RandomSpreadStructurePlacement, StructurePlacement, StructurePlacementType,
     };
     use pumpkin_util::math::position::BlockPos;
-    use crate::generation::structure::placement::GlobalStructureCache;
 
     #[test]
     fn test_find_nearest_structure_empty() {
         let origin = BlockPos::new(0, 0, 0);
         let global_cache = GlobalStructureCache::new();
-        let result = find_nearest_structure(
-            origin,
-            &[],
-            100,
-            12345,
-            &global_cache,
-            |_, _| true,
-        );
+        let result = find_nearest_structure(origin, &[], 100, 12345, &global_cache, |_, _| true);
         assert!(result.is_none());
     }
 
@@ -207,7 +201,7 @@ mod tests {
     fn test_find_nearest_structure_validation_filter() {
         let origin = BlockPos::new(0, 0, 0);
         let global_cache = GlobalStructureCache::new();
-        
+
         let placement = StructurePlacement {
             frequency_reduction_method: None,
             frequency: None,
@@ -221,26 +215,13 @@ mod tests {
         };
 
         // If validation closure always returns false, no structure should be found
-        let result_false = find_nearest_structure(
-            origin,
-            &[&placement],
-            2,
-            12345,
-            &global_cache,
-            |_, _| false,
-        );
+        let result_false =
+            find_nearest_structure(origin, &[&placement], 2, 12345, &global_cache, |_, _| false);
         assert!(result_false.is_none());
 
         // If validation closure always returns true, a structure should be found
-        let result_true = find_nearest_structure(
-            origin,
-            &[&placement],
-            2,
-            12345,
-            &global_cache,
-            |_, _| true,
-        );
+        let result_true =
+            find_nearest_structure(origin, &[&placement], 2, 12345, &global_cache, |_, _| true);
         assert!(result_true.is_some());
     }
 }
-
