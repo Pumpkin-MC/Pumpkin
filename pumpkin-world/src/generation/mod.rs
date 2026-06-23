@@ -14,6 +14,7 @@ pub mod positions;
 pub mod proto_chunk;
 pub mod proto_chunk_test;
 pub mod rule;
+pub mod locator;
 pub mod structure;
 mod surface;
 

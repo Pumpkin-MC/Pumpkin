@@ -1,6 +1,5 @@
 #![allow(clippy::too_many_lines)]
 use pumpkin_data::biome::Biome;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::structures::{StructureKeys, StructureSet};
 use pumpkin_data::tag::{RegistryKey, get_tag_ids, get_tag_values};
 use pumpkin_data::translation::java::{
@@ -13,12 +12,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_world::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
-use pumpkin_world::generation::biome_coords;
-use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
-use pumpkin_world::generation::noise::router::multi_noise_sampler::{
-    MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-};
 use std::borrow::Cow;
 use std::time::Instant;
 
@@ -65,7 +58,7 @@ impl CommandExecutor for StructureExecutor {
             let mut display_name = raw_structure.to_string();
 
             if raw_structure.starts_with('#') {
-                if let Some(keys) = get_structures_by_tag(raw_structure) {
+                if let Some(keys) = StructureSet::get_structures_by_tag(raw_structure) {
                     target_keys = keys;
                 } else {
                     return Err(CommandError::CommandFailed(TextComponent::translate_cross(
@@ -101,27 +94,6 @@ impl CommandExecutor for StructureExecutor {
                 )));
             }
 
-            let dimension = &world.dimension;
-            let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
-            let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
-            let end_supplier = TheEndBiomeSupplier;
-
-            let base_supplier: &dyn BiomeSupplier = if *dimension == Dimension::OVERWORLD {
-                &overworld_supplier
-            } else if *dimension == Dimension::THE_NETHER {
-                &nether_supplier
-            } else if *dimension == Dimension::THE_END {
-                &end_supplier
-            } else {
-                &overworld_supplier
-            };
-
-            let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
-            let mut multi_noise_sampler = MultiNoiseSampler::generate(
-                &world.level.world_gen.base_router.multi_noise,
-                &multi_noise_config,
-            );
-
             let mut allowed_biomes_mask = [false; 256];
             for key in &target_keys {
                 let struct_config = pumpkin_data::structures::Structure::get(key);
@@ -140,21 +112,21 @@ impl CommandExecutor for StructureExecutor {
             }
 
             let start = Instant::now();
-            let world_seed = world.level.seed.0 as i64;
-            let nearest_pos = find_nearest_structure(
-                source_pos,
-                &placements,
-                100,
-                world_seed,
-                &world.level.world_gen.global_structure_cache,
-                |pos, _placement| {
-                    let bx = biome_coords::from_block(pos.0.x);
-                    let by = biome_coords::from_block(64);
-                    let bz = biome_coords::from_block(pos.0.z);
-                    let sampled_biome = base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
-                    allowed_biomes_mask[sampled_biome.id as usize]
-                },
-            );
+            let world_gen = world.level.world_gen.clone();
+            let dimension = world.dimension.clone();
+
+            let nearest_pos = tokio::task::spawn_blocking(move || {
+                pumpkin_world::generation::locator::find_nearest_structure_pos(
+                    &world_gen,
+                    dimension,
+                    source_pos,
+                    &placements,
+                    allowed_biomes_mask,
+                )
+            })
+            .await
+            .map_err(|e| CommandError::CommandFailed(TextComponent::text(e.to_string())))?;
+
             let elapsed = start.elapsed();
 
             let Some(found_pos) = nearest_pos else {
@@ -259,75 +231,23 @@ impl CommandExecutor for BiomeExecutor {
                 )));
             }
 
-            let dimension = &world.dimension;
-            let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
-            let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
-            let end_supplier = TheEndBiomeSupplier;
+            let dimension = world.dimension.clone();
+            let min_y = world.level.world_gen.settings.shape.min_y as i32;
+            let height = world.level.world_gen.settings.shape.height as i32;
+            let world_gen = world.level.world_gen.clone();
 
-            let base_supplier: &dyn BiomeSupplier = if *dimension == Dimension::OVERWORLD {
-                &overworld_supplier
-            } else if *dimension == Dimension::THE_NETHER {
-                &nether_supplier
-            } else if *dimension == Dimension::THE_END {
-                &end_supplier
-            } else {
-                &overworld_supplier
-            };
-
-            let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
-            let mut multi_noise_sampler = MultiNoiseSampler::generate(
-                &world.level.world_gen.base_router.multi_noise,
-                &multi_noise_config,
-            );
-
-            let px = source_pos.0.x;
-            let py = source_pos.0.y;
-            let pz = source_pos.0.z;
-
-            let shape = &world.level.world_gen.settings.shape;
-            let min_y = shape.min_y as i32;
-            let height = shape.height as i32;
-            let max_y = min_y + height - 1;
-
-            let mut y_coords = Vec::new();
-            let mut y = min_y;
-            while y <= max_y {
-                y_coords.push(y);
-                y += 64;
-            }
-            y_coords.sort_by_key(|&val| (val - py).abs());
-
-            let mut best_match: Option<(BlockPos, f64)> = None;
-
-            for r_step in 0..=200 {
-                let r = r_step * 32;
-                if let Some((_, best_d)) = best_match
-                    && r as f64 > best_d
-                {
-                    break;
-                }
-
-                let perimeter_points = get_perimeter_points(px, pz, r);
-                for (x, z) in perimeter_points {
-                    for &y in &y_coords {
-                        let bx = biome_coords::from_block(x);
-                        let by = biome_coords::from_block(y);
-                        let bz = biome_coords::from_block(z);
-
-                        let sampled_biome =
-                            base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
-                        if biome_mask[sampled_biome.id as usize] {
-                            let dx = x - px;
-                            let dy = y - py;
-                            let dz = z - pz;
-                            let dist = ((dx * dx + dy * dy + dz * dz) as f64).sqrt();
-                            if best_match.as_ref().is_none_or(|&(_, d)| dist < d) {
-                                best_match = Some((BlockPos::new(x, y, z), dist));
-                            }
-                        }
-                    }
-                }
-            }
+            let best_match = tokio::task::spawn_blocking(move || {
+                pumpkin_world::generation::locator::find_nearest_biome(
+                    &world_gen,
+                    dimension,
+                    source_pos,
+                    &biome_mask,
+                    min_y,
+                    height,
+                )
+            })
+            .await
+            .map_err(|e| CommandError::CommandFailed(TextComponent::text(e.to_string())))?;
 
             let Some((found_pos, distance)) = best_match else {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
@@ -489,109 +409,6 @@ fn format_coordinates(x: i32, y_str: &str, z: i32) -> TextComponent {
         command: Cow::from(format!("/tp @s {x_str} {y_str} {z_str}")),
     })
     .hover_event(HoverEvent::show_text(tooltip))
-}
-
-fn get_perimeter_points(px: i32, pz: i32, r: i32) -> impl Iterator<Item = (i32, i32)> {
-    // At r == 0 there is only the origin itself.
-    // For r > 0 we walk the four edges of the square at step 32:
-    //   - Left  column : (px - r, pz - r ..= pz + r)
-    //   - Right column : (px + r, pz - r ..= pz + r)
-    //   - Top    row   : (px - r + 32 ..= px + r - 32, pz - r)
-    //   - Bottom row   : (px - r + 32 ..= px + r - 32, pz + r)
-    let left = (0i32..)
-        .map(move |i| pz - r + i * 32)
-        .take_while(move |&z| z <= pz + r)
-        .flat_map(move |z| [(px - r, z), (px + r, z)]);
-
-    let top_bottom = (0i32..)
-        .map(move |i| px - r + 32 + i * 32)
-        .take_while(move |&x| x <= px + r - 32)
-        .flat_map(move |x| [(x, pz - r), (x, pz + r)]);
-
-    let origin = (r == 0).then_some((px, pz)).into_iter();
-
-    origin.chain(left).chain(top_bottom)
-}
-
-fn get_structures_by_tag(tag: &str) -> Option<Vec<StructureKeys>> {
-    let tag = tag.strip_prefix('#').unwrap_or(tag);
-    let tag = tag.strip_prefix("minecraft:").unwrap_or(tag);
-    match tag {
-        "village" => Some(vec![
-            StructureKeys::VillagePlains,
-            StructureKeys::VillageDesert,
-            StructureKeys::VillageSavanna,
-            StructureKeys::VillageSnowy,
-            StructureKeys::VillageTaiga,
-        ]),
-        "mineshaft" => Some(vec![StructureKeys::Mineshaft, StructureKeys::MineshaftMesa]),
-        "shipwreck" => Some(vec![
-            StructureKeys::Shipwreck,
-            StructureKeys::ShipwreckBeached,
-        ]),
-        "ruined_portal" => Some(vec![
-            StructureKeys::RuinedPortal,
-            StructureKeys::RuinedPortalDesert,
-            StructureKeys::RuinedPortalJungle,
-            StructureKeys::RuinedPortalSwamp,
-            StructureKeys::RuinedPortalMountain,
-            StructureKeys::RuinedPortalOcean,
-            StructureKeys::RuinedPortalNether,
-        ]),
-        "ocean_ruin" => Some(vec![
-            StructureKeys::OceanRuinCold,
-            StructureKeys::OceanRuinWarm,
-        ]),
-        "cats_spawn_in" => Some(vec![StructureKeys::SwampHut]),
-        _ => None,
-    }
-}
-
-trait StructureKeysExt {
-    fn from_registry_name(name: &str) -> Option<StructureKeys>;
-}
-
-impl StructureKeysExt for StructureKeys {
-    fn from_registry_name(name: &str) -> Option<Self> {
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
-        match name {
-            "pillager_outpost" => Some(Self::PillagerOutpost),
-            "mineshaft" => Some(Self::Mineshaft),
-            "mineshaft_mesa" => Some(Self::MineshaftMesa),
-            "mansion" | "woodland_mansion" => Some(Self::Mansion),
-            "jungle_pyramid" | "jungle_temple" => Some(Self::JunglePyramid),
-            "desert_pyramid" => Some(Self::DesertPyramid),
-            "igloo" => Some(Self::Igloo),
-            "shipwreck" => Some(Self::Shipwreck),
-            "shipwreck_beached" => Some(Self::ShipwreckBeached),
-            "swamp_hut" => Some(Self::SwampHut),
-            "stronghold" => Some(Self::Stronghold),
-            "monument" | "ocean_monument" => Some(Self::Monument),
-            "ocean_ruin_cold" => Some(Self::OceanRuinCold),
-            "ocean_ruin_warm" => Some(Self::OceanRuinWarm),
-            "fortress" => Some(Self::Fortress),
-            "nether_fossil" => Some(Self::NetherFossil),
-            "end_city" => Some(Self::EndCity),
-            "buried_treasure" => Some(Self::BuriedTreasure),
-            "bastion_remnant" => Some(Self::BastionRemnant),
-            "village_plains" => Some(Self::VillagePlains),
-            "village_desert" => Some(Self::VillageDesert),
-            "village_savanna" => Some(Self::VillageSavanna),
-            "village_snowy" => Some(Self::VillageSnowy),
-            "village_taiga" => Some(Self::VillageTaiga),
-            "ruined_portal" => Some(Self::RuinedPortal),
-            "ruined_portal_desert" => Some(Self::RuinedPortalDesert),
-            "ruined_portal_jungle" => Some(Self::RuinedPortalJungle),
-            "ruined_portal_swamp" => Some(Self::RuinedPortalSwamp),
-            "ruined_portal_mountain" => Some(Self::RuinedPortalMountain),
-            "ruined_portal_ocean" => Some(Self::RuinedPortalOcean),
-            "ruined_portal_nether" => Some(Self::RuinedPortalNether),
-            "ancient_city" => Some(Self::AncientCity),
-            "trail_ruins" => Some(Self::TrailRuins),
-            "trial_chambers" => Some(Self::TrialChambers),
-            _ => None,
-        }
-    }
 }
 
 pub fn init_command_tree() -> CommandTree {

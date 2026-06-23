@@ -8,12 +8,17 @@ use crate::generation::structure::placement::{
     GlobalStructureCache, get_structure_chunk_in_region,
 };
 
-/// Block-level position of a found structure plus squared distance from the
-/// search origin, used internally to track the running nearest candidate.
 #[derive(Debug, Clone)]
 pub struct FoundStructure {
     pub pos: BlockPos,
     pub distance_sq: f64,
+}
+
+pub struct StructureSearchContext {
+    pub origin: BlockPos,
+    pub chunk_origin_x: i32,
+    pub chunk_origin_z: i32,
+    pub world_seed: i64,
 }
 
 /// Finds the block position of the nearest structure whose placement is listed
@@ -70,15 +75,18 @@ pub fn find_nearest_structure(
     if !random_spread.is_empty() {
         let chunk_origin_x = origin.0.x >> 4;
         let chunk_origin_z = origin.0.z >> 4;
+        let context = StructureSearchContext {
+            origin,
+            chunk_origin_x,
+            chunk_origin_z,
+            world_seed,
+        };
 
         'radius: for radius in 0..=max_search_radius {
             for (p, placement, salt) in &random_spread {
                 if let Some(found) = find_nearest_random_spread_at_radius(
-                    origin,
-                    chunk_origin_x,
-                    chunk_origin_z,
+                    &context,
                     radius,
-                    world_seed,
                     placement,
                     p,
                     *salt,
@@ -138,13 +146,9 @@ where
         .min_by(|a, b| a.distance_sq.partial_cmp(&b.distance_sq).unwrap())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn find_nearest_random_spread_at_radius<F>(
-    origin: BlockPos,
-    chunk_origin_x: i32,
-    chunk_origin_z: i32,
+    ctx: &StructureSearchContext,
     radius: i32,
-    world_seed: i64,
     placement: &RandomSpreadStructurePlacement,
     parent_placement: &StructurePlacement,
     salt: u32,
@@ -154,8 +158,8 @@ where
     F: FnMut(BlockPos, &StructurePlacement) -> bool,
 {
     let spacing = placement.spacing;
-    let ox = origin.0.x as f64;
-    let oz = origin.0.z as f64;
+    let ox = ctx.origin.0.x as f64;
+    let oz = ctx.origin.0.z as f64;
 
     let mut best: Option<FoundStructure> = None;
 
@@ -165,11 +169,11 @@ where
                 continue;
             }
 
-            let rx = floor_div(chunk_origin_x, spacing) + rx_off;
-            let rz = floor_div(chunk_origin_z, spacing) + rz_off;
+            let rx = floor_div(ctx.chunk_origin_x, spacing) + rx_off;
+            let rz = floor_div(ctx.chunk_origin_z, spacing) + rz_off;
 
             let (struct_cx, struct_cz) =
-                get_structure_chunk_in_region(placement, world_seed, rx, rz, salt);
+                get_structure_chunk_in_region(placement, ctx.world_seed, rx, rz, salt);
 
             let bx = (struct_cx << 4) + 8;
             let bz = (struct_cz << 4) + 8;

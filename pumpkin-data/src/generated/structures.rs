@@ -41,6 +41,160 @@ pub enum StructureKeys {
     TrailRuins,
     TrialChambers,
 }
+impl StructureKeys {
+    pub const ALL: &'static [Self] = &[
+        StructureKeys::AncientCity,
+        StructureKeys::BastionRemnant,
+        StructureKeys::BuriedTreasure,
+        StructureKeys::DesertPyramid,
+        StructureKeys::EndCity,
+        StructureKeys::Fortress,
+        StructureKeys::Igloo,
+        StructureKeys::JunglePyramid,
+        StructureKeys::Mansion,
+        StructureKeys::Mineshaft,
+        StructureKeys::MineshaftMesa,
+        StructureKeys::Monument,
+        StructureKeys::NetherFossil,
+        StructureKeys::OceanRuinCold,
+        StructureKeys::OceanRuinWarm,
+        StructureKeys::PillagerOutpost,
+        StructureKeys::RuinedPortal,
+        StructureKeys::RuinedPortalDesert,
+        StructureKeys::RuinedPortalJungle,
+        StructureKeys::RuinedPortalMountain,
+        StructureKeys::RuinedPortalNether,
+        StructureKeys::RuinedPortalOcean,
+        StructureKeys::RuinedPortalSwamp,
+        StructureKeys::Shipwreck,
+        StructureKeys::ShipwreckBeached,
+        StructureKeys::Stronghold,
+        StructureKeys::SwampHut,
+        StructureKeys::TrailRuins,
+        StructureKeys::TrialChambers,
+        StructureKeys::VillageDesert,
+        StructureKeys::VillagePlains,
+        StructureKeys::VillageSavanna,
+        StructureKeys::VillageSnowy,
+        StructureKeys::VillageTaiga,
+    ];
+    pub const ALL_NAMES: &'static [&'static str] = &[
+        "minecraft:ancient_city",
+        "minecraft:bastion_remnant",
+        "minecraft:buried_treasure",
+        "minecraft:desert_pyramid",
+        "minecraft:end_city",
+        "minecraft:fortress",
+        "minecraft:igloo",
+        "minecraft:jungle_pyramid",
+        "minecraft:mansion",
+        "minecraft:mineshaft",
+        "minecraft:mineshaft_mesa",
+        "minecraft:monument",
+        "minecraft:nether_fossil",
+        "minecraft:ocean_ruin_cold",
+        "minecraft:ocean_ruin_warm",
+        "minecraft:pillager_outpost",
+        "minecraft:ruined_portal",
+        "minecraft:ruined_portal_desert",
+        "minecraft:ruined_portal_jungle",
+        "minecraft:ruined_portal_mountain",
+        "minecraft:ruined_portal_nether",
+        "minecraft:ruined_portal_ocean",
+        "minecraft:ruined_portal_swamp",
+        "minecraft:shipwreck",
+        "minecraft:shipwreck_beached",
+        "minecraft:stronghold",
+        "minecraft:swamp_hut",
+        "minecraft:trail_ruins",
+        "minecraft:trial_chambers",
+        "minecraft:village_desert",
+        "minecraft:village_plains",
+        "minecraft:village_savanna",
+        "minecraft:village_snowy",
+        "minecraft:village_taiga",
+    ];
+    #[must_use]
+    pub const fn registry_name(&self) -> &'static str {
+        match *self {
+            StructureKeys::AncientCity => "minecraft:ancient_city",
+            StructureKeys::BastionRemnant => "minecraft:bastion_remnant",
+            StructureKeys::BuriedTreasure => "minecraft:buried_treasure",
+            StructureKeys::DesertPyramid => "minecraft:desert_pyramid",
+            StructureKeys::EndCity => "minecraft:end_city",
+            StructureKeys::Fortress => "minecraft:fortress",
+            StructureKeys::Igloo => "minecraft:igloo",
+            StructureKeys::JunglePyramid => "minecraft:jungle_pyramid",
+            StructureKeys::Mansion => "minecraft:mansion",
+            StructureKeys::Mineshaft => "minecraft:mineshaft",
+            StructureKeys::MineshaftMesa => "minecraft:mineshaft_mesa",
+            StructureKeys::Monument => "minecraft:monument",
+            StructureKeys::NetherFossil => "minecraft:nether_fossil",
+            StructureKeys::OceanRuinCold => "minecraft:ocean_ruin_cold",
+            StructureKeys::OceanRuinWarm => "minecraft:ocean_ruin_warm",
+            StructureKeys::PillagerOutpost => "minecraft:pillager_outpost",
+            StructureKeys::RuinedPortal => "minecraft:ruined_portal",
+            StructureKeys::RuinedPortalDesert => "minecraft:ruined_portal_desert",
+            StructureKeys::RuinedPortalJungle => "minecraft:ruined_portal_jungle",
+            StructureKeys::RuinedPortalMountain => "minecraft:ruined_portal_mountain",
+            StructureKeys::RuinedPortalNether => "minecraft:ruined_portal_nether",
+            StructureKeys::RuinedPortalOcean => "minecraft:ruined_portal_ocean",
+            StructureKeys::RuinedPortalSwamp => "minecraft:ruined_portal_swamp",
+            StructureKeys::Shipwreck => "minecraft:shipwreck",
+            StructureKeys::ShipwreckBeached => "minecraft:shipwreck_beached",
+            StructureKeys::Stronghold => "minecraft:stronghold",
+            StructureKeys::SwampHut => "minecraft:swamp_hut",
+            StructureKeys::TrailRuins => "minecraft:trail_ruins",
+            StructureKeys::TrialChambers => "minecraft:trial_chambers",
+            StructureKeys::VillageDesert => "minecraft:village_desert",
+            StructureKeys::VillagePlains => "minecraft:village_plains",
+            StructureKeys::VillageSavanna => "minecraft:village_savanna",
+            StructureKeys::VillageSnowy => "minecraft:village_snowy",
+            StructureKeys::VillageTaiga => "minecraft:village_taiga",
+        }
+    }
+    #[must_use]
+    pub fn from_registry_name(name: &str) -> Option<Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        match name {
+            "ancient_city" => Some(StructureKeys::AncientCity),
+            "bastion_remnant" => Some(StructureKeys::BastionRemnant),
+            "buried_treasure" => Some(StructureKeys::BuriedTreasure),
+            "desert_pyramid" => Some(StructureKeys::DesertPyramid),
+            "end_city" => Some(StructureKeys::EndCity),
+            "fortress" => Some(StructureKeys::Fortress),
+            "igloo" => Some(StructureKeys::Igloo),
+            "jungle_pyramid" => Some(StructureKeys::JunglePyramid),
+            "mansion" => Some(StructureKeys::Mansion),
+            "mineshaft" => Some(StructureKeys::Mineshaft),
+            "mineshaft_mesa" => Some(StructureKeys::MineshaftMesa),
+            "monument" => Some(StructureKeys::Monument),
+            "nether_fossil" => Some(StructureKeys::NetherFossil),
+            "ocean_ruin_cold" => Some(StructureKeys::OceanRuinCold),
+            "ocean_ruin_warm" => Some(StructureKeys::OceanRuinWarm),
+            "pillager_outpost" => Some(StructureKeys::PillagerOutpost),
+            "ruined_portal" => Some(StructureKeys::RuinedPortal),
+            "ruined_portal_desert" => Some(StructureKeys::RuinedPortalDesert),
+            "ruined_portal_jungle" => Some(StructureKeys::RuinedPortalJungle),
+            "ruined_portal_mountain" => Some(StructureKeys::RuinedPortalMountain),
+            "ruined_portal_nether" => Some(StructureKeys::RuinedPortalNether),
+            "ruined_portal_ocean" => Some(StructureKeys::RuinedPortalOcean),
+            "ruined_portal_swamp" => Some(StructureKeys::RuinedPortalSwamp),
+            "shipwreck" => Some(StructureKeys::Shipwreck),
+            "shipwreck_beached" => Some(StructureKeys::ShipwreckBeached),
+            "stronghold" => Some(StructureKeys::Stronghold),
+            "swamp_hut" => Some(StructureKeys::SwampHut),
+            "trail_ruins" => Some(StructureKeys::TrailRuins),
+            "trial_chambers" => Some(StructureKeys::TrialChambers),
+            "village_desert" => Some(StructureKeys::VillageDesert),
+            "village_plains" => Some(StructureKeys::VillagePlains),
+            "village_savanna" => Some(StructureKeys::VillageSavanna),
+            "village_snowy" => Some(StructureKeys::VillageSnowy),
+            "village_taiga" => Some(StructureKeys::VillageTaiga),
+            _ => None,
+        }
+    }
+}
 pub struct StructureSet {
     pub placement: StructurePlacement,
     pub structures: &'static [WeightedEntry],
@@ -1147,6 +1301,50 @@ impl StructureSet {
             "trial_chambers" => Some(&Self::TRIAL_CHAMBERS),
             "villages" => Some(&Self::VILLAGES),
             "woodland_mansions" => Some(&Self::WOODLAND_MANSIONS),
+            _ => None,
+        }
+    }
+    #[must_use]
+    pub fn get_structures_by_tag(tag: &str) -> Option<Vec<StructureKeys>> {
+        let tag = tag.strip_prefix('#').unwrap_or(tag);
+        let tag = tag.strip_prefix("minecraft:").unwrap_or(tag);
+        match tag {
+            "village" => Some(
+                Self::VILLAGES
+                    .structures
+                    .iter()
+                    .map(|e| e.structure)
+                    .collect(),
+            ),
+            "mineshaft" => Some(
+                Self::MINESHAFTS
+                    .structures
+                    .iter()
+                    .map(|e| e.structure)
+                    .collect(),
+            ),
+            "shipwreck" => Some(
+                Self::SHIPWRECKS
+                    .structures
+                    .iter()
+                    .map(|e| e.structure)
+                    .collect(),
+            ),
+            "ruined_portal" => Some(
+                Self::RUINED_PORTALS
+                    .structures
+                    .iter()
+                    .map(|e| e.structure)
+                    .collect(),
+            ),
+            "ocean_ruin" => Some(
+                Self::OCEAN_RUINS
+                    .structures
+                    .iter()
+                    .map(|e| e.structure)
+                    .collect(),
+            ),
+            "cats_spawn_in" => Some(vec![StructureKeys::SwampHut]),
             _ => None,
         }
     }

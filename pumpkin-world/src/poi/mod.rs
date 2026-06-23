@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tracing::{info, warn};
 
 use flate2::Compression;
@@ -32,7 +33,7 @@ pub struct PoiEntry {
     pub y: i32,
     pub z: i32,
     #[serde(rename = "type")]
-    pub poi_type: String,
+    pub poi_type: Arc<str>,
     pub free_tickets: i32,
 }
 
@@ -43,7 +44,7 @@ impl PoiEntry {
             x: pos.0.x,
             y: pos.0.y,
             z: pos.0.z,
-            poi_type: POI_TYPE_NETHER_PORTAL.to_string(),
+            poi_type: Arc::from(POI_TYPE_NETHER_PORTAL),
             free_tickets: 0,
         }
     }
@@ -412,7 +413,7 @@ impl PoiStorage {
             x: pos.0.x,
             y: pos.0.y,
             z: pos.0.z,
-            poi_type: poi_type.to_string(),
+            poi_type: Arc::from(poi_type),
             free_tickets: 0,
         });
     }
@@ -427,7 +428,6 @@ impl PoiStorage {
         region.remove(pos)
     }
 
-    /// Get all POI positions within a square radius (for portal search)
     #[expect(clippy::similar_names)]
     pub fn get_in_square(
         &mut self,
@@ -452,15 +452,14 @@ impl PoiStorage {
             for rz in min_rz..=max_rz {
                 let region = self.get_or_load_region(rx, rz);
                 for entry in region.get_all() {
-                    if let Some(filter_type) = poi_type
-                        && entry.poi_type != filter_type
-                    {
-                        continue;
-                    }
-
                     let dx = (entry.x - center.0.x).abs();
                     let dz = (entry.z - center.0.z).abs();
                     if dx <= radius && dz <= radius {
+                        if let Some(filter_type) = poi_type
+                            && entry.poi_type.as_ref() != filter_type
+                        {
+                            continue;
+                        }
                         results.push(entry.pos());
                     }
                 }
@@ -477,7 +476,7 @@ impl PoiStorage {
         center: BlockPos,
         radius: i32,
         filter: F,
-    ) -> Vec<(BlockPos, String)>
+    ) -> Vec<(BlockPos, Arc<str>)>
     where
         F: Fn(&str) -> bool,
     {
@@ -498,12 +497,10 @@ impl PoiStorage {
             for rz in min_rz..=max_rz {
                 let region = self.get_or_load_region(rx, rz);
                 for entry in region.get_all() {
-                    if filter(&entry.poi_type) {
-                        let dx = (entry.x - center.0.x).abs();
-                        let dz = (entry.z - center.0.z).abs();
-                        if dx <= radius && dz <= radius {
-                            results.push((entry.pos(), entry.poi_type.clone()));
-                        }
+                    let dx = (entry.x - center.0.x).abs();
+                    let dz = (entry.z - center.0.z).abs();
+                    if dx <= radius && dz <= radius && filter(&entry.poi_type) {
+                        results.push((entry.pos(), entry.poi_type.clone()));
                     }
                 }
             }
@@ -553,7 +550,7 @@ mod tests {
         assert_eq!(entry.x, 100);
         assert_eq!(entry.y, 64);
         assert_eq!(entry.z, 200);
-        assert_eq!(entry.poi_type, POI_TYPE_NETHER_PORTAL);
+        assert_eq!(entry.poi_type.as_ref(), POI_TYPE_NETHER_PORTAL);
     }
 
     #[test]

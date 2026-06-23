@@ -11,46 +11,6 @@ use crate::command::{
 };
 use crate::server::Server;
 
-const STRUCTURES: &[&str] = &[
-    "minecraft:pillager_outpost",
-    "minecraft:mineshaft",
-    "minecraft:mineshaft_mesa",
-    "minecraft:mansion",
-    "minecraft:woodland_mansion",
-    "minecraft:jungle_pyramid",
-    "minecraft:jungle_temple",
-    "minecraft:desert_pyramid",
-    "minecraft:igloo",
-    "minecraft:shipwreck",
-    "minecraft:shipwreck_beached",
-    "minecraft:swamp_hut",
-    "minecraft:stronghold",
-    "minecraft:monument",
-    "minecraft:ocean_monument",
-    "minecraft:ocean_ruin_cold",
-    "minecraft:ocean_ruin_warm",
-    "minecraft:fortress",
-    "minecraft:nether_fossil",
-    "minecraft:end_city",
-    "minecraft:buried_treasure",
-    "minecraft:bastion_remnant",
-    "minecraft:village_plains",
-    "minecraft:village_desert",
-    "minecraft:village_savanna",
-    "minecraft:village_snowy",
-    "minecraft:village_taiga",
-    "minecraft:ruined_portal",
-    "minecraft:ruined_portal_desert",
-    "minecraft:ruined_portal_jungle",
-    "minecraft:ruined_portal_swamp",
-    "minecraft:ruined_portal_mountain",
-    "minecraft:ruined_portal_ocean",
-    "minecraft:ruined_portal_nether",
-    "minecraft:ancient_city",
-    "minecraft:trail_ruins",
-    "minecraft:trial_chambers",
-];
-
 const STRUCTURE_TAGS: &[&str] = &[
     "#minecraft:village",
     "#minecraft:mineshaft",
@@ -92,13 +52,7 @@ impl ArgumentConsumer for StructureArgumentConsumer {
                             .eq_ignore_ascii_case(name.strip_prefix('#').unwrap())
                 })
             } else {
-                STRUCTURES.iter().any(|&struct_name| {
-                    struct_name.eq_ignore_ascii_case(name)
-                        || struct_name
-                            .strip_prefix("minecraft:")
-                            .unwrap_or(struct_name)
-                            .eq_ignore_ascii_case(name)
-                })
+                pumpkin_data::structures::StructureKeys::from_registry_name(name).is_some()
             };
             is_valid.then(|| Arg::ResourceLocation(name))
         });
@@ -119,7 +73,7 @@ impl ArgumentConsumer for StructureArgumentConsumer {
             };
             let input_lower = typed_word.to_lowercase();
             let mut matches = Vec::new();
-            for s in STRUCTURES.iter().chain(STRUCTURE_TAGS.iter()) {
+            for s in pumpkin_data::structures::StructureKeys::ALL_NAMES.iter().chain(STRUCTURE_TAGS.iter()) {
                 let s_lower = s.to_lowercase();
                 let mut match_found = s_lower.starts_with(&input_lower);
 

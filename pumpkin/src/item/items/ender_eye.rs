@@ -93,7 +93,7 @@ impl ItemBehaviour for EnderEyeItem {
             }
 
             let origin = player.get_entity().block_pos.load();
-            let target_block_pos = find_stronghold(&world, origin);
+            let target_block_pos = find_stronghold(&world, origin).await;
 
             let Some(target) = target_block_pos else {
                 return;
@@ -136,17 +136,21 @@ impl ItemBehaviour for EnderEyeItem {
     }
 }
 
-fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
-    let level = &world.level;
-    let generator = &level.world_gen;
-    let seed = level.seed.0;
+async fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
+    let world_gen = world.level.world_gen.clone();
+    let seed = world.level.seed.0;
 
-    find_nearest_structure(
-        origin,
-        &[&StructureSet::get("strongholds").unwrap().placement],
-        100, // max search radius in chunks, matches vanilla default
-        seed as i64,
-        &generator.global_structure_cache,
-        |_, _| true,
-    )
+    tokio::task::spawn_blocking(move || {
+        find_nearest_structure(
+            origin,
+            &[&StructureSet::get("strongholds").unwrap().placement],
+            100, // max search radius in chunks, matches vanilla default
+            seed as i64,
+            &world_gen.global_structure_cache,
+            |_, _| true,
+        )
+    })
+    .await
+    .ok()
+    .flatten()
 }

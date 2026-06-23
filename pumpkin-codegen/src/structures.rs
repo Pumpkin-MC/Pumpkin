@@ -421,6 +421,10 @@ pub fn build() -> TokenStream {
 
     let mut structure_const_defs = TokenStream::new();
     let mut structure_lookup_arms = TokenStream::new();
+    let mut structure_from_registry_name_arms = TokenStream::new();
+    let mut structure_registry_name_arms = TokenStream::new();
+    let mut structure_key_variants = Vec::new();
+    let mut structure_names = Vec::new();
 
     for (name, structure) in &structures_json {
         let stripped_name = name.strip_prefix("minecraft:").unwrap_or(name);
@@ -435,6 +439,17 @@ pub fn build() -> TokenStream {
         structure_lookup_arms.extend(quote!(
             #key_variant => &Self::#const_name,
         ));
+
+        structure_from_registry_name_arms.extend(quote!(
+            #stripped_name => Some(#key_variant),
+        ));
+
+        structure_registry_name_arms.extend(quote!(
+            #key_variant => #name,
+        ));
+
+        structure_key_variants.push(key_variant);
+        structure_names.push(name.clone());
     }
 
     let mut structure_set_const_defs = TokenStream::new();
@@ -500,6 +515,32 @@ pub fn build() -> TokenStream {
             AncientCity,
             TrailRuins,
             TrialChambers,
+        }
+
+        impl StructureKeys {
+            pub const ALL: &'static [Self] = &[
+                #(#structure_key_variants),*
+            ];
+
+            pub const ALL_NAMES: &'static [&'static str] = &[
+                #(#structure_names),*
+            ];
+
+            #[must_use]
+            pub const fn registry_name(&self) -> &'static str {
+                match *self {
+                    #structure_registry_name_arms
+                }
+            }
+
+            #[must_use]
+            pub fn from_registry_name(name: &str) -> Option<Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                match name {
+                    #structure_from_registry_name_arms
+                    _ => None,
+                }
+            }
         }
 
         pub struct StructureSet {
@@ -670,6 +711,21 @@ pub fn build() -> TokenStream {
             pub fn get(name: &str) -> Option<&'static Self> {
                 match name {
                     #structure_set_lookup_arms
+                    _ => None,
+                }
+            }
+
+            #[must_use]
+            pub fn get_structures_by_tag(tag: &str) -> Option<Vec<StructureKeys>> {
+                let tag = tag.strip_prefix('#').unwrap_or(tag);
+                let tag = tag.strip_prefix("minecraft:").unwrap_or(tag);
+                match tag {
+                    "village" => Some(Self::VILLAGES.structures.iter().map(|e| e.structure).collect()),
+                    "mineshaft" => Some(Self::MINESHAFTS.structures.iter().map(|e| e.structure).collect()),
+                    "shipwreck" => Some(Self::SHIPWRECKS.structures.iter().map(|e| e.structure).collect()),
+                    "ruined_portal" => Some(Self::RUINED_PORTALS.structures.iter().map(|e| e.structure).collect()),
+                    "ocean_ruin" => Some(Self::OCEAN_RUINS.structures.iter().map(|e| e.structure).collect()),
+                    "cats_spawn_in" => Some(vec![StructureKeys::SwampHut]),
                     _ => None,
                 }
             }
