@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
 use crate::generation::biome_coords;
 use crate::generation::generator::structure_finder::find_nearest_structure;
@@ -151,4 +153,53 @@ pub fn find_nearest_structure_pos(
             allowed_biomes_mask[sampled_biome.id as usize]
         },
     )
+}
+
+pub fn find_nearby_pois(
+    portal_poi: &tokio::sync::Mutex<crate::poi::PoiStorage>,
+    center: BlockPos,
+    radius: i32,
+    target_names: &[String],
+) -> Vec<(BlockPos, Arc<str>)> {
+    let min_x = center.0.x - radius;
+    let max_x = center.0.x + radius;
+    let min_z = center.0.z - radius;
+    let max_z = center.0.z + radius;
+
+    // Calculate which regions we need to check
+    let min_rx = (min_x >> 4) >> 5;
+    let max_rx = (max_x >> 4) >> 5;
+    let min_rz = (min_z >> 4) >> 5;
+    let max_rz = (max_z >> 4) >> 5;
+
+    let mut results = Vec::new();
+
+    for rx in min_rx..=max_rx {
+        for rz in min_rz..=max_rz {
+            let entries = {
+                let mut storage = portal_poi.blocking_lock();
+                storage
+                    .get_or_load_region(rx, rz)
+                    .get_all()
+                    .into_iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+
+            for entry in entries {
+                let dx = (entry.x - center.0.x).abs();
+                let dz = (entry.z - center.0.z).abs();
+                if dx <= radius && dz <= radius {
+                    if target_names
+                        .iter()
+                        .any(|target| target.as_str() == entry.poi_type.as_ref())
+                    {
+                        results.push((entry.pos(), entry.poi_type.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    results
 }
