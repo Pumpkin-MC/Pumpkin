@@ -189,13 +189,13 @@ pub fn find_nearby_pois(
             for entry in entries {
                 let dx = (entry.x - center.0.x).abs();
                 let dz = (entry.z - center.0.z).abs();
-                if dx <= radius && dz <= radius {
-                    if target_names
+                if dx <= radius
+                    && dz <= radius
+                    && target_names
                         .iter()
                         .any(|target| target.as_str() == entry.poi_type.as_ref())
-                    {
-                        results.push((entry.pos(), entry.poi_type.clone()));
-                    }
+                {
+                    results.push((entry.pos(), entry.poi_type.clone()));
                 }
             }
         }
