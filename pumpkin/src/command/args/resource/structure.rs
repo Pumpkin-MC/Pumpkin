@@ -43,17 +43,18 @@ impl ArgumentConsumer for StructureArgumentConsumer {
     ) -> ConsumeResult<'a> {
         let name_opt = args.pop().map(|arg| arg.value);
         let result = name_opt.and_then(|name| {
-            let is_valid = if let Some(name_stripped) = name.strip_prefix('#') {
-                STRUCTURE_TAGS.iter().any(|&tag| {
-                    tag.eq_ignore_ascii_case(name)
-                        || tag
-                            .strip_prefix("#minecraft:")
-                            .unwrap_or(tag)
-                            .eq_ignore_ascii_case(name_stripped)
-                })
-            } else {
-                pumpkin_data::structures::StructureKeys::from_registry_name(name).is_some()
-            };
+            let is_valid = name.strip_prefix('#').map_or_else(
+                || pumpkin_data::structures::StructureKeys::from_registry_name(name).is_some(),
+                |name_stripped| {
+                    STRUCTURE_TAGS.iter().any(|&tag| {
+                        tag.eq_ignore_ascii_case(name)
+                            || tag
+                                .strip_prefix("#minecraft:")
+                                .unwrap_or(tag)
+                                .eq_ignore_ascii_case(name_stripped)
+                    })
+                },
+            );
             is_valid.then(|| Arg::ResourceLocation(name))
         });
         Box::pin(async move { result })
