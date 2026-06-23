@@ -45,7 +45,8 @@ pub fn find_nearest_structure(
     // ── Pass 1: Concentric-rings (strongholds) ──────────────────────────────
     for p in placements {
         if let StructurePlacementType::ConcentricRings(rings) = &p.placement_type
-            && let Some(found) = find_nearest_concentric(origin, rings, global_cache)
+            && let Some(found) =
+                find_nearest_concentric(origin, rings, global_cache, p, &mut is_valid_pos)
             && nearest
                 .as_ref()
                 .is_none_or(|n| found.distance_sq < n.distance_sq)
@@ -98,12 +99,17 @@ pub fn find_nearest_structure(
     nearest.map(|f| f.pos)
 }
 
-fn find_nearest_concentric(
+fn find_nearest_concentric<F>(
     origin: BlockPos,
     // Kept for potential future bounds / distance validation.
     _rings: &ConcentricRingsStructurePlacement,
     global_cache: &GlobalStructureCache,
-) -> Option<FoundStructure> {
+    parent_placement: &StructurePlacement,
+    is_valid_pos: &mut F,
+) -> Option<FoundStructure>
+where
+    F: FnMut(BlockPos, &StructurePlacement) -> bool,
+{
     let strongholds = global_cache.get_stronghold_chunks();
     if strongholds.is_empty() {
         return None;
@@ -114,22 +120,26 @@ fn find_nearest_concentric(
 
     strongholds
         .iter()
-        .map(|(cx, cz)| {
+        .filter_map(|(cx, cz)| {
             // Centre of the chunk in block coords.
             let bx = (cx << 4) + 8;
             let bz = (cz << 4) + 8;
+            let pos = BlockPos::new(bx, 0, bz);
+            if !is_valid_pos(pos, parent_placement) {
+                return None;
+            }
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
-            FoundStructure {
-                pos: BlockPos::new(bx, 0, bz),
+            Some(FoundStructure {
+                pos,
                 distance_sq: dx * dx + dz * dz,
-            }
+            })
         })
         .min_by(|a, b| a.distance_sq.partial_cmp(&b.distance_sq).unwrap())
 }
 
 #[allow(clippy::too_many_arguments)]
-fn find_nearest_random_spread_at_radius(
+fn find_nearest_random_spread_at_radius<F>(
     origin: BlockPos,
     chunk_origin_x: i32,
     chunk_origin_z: i32,
@@ -138,8 +148,11 @@ fn find_nearest_random_spread_at_radius(
     placement: &RandomSpreadStructurePlacement,
     parent_placement: &StructurePlacement,
     salt: u32,
-    is_valid_pos: &mut dyn FnMut(BlockPos, &StructurePlacement) -> bool,
-) -> Option<FoundStructure> {
+    is_valid_pos: &mut F,
+) -> Option<FoundStructure>
+where
+    F: FnMut(BlockPos, &StructurePlacement) -> bool,
+{
     let spacing = placement.spacing;
     let ox = origin.0.x as f64;
     let oz = origin.0.z as f64;
@@ -160,19 +173,20 @@ fn find_nearest_random_spread_at_radius(
 
             let bx = (struct_cx << 4) + 8;
             let bz = (struct_cz << 4) + 8;
-            let pos = BlockPos::new(bx, 0, bz);
 
-            if is_valid_pos(pos, parent_placement) {
-                let dx = bx as f64 - ox;
-                let dz = bz as f64 - oz;
-                let dist_sq = dx * dx + dz * dz;
+            // Compute the cheap distance check first; only run the expensive
+            // biome sampler if this candidate actually beats the current best.
+            let dx = bx as f64 - ox;
+            let dz = bz as f64 - oz;
+            let dist_sq = dx * dx + dz * dz;
 
-                if best.as_ref().is_none_or(|b| dist_sq < b.distance_sq) {
-                    best = Some(FoundStructure {
-                        pos,
-                        distance_sq: dist_sq,
-                    });
-                }
+            if best.as_ref().is_none_or(|b| dist_sq < b.distance_sq)
+                && is_valid_pos(BlockPos::new(bx, 0, bz), parent_placement)
+            {
+                best = Some(FoundStructure {
+                    pos: BlockPos::new(bx, 0, bz),
+                    distance_sq: dist_sq,
+                });
             }
         }
     }

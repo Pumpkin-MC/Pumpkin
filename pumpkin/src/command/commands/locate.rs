@@ -74,16 +74,14 @@ impl CommandExecutor for StructureExecutor {
                         [TextComponent::text(raw_structure.to_string())],
                     )));
                 }
+            } else if let Some(key) = StructureKeys::from_registry_name(raw_structure) {
+                target_keys.push(key);
             } else {
-                if let Some(key) = StructureKeys::from_registry_name(raw_structure) {
-                    target_keys.push(key);
-                } else {
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        COMMANDS_LOCATE_STRUCTURE_INVALID,
-                        COMMANDS_LOCATE_STRUCTURE_INVALID,
-                        [TextComponent::text(raw_structure.to_string())],
-                    )));
-                }
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    COMMANDS_LOCATE_STRUCTURE_INVALID,
+                    COMMANDS_LOCATE_STRUCTURE_INVALID,
+                    [TextComponent::text(raw_structure.to_string())],
+                )));
             }
 
             let mut placements = Vec::new();
@@ -222,7 +220,7 @@ impl CommandExecutor for BiomeExecutor {
             let source_pos = BlockPos::floored_v(position);
             let raw_biome = BiomeArgumentConsumer::find_arg(args, "biome")?;
 
-            let mut target_biome_ids = Vec::new();
+            let mut biome_mask = [false; 256];
             let mut display_name = raw_biome.to_string();
 
             if let Some(tag_name) = raw_biome.strip_prefix('#') {
@@ -230,7 +228,9 @@ impl CommandExecutor for BiomeExecutor {
                     get_tag_ids(RegistryKey::WorldgenBiome, &format!("minecraft:{tag_name}"))
                 });
                 if let Some(ids) = tag_ids {
-                    target_biome_ids = ids.iter().map(|&id| id as u8).collect();
+                    for &id in ids {
+                        biome_mask[id as usize] = true;
+                    }
                 } else {
                     return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                         COMMANDS_LOCATE_BIOME_NOT_FOUND,
@@ -241,7 +241,7 @@ impl CommandExecutor for BiomeExecutor {
             } else {
                 let biome_name = raw_biome.strip_prefix("minecraft:").unwrap_or(raw_biome);
                 if let Some(biome) = Biome::from_name(biome_name) {
-                    target_biome_ids.push(biome.id);
+                    biome_mask[biome.id as usize] = true;
                 } else {
                     return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                         COMMANDS_LOCATE_BIOME_NOT_FOUND,
@@ -251,7 +251,7 @@ impl CommandExecutor for BiomeExecutor {
                 }
             }
 
-            if target_biome_ids.is_empty() {
+            if !biome_mask.iter().any(|&v| v) {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                     COMMANDS_LOCATE_BIOME_NOT_FOUND,
                     COMMANDS_LOCATE_BIOME_NOT_FOUND,
@@ -316,7 +316,7 @@ impl CommandExecutor for BiomeExecutor {
 
                         let sampled_biome =
                             base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
-                        if target_biome_ids.contains(&sampled_biome.id) {
+                        if biome_mask[sampled_biome.id as usize] {
                             let dx = x - px;
                             let dy = y - py;
                             let dz = z - pz;
@@ -491,28 +491,26 @@ fn format_coordinates(x: i32, y_str: &str, z: i32) -> TextComponent {
     .hover_event(HoverEvent::show_text(tooltip))
 }
 
-fn get_perimeter_points(px: i32, pz: i32, r: i32) -> Vec<(i32, i32)> {
-    if r == 0 {
-        return vec![(px, pz)];
-    }
+fn get_perimeter_points(px: i32, pz: i32, r: i32) -> impl Iterator<Item = (i32, i32)> {
+    // At r == 0 there is only the origin itself.
+    // For r > 0 we walk the four edges of the square at step 32:
+    //   - Left  column : (px - r, pz - r ..= pz + r)
+    //   - Right column : (px + r, pz - r ..= pz + r)
+    //   - Top    row   : (px - r + 32 ..= px + r - 32, pz - r)
+    //   - Bottom row   : (px - r + 32 ..= px + r - 32, pz + r)
+    let left = (0i32..)
+        .map(move |i| pz - r + i * 32)
+        .take_while(move |&z| z <= pz + r)
+        .flat_map(move |z| [(px - r, z), (px + r, z)]);
 
-    let mut points = Vec::new();
+    let top_bottom = (0i32..)
+        .map(move |i| px - r + 32 + i * 32)
+        .take_while(move |&x| x <= px + r - 32)
+        .flat_map(move |x| [(x, pz - r), (x, pz + r)]);
 
-    let mut z = pz - r;
-    while z <= pz + r {
-        points.push((px - r, z));
-        points.push((px + r, z));
-        z += 32;
-    }
+    let origin = (r == 0).then_some((px, pz)).into_iter();
 
-    let mut x = px - r + 32;
-    while x <= px + r - 32 {
-        points.push((x, pz - r));
-        points.push((x, pz + r));
-        x += 32;
-    }
-
-    points
+    origin.chain(left).chain(top_bottom)
 }
 
 fn get_structures_by_tag(tag: &str) -> Option<Vec<StructureKeys>> {
