@@ -483,6 +483,9 @@ impl ProtoChunk {
     }
 
     pub fn step_to_biomes(&mut self, generator: &super::generator::VanillaGenerator) {
+        if self.stage >= StagedChunkEnum::Biomes {
+            return;
+        }
         debug_assert_eq!(self.stage, StagedChunkEnum::Empty);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
@@ -500,6 +503,9 @@ impl ProtoChunk {
     }
 
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
+        if self.stage >= StagedChunkEnum::Noise {
+            return;
+        }
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
 
         let settings = generator.settings;
@@ -681,6 +687,9 @@ impl ProtoChunk {
     }
 
     pub fn step_to_surface(&mut self, generator: &super::generator::VanillaGenerator) {
+        if self.stage >= StagedChunkEnum::Surface {
+            return;
+        }
         debug_assert_eq!(self.stage, StagedChunkEnum::Noise);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
@@ -708,6 +717,9 @@ impl ProtoChunk {
     }
 
     pub fn step_to_carvers(&mut self, generator: &super::generator::VanillaGenerator) {
+        if self.stage >= StagedChunkEnum::Carvers {
+            return;
+        }
         debug_assert_eq!(self.stage, StagedChunkEnum::Surface);
 
         super::carver::carve(self, generator);
@@ -1006,6 +1018,9 @@ impl ProtoChunk {
         block_registry: &dyn WorldPortalExt,
         random_config: &GlobalRandomConfig,
     ) {
+        if cache.get_center_chunk().stage >= StagedChunkEnum::Features {
+            return;
+        }
         let (center_x, center_z, min_y, height, biomes_in_chunk) = {
             let chunk = cache.get_center_chunk();
             let mut unique_biomes = Vec::with_capacity(4);
@@ -1181,6 +1196,9 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {
+        if self.stage >= StagedChunkEnum::StructureStart {
+            return;
+        }
         debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
         let random_config = &generator.random_config;
         let settings = generator.settings;
@@ -1291,6 +1309,9 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
+        if self.stage >= StagedChunkEnum::StructureReferences {
+            return;
+        }
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
         let random_config = &generator.random_config;
         let settings = generator.settings;

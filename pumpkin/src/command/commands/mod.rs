@@ -27,6 +27,7 @@ mod help;
 mod kick;
 mod kill;
 mod list;
+mod locate;
 mod me;
 mod msg;
 mod op;
@@ -78,6 +79,10 @@ pub async fn default_dispatcher(
     dispatcher.register(
         worldborder::init_command_tree(),
         "minecraft:command.worldborder",
+    );
+    dispatcher.register(
+        locate::init_command_tree(),
+        "minecraft:command.locate",
     );
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
@@ -211,6 +216,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.worldborder",
             "Manages the world border",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.locate",
+            "Locates a structure, biome or point of interest",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .expect("Permission already registered");

@@ -147,5 +147,6 @@ fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
         100, // max search radius in chunks, matches vanilla default
         seed as i64,
         &generator.global_structure_cache,
+        |_, _| true,
     )
 }
