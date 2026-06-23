@@ -143,7 +143,7 @@ where
                 distance_sq: dx * dx + dz * dz,
             })
         })
-        .min_by(|a, b| a.distance_sq.partial_cmp(&b.distance_sq).unwrap())
+        .min_by(|a, b| a.distance_sq.total_cmp(&b.distance_sq))
 }
 
 fn find_nearest_random_spread_at_radius<F>(

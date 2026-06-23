@@ -394,7 +394,7 @@ impl PoiStorage {
         self.folder.join(format!("r.{rx}.{rz}.mca"))
     }
 
-    fn get_or_load_region(&mut self, rx: i32, rz: i32) -> &mut PoiRegion {
+    pub fn get_or_load_region(&mut self, rx: i32, rz: i32) -> &mut PoiRegion {
         let path = self.region_path(rx, rz);
         self.regions.entry((rx, rz)).or_insert_with(|| {
             PoiRegion::load(&path).unwrap_or_else(|e| {

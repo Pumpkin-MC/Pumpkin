@@ -43,13 +43,13 @@ impl ArgumentConsumer for StructureArgumentConsumer {
     ) -> ConsumeResult<'a> {
         let name_opt = args.pop().map(|arg| arg.value);
         let result = name_opt.and_then(|name| {
-            let is_valid = if name.starts_with('#') {
+            let is_valid = if let Some(name_stripped) = name.strip_prefix('#') {
                 STRUCTURE_TAGS.iter().any(|&tag| {
                     tag.eq_ignore_ascii_case(name)
                         || tag
                             .strip_prefix("#minecraft:")
                             .unwrap_or(tag)
-                            .eq_ignore_ascii_case(name.strip_prefix('#').unwrap())
+                            .eq_ignore_ascii_case(name_stripped)
                 })
             } else {
                 pumpkin_data::structures::StructureKeys::from_registry_name(name).is_some()
@@ -87,8 +87,7 @@ impl ArgumentConsumer for StructureArgumentConsumer {
                     match_found = true;
                 }
 
-                if !match_found && s_lower.starts_with('#') {
-                    let tag_name = s_lower.strip_prefix('#').unwrap();
+                if !match_found && let Some(tag_name) = s_lower.strip_prefix('#') {
                     let user_tag_name = input_lower.strip_prefix('#').unwrap_or(&input_lower);
                     if tag_name.starts_with(user_tag_name) {
                         match_found = true;

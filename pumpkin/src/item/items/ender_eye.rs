@@ -140,10 +140,12 @@ async fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPo
     let world_gen = world.level.world_gen.clone();
     let seed = world.level.seed.0;
 
+    let stronghold_set = StructureSet::get("strongholds")?;
+
     tokio::task::spawn_blocking(move || {
         find_nearest_structure(
             origin,
-            &[&StructureSet::get("strongholds").unwrap().placement],
+            &[&stronghold_set.placement],
             100, // max search radius in chunks, matches vanilla default
             seed as i64,
             &world_gen.global_structure_cache,
