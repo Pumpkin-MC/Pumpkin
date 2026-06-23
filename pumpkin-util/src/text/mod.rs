@@ -752,10 +752,15 @@ impl TextComponent {
             .clone()
             .to_translated()
             .serialize(&mut serializer)
-            .expect(&get_translation(
-                "pumpkin:text.component.failed_serialize_nbt",
-                server_locale(),
-            ));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    get_translation(
+                        "pumpkin:text.component.failed_serialize_nbt",
+                        server_locale(),
+                    )
+                )
+            });
 
         buf.into_boxed_slice()
     }

@@ -1,6 +1,5 @@
 use std::fmt;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
