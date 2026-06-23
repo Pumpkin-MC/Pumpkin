@@ -17,7 +17,7 @@ use crossbeam::channel::Receiver;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_i18n::{Locale, server_locale};
+use pumpkin_i18n::{Locale, server_global_locale, try_player_locale};
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::AbilityLayer;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
@@ -3122,16 +3122,23 @@ impl Player {
         self.send_system_message_raw(text, false).await;
     }
 
+    #[must_use]
+    pub fn locale(&self) -> Locale {
+        try_player_locale(&self.gameprofile.id.to_string()).unwrap_or_else(|| {
+            Locale::from_str(&self.config.load().locale).unwrap_or_else(|_| server_global_locale())
+        })
+    }
+
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
+        let locale = self.locale();
         match &self.client {
             ClientPlatform::Java(client) => {
+                let text = text.clone().to_translated_with_locale(locale);
                 client
-                    .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+                    .enqueue_packet(&CSystemChatMessage::new(&text, overlay))
                     .await;
             }
             ClientPlatform::Bedrock(client) => {
-                let locale =
-                    Locale::from_str(&self.config.load().locale).unwrap_or(server_locale());
                 let packet = match &*text.0.content {
                     pumpkin_util::text::TextContent::Translate {
                         translate,
@@ -3141,7 +3148,7 @@ impl Player {
                         let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
                         let parameters = with
                             .iter()
-                            .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
+                            .map(|component| component.to_bedrock_string_with_locale(locale))
                             .collect();
                         SText::translation(key.to_string(), parameters)
                     }

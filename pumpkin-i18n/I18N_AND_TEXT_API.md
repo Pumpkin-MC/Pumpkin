@@ -65,7 +65,7 @@
 pumpkin-i18n/src/
 ├── lib.rs          # crate root, re-exports, SubstitutionRange, parse_locale_value
 ├── locale.rs       # Locale 枚举 (128 variants) + FromStr
-├── server.rs       # server_locale(), set_server_locale(), detect_system_locale()
+├── server.rs       # server_global_locale(), set_server_global_locale(), detect_system_locale()
 ├── client.rs       # player_locale(), set_player_locale(), resolve_client_locale()
 ├── store.rs        # TRANSLATIONS 全局存储, get_translation(), add_translation()
 ├── engine.rs       # TranslationEngine (FST + DashMap cache)
@@ -245,10 +245,10 @@ impl FromStr for Locale {
 
 ```rust
 // 获取当前服务端日志语言
-pub fn server_locale() -> Locale;
+pub fn server_global_locale() -> Locale;
 
 // 设置服务端日志语言（由 pumpkin server crate 在启动时调用）
-pub fn set_server_locale(locale: Locale);
+pub fn set_server_global_locale(locale: Locale);
 
 // 自动检测系统语言
 pub fn detect_system_locale() -> Locale;
@@ -261,19 +261,19 @@ pub fn resolve_server_locale(config_value: &str) -> Locale;
 
 | 函数                           | 行为                                                                                                                                  |
 |------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `server_locale()`            | 返回 `OnceLock` 中存储的语言，未初始化时回退 `EnUs`                                                                                                 |
-| `set_server_locale()`        | **仅首次调用生效**（`OnceLock`），后续调用被静默忽略                                                                                                   |
+| `server_global_locale()`     | 返回 `OnceLock` 中存储的语言，未初始化时回退 `EnUs`                                                                                                 |
+| `set_server_global_locale()` | **仅首次调用生效**（`OnceLock`），后续调用被静默忽略                                                                                                   |
 | `detect_system_locale()`     | **Linux/macOS**: 读取 `LANG` → `LC_ALL` → `LC_MESSAGES` 环境变量<br>**Windows**: 调用 `GetUserDefaultLocaleName` API<br>**其他平台**: 回退 `EnUs` |
 | `resolve_server_locale(cfg)` | 若 `cfg == "auto"` 调用 `detect_system_locale()`；否则解析配置值                                                                               |
 
 ### 用法示例
 
 ```rust
-use pumpkin_i18n::{detect_system_locale, resolve_server_locale, set_server_locale};
+use pumpkin_i18n::{detect_system_locale, resolve_server_locale, set_server_global_locale};
 
 // 启动时
 let locale = resolve_server_locale("auto");  // 或 "zh_cn"
-set_server_locale(locale);
+set_server_global_locale(locale);
 ```
 
 ---
@@ -1090,19 +1090,19 @@ assets/translations/pumpkin/<locale>.json
 ### 1. 初始化 i18n
 
 ```rust
-use pumpkin_i18n::{set_server_locale, resolve_server_locale};
+use pumpkin_i18n::{set_server_global_locale, resolve_server_locale};
 
 // 服务端启动时
 let locale = resolve_server_locale("auto"); // 或 "zh_cn"
-set_server_locale(locale);
+set_server_global_locale(locale);
 ```
 
 ### 2. 获取翻译字符串
 
 ```rust
-use pumpkin_i18n::{get_translation, server_locale};
+use pumpkin_i18n::{get_translation, server_global_locale};
 
-let msg = get_translation("pumpkin:text.color.hex_format_invalid", server_locale());
+let msg = get_translation("pumpkin:text.color.hex_format_invalid", server_global_locale());
 // → "Hex color must be in the format '#RRGGBB'" (EnUs)
 // 或 "十六进制颜色必须为 '#RRGGBB' 格式" (ZhCn)
 ```

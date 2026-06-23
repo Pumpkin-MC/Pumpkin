@@ -1,5 +1,5 @@
 use colored::{ColoredString, Colorize};
-use pumpkin_i18n::{get_translation, server_locale};
+use pumpkin_i18n::{get_translation, server_global_locale};
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// Text color for chat components.
@@ -62,26 +62,26 @@ impl<'de> Deserialize<'de> for Color {
             if s.len() != 7 {
                 return Err(serde::de::Error::custom(get_translation(
                     "pumpkin:text.color.hex_format_invalid",
-                    server_locale(),
+                    server_global_locale(),
                 )));
             }
 
             let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| {
                 serde::de::Error::custom(get_translation(
                     "pumpkin:text.color.invalid_red_component",
-                    server_locale(),
+                    server_global_locale(),
                 ))
             })?;
             let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| {
                 serde::de::Error::custom(get_translation(
                     "pumpkin:text.color.invalid_green_component",
-                    server_locale(),
+                    server_global_locale(),
                 ))
             })?;
             let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| {
                 serde::de::Error::custom(get_translation(
                     "pumpkin:text.color.invalid_blue_component",
-                    server_locale(),
+                    server_global_locale(),
                 ))
             })?;
 
@@ -91,7 +91,7 @@ impl<'de> Deserialize<'de> for Color {
                 |()| {
                     serde::de::Error::custom(get_translation(
                         "pumpkin:text.color.invalid_named_color",
-                        server_locale(),
+                        server_global_locale(),
                     ))
                 },
             )?))

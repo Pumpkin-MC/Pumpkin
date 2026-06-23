@@ -8,24 +8,24 @@ static SERVER_LOGGING_LOCALE: OnceLock<Locale> = OnceLock::new();
 /// Global command locale, set by the pumpkin server crate during startup.
 static SERVER_COMMAND_LOCALE: OnceLock<Locale> = OnceLock::new();
 
-/// Returns the server logging locale, falling back to [`Locale::EnUs`].
+/// Returns the server global logging locale, falling back to [`Locale::EnUs`].
 #[must_use]
-pub fn server_locale() -> Locale {
+pub fn server_global_locale() -> Locale {
     *SERVER_LOGGING_LOCALE.get().unwrap_or(&Locale::EnUs)
 }
 
-/// Returns the server command locale, falling back to [`server_locale`].
+/// Returns the server command locale, falling back to [`server_global_locale`].
 #[must_use]
 pub fn server_command_locale() -> Locale {
     SERVER_COMMAND_LOCALE
         .get()
         .copied()
-        .unwrap_or_else(server_locale)
+        .unwrap_or_else(server_global_locale)
 }
 
-/// Sets the server logging locale. Called from the pumpkin server crate during
-/// initialization.
-pub fn set_server_locale(locale: Locale) {
+/// Sets the server global logging locale. Called from the pumpkin server crate
+/// during initialization.
+pub fn set_server_global_locale(locale: Locale) {
     let _ = SERVER_LOGGING_LOCALE.set(locale);
 }
 

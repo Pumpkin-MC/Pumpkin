@@ -71,7 +71,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
-use pumpkin_i18n::server_locale;
+use pumpkin_i18n::locale_to_log_string;
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -83,7 +83,7 @@ use pumpkin_protocol::java::client::play::{
     CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
-    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
+    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings,
 };
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
@@ -570,26 +570,9 @@ impl World {
     }
 
     pub async fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
-        let je_packet = CSystemChatMessage::new(message, overlay);
-        let be_packet = Self::component_to_bedrock_text(message);
-        self.broadcast_editioned(&je_packet, &be_packet).await;
-    }
-
-    fn component_to_bedrock_text(message: &TextComponent) -> SText {
-        match &*message.0.content {
-            pumpkin_util::text::TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with,
-            } => {
-                let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
-                let parameters = with
-                    .iter()
-                    .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
-                    .collect();
-                SText::translation(key.to_string(), parameters)
-            }
-            _ => SText::system_message(message.0.to_bedrock_legacy(server_locale())),
+        let players: Vec<_> = self.players.load().iter().cloned().collect();
+        for player in players {
+            player.send_system_message_raw(message, overlay).await;
         }
     }
 
@@ -2299,7 +2282,11 @@ impl World {
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
                 .await;
-            info!("{}", event.join_message.to_pretty_console());
+            info!(
+                "{} language: {}",
+                event.join_message.to_pretty_console(),
+                locale_to_log_string(player.locale())
+            );
         }
     }
 
@@ -2924,7 +2911,11 @@ impl World {
             self.broadcast_system_message(&event.join_message, false)
                 .await;
             // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
-            info!("{}", event.join_message.to_pretty_console());
+            info!(
+                "{} language: {}",
+                event.join_message.to_pretty_console(),
+                locale_to_log_string(player.locale())
+            );
         }
     }
 

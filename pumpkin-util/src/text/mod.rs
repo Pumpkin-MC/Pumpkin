@@ -7,7 +7,7 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use pumpkin_i18n::{Locale, get_translation, server_locale};
+use pumpkin_i18n::{Locale, get_translation, server_global_locale};
 use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -104,13 +104,13 @@ impl TextComponentBase {
     /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
-        self.to_pretty_console_with_locale(server_locale())
+        self.to_pretty_console_with_locale(server_global_locale())
     }
 
     /// Converts this component to a human-readable string for console output
     /// using the provided locale for vanilla translation components.
     ///
-    /// Custom translation components keep their explicit locale.
+    /// Custom translation components use the supplied locale.
     #[must_use]
     pub fn to_pretty_console_with_locale(self, locale: Locale) -> String {
         fn osc8_link(url: &str, text: &str) -> String {
@@ -129,7 +129,7 @@ impl TextComponentBase {
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, locale, with } => translation_to_pretty(key, locale, with),
+            TextContent::Custom { key, with, .. } => translation_to_pretty(key, locale, with),
         };
         let style = self.style;
         let color = style.color;
@@ -165,6 +165,13 @@ impl TextComponentBase {
     /// Translations are emitted as `%translation.key` so Bedrock evaluates them natively.
     #[must_use]
     pub fn to_bedrock_string(&self) -> String {
+        self.to_bedrock_string_with_locale(Locale::EnUs)
+    }
+
+    /// Converts this component into a raw Bedrock string using the supplied locale
+    /// for Pumpkin custom translation parameters.
+    #[must_use]
+    pub fn to_bedrock_string_with_locale(&self, locale: Locale) -> String {
         let mut text = String::new();
 
         match &*self.content {
@@ -179,13 +186,13 @@ impl TextComponentBase {
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
-            TextContent::Custom { key, .. } => {
-                let _ = write!(text, "%{key}");
+            TextContent::Custom { key, with, .. } => {
+                text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
             }
         }
 
         for child in &self.extra {
-            text.push_str(&child.to_bedrock_string());
+            text.push_str(&child.to_bedrock_string_with_locale(locale));
         }
 
         text
@@ -234,9 +241,8 @@ impl TextComponentBase {
                 bedrock_translate: _,
                 with,
             } => {
-                // TODO
                 text.push_str(&get_translation_text(
-                    translate.to_string(),
+                    format!("minecraft:{translate}"),
                     locale,
                     with.clone(),
                 ));
@@ -295,13 +301,17 @@ impl TextComponentBase {
     ///
     /// # Returns
     /// A new component with all translations resolved.
-    fn translate_hover_event(style: &mut Style) {
+    fn translate_hover_event(style: &mut Style, locale_override: Option<Locale>) {
         if let Some(ref hover) = style.hover_event {
             style.hover_event = match hover {
                 HoverEvent::ShowText { value } => {
                     let mut hover_components = vec![];
                     for hover_component in value {
-                        hover_components.push(hover_component.to_owned().to_translated());
+                        hover_components.push(
+                            hover_component
+                                .to_owned()
+                                .to_translated_with_locale_override(locale_override),
+                        );
                     }
                     Some(HoverEvent::ShowText {
                         value: hover_components,
@@ -317,7 +327,14 @@ impl TextComponentBase {
                     },
                     |name| {
                         Some(HoverEvent::ShowEntity {
-                            name: Some(name.iter().map(|x| x.to_owned().to_translated()).collect()),
+                            name: Some(
+                                name.iter()
+                                    .map(|x| {
+                                        x.to_owned()
+                                            .to_translated_with_locale_override(locale_override)
+                                    })
+                                    .collect(),
+                            ),
                             id: id.clone(),
                             uuid: uuid.clone(),
                         })
@@ -337,6 +354,17 @@ impl TextComponentBase {
     /// A new component with all translations resolved.
     #[must_use]
     pub fn to_translated(self) -> Self {
+        self.to_translated_with_locale_override(None)
+    }
+
+    /// Converts this component by resolving all Pumpkin custom translations with
+    /// the supplied locale.
+    #[must_use]
+    pub fn to_translated_with_locale(self, locale: Locale) -> Self {
+        self.to_translated_with_locale_override(Some(locale))
+    }
+
+    fn to_translated_with_locale_override(self, locale_override: Option<Locale>) -> Self {
         // NOTE: Divide the translation into slices and inserts the substitutions.
         let component = match *self.content {
             TextContent::Translate {
@@ -346,7 +374,7 @@ impl TextComponentBase {
             } => {
                 let mut translated_with = vec![];
                 for w in with {
-                    translated_with.push(w.to_translated());
+                    translated_with.push(w.to_translated_with_locale_override(locale_override));
                 }
                 Self {
                     content: Box::new(TextContent::Translate {
@@ -359,6 +387,7 @@ impl TextComponentBase {
                 }
             }
             TextContent::Custom { key, with, locale } => {
+                let locale = locale_override.unwrap_or(locale);
                 let (translation_parent, mut translation_slices) =
                     resolve_translation_components(&key, locale, with);
                 for i in self.extra {
@@ -378,12 +407,12 @@ impl TextComponentBase {
         let extra = component
             .extra
             .into_iter()
-            .map(Self::to_translated)
+            .map(|component| component.to_translated_with_locale_override(locale_override))
             .collect();
 
         // If the hover event is present, it will also be translated
         let mut style = component.style;
-        Self::translate_hover_event(&mut style);
+        Self::translate_hover_event(&mut style, locale_override);
 
         Self {
             content: component.content,
@@ -723,6 +752,13 @@ impl TextComponent {
     pub fn to_pretty_console_with_locale(self, locale: Locale) -> String {
         self.0.to_pretty_console_with_locale(locale)
     }
+
+    /// Resolves Pumpkin custom translations with the supplied locale while
+    /// preserving client-native Minecraft translation components.
+    #[must_use]
+    pub fn to_translated_with_locale(self, locale: Locale) -> Self {
+        Self(self.0.to_translated_with_locale(locale))
+    }
 }
 
 impl TextComponent {
@@ -745,7 +781,7 @@ impl TextComponent {
                     "{}",
                     get_translation(
                         "pumpkin:text.component.failed_serialize_nbt",
-                        server_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -882,7 +918,7 @@ impl TextComponent {
     where
         F: Fn(usize, usize) -> color::RGBColor,
     {
-        let raw_text = self.0.clone().get_text(server_locale());
+        let raw_text = self.0.clone().get_text(server_global_locale());
         let chars: Vec<char> = raw_text.chars().collect();
         let len = chars.len();
 
