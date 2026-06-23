@@ -9,9 +9,11 @@
 //! The on-disk layout mirrors AdvancedSlimePaper `dev/26.2`
 //! (`SlimeSerializer` / `v13SlimeWorldDeSerializer`).
 
+mod convert;
 mod model;
 mod reader;
 
+pub(crate) use convert::{chunk_to_chunk_data, chunk_to_entity_data};
 pub use model::{SlimeChunk, SlimeSection, SlimeWorld};
 pub use reader::read_slime_world;
 
