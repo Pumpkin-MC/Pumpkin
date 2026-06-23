@@ -34,6 +34,7 @@ use super::{
 pub mod anvil;
 pub mod linear;
 pub mod pump;
+pub mod slime;
 
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
