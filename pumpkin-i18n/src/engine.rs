@@ -329,10 +329,9 @@ impl TranslationEngine {
             overrides.clear();
         }
         #[cfg(not(debug_assertions))]
-        {
-            self.fallback_log_once.clear();
-            self.missing_log_once.clear();
-        }
+        self.fallback_log_once.clear();
+        #[cfg(not(debug_assertions))]
+        self.missing_log_once.clear();
         // Clear the cache so that new stores are used immediately.
         self.cache.clear();
     }
