@@ -10,10 +10,12 @@
 //! (`SlimeSerializer` / `v13SlimeWorldDeSerializer`).
 
 mod convert;
+mod io;
 mod model;
 mod reader;
 
 pub(crate) use convert::{chunk_to_chunk_data, chunk_to_entity_data};
+pub(crate) use io::{SlimeChunkIo, SlimeEntityIo};
 pub use model::{SlimeChunk, SlimeSection, SlimeWorld};
 pub use reader::read_slime_world;
 
