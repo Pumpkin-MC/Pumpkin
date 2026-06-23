@@ -73,7 +73,10 @@ impl ArgumentConsumer for StructureArgumentConsumer {
             };
             let input_lower = typed_word.to_lowercase();
             let mut matches = Vec::new();
-            for s in pumpkin_data::structures::StructureKeys::ALL_NAMES.iter().chain(STRUCTURE_TAGS.iter()) {
+            for s in pumpkin_data::structures::StructureKeys::ALL_NAMES
+                .iter()
+                .chain(STRUCTURE_TAGS.iter())
+            {
                 let s_lower = s.to_lowercase();
                 let mut match_found = s_lower.starts_with(&input_lower);
 

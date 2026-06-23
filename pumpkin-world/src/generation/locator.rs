@@ -1,12 +1,12 @@
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::structures::StructurePlacement;
-use pumpkin_util::math::position::BlockPos;
 use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
 use crate::generation::biome_coords;
+use crate::generation::generator::structure_finder::find_nearest_structure;
 use crate::generation::noise::router::multi_noise_sampler::{
     MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
 };
-use crate::generation::generator::structure_finder::find_nearest_structure;
+use pumpkin_data::dimension::Dimension;
+use pumpkin_data::structures::StructurePlacement;
+use pumpkin_util::math::position::BlockPos;
 
 pub fn find_nearest_biome(
     world_gen: &crate::generation::generator::VanillaGenerator,
@@ -48,10 +48,8 @@ pub fn find_nearest_biome(
     };
 
     let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
-    let mut multi_noise_sampler = MultiNoiseSampler::generate(
-        &world_gen.base_router.multi_noise,
-        &multi_noise_config,
-    );
+    let mut multi_noise_sampler =
+        MultiNoiseSampler::generate(&world_gen.base_router.multi_noise, &multi_noise_config);
 
     let mut best_match: Option<(BlockPos, f64)> = None;
 
@@ -70,8 +68,7 @@ pub fn find_nearest_biome(
                 let by = biome_coords::from_block(y);
                 let bz = biome_coords::from_block(z);
 
-                let sampled_biome =
-                    base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
+                let sampled_biome = base_supplier.biome(bx, by, bz, &mut multi_noise_sampler);
                 if biome_mask[sampled_biome.id as usize] {
                     let dx = x - px;
                     let dy = y - py;
@@ -126,10 +123,8 @@ pub fn find_nearest_structure_pos(
     };
 
     let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
-    let mut multi_noise_sampler = MultiNoiseSampler::generate(
-        &world_gen.base_router.multi_noise,
-        &multi_noise_config,
-    );
+    let mut multi_noise_sampler =
+        MultiNoiseSampler::generate(&world_gen.base_router.multi_noise, &multi_noise_config);
 
     let world_seed = world_gen.random_config.seed as i64;
     find_nearest_structure(

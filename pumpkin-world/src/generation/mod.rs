@@ -9,12 +9,12 @@ mod feature;
 pub mod generator;
 pub mod height_limit;
 pub mod height_provider;
+pub mod locator;
 pub mod noise;
 pub mod positions;
 pub mod proto_chunk;
 pub mod proto_chunk_test;
 pub mod rule;
-pub mod locator;
 pub mod structure;
 mod surface;
 
