@@ -28,7 +28,9 @@ use pumpkin::{
 };
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
-use pumpkin_i18n::{self, locale_to_log_string, resolve_server_locale, set_server_locale};
+use pumpkin_i18n::{
+    self, locale_to_log_string, resolve_server_locale, set_server_command_locale, set_server_locale,
+};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -83,13 +85,20 @@ async fn main() {
 
     pumpkin::init_logger(&config.advanced);
 
-    // Initialize the server logging locale from config
+    // Initialize server locales from config.
     let server_locale = resolve_server_locale(&config.advanced.locale.server_logging);
+    let server_command_locale = resolve_server_locale(&config.advanced.locale.server_command);
     set_server_locale(server_locale);
+    set_server_command_locale(server_command_locale);
     info!(
-        "Server locale: {} (source: {})",
+        "Server logging locale: {} (source: {})",
         locale_to_log_string(server_locale),
         config.advanced.locale.server_logging
+    );
+    info!(
+        "Server command locale: {} (source: {})",
+        locale_to_log_string(server_command_locale),
+        config.advanced.locale.server_command
     );
 
     info!(

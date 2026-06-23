@@ -1,6 +1,6 @@
 use crate::text::color::{ARGBColor, hsv_to_rgb};
 use crate::text::translation::{
-    get_translation_text, reorder_substitutions, translation_to_pretty,
+    get_translation_text, resolve_translation_components, translation_to_pretty,
 };
 use click::ClickEvent;
 use color::Color;
@@ -104,6 +104,15 @@ impl TextComponentBase {
     /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
+        self.to_pretty_console_with_locale(server_locale())
+    }
+
+    /// Converts this component to a human-readable string for console output
+    /// using the provided locale for vanilla translation components.
+    ///
+    /// Custom translation components keep their explicit locale.
+    #[must_use]
+    pub fn to_pretty_console_with_locale(self, locale: Locale) -> String {
         fn osc8_link(url: &str, text: &str) -> String {
             format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
         }
@@ -114,7 +123,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => translation_to_pretty(format!("minecraft:{translate}"), server_locale(), with),
+            } => translation_to_pretty(format!("minecraft:{translate}"), locale, with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -147,7 +156,7 @@ impl TextComponentBase {
         }
 
         for child in self.extra {
-            text += &*child.to_pretty_console();
+            text += &*child.to_pretty_console_with_locale(locale);
         }
         text
     }
@@ -350,38 +359,8 @@ impl TextComponentBase {
                 }
             }
             TextContent::Custom { key, with, locale } => {
-                let translation = get_translation(&key, locale);
-                let mut translation_parent = translation.clone();
-                let mut translation_slices = vec![];
-
-                if translation.contains('%') {
-                    let (substitutions, ranges) = reorder_substitutions(&translation, with);
-                    for (idx, &range) in ranges.iter().enumerate() {
-                        if idx == 0 {
-                            translation_parent = translation[..range.start].to_string();
-                        }
-                        translation_slices.push(substitutions[idx].clone());
-                        if range.end >= translation.len() - 1 {
-                            continue;
-                        }
-
-                        translation_slices.push(Self {
-                            content: Box::new(TextContent::Text {
-                                text: if idx == ranges.len() - 1 {
-                                    // Last substitution, append the rest of the translation
-                                    Cow::Owned(translation[range.end + 1..].to_string())
-                                } else {
-                                    Cow::Owned(
-                                        translation[range.end + 1..ranges[idx + 1].start]
-                                            .to_string(),
-                                    )
-                                },
-                            }),
-                            style: Box::new(Style::default()),
-                            extra: vec![],
-                        });
-                    }
-                }
+                let (translation_parent, mut translation_slices) =
+                    resolve_translation_components(&key, locale, with);
                 for i in self.extra {
                     translation_slices.push(i);
                 }
@@ -734,6 +713,15 @@ impl TextComponent {
     #[must_use]
     pub fn to_pretty_console(self) -> String {
         self.0.to_pretty_console()
+    }
+
+    /// Converts this component to a pretty console string using the supplied locale.
+    ///
+    /// # Returns
+    /// A formatted string ready for console output.
+    #[must_use]
+    pub fn to_pretty_console_with_locale(self, locale: Locale) -> String {
+        self.0.to_pretty_console_with_locale(locale)
     }
 }
 

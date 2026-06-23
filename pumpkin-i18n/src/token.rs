@@ -5,7 +5,7 @@ use std::sync::Arc;
 /// During startup, every translation string containing `%` placeholders
 /// is parsed into a sequence of [`Token`]s so that runtime substitution
 /// does zero parsing work — it simply streams the tokens into a buffer.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token {
     /// A static text fragment to be written verbatim.
     Text(Arc<str>),
@@ -47,58 +47,82 @@ pub fn precompile(template: &str) -> Option<TokenStream> {
 
     let mut tokens: Vec<Token> = Vec::new();
     let mut cursor = 0usize;
+    let mut text_start = 0usize;
     let mut sequential_idx = 0usize;
 
     while cursor < len {
-        let pct = if let Some(pos) = bytes[cursor..].iter().position(|&b| b == b'%') {
-            cursor + pos
-        } else {
-            // Remainder is plain text
-            if cursor < len {
-                tokens.push(Token::Text(template[cursor..].into()));
-            }
-            break;
-        };
-
-        // Emit text before the %
-        if pct > cursor {
-            tokens.push(Token::Text(template[cursor..pct].into()));
-        }
-
-        // Check for %% (escaped literal percent)
-        if pct + 1 < len && bytes[pct + 1] == b'%' {
-            tokens.push(Token::Text("%".into()));
-            cursor = pct + 2;
+        if bytes[cursor] != b'%' {
+            cursor += 1;
             continue;
         }
 
-        // We have a placeholder. Scan for a possible digit prefix + '$'.
-        let mut num_str = String::new();
+        if cursor > 0 && bytes[cursor - 1] == b'\\' {
+            cursor += 1;
+            continue;
+        }
+
+        let pct = cursor;
+        if pct > text_start {
+            tokens.push(Token::Text(template[text_start..pct].into()));
+        }
+
+        if pct + 1 >= len {
+            tokens.push(Token::Text("%".into()));
+            text_start = len;
+            break;
+        }
+
+        if pct + 1 < len && bytes[pct + 1] == b'%' {
+            tokens.push(Token::Text("%".into()));
+            cursor = pct + 2;
+            text_start = cursor;
+            continue;
+        }
+
         let mut look = pct + 1;
+        let digits_start = look;
         while look < len && bytes[look].is_ascii_digit() {
-            num_str.push(bytes[look] as char);
             look += 1;
         }
 
-        if look < len && bytes[look] == b'$' {
+        if look > digits_start && look + 1 < len && bytes[look] == b'$' {
             // Explicit index: %1$s, %2$d, …
-            let idx: usize = num_str.parse().unwrap_or(1);
-            // 1‑based → 0‑based
+            let idx = template[digits_start..look].parse::<usize>().unwrap_or(1);
             tokens.push(Token::Var(idx.saturating_sub(1)));
-            // Skip the format specifier char (s/d/f/…)
-            cursor = look + 2.min(len.saturating_sub(look));
+            cursor = look + 2;
         } else {
             // Sequential index: %s, %d, %f, …
             tokens.push(Token::Var(sequential_idx));
             sequential_idx += 1;
-            // Skip the format specifier char
-            cursor = pct + 2.min(len);
+            cursor = pct + 2;
         }
+
+        text_start = cursor;
+    }
+
+    if text_start < len {
+        tokens.push(Token::Text(template[text_start..].into()));
     }
 
     if tokens.is_empty() {
         None
     } else {
         Some(tokens.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::format_tokens;
+
+    use super::precompile;
+
+    #[test]
+    fn precompile_formats_explicit_sequential_and_literal_percent() {
+        let tokens = precompile("%2$s %% %s \\%s end%").unwrap();
+        let mut output = String::new();
+        format_tokens(&tokens, &["A".to_owned(), "B".to_owned()], &mut output);
+
+        assert_eq!(output, "B % A \\%s end%");
     }
 }

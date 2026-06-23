@@ -46,9 +46,13 @@ pub fn set_player_locale(uuid: &str, player_reported_locale: &str, config_value:
 /// The cached [`Locale`], or [`Locale::EnUs`] on cache miss.
 #[must_use]
 pub fn player_locale(uuid: &str) -> Locale {
-    PLAYER_CACHE
-        .get(uuid)
-        .map_or(Locale::EnUs, |entry| *entry.value())
+    try_player_locale(uuid).unwrap_or(Locale::EnUs)
+}
+
+/// Retrieve a player's cached locale, returning [`None`] on cache miss.
+#[must_use]
+pub fn try_player_locale(uuid: &str) -> Option<Locale> {
+    PLAYER_CACHE.get(uuid).map(|entry| *entry.value())
 }
 
 /// Remove a player from the locale cache on disconnect.
@@ -75,7 +79,7 @@ pub fn remove_player_locale(uuid: &str) {
 /// Otherwise overrides with the configured locale.
 #[must_use]
 pub fn resolve_client_locale(player_locale: &str, config_value: &str) -> Locale {
-    let source = if config_value == "auto" {
+    let source = if config_value.eq_ignore_ascii_case("auto") {
         player_locale
     } else {
         config_value
@@ -98,14 +102,12 @@ pub fn resolve_client_locale(player_locale: &str, config_value: &str) -> Locale 
 pub fn locale_to_log_string(locale: Locale) -> String {
     let raw = format!("{locale:?}");
     // Insert underscores before uppercase letters, then lowercase
-    raw.chars()
-        .enumerate()
-        .flat_map(|(i, c)| {
-            if i > 0 && c.is_uppercase() {
-                vec!['_', c.to_ascii_lowercase()]
-            } else {
-                vec![c.to_ascii_lowercase()]
-            }
-        })
-        .collect()
+    let mut output = String::with_capacity(raw.len() + 2);
+    for (idx, c) in raw.chars().enumerate() {
+        if idx > 0 && c.is_uppercase() {
+            output.push('_');
+        }
+        output.push(c.to_ascii_lowercase());
+    }
+    output
 }

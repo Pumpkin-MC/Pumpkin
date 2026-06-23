@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{borrow::Cow, str::FromStr};
 
 /// Supported locales for translations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -143,7 +143,7 @@ impl FromStr for Locale {
     #[expect(clippy::too_many_lines)]
     #[allow(clippy::match_same_arms)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
+        match normalize_locale_code(s).as_ref() {
             "af_za" => Ok(Self::AfZa),       // Afrikaans (Suid-Afrika)
             "ar_sa" => Ok(Self::ArSa),       // Arabic
             "ast_es" => Ok(Self::AstEs),     // Asturian
@@ -274,5 +274,59 @@ impl FromStr for Locale {
             "zlm_arab" => Ok(Self::ZlmArab), // Malay (Jawi)
             _ => Ok(Self::EnUs),             // Default to English (US) if not found
         }
+    }
+}
+
+fn normalize_locale_code(raw: &str) -> Cow<'_, str> {
+    if !raw
+        .bytes()
+        .any(|byte| byte == b'-' || byte.is_ascii_uppercase())
+    {
+        return Cow::Borrowed(raw);
+    }
+
+    let mut normalized = String::with_capacity(raw.len() + 2);
+    let mut previous_was_separator = true;
+    let mut previous_was_uppercase = false;
+
+    for (idx, byte) in raw.bytes().enumerate() {
+        match byte {
+            b'-' => {
+                normalized.push('_');
+                previous_was_separator = true;
+                previous_was_uppercase = false;
+            }
+            b'A'..=b'Z' => {
+                if idx > 0 && !previous_was_separator && !previous_was_uppercase {
+                    normalized.push('_');
+                }
+                normalized.push(byte.to_ascii_lowercase() as char);
+                previous_was_separator = false;
+                previous_was_uppercase = true;
+            }
+            _ => {
+                normalized.push(byte as char);
+                previous_was_separator = byte == b'_';
+                previous_was_uppercase = false;
+            }
+        }
+    }
+
+    Cow::Owned(normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::Locale;
+
+    #[test]
+    fn parses_common_locale_spellings() {
+        assert_eq!(Locale::from_str("en_us"), Ok(Locale::EnUs));
+        assert_eq!(Locale::from_str("en-US"), Ok(Locale::EnUs));
+        assert_eq!(Locale::from_str("EnUs"), Ok(Locale::EnUs));
+        assert_eq!(Locale::from_str("ZH_CN"), Ok(Locale::ZhCn));
+        assert_eq!(Locale::from_str("zlm-Arab"), Ok(Locale::ZlmArab));
     }
 }

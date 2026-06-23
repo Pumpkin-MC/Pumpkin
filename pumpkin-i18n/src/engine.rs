@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-use std::fmt::Write;
-use std::sync::Arc;
-
 use std::hash::BuildHasherDefault;
+use std::sync::Arc;
+use std::{collections::HashMap, fmt::Write};
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
@@ -26,18 +24,60 @@ pub enum ResolvedTranslation {
     /// A plain string with no formatting placeholders.
     Static(Arc<str>),
     /// A precompiled token stream ready for [`format_tokens`].
-    Tokenized(TokenStream),
+    Tokenized {
+        /// Original untranslated template.
+        template: Arc<str>,
+        /// Precompiled placeholder stream.
+        tokens: TokenStream,
+    },
+    /// A missing key fallback.
+    Missing(Arc<str>),
 }
 
 impl ResolvedTranslation {
+    /// Builds a resolved translation from a raw template string.
+    #[must_use]
+    pub fn from_template(value: &str) -> Self {
+        let template: Arc<str> = Arc::from(value);
+        match token::precompile(value) {
+            Some(tokens) => Self::Tokenized { template, tokens },
+            None => Self::Static(template),
+        }
+    }
+
+    /// Returns the original translation template.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Static(s) | Self::Missing(s) => s,
+            Self::Tokenized { template, .. } => template,
+        }
+    }
+
+    /// Returns the precompiled token stream, if this template contains
+    /// formatting placeholders or escaped percent literals.
+    #[must_use]
+    pub fn tokens(&self) -> Option<&[Token]> {
+        match self {
+            Self::Tokenized { tokens, .. } => Some(tokens),
+            Self::Static(_) | Self::Missing(_) => None,
+        }
+    }
+
+    /// Returns whether this is the raw-key missing fallback.
+    #[must_use]
+    pub const fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing(_))
+    }
+
     /// Convenience: format this resolved translation into `buf`.
     ///
     /// For [`Static`](Self::Static) this is a simple `push_str`;
     /// for [`Tokenized`](Self::Tokenized) it streams tokens.
     pub fn write_to(&self, args: &[String], buf: &mut String) {
         match self {
-            Self::Static(s) => buf.push_str(s),
-            Self::Tokenized(tokens) => format_tokens(tokens, args, buf),
+            Self::Static(s) | Self::Missing(s) => buf.push_str(s),
+            Self::Tokenized { tokens, .. } => format_tokens(tokens, args, buf),
         }
     }
 }
@@ -95,11 +135,7 @@ impl FstLocaleStore {
             for (idx, (key, value)) in sorted.iter().enumerate() {
                 let _ = builder.insert(key, idx as u64);
 
-                let resolved = token::precompile(value).map_or_else(
-                    || ResolvedTranslation::Static(Arc::from(*value)),
-                    ResolvedTranslation::Tokenized,
-                );
-                entries.push(resolved);
+                entries.push(ResolvedTranslation::from_template(value));
             }
             builder.into_inner().expect("FST build failed")
         };
@@ -123,6 +159,11 @@ impl FstLocaleStore {
 // Translation engine (multi‑locale, cached, lock‑free reads)
 // ---------------------------------------------------------------------------
 
+type FastHasher = BuildHasherDefault<Xxh64>;
+type ResolvedMap = DashMap<String, Arc<ResolvedTranslation>, FastHasher>;
+#[cfg(not(debug_assertions))]
+type SeenLogMap = DashMap<String, (), FastHasher>;
+
 /// A high‑performance translation engine with FST‑based key lookup,
 /// precompiled format tokens, and a concurrent cache.
 ///
@@ -134,8 +175,16 @@ impl FstLocaleStore {
 pub struct TranslationEngine {
     /// Per‑locale FST stores, atomically swappable.
     stores: ArcSwap<Box<[FstLocaleStore]>>,
+    /// Runtime/plugin overrides. Checked before built-in FST data.
+    overrides: Box<[ResolvedMap]>,
     /// Cache for resolved translations. Key format: `"<locale_idx>:<key>"`.
-    cache: DashMap<String, Arc<ResolvedTranslation>, BuildHasherDefault<Xxh64>>,
+    cache: ResolvedMap,
+    /// Release-build log limiter for requested-locale → English fallback.
+    #[cfg(not(debug_assertions))]
+    fallback_log_once: SeenLogMap,
+    /// Release-build log limiter for complete translation misses.
+    #[cfg(not(debug_assertions))]
+    missing_log_once: SeenLogMap,
 }
 
 impl TranslationEngine {
@@ -151,7 +200,12 @@ impl TranslationEngine {
 
         Self {
             stores: ArcSwap::from_pointee(stores),
+            overrides: build_override_maps(data.len()),
             cache: DashMap::with_hasher(BuildHasherDefault::default()),
+            #[cfg(not(debug_assertions))]
+            fallback_log_once: DashMap::with_hasher(BuildHasherDefault::default()),
+            #[cfg(not(debug_assertions))]
+            missing_log_once: DashMap::with_hasher(BuildHasherDefault::default()),
         }
     }
 
@@ -164,7 +218,7 @@ impl TranslationEngine {
     ///
     /// The result is cached behind [`DashMap`] so subsequent lookups are
     /// lock‑free. The return value is never `None` — at minimum the raw key
-    /// is wrapped as [`ResolvedTranslation::Static`].
+    /// is wrapped as [`ResolvedTranslation::Missing`].
     ///
     /// # Arguments
     /// * `locale_idx` — Index of the locale (use `locale as usize`).
@@ -180,6 +234,11 @@ impl TranslationEngine {
         let stores = self.stores.load();
 
         // Tier 1 – requested locale (silent)
+        if let Some(entry) = self.lookup_override(locale_idx, key) {
+            self.cache.insert(cache_key, entry.clone());
+            return entry;
+        }
+
         if let Some(entry) = stores.get(locale_idx).and_then(|store| store.lookup(key)) {
             let resolved = Arc::new(entry.clone());
             self.cache.insert(cache_key, resolved.clone());
@@ -187,21 +246,62 @@ impl TranslationEngine {
         }
 
         // Tier 2 – EnUs fallback
-        if let Some(entry) = stores
-            .get(crate::locale::Locale::EnUs as usize)
-            .and_then(|store| store.lookup(key))
-        {
-            warn!("translation key not found – falling back to English");
-            let resolved = Arc::new(entry.clone());
-            self.cache.insert(cache_key, resolved.clone());
-            return resolved;
+        if locale_idx != crate::locale::Locale::EnUs as usize {
+            if let Some(entry) = self.lookup_override(crate::locale::Locale::EnUs as usize, key) {
+                self.log_english_fallback(locale_idx, key);
+                self.cache.insert(cache_key, entry.clone());
+                return entry;
+            }
+
+            if let Some(entry) = stores
+                .get(crate::locale::Locale::EnUs as usize)
+                .and_then(|store| store.lookup(key))
+            {
+                self.log_english_fallback(locale_idx, key);
+                let resolved = Arc::new(entry.clone());
+                self.cache.insert(cache_key, resolved.clone());
+                return resolved;
+            }
         }
 
         // Tier 3 – raw key
-        error!("translation key not found in any locale – returning raw key");
-        let resolved = Arc::new(ResolvedTranslation::Static(Arc::from(key)));
+        self.log_missing_translation(locale_idx, key);
+        let resolved = Arc::new(ResolvedTranslation::Missing(Arc::from(key)));
         self.cache.insert(cache_key, resolved.clone());
         resolved
+    }
+
+    /// Adds or replaces a runtime translation entry.
+    ///
+    /// Overrides are checked before the immutable built-in FST stores. This
+    /// keeps plugin/custom translation loading cheap and avoids rebuilding all
+    /// locale data for a single write.
+    pub fn add_translation(&self, locale_idx: usize, key: &str, translation: String) {
+        if let Some(store) = self.overrides.get(locale_idx) {
+            store.insert(
+                key.to_owned(),
+                Arc::new(ResolvedTranslation::from_template(&translation)),
+            );
+            self.cache.clear();
+        }
+    }
+
+    /// Adds or replaces several runtime translation entries for one locale.
+    pub fn add_translations<I>(&self, locale_idx: usize, entries: I)
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let Some(store) = self.overrides.get(locale_idx) else {
+            return;
+        };
+
+        for (key, translation) in entries {
+            store.insert(
+                key,
+                Arc::new(ResolvedTranslation::from_template(&translation)),
+            );
+        }
+        self.cache.clear();
     }
 
     /// Reload translation data atomically.
@@ -216,8 +316,59 @@ impl TranslationEngine {
             .into_boxed_slice();
 
         self.stores.store(Arc::new(stores));
+        for overrides in &self.overrides {
+            overrides.clear();
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.fallback_log_once.clear();
+            self.missing_log_once.clear();
+        }
         // Clear the cache so that new stores are used immediately.
         self.cache.clear();
+    }
+
+    fn lookup_override(&self, locale_idx: usize, key: &str) -> Option<Arc<ResolvedTranslation>> {
+        self.overrides
+            .get(locale_idx)?
+            .get(key)
+            .map(|entry| entry.value().clone())
+    }
+
+    #[cfg(debug_assertions)]
+    fn log_english_fallback(&self, locale_idx: usize, key: &str) {
+        warn!(
+            locale_idx,
+            key, "translation key not found in requested locale – falling back to English"
+        );
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn log_english_fallback(&self, _locale_idx: usize, key: &str) {
+        if self.fallback_log_once.insert(key.to_owned(), ()).is_none() {
+            warn!(
+                key,
+                "translation key not found in requested locale – falling back to English"
+            );
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn log_missing_translation(&self, locale_idx: usize, key: &str) {
+        error!(
+            locale_idx,
+            key, "translation key not found in any locale – returning raw key"
+        );
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn log_missing_translation(&self, _locale_idx: usize, key: &str) {
+        if self.missing_log_once.insert(key.to_owned(), ()).is_none() {
+            error!(
+                key,
+                "translation key not found in any locale – returning raw key"
+            );
+        }
     }
 }
 
@@ -231,4 +382,11 @@ fn make_cache_key(locale_idx: usize, key: &str) -> String {
     let mut buf = String::with_capacity(4 + key.len() + 1);
     let _ = write!(buf, "{locale_idx}:{key}");
     buf
+}
+
+fn build_override_maps(len: usize) -> Box<[ResolvedMap]> {
+    (0..len)
+        .map(|_| DashMap::with_hasher(BuildHasherDefault::default()))
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }

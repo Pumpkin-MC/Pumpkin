@@ -11,12 +11,18 @@ pub mod token;
 
 pub use client::{
     locale_to_log_string, player_locale, remove_player_locale, resolve_client_locale,
-    set_player_locale,
+    set_player_locale, try_player_locale,
 };
 pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
 pub use locale::Locale;
-pub use server::{detect_system_locale, resolve_server_locale, server_locale, set_server_locale};
-pub use store::{TRANSLATIONS, add_translation, add_translation_file, get_translation};
+pub use server::{
+    detect_system_locale, resolve_server_locale, server_command_locale, server_locale,
+    set_server_command_locale, set_server_locale,
+};
+pub use store::{
+    TRANSLATIONS, add_translation, add_translation_file, format_translation, get_translation,
+    resolve_translation, translation_engine,
+};
 pub use token::{Token, precompile};
 
 use std::str::FromStr;
@@ -26,10 +32,6 @@ use std::str::FromStr;
 /// Normalises hyphens to underscores only when needed and uses
 /// ASCII-only lowercasing. Returns [`Locale::EnUs`] on failure.
 pub(crate) fn parse_locale_value(raw: &str) -> Locale {
-    if raw.contains('-') {
-        let normalized = raw.replace('-', "_");
-        return Locale::from_str(&normalized).unwrap_or(Locale::EnUs);
-    }
     Locale::from_str(raw).unwrap_or(Locale::EnUs)
 }
 

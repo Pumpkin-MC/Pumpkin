@@ -2487,7 +2487,6 @@ dependencies = [
  "lz4-java-wrc",
  "pumpkin-config",
  "pumpkin-data",
- "pumpkin-i18n",
  "pumpkin-nbt",
  "pumpkin-util",
  "rand",

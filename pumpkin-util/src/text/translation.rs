@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use pumpkin_i18n::{Locale, SubstitutionRange, get_translation};
+use pumpkin_i18n::{Locale, SubstitutionRange, Token, resolve_translation};
 
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
@@ -17,63 +17,19 @@ pub fn reorder_substitutions(
     translation: &str,
     with: Vec<TextComponentBase>,
 ) -> (Vec<TextComponentBase>, Vec<SubstitutionRange>) {
-    let indices: Vec<usize> = translation
-        .match_indices('%')
-        .filter(|(i, _)| *i == 0 || translation.as_bytes()[i - 1] != b'\\')
-        .map(|(i, _)| i)
-        .collect();
+    let placeholders = placeholder_ranges(translation);
+    let mut substitutions = Vec::with_capacity(placeholders.len());
+    let mut ranges = Vec::with_capacity(placeholders.len());
 
-    if translation.matches("%s").count() == indices.len() {
-        return (
-            with,
-            indices
-                .iter()
-                .map(|&i| SubstitutionRange {
-                    start: i,
-                    end: i + 1,
-                })
-                .collect(),
+    for (arg_idx, range) in placeholders {
+        substitutions.push(
+            with.get(arg_idx)
+                .cloned()
+                .unwrap_or_else(empty_text_component),
         );
+        ranges.push(range);
     }
 
-    let mut substitutions: Vec<TextComponentBase> = indices
-        .iter()
-        .map(|_| TextComponentBase {
-            content: Box::new(TextContent::Text { text: "".into() }),
-            style: Box::new(Style::default()),
-            extra: vec![],
-        })
-        .collect();
-    let mut ranges: Vec<SubstitutionRange> = vec![];
-
-    let bytes = translation.as_bytes();
-    let mut next_idx = 0usize;
-    for (idx, &i) in indices.iter().enumerate() {
-        let mut num_chars = String::new();
-        let mut pos = 1;
-        while i + pos < bytes.len() && bytes[i + pos].is_ascii_digit() {
-            num_chars.push(bytes[i + pos] as char);
-            pos += 1;
-        }
-
-        if num_chars.is_empty() {
-            ranges.push(SubstitutionRange {
-                start: i,
-                end: i + 1,
-            });
-            substitutions[idx] = with[next_idx].clone();
-            next_idx = (next_idx + 1).clamp(0, with.len() - 1);
-            continue;
-        }
-
-        ranges.push(SubstitutionRange {
-            start: i,
-            end: i + pos + 1,
-        });
-        if let Ok(digit) = num_chars.parse::<usize>() {
-            substitutions[idx] = with[digit.clamp(1, with.len()) - 1].clone();
-        }
-    }
     (substitutions, ranges)
 }
 
@@ -91,26 +47,12 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     locale: Locale,
     with: Vec<TextComponentBase>,
 ) -> String {
-    let translation = get_translation(&namespaced_key.into(), locale);
-    if with.is_empty() || !translation.contains('%') {
-        return translation;
-    }
-
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
-    let mut result = String::new();
-    let mut pos = 0;
-
-    for (idx, &range) in indices.iter().enumerate() {
-        let sub_idx = idx.clamp(0, substitutions.len() - 1);
-        let substitution = substitutions[sub_idx].clone().to_pretty_console();
-
-        result.push_str(&translation[pos..range.start]);
-        result.push_str(&substitution);
-        pos = range.end + 1;
-    }
-
-    result.push_str(&translation[pos..]);
-    result
+    format_translation_components(
+        namespaced_key.into(),
+        locale,
+        &with,
+        TextComponentBase::to_pretty_console,
+    )
 }
 
 /// Resolves a translation into plain text.
@@ -127,24 +69,198 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     locale: Locale,
     with: Vec<TextComponentBase>,
 ) -> String {
-    let translation = get_translation(&namespaced_key.into(), locale);
-    if with.is_empty() || !translation.contains('%') {
-        return translation;
+    format_translation_components(namespaced_key.into(), locale, &with, |component| {
+        component.get_text(locale)
+    })
+}
+
+pub(crate) fn resolve_translation_components(
+    namespaced_key: &str,
+    locale: Locale,
+    with: Vec<TextComponentBase>,
+) -> (String, Vec<TextComponentBase>) {
+    let resolved = resolve_translation(namespaced_key, locale);
+    if with.is_empty() {
+        return (resolved_text(namespaced_key, &resolved), Vec::new());
     }
 
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
-    let mut result = String::new();
-    let mut pos = 0;
+    let Some(tokens) = resolved.tokens() else {
+        return (resolved_text(namespaced_key, &resolved), Vec::new());
+    };
 
-    for (idx, &range) in indices.iter().enumerate() {
-        let sub_idx = idx.clamp(0, substitutions.len() - 1);
-        let substitution = substitutions[sub_idx].clone().get_text(locale);
+    let mut parent = String::new();
+    let mut extra = Vec::new();
+    let mut writing_parent = true;
 
-        result.push_str(&translation[pos..range.start]);
-        result.push_str(&substitution);
-        pos = range.end + 1;
+    for token in tokens {
+        match token {
+            Token::Text(text) if writing_parent => parent.push_str(text),
+            Token::Text(text) if !text.is_empty() => extra.push(text_component(text.as_ref())),
+            Token::Text(_) => {}
+            Token::Var(idx) => {
+                writing_parent = false;
+                if let Some(component) = with.get(*idx) {
+                    extra.push(component.clone());
+                }
+            }
+        }
     }
 
-    result.push_str(&translation[pos..]);
+    (parent, extra)
+}
+
+fn format_translation_components<F>(
+    namespaced_key: Cow<'static, str>,
+    locale: Locale,
+    with: &[TextComponentBase],
+    mut render_component: F,
+) -> String
+where
+    F: FnMut(TextComponentBase) -> String,
+{
+    let resolved = resolve_translation(namespaced_key.as_ref(), locale);
+    if with.is_empty() {
+        return resolved_text(namespaced_key.as_ref(), &resolved);
+    }
+
+    let Some(tokens) = resolved.tokens() else {
+        return resolved_text(namespaced_key.as_ref(), &resolved);
+    };
+
+    let mut result = String::with_capacity(resolved.as_str().len());
+    for token in tokens {
+        match token {
+            Token::Text(text) => result.push_str(text),
+            Token::Var(idx) => {
+                if let Some(component) = with.get(*idx) {
+                    result.push_str(&render_component(component.clone()));
+                }
+            }
+        }
+    }
     result
+}
+
+fn resolved_text(raw_key: &str, resolved: &pumpkin_i18n::ResolvedTranslation) -> String {
+    if resolved.is_missing() {
+        raw_key.to_owned()
+    } else {
+        resolved.as_str().to_owned()
+    }
+}
+
+fn placeholder_ranges(translation: &str) -> Vec<(usize, SubstitutionRange)> {
+    let bytes = translation.as_bytes();
+    let mut ranges = Vec::new();
+    let mut cursor = 0usize;
+    let mut sequential_idx = 0usize;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'%' {
+            cursor += 1;
+            continue;
+        }
+
+        if cursor > 0 && bytes[cursor - 1] == b'\\' {
+            cursor += 1;
+            continue;
+        }
+
+        if cursor + 1 >= bytes.len() {
+            break;
+        }
+
+        if bytes[cursor + 1] == b'%' {
+            cursor += 2;
+            continue;
+        }
+
+        let mut look = cursor + 1;
+        let digits_start = look;
+        while look < bytes.len() && bytes[look].is_ascii_digit() {
+            look += 1;
+        }
+
+        if look > digits_start && look + 1 < bytes.len() && bytes[look] == b'$' {
+            let arg_idx = translation[digits_start..look]
+                .parse::<usize>()
+                .unwrap_or(1)
+                .saturating_sub(1);
+            ranges.push((
+                arg_idx,
+                SubstitutionRange {
+                    start: cursor,
+                    end: look + 1,
+                },
+            ));
+            cursor = look + 2;
+            continue;
+        }
+
+        ranges.push((
+            sequential_idx,
+            SubstitutionRange {
+                start: cursor,
+                end: cursor + 1,
+            },
+        ));
+        sequential_idx += 1;
+        cursor += 2;
+    }
+
+    ranges
+}
+
+fn empty_text_component() -> TextComponentBase {
+    text_component("")
+}
+
+fn text_component(text: &str) -> TextComponentBase {
+    TextComponentBase {
+        content: Box::new(TextContent::Text {
+            text: Cow::Owned(text.to_owned()),
+        }),
+        style: Box::new(Style::default()),
+        extra: vec![],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_i18n::{Locale, add_translation};
+
+    use crate::text::TextComponent;
+
+    use super::{get_translation_text, reorder_substitutions, translation_to_pretty};
+
+    #[test]
+    fn formats_explicit_placeholders_and_literal_percent() {
+        add_translation(
+            "test_util_translation",
+            "ordered",
+            "%2$s then %1$s %% done",
+            Locale::EnUs,
+        );
+
+        let args = vec![TextComponent::text("A").0, TextComponent::text("B").0];
+
+        assert_eq!(
+            get_translation_text("test_util_translation:ordered", Locale::EnUs, args.clone()),
+            "B then A % done"
+        );
+        assert_eq!(
+            translation_to_pretty("test_util_translation:ordered", Locale::EnUs, args),
+            "B then A % done"
+        );
+    }
+
+    #[test]
+    fn reorder_substitutions_handles_missing_args() {
+        let (substitutions, ranges) =
+            reorder_substitutions("%s %2$s %%", vec![TextComponent::text("A").0]);
+
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(substitutions[0].clone().get_text(Locale::EnUs), "A");
+        assert_eq!(substitutions[1].clone().get_text(Locale::EnUs), "");
+    }
 }

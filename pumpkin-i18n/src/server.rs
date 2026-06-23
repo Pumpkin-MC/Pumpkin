@@ -5,6 +5,8 @@ use crate::locale::Locale;
 
 /// Global logging locale, set by the pumpkin server crate during startup.
 static SERVER_LOGGING_LOCALE: OnceLock<Locale> = OnceLock::new();
+/// Global command locale, set by the pumpkin server crate during startup.
+static SERVER_COMMAND_LOCALE: OnceLock<Locale> = OnceLock::new();
 
 /// Returns the server logging locale, falling back to [`Locale::EnUs`].
 #[must_use]
@@ -12,10 +14,25 @@ pub fn server_locale() -> Locale {
     *SERVER_LOGGING_LOCALE.get().unwrap_or(&Locale::EnUs)
 }
 
+/// Returns the server command locale, falling back to [`server_locale`].
+#[must_use]
+pub fn server_command_locale() -> Locale {
+    SERVER_COMMAND_LOCALE
+        .get()
+        .copied()
+        .unwrap_or_else(server_locale)
+}
+
 /// Sets the server logging locale. Called from the pumpkin server crate during
 /// initialization.
 pub fn set_server_locale(locale: Locale) {
     let _ = SERVER_LOGGING_LOCALE.set(locale);
+}
+
+/// Sets the server command locale. Called from the pumpkin server crate during
+/// initialization.
+pub fn set_server_command_locale(locale: Locale) {
+    let _ = SERVER_COMMAND_LOCALE.set(locale);
 }
 
 /// Detects the system locale using platform-specific APIs.
@@ -38,22 +55,19 @@ pub fn detect_system_locale() -> Locale {
 
 #[cfg(unix)]
 fn detect_platform_locale() -> Locale {
-    let raw = std::env::var("LANG")
-        .or_else(|_| std::env::var("LC_ALL"))
+    let raw = std::env::var("LC_ALL")
         .or_else(|_| std::env::var("LC_MESSAGES"))
+        .or_else(|_| std::env::var("LANG"))
         .unwrap_or_default();
 
-    if raw.is_empty() {
+    if raw.is_empty() || raw == "C" || raw == "POSIX" {
         return Locale::EnUs;
     }
 
     // Extract language part before the first '.'
     // e.g. "zh_CN.UTF-8" -> "zh_CN"
     let lang = raw.split('.').next().unwrap_or("en_us");
-    // Normalize hyphens to underscores: "zh-CN" -> "zh_CN"
-    let normalized = lang.replace('-', "_");
-
-    Locale::from_str(&normalized).unwrap_or(Locale::EnUs)
+    Locale::from_str(lang).unwrap_or(Locale::EnUs)
 }
 
 #[cfg(windows)]
@@ -73,16 +87,15 @@ fn detect_platform_locale() -> Locale {
     }
 
     let len = result as usize;
-    let raw = String::from_utf16_lossy(&buffer[..len]);
+    let raw = String::from_utf16_lossy(&buffer[..len])
+        .trim_end_matches('\0')
+        .to_owned();
 
     if raw.is_empty() {
         return Locale::EnUs;
     }
 
-    // Windows returns BCP‑47 tags like "zh-CN", "en-US".
-    // Normalize hyphens to underscores for our locale parser.
-    let normalized = raw.replace('-', "_");
-    Locale::from_str(&normalized).unwrap_or(Locale::EnUs)
+    Locale::from_str(&raw).unwrap_or(Locale::EnUs)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -101,7 +114,7 @@ fn detect_platform_locale() -> Locale {
 /// Otherwise parses the config value as a locale, falling back to [`Locale::EnUs`].
 #[must_use]
 pub fn resolve_server_locale(config_value: &str) -> Locale {
-    if config_value == "auto" {
+    if config_value.eq_ignore_ascii_case("auto") {
         return detect_system_locale();
     }
     crate::parse_locale_value(config_value)

@@ -17,7 +17,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
     dimension::Dimension,
 };
-use pumpkin_i18n::{Locale, player_locale, server_locale};
+use pumpkin_i18n::{Locale, server_command_locale, try_player_locale};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
@@ -90,9 +90,15 @@ impl CommandSender {
     pub async fn send_message(&self, text: TextComponent) {
         match self {
             #[allow(clippy::print_stdout)]
-            Self::Console => println!("{}", text.to_pretty_console()),
+            Self::Console => println!(
+                "{}",
+                text.to_pretty_console_with_locale(server_command_locale())
+            ),
             Self::Player(c) => c.send_system_message(&text).await,
-            Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
+            Self::Rcon(s) => s
+                .lock()
+                .await
+                .push(text.to_pretty_console_with_locale(server_command_locale())),
             Self::CommandBlock(block_entity, _) => {
                 let mut last_output = block_entity.last_output.lock().await;
 
@@ -102,7 +108,11 @@ impl CommandSender {
                     .format(&format)
                     .expect("Failed to format timestamp for command block output");
 
-                *last_output = format!("[{}] {}", timestamp, text.get_text());
+                *last_output = format!(
+                    "[{}] {}",
+                    timestamp,
+                    text.0.clone().get_text(server_command_locale())
+                );
             }
             Self::Dummy => {}
         }
@@ -219,22 +229,10 @@ impl CommandSender {
     pub fn get_locale(&self) -> Locale {
         match self {
             Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => {
-                server_locale()
+                server_command_locale()
             }
-            Self::Player(player) => {
-                // Three-tier fallback matching store::get_translation pattern:
-                //   Tier 1 – requested locale: player's cached locale
-                //   Tier 2 – EnUs fallback:    universal language, always has translations
-                //   Tier 3 – raw fallback:     server-configured locale
-                let locale = player_locale(&player.gameprofile.id.to_string());
-                if locale != Locale::EnUs {
-                    return locale; // Tier 1: player-specific locale (with config override)
-                }
-                // locale is EnUs (cache miss or real English player)
-                // → EnUs itself is the Tier 2 fallback per store.rs semantics
-                // → Use server_locale only as Tier 3 last resort
-                server_locale()
-            }
+            Self::Player(player) => try_player_locale(&player.gameprofile.id.to_string())
+                .unwrap_or_else(server_command_locale),
         }
     }
 
