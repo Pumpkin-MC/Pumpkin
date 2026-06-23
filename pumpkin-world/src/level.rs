@@ -1,5 +1,6 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
+use crate::chunk::format::slime::{SlimeChunkIo, SlimeEntityIo};
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
@@ -155,6 +156,9 @@ impl Level {
         });
 
         let seed = Seed(seed as u64);
+        // Bottom-most section index of this dimension; SlimeWorld stores sections
+        // bottom-up without an explicit Y, so this anchors them.
+        let min_section_y = dimension.min_y >> 4;
         let world_gen = get_world_gen(seed, dimension).into();
 
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
@@ -163,6 +167,9 @@ impl Level {
                 ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
             ),
             ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkData>>::new(())),
+            ChunkConfig::Slime => {
+                Arc::new(SlimeChunkIo::new(&level_folder.root_folder, min_section_y))
+            }
         };
         let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
             ChunkConfig::Linear => {
@@ -172,6 +179,7 @@ impl Level {
                 AnvilChunkFile<ChunkEntityData>,
             >::new(config.clone())),
             ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkEntityData>>::new(())),
+            ChunkConfig::Slime => Arc::new(SlimeEntityIo::new(&level_folder.root_folder)),
         };
 
         let pending_entity_generations = Arc::new(DashMap::new());
