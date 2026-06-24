@@ -168,7 +168,7 @@ impl RCONClient {
                                 "{}",
                                 localized_log_format(
                                     "server.log.rcon_command_output",
-                                    &[self.address.to_string(), line.to_string()]
+                                    &[self.address.to_string(), line.clone()]
                                 )
                             );
                         }

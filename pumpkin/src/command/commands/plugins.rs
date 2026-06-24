@@ -40,7 +40,7 @@ impl CommandExecutor for Executor {
                         "commands.plugins.hover_text",
                         locale,
                         [
-                            TextComponent::text(metadata.version.to_string()),
+                            TextComponent::text(metadata.version.clone()),
                             TextComponent::text(metadata.authors.join(", ")),
                             TextComponent::text(metadata.description),
                         ],

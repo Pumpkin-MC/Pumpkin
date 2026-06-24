@@ -26,7 +26,12 @@ impl KeyStore {
 
         let public_key_der = public_key
             .to_public_key_der()
-            .expect(&localized_log("debug.expect.encode_public_key_der_failed"))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.encode_public_key_der_failed")
+                )
+            })
             .into_vec()
             .into_boxed_slice();
 
@@ -47,8 +52,12 @@ impl KeyStore {
     fn generate_private_key() -> RsaPrivateKey {
         let mut rng = rand::rng();
 
-        RsaPrivateKey::new(&mut rng, 1024)
-            .expect(&localized_log("debug.expect.generate_private_key_failed"))
+        RsaPrivateKey::new(&mut rng, 1024).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.generate_private_key_failed")
+            )
+        })
     }
 
     pub fn encryption_request<'a>(

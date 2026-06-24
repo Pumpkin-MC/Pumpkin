@@ -193,7 +193,7 @@ impl Scoreboard {
         if !self.teams.contains_key(&team.name) {
             warn!(
                 "{}",
-                localized_log_format("server.log.team_update_missing", &[team.name.clone()])
+                localized_log_format("server.log.team_update_missing", &[team.name])
             );
             return;
         }

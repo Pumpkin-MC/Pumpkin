@@ -487,9 +487,12 @@ pub(crate) fn text_component_from_resource(
     state
         .resource_table
         .get::<TextComponentResource>(&Resource::new_own(text.rep()))
-        .expect(&localized_log(
-            "debug.expect.plugin_wasm.invalid_text_component_resource_handle",
-        ))
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.invalid_text_component_resource_handle",)
+            )
+        })
         .provider
         .clone()
 }
@@ -501,9 +504,12 @@ fn world_from_resource(
     state
         .resource_table
         .get::<WorldResource>(&Resource::new_own(world.rep()))
-        .expect(&localized_log(
-            "debug.expect.plugin_wasm.invalid_world_resource_handle",
-        ))
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.invalid_world_resource_handle",)
+            )
+        })
         .provider
         .clone()
 }
@@ -790,9 +796,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         level: pumpkin::plugin::permission::PermissionLevel,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
         let level = from_wit_permission_level(level);
         let command_dispatcher = server.command_dispatcher.read().await;
         player
@@ -808,9 +817,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         value: bool,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
 
         let mut perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
@@ -827,9 +839,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         node: String,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
 
         let mut perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
@@ -846,9 +861,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         node: String,
     ) -> wasmtime::Result<Option<bool>> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
 
         let mut perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
@@ -863,9 +881,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         node: String,
     ) -> wasmtime::Result<bool> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
         Ok(player.has_permission(server, &node).await)
     }
 
@@ -1105,9 +1126,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
         let reason = reason.map(|r| text_component_from_resource(self, &r));
         player.ban(server, reason).await;
         Ok(())
@@ -1119,9 +1143,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect(&localized_log(
-            "debug.expect.plugin_wasm.server_not_available",
-        ));
+        let server = self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.server_not_available",)
+            )
+        });
         let reason = reason.map(|r| text_component_from_resource(self, &r));
         player.ban_ip(server, reason).await;
         Ok(())

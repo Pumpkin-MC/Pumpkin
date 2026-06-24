@@ -24,9 +24,12 @@ use crate::plugin::{
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state.add_player(self.player.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_player_resource",
-        ));
+        let player_res = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         let packet = match &self.player.client {
             ClientPlatform::Java(client) => {
@@ -76,9 +79,12 @@ impl ToFromWasmEvent for PacketReceivedEvent {
 
 impl ToFromWasmEvent for PacketSentEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state.add_player(self.player.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_player_resource",
-        ));
+        let player_res = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         let packet = match &self.player.client {
             ClientPlatform::Java(_) => {
@@ -142,14 +148,20 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let message = state
             .add_text_component(self.message.clone())
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.failed_add_text_component_resource",
-            ));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
         let sender = state
             .add_text_component(self.sender.clone())
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.failed_add_text_component_resource",
-            ));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
 
         Event::ServerBroadcastEvent(ServerBroadcastEventData {
             message,

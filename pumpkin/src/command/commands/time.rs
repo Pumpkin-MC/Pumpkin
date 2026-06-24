@@ -59,10 +59,15 @@ impl CommandExecutor for QueryExecutor {
             let mode = self.0;
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds.first().expect(&tr_plain(
-                "debug.expect.there_should_always_be_one_world",
-                server_command_locale(),
-            ));
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let level_time = world.level_time.lock().await;
 
             let curr_time = match mode {
@@ -107,10 +112,15 @@ impl CommandExecutor for ChangeExecutor {
             let mode = self.0;
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds.first().expect(&tr_plain(
-                "debug.expect.there_should_always_be_one_world",
-                server_command_locale(),
-            ));
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut level_time = world.level_time.lock().await;
 
             match mode {

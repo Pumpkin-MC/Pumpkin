@@ -287,35 +287,50 @@ impl DowncastResourceExt<ContextResource> for Resource<Context> {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.invalid_context_resource_handle",
-            ))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.invalid_context_resource_handle",)
+                )
+            })
             .downcast_ref()
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.resource_type_mismatch",
-            ))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.resource_type_mismatch",)
+                )
+            })
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut ContextResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.invalid_context_resource_handle",
-            ))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.invalid_context_resource_handle",)
+                )
+            })
             .downcast_mut()
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.resource_type_mismatch",
-            ))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.resource_type_mismatch",)
+                )
+            })
     }
 
     fn consume(self, state: &mut PluginHostState) -> ContextResource {
         state
             .resource_table
             .delete(Resource::new_own(self.rep()))
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.invalid_context_resource_handle",
-            ))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.invalid_context_resource_handle",)
+                )
+            })
     }
 }
 

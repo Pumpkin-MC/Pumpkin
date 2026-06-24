@@ -165,7 +165,9 @@ impl EntitySelector {
         if list.len() == 1 {
             Ok(list
                 .first()
-                .expect(&localized_log("debug.expect.list_first_should_exist"))
+                .unwrap_or_else(|| {
+                    panic!("{}", localized_log("debug.expect.list_first_should_exist"))
+                })
                 .clone())
         } else {
             Err(entity::NO_PLAYERS_ERROR_TYPE.create_without_context())

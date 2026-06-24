@@ -113,8 +113,9 @@ impl FireBlockBase {
         NetherPortal::get_new_portal(
             world,
             block_pos,
-            dir.to_horizontal_axis()
-                .expect(&localized_log("debug.expect.direction_not_horizontal")),
+            dir.to_horizontal_axis().unwrap_or_else(|| {
+                panic!("{}", localized_log("debug.expect.direction_not_horizontal"))
+            }),
         )
         .is_some()
     }

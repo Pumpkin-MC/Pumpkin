@@ -81,8 +81,9 @@ impl JavaClient {
             let id = if server.basic_config.online_mode {
                 login_start.uuid
             } else {
-                offline_uuid(&login_start.name)
-                    .expect(&localized_log("debug.expect.offline_uuid_failed"))
+                offline_uuid(&login_start.name).unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.offline_uuid_failed"))
+                })
             };
 
             let profile = GameProfile {

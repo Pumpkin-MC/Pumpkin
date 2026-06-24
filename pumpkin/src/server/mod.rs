@@ -308,7 +308,12 @@ impl Server {
             rayon::ThreadPoolBuilder::new()
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
-                .expect(&localized_log("debug.expect.generation_thread_pool_failed")),
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.generation_thread_pool_failed")
+                    )
+                }),
         );
 
         let server_clone = server.clone();
@@ -356,8 +361,9 @@ impl Server {
 
         let mut worlds_vec = Vec::new();
         for world_result in worlds_results {
-            worlds_vec
-                .push(world_result.expect(&localized_log("debug.expect.world_loading_panicked")));
+            worlds_vec.push(world_result.unwrap_or_else(|_| {
+                panic!("{}", localized_log("debug.expect.world_loading_panicked"))
+            }));
         }
 
         server.worlds.store(Arc::new(worlds_vec));
@@ -412,7 +418,12 @@ impl Server {
                 self.worlds
                     .load()
                     .first()
-                    .expect(&localized_log("debug.expect.default_world_should_exist"))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{}",
+                            localized_log("debug.expect.default_world_should_exist")
+                        )
+                    })
                     .clone()
             })
     }
@@ -458,7 +469,7 @@ impl Server {
             world
         })
         .await
-        .expect(&localized_log("debug.expect.world_creation_panicked"))
+        .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.world_creation_panicked")))
     }
 
     /// Adds a new player to the server.
@@ -512,7 +523,12 @@ impl Server {
                             .worlds
                             .load()
                             .first()
-                            .expect(&localized_log("debug.expect.default_world_should_exist"))
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "{}",
+                                    localized_log("debug.expect.default_world_should_exist")
+                                )
+                            })
                             .clone();
                         (default_world, Some(data))
                     }
@@ -522,7 +538,12 @@ impl Server {
                         .worlds
                         .load()
                         .first()
-                        .expect(&localized_log("debug.expect.default_world_should_exist"))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                localized_log("debug.expect.default_world_should_exist")
+                            )
+                        })
                         .clone();
                     (default_world, Some(data))
                 }
@@ -532,7 +553,12 @@ impl Server {
                     .worlds
                     .load()
                     .first()
-                    .expect(&localized_log("debug.expect.default_world_should_exist"))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{}",
+                            localized_log("debug.expect.default_world_should_exist")
+                        )
+                    })
                     .clone();
                 (default_world, None)
             };
@@ -1019,8 +1045,12 @@ impl Server {
                 .map_or_else(Vec::new, |player| vec![player]),
         };
 
-        let player_type = EntityType::from_name("player")
-            .expect(&localized_log("debug.expect.entity_type_player_must_exist"));
+        let player_type = EntityType::from_name("player").unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.entity_type_player_must_exist")
+            )
+        });
         let type_included = target_selector
             .conditions
             .iter()

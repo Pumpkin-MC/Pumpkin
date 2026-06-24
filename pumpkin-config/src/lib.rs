@@ -256,8 +256,9 @@ pub trait LoadConfiguration {
     {
         if !config_dir.exists() {
             debug!("{}", localized_log("config.load.creating_root_folder"));
-            fs::create_dir(config_dir)
-                .expect(&localized_log("config.load.create_root_folder_failed"));
+            fs::create_dir(config_dir).unwrap_or_else(|_| {
+                panic!("{}", localized_log("config.load.create_root_folder_failed"))
+            });
         }
         let path = config_dir.join(Self::get_path());
 
@@ -332,13 +333,13 @@ pub trait LoadConfiguration {
         let default_config = Self::default();
 
         let default_toml_value = toml::Value::try_from(default_config)
-            .expect(&localized_log("config.load.parse_default_failed"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("config.load.parse_default_failed")));
 
         let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
         let config = merged_value
             .try_into()
-            .expect(&localized_log("config.load.convert_merged_failed"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("config.load.convert_merged_failed")));
 
         (config, changed)
     }

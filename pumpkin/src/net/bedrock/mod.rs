@@ -220,13 +220,13 @@ impl BedrockClient {
                 let mut guard = client.outgoing_packet_queue_recv.lock().await;
                 guard
                     .take()
-                    .expect(&localized_log("debug.expect.outgoing_packet_receiver_taken"))
+                    .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.outgoing_packet_receiver_taken")))
             };
             let mut priority_packet_receiver = {
                 let mut guard = client.outgoing_packet_priority_recv.lock().await;
                 guard
                     .take()
-                    .expect(&localized_log("debug.expect.outgoing_packet_receiver_taken"))
+                    .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.outgoing_packet_receiver_taken")))
             };
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 

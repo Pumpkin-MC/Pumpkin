@@ -530,16 +530,19 @@ impl SnbtParser<'_, '_> {
             Some('\'') => Some(EscapeSequenceBranch::Return('\'')),
             Some('"') => Some(EscapeSequenceBranch::Return('"')),
             Some('x') => Some(EscapeSequenceBranch::CheckValidity(
-                u32::from_str_radix(&self.string_hex_2()?, 16)
-                    .expect(&localized_log("debug.expect.hexadecimal_valid")),
+                u32::from_str_radix(&self.string_hex_2()?, 16).unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.hexadecimal_valid"))
+                }),
             )),
             Some('u') => Some(EscapeSequenceBranch::CheckValidity(
-                u32::from_str_radix(&self.string_hex_4()?, 16)
-                    .expect(&localized_log("debug.expect.hexadecimal_valid")),
+                u32::from_str_radix(&self.string_hex_4()?, 16).unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.hexadecimal_valid"))
+                }),
             )),
             Some('U') => Some(EscapeSequenceBranch::CheckValidity(
-                u32::from_str_radix(&self.string_hex_8()?, 16)
-                    .expect(&localized_log("debug.expect.hexadecimal_valid")),
+                u32::from_str_radix(&self.string_hex_8()?, 16).unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.hexadecimal_valid"))
+                }),
             )),
             Some('N') => {
                 if self.reader.peek() != Some('{') {

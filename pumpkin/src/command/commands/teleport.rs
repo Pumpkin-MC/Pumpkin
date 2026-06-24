@@ -63,10 +63,15 @@ fn resolve_sender_world(
             .worlds
             .load()
             .first()
-            .expect(&tr_plain(
-                "debug.expect.server_needs_one_world",
-                server_command_locale(),
-            ))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.server_needs_one_world",
+                        server_command_locale(),
+                    )
+                )
+            })
             .clone()
     })
 }

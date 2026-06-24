@@ -131,9 +131,12 @@ impl GenerationSchedule {
                     .spawn(move || {
                         generation_work(recv_gen, send_chunk, level_clone);
                     })
-                    .expect(&localized_log(
-                        "world.chunk_system.spawn_generation_thread_failed",
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "{}",
+                            localized_log("world.chunk_system.spawn_generation_thread_failed",)
+                        )
+                    });
 
                 thread_tracker.push(handle);
             }
@@ -175,9 +178,12 @@ impl GenerationSchedule {
                 };
                 scheduler.work(level_sched);
             })
-            .expect(&localized_log(
-                "world.chunk_system.spawn_scheduler_thread_failed",
-            ));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("world.chunk_system.spawn_scheduler_thread_failed",)
+                )
+            });
 
         thread_tracker.push(handle);
     }

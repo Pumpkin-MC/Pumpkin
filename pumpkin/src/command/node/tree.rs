@@ -162,7 +162,7 @@ impl Tree {
         self.nodes
             .len()
             .try_into()
-            .expect(&localized_log("debug.expect.tree_nonzero_size"))
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.tree_nonzero_size")))
     }
 
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.

@@ -79,9 +79,13 @@ pub(super) fn to_wasm_block_name(block: &'static Block) -> String {
 }
 
 pub(super) fn from_wasm_block_name(block_name: &str) -> &'static Block {
-    Block::from_registry_key(block_name.strip_prefix("minecraft:").unwrap_or(block_name)).expect(
-        &localized_log("debug.expect.plugin_wasm.invalid_block_name"),
-    )
+    Block::from_registry_key(block_name.strip_prefix("minecraft:").unwrap_or(block_name))
+        .unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.invalid_block_name")
+            )
+        })
 }
 
 pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
@@ -89,9 +93,12 @@ pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
 }
 
 pub(super) fn from_wasm_entity_type(entity_type: &str) -> &'static EntityType {
-    EntityType::from_name(entity_type).expect(&localized_log(
-        "debug.expect.plugin_wasm.invalid_entity_type",
-    ))
+    EntityType::from_name(entity_type).unwrap_or_else(|| {
+        panic!(
+            "{}",
+            localized_log("debug.expect.plugin_wasm.invalid_entity_type",)
+        )
+    })
 }
 
 pub(super) const fn to_wasm_hand(hand: Hand) -> pumpkin::plugin::common::Hand {
@@ -183,9 +190,12 @@ pub(super) fn consume_player(
     state
         .resource_table
         .delete::<PlayerResource>(Resource::new_own(player.rep()))
-        .expect(&localized_log(
-            "debug.expect.plugin_wasm.invalid_player_resource_handle",
-        ))
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.invalid_player_resource_handle",)
+            )
+        })
         .provider
 }
 
@@ -196,9 +206,12 @@ pub(super) fn consume_text_component(
     state
         .resource_table
         .delete::<TextComponentResource>(Resource::new_own(text_component.rep()))
-        .expect(&localized_log(
-            "debug.expect.plugin_wasm.invalid_text_component_resource_handle",
-        ))
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.invalid_text_component_resource_handle",)
+            )
+        })
         .provider
 }
 
@@ -209,9 +222,12 @@ pub(super) fn consume_world(
     state
         .resource_table
         .delete::<WorldResource>(Resource::new_own(world.rep()))
-        .expect(&localized_log(
-            "debug.expect.plugin_wasm.invalid_world_resource_handle",
-        ))
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.invalid_world_resource_handle",)
+            )
+        })
         .provider
 }
 

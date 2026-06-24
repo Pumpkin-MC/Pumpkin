@@ -367,10 +367,12 @@ impl CommandSource {
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
     #[must_use]
     pub fn world(&self) -> &Arc<World> {
-        self.world.as_ref().expect(&tr_plain(
-            "debug.expect.world_should_exist",
-            server_command_locale(),
-        ))
+        self.world.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain("debug.expect.world_should_exist", server_command_locale(),)
+            )
+        })
     }
 
     /// Gets the server as a result:
@@ -379,10 +381,12 @@ impl CommandSource {
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     #[must_use]
     pub fn server(&self) -> &Arc<Server> {
-        self.server.as_ref().expect(&tr_plain(
-            "debug.expect.server_should_exist",
-            server_command_locale(),
-        ))
+        self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain("debug.expect.server_should_exist", server_command_locale(),)
+            )
+        })
     }
 
     /// Gets the player as an option:

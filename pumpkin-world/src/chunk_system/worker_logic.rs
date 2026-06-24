@@ -42,7 +42,7 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
     let engine = chunk
         .light_engine
         .lock()
-        .expect(&localized_log("debug.expect.mutex_not_poisoned"));
+        .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.mutex_not_poisoned")));
 
     // Scan for any complex lighting data
     let has_complex_light = engine.sky_light.iter().any(|lc| match lc {
@@ -249,9 +249,12 @@ pub fn run_generation(
     _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
-    let portal_ref = portal.as_deref().expect(&localized_log(
-        "world.chunk_system.portal_should_be_initialized",
-    ));
+    let portal_ref = portal.as_deref().unwrap_or_else(|| {
+        panic!(
+            "{}",
+            localized_log("world.chunk_system.portal_should_be_initialized",)
+        )
+    });
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);

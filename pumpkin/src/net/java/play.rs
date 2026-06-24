@@ -2084,7 +2084,7 @@ impl JavaClient {
             },
             Err(_) => {
                 self.kick(localized_text("client.disconnect.invalid_status", []))
-                    .await
+                    .await;
             }
         }
     }

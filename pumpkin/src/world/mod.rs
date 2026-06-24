@@ -528,17 +528,16 @@ impl World {
                 Ok(packet_data) => packet_data,
                 Err(err) => {
                     error!(
-                            "{}",
-                            localized_log_format
-                            "Failed to serialize packet {} for version {:?}: {}",
-                            std::any::type_name::<P>(),
-                            version,
-                            err
-                            error!(
                         "{}",
-                        localized_log_format("server.log.player_tick_panicked", &[format!("{e:?}")])
+                        localized_log_format(
+                            "server.log.serialize_packet_failed",
+                            &[
+                                std::any::type_name::<P>().to_string(),
+                                format!("{version:?}"),
+                                err.to_string(),
+                            ],
+                        )
                     );
-                        );
                     continue;
                 }
             };

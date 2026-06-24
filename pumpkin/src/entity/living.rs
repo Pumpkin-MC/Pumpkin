@@ -1303,7 +1303,12 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
-            .expect(&localized_log("debug.expect.entity_not_found_in_world"));
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.entity_not_found_in_world")
+                )
+            });
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)

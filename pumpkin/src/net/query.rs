@@ -21,7 +21,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
         UdpSocket::bind(query_addr)
             .await
-            .expect(&localized_log("debug.expect.bind_address_failed")),
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.bind_address_failed"))),
     );
 
     // Challenge tokens are bound to the IP address and port
@@ -45,7 +45,10 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
                 "{}",
                 socket
                     .local_addr()
-                    .expect(&localized_log("debug.expect.running_address_not_found"))
+                    .unwrap_or_else(|_| panic!(
+                        "{}",
+                        localized_log("debug.expect.running_address_not_found")
+                    ))
                     .port()
             ))
             .color_named(NamedColor::DarkBlue)

@@ -56,7 +56,7 @@ impl ArgumentConsumer for EntityArgumentConsumer {
                     tr_format(
                         "server.log.failed_parse_target_selector",
                         server_command_locale(),
-                        &[s.to_string(), e.to_string()],
+                        &[s.to_string(), e],
                     )
                 );
                 return Box::pin(async move { None });

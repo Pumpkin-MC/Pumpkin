@@ -82,10 +82,15 @@ impl PlacedFeature {
         }
 
         let feature = match &self.feature {
-            Feature::Named(name) => CONFIGURED_FEATURES.get(name).expect(&localized_log_format(
-                "world.generation.feature_name_not_found",
-                &[format!("{name:?}")],
-            )),
+            Feature::Named(name) => CONFIGURED_FEATURES.get(name).unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log_format(
+                        "world.generation.feature_name_not_found",
+                        &[format!("{name:?}")],
+                    )
+                )
+            }),
             Feature::Inlined(feature) => feature,
         };
 

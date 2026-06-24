@@ -114,7 +114,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
-            .expect(&localized_log("debug.expect.time_went_backwards"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.time_went_backwards")));
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };
@@ -127,7 +127,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let compression_writer = GzEncoder::new(world_info_file, Compression::best());
         // TODO: Proper error handling
         pumpkin_nbt::to_bytes(&level, compression_writer)
-            .expect(&localized_log("world.info.write_level_dat_failed"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("world.info.write_level_dat_failed")));
         Ok(())
     }
 }

@@ -22,9 +22,12 @@ use crate::plugin::{
 
 impl ToFromWasmEvent for BlockRedstoneEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let target_world = state.add_world(self.world.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_world_resource",
-        ));
+        let target_world = state.add_world(self.world.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+            )
+        });
 
         Event::BlockRedstoneEvent(BlockRedstoneEventData {
             target_world,
@@ -57,9 +60,12 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
 impl ToFromWasmEvent for BlockBreakEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = self.player.as_ref().map(|player| {
-            state.add_player(player.clone()).expect(&localized_log(
-                "debug.expect.plugin_wasm.failed_add_player_resource",
-            ))
+            state.add_player(player.clone()).unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+                )
+            })
         });
 
         Event::BlockBreakEvent(BlockBreakEventData {
@@ -116,9 +122,12 @@ impl ToFromWasmEvent for BlockBurnEvent {
 
 impl ToFromWasmEvent for BlockCanBuildEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state.add_player(self.player.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_player_resource",
-        ));
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::BlockCanBuildEvent(BlockCanBuildEventData {
             block_to_build: to_wasm_block_name(self.block_to_build),
@@ -148,9 +157,12 @@ impl ToFromWasmEvent for BlockCanBuildEvent {
 
 impl ToFromWasmEvent for BlockGrowEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let target_world = state.add_world(self.world.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_world_resource",
-        ));
+        let target_world = state.add_world(self.world.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+            )
+        });
 
         Event::BlockGrowEvent(BlockGrowEventData {
             target_world,
@@ -184,9 +196,12 @@ impl ToFromWasmEvent for BlockGrowEvent {
 
 impl ToFromWasmEvent for BlockPlaceEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state.add_player(self.player.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_player_resource",
-        ));
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::BlockPlaceEvent(BlockPlaceEventData {
             player,

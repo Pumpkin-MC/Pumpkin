@@ -19,8 +19,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 
 use pumpkin::{
-    CRASH_REPORT, LoggerOption, PumpkinServer, SERVER_EXIT_CODE, SERVER_IS_STOPPING, SHOULD_STOP,
-    STOP_INTERRUPT,
+    CRASH_REPORT, PumpkinServer, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     localized_log, localized_log_format, localized_text, stop_or_exit_server, stop_server,
@@ -50,7 +49,7 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     MAIN_THREAD
         .set(thread::current().id())
-        .expect(&localized_log("debug.expect.main_thread_id_failed"));
+        .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.main_thread_id_failed")));
 
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
@@ -95,7 +94,8 @@ async fn main() {
         "{}",
         TextComponent::text(localized_log_format(
             "server.log.starting_server",
-            &["Starting {} {} Minecraft (Protocol {})"
+            &[
+                "Starting {} {} Minecraft (Protocol {})".to_string(),
                 TextComponent::text("Pumpkin")
                     .color_named(NamedColor::Gold)
                     .to_pretty_console(),
@@ -131,7 +131,7 @@ async fn main() {
     tokio::spawn(async {
         setup_sighandler()
             .await
-            .expect(&localized_log("debug.expect.signal_handlers_failed"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.signal_handlers_failed")));
     });
 
     let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;

@@ -45,12 +45,14 @@ pub trait LoadJSONConfiguration {
     where
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
-        let exe_dir = env::current_dir().expect(&localized_log("debug.expect.current_dir_failed"));
+        let exe_dir = env::current_dir()
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.current_dir_failed")));
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
             debug!("{}", localized_log("server.log.creating_data_folder"));
-            fs::create_dir(&data_dir)
-                .expect(&localized_log("debug.expect.create_data_root_failed"));
+            fs::create_dir(&data_dir).unwrap_or_else(|_| {
+                panic!("{}", localized_log("debug.expect.create_data_root_failed"))
+            });
         }
         let path = data_dir.join(Self::get_path());
 
@@ -79,9 +81,12 @@ pub trait LoadJSONConfiguration {
 
             if let Err(err) = fs::write(
                 &path,
-                serde_json::to_string_pretty(&content).expect(&localized_log(
-                    "debug.expect.serialize_default_data_config_failed",
-                )),
+                serde_json::to_string_pretty(&content).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.serialize_default_data_config_failed",)
+                    )
+                }),
             ) {
                 error!(
                     "{}",
@@ -109,12 +114,14 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
     where
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
-        let exe_dir = env::current_dir().expect(&localized_log("debug.expect.current_dir_failed"));
+        let exe_dir = env::current_dir()
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.current_dir_failed")));
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
             debug!("{}", localized_log("server.log.creating_data_folder"));
-            fs::create_dir(&data_dir)
-                .expect(&localized_log("debug.expect.create_data_root_failed"));
+            fs::create_dir(&data_dir).unwrap_or_else(|_| {
+                panic!("{}", localized_log("debug.expect.create_data_root_failed"))
+            });
         }
         let path = data_dir.join(Self::get_path());
 

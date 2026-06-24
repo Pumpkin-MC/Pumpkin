@@ -94,9 +94,12 @@ impl CachedStatus {
             version.protocol = client_protocol as u32;
         }
 
-        let json = serde_json::to_string(&response).expect(&localized_log(
-            "debug.expect.serialize_status_response_failed",
-        ));
+        let json = serde_json::to_string(&response).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.serialize_status_response_failed",)
+            )
+        });
 
         CStatusResponse::new(json)
     }
@@ -160,10 +163,7 @@ impl CachedStatus {
                     }
                     debug!(
                         "{}",
-                        localized_log_format(
-                            "server.log.loading_favicon",
-                            &[icon_path.to_string()]
-                        )
+                        localized_log_format("server.log.loading_favicon", &[icon_path.clone()])
                     );
 
                     match load_icon_from_file(icon_path) {
@@ -191,7 +191,7 @@ impl CachedStatus {
                                 "{}",
                                 localized_log_format(
                                     "server.log.failed_load_favicon",
-                                    &[icon_path.to_string(), error_message]
+                                    &[icon_path.clone(), error_message]
                                 )
                             );
 

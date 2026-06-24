@@ -55,7 +55,7 @@ impl LANBroadcast {
     pub async fn start(self, bound_addr: SocketAddr) {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))
             .await
-            .expect(&localized_log("debug.expect.bind_address_failed"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.bind_address_failed")));
 
         socket.set_broadcast(true).unwrap();
 
@@ -69,7 +69,10 @@ impl LANBroadcast {
                 "server.log.lan_broadcast_running",
                 &[socket
                     .local_addr()
-                    .expect(&localized_log("debug.expect.running_address_not_found"))
+                    .unwrap_or_else(|_| panic!(
+                        "{}",
+                        localized_log("debug.expect.running_address_not_found")
+                    ))
                     .to_string()]
             )
         );

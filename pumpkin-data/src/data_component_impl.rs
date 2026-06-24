@@ -341,9 +341,12 @@ fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<SoundEvent> {
         let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
         IdOr::Id(Sound::from_name(sound).unwrap_or(default))
     } else if let Some(sound_compound) = nbt.get_compound(key) {
-        let sound_name = sound_compound
-            .get_string("sound_id")
-            .expect(&localized_log("debug.expect.sound_event_missing_sound_id"));
+        let sound_name = sound_compound.get_string("sound_id").unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.sound_event_missing_sound_id")
+            )
+        });
         let range = sound_compound.get_float("range");
         IdOr::Value(SoundEvent {
             sound_name: sound_name.to_string(),

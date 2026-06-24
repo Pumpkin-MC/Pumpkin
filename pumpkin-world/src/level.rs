@@ -136,10 +136,18 @@ impl Level {
         let region_folder = root_folder.join("region");
         let entities_folder = root_folder.join("entities");
 
-        std::fs::create_dir_all(&region_folder)
-            .expect(&localized_log("world.level.create_region_folder_failed"));
-        std::fs::create_dir_all(&entities_folder)
-            .expect(&localized_log("world.level.create_entities_folder_failed"));
+        std::fs::create_dir_all(&region_folder).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("world.level.create_region_folder_failed")
+            )
+        });
+        std::fs::create_dir_all(&entities_folder).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("world.level.create_entities_folder_failed")
+            )
+        });
 
         let level_folder = Arc::new(LevelFolder {
             root_folder,
@@ -264,9 +272,12 @@ impl Level {
                         }
                     }
                 })
-                .expect(&localized_log(
-                    "world.level.spawn_entity_generation_thread_failed",
-                ));
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("world.level.spawn_entity_generation_thread_failed",)
+                    )
+                });
         }
     }
 
@@ -602,7 +613,7 @@ impl Level {
 
         let chunk = recv
             .await
-            .expect(&localized_log("world.level.chunk_listener_dropped"));
+            .unwrap_or_else(|_| panic!("{}", localized_log("world.level.chunk_listener_dropped")));
 
         {
             let mut lock = self.chunk_loading.lock().unwrap();
@@ -722,9 +733,12 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.expect(&localized_log(
-                "world.level.entity_generation_worker_dropped",
-            ))
+            rx.await.unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("world.level.entity_generation_worker_dropped",)
+                )
+            })
         }
     }
 

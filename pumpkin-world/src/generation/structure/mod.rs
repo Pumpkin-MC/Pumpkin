@@ -72,12 +72,15 @@ pub fn try_generate_structure(
         | StructureKeys::VillageSnowy
         | StructureKeys::VillageTaiga => {
             let generator = JigsawGenerator::new(
-                structure.start_pool.expect(&localized_log(
-                    "world.structure.jigsaw_must_have_start_pool",
-                )),
-                structure
-                    .size
-                    .expect(&localized_log("world.structure.jigsaw_must_have_size")),
+                structure.start_pool.unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        localized_log("world.structure.jigsaw_must_have_start_pool",)
+                    )
+                }),
+                structure.size.unwrap_or_else(|| {
+                    panic!("{}", localized_log("world.structure.jigsaw_must_have_size"))
+                }),
             );
             generator.get_structure_position(context)
         }
@@ -87,12 +90,15 @@ pub fn try_generate_structure(
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
             let generator = JigsawGenerator::new(
-                structure.start_pool.expect(&localized_log(
-                    "world.structure.jigsaw_must_have_start_pool",
-                )),
-                structure
-                    .size
-                    .expect(&localized_log("world.structure.jigsaw_must_have_size")),
+                structure.start_pool.unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        localized_log("world.structure.jigsaw_must_have_start_pool",)
+                    )
+                }),
+                structure.size.unwrap_or_else(|| {
+                    panic!("{}", localized_log("world.structure.jigsaw_must_have_size"))
+                }),
             );
             generator.get_structure_position(context)
         }
@@ -172,12 +178,15 @@ pub fn lazily_generate_structure(
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
             let generator = JigsawGenerator::new(
-                structure.start_pool.expect(&localized_log(
-                    "world.structure.jigsaw_must_have_start_pool",
-                )),
-                structure
-                    .size
-                    .expect(&localized_log("world.structure.jigsaw_must_have_size")),
+                structure.start_pool.unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        localized_log("world.structure.jigsaw_must_have_start_pool",)
+                    )
+                }),
+                structure.size.unwrap_or_else(|| {
+                    panic!("{}", localized_log("world.structure.jigsaw_must_have_size"))
+                }),
             );
             generator.get_structure_position(context)
         }

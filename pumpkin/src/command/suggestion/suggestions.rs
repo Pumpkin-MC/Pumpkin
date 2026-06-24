@@ -337,10 +337,15 @@ impl Suggestions {
             .iter()
             .map(|s| s.borrow().range)
             .reduce(StringRange::encompass)
-            .expect(&tr_plain(
-                "debug.expect.suggestions_range_exists",
-                server_command_locale(),
-            ));
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.suggestions_range_exists",
+                        server_command_locale(),
+                    )
+                )
+            });
 
         let mut texts = Vec::new();
         for suggestion in &suggestions {

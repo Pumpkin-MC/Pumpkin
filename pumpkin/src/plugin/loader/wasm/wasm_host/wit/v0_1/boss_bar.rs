@@ -137,9 +137,12 @@ impl boss_bar::HostBossBar for PluginHostState {
         let server = self
             .server
             .as_ref()
-            .expect(&localized_log(
-                "debug.expect.plugin_wasm.server_not_available",
-            ))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.server_not_available",)
+                )
+            })
             .clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
             bossbar,

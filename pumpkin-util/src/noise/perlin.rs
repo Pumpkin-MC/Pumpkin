@@ -320,10 +320,10 @@ impl OctavePerlinNoiseSampler {
 
         let i = -**octaves
             .first()
-            .expect(&localized_log("debug.expect.octaves_not_empty"));
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.octaves_not_empty")));
         let j = **octaves
             .last()
-            .expect(&localized_log("debug.expect.octaves_not_empty"));
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.octaves_not_empty")));
         let k = i + j + 1;
 
         let mut double_list = vec![0.0; k as usize];

@@ -141,8 +141,9 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             None
         } else {
             Some(
-                GzipRollingLogger::new(level, advanced_config.logging.file.clone())
-                    .expect(&localized_log("server.log.file_logger_init_failed")),
+                GzipRollingLogger::new(level, advanced_config.logging.file.clone()).unwrap_or_else(
+                    |_| panic!("{}", localized_log("server.log.file_logger_init_failed")),
+                ),
             )
         };
 
@@ -339,7 +340,7 @@ impl PumpkinServer {
             // In the event the user puts 0 for their port, this will allow us to know what port it is running on
             let addr = listener
                 .local_addr()
-                .expect(&localized_log("server.log.cannot_get_address"));
+                .unwrap_or_else(|_| panic!("{}", localized_log("server.log.cannot_get_address")));
 
             if server.advanced_config.networking.query.enabled {
                 info!("{}", localized_log("server.log.query_protocol_enabled"));
@@ -376,7 +377,7 @@ impl PumpkinServer {
             Some(Arc::new(
                 UdpSocket::bind(server.basic_config.bedrock_edition_address)
                     .await
-                    .expect(&localized_log("server.log.udp_bind_failed")),
+                    .unwrap_or_else(|_| panic!("{}", localized_log("server.log.udp_bind_failed"))),
             ))
         } else {
             None
@@ -578,7 +579,7 @@ impl PumpkinServer {
                                         localized_log_format(
                                             "server.log.player_joined_language",
                                             &[
-                                                player.gameprofile.name.to_string(),
+                                                player.gameprofile.name.clone(),
                                                 player.gameprofile.id.to_string(),
                                                 locale_to_log_string(resolved_locale),
                                                 player_locale_str.clone(),
@@ -692,7 +693,7 @@ impl PumpkinServer {
                                                         localized_log_format(
                                                             "server.log.player_joined_language",
                                                             &[
-                                                                player.gameprofile.name.to_string(),
+                                                                player.gameprofile.name.clone(),
                                                                 player.gameprofile.id.to_string(),
                                                                 locale_to_log_string(resolved_locale),
                                                                 player_locale_str.clone(),
@@ -778,7 +779,7 @@ fn setup_stdin_console(server: Arc<Server>) {
                 warn!("{}", localized_log("server.log.console_no_newline"));
             }
             rt.block_on(tx.send(line.trim().to_string()))
-                .expect(&localized_log("server.log.failed_send_command"));
+                .unwrap_or_else(|_| panic!("{}", localized_log("server.log.failed_send_command")));
         }
     });
     tokio::spawn(async move {

@@ -202,10 +202,15 @@ impl TargetSelector {
 
     #[must_use]
     pub fn includes_entities(&self) -> bool {
-        let player_type = EntityType::from_name("player").expect(&tr_plain(
-            "debug.expect.entity_type_player_must_exist",
-            server_command_locale(),
-        ));
+        let player_type = EntityType::from_name("player").unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.entity_type_player_must_exist",
+                    server_command_locale(),
+                )
+            )
+        });
         let mut includes_entities = self.base_includes_entities();
 
         for condition in &self.conditions {
@@ -393,7 +398,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
                     tr_format(
                         "server.log.failed_parse_target_selector",
                         server_command_locale(),
-                        &[s.to_string(), e.to_string()],
+                        &[s.to_string(), e],
                     )
                 );
                 return Box::pin(async move { None }); // Return a Future resolving to None

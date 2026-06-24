@@ -625,7 +625,7 @@ impl StructurePiecesCollector {
         }
 
         let bbox = BlockBox::encompass_all(self.pieces.iter().map(|p| p.bounding_box()))
-            .expect(&localized_log("world.structure.must_have_one_piece"));
+            .unwrap_or_else(|| panic!("{}", localized_log("world.structure.must_have_one_piece")));
 
         self.cached_box = Some(bbox);
         bbox

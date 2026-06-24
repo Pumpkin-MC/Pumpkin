@@ -70,7 +70,7 @@ pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     let (signature, data_without_signature) = data;
     // Our fault, we can panic/expect?
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect(&localized_log("debug.expect.hmac_key_any_size"));
+        .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.hmac_key_any_size")));
     mac.update(data_without_signature);
     mac.verify_slice(signature).is_ok()
 }

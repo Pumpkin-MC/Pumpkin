@@ -230,10 +230,12 @@ impl CommandDispatcher {
                     .errors
                     .values()
                     .next()
-                    .expect(&tr_plain(
-                        "debug.expect.node_errors_next",
-                        server_command_locale(),
-                    ))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{}",
+                            tr_plain("debug.expect.node_errors_next", server_command_locale(),)
+                        )
+                    })
                     .clone())
             } else if parsed.context.range.is_empty() {
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
@@ -368,10 +370,15 @@ impl CommandDispatcher {
 
                     (a_reader_remaining, a_has_errors).cmp(&(b_reader_remaining, b_has_errors))
                 })
-                .expect(&tr_plain(
-                    "debug.expect.node_potentials_not_empty",
-                    server_command_locale(),
-                ))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        tr_plain(
+                            "debug.expect.node_potentials_not_empty",
+                            server_command_locale(),
+                        )
+                    )
+                })
         }
     }
 
@@ -915,10 +922,15 @@ impl CommandDispatcher {
                         }
                         if child_usages.len() == 1 {
                             let mut child_usage =
-                                child_usages.into_iter().next().expect(&tr_plain(
-                                    "debug.expect.node_child_usages_next",
-                                    server_command_locale(),
-                                ));
+                                child_usages.into_iter().next().unwrap_or_else(|| {
+                                    panic!(
+                                        "{}",
+                                        tr_plain(
+                                            "debug.expect.node_child_usages_next",
+                                            server_command_locale(),
+                                        )
+                                    )
+                                });
                             if is_optional {
                                 child_usage = format!(
                                     "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"

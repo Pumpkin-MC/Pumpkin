@@ -27,7 +27,7 @@ impl GlobalNodeId {
     pub fn new() -> Self {
         Self(
             NonZero::new(NEXT_DETACHED_NODE_ID.fetch_add(1, Ordering::Relaxed))
-                .expect(&localized_log("debug.expect.node_nonzero_id")),
+                .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.node_nonzero_id"))),
         )
     }
 }

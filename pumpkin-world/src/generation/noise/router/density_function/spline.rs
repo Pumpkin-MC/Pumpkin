@@ -90,7 +90,7 @@ impl Spline {
         let first_point = self
             .points
             .first()
-            .expect(&localized_log("world.noise.spline_requires_points"));
+            .unwrap_or_else(|| panic!("{}", localized_log("world.noise.spline_requires_points")));
         if input_min < first_point.location {
             let (point_min, point_max) = first_point.value.calculate_min_and_max(component_stack);
             let sample_min = first_point.sample_outside_range(input_min, point_min);
@@ -103,7 +103,7 @@ impl Spline {
         let last_point = self
             .points
             .last()
-            .expect(&localized_log("world.noise.spline_requires_points"));
+            .unwrap_or_else(|| panic!("{}", localized_log("world.noise.spline_requires_points")));
         if input_max > last_point.location {
             let (point_min, point_max) = last_point.value.calculate_min_and_max(component_stack);
             let sample_min = last_point.sample_outside_range(input_max, point_min);

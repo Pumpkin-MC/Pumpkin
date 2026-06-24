@@ -158,7 +158,7 @@ impl Jwk {
         if self.kty != "EC" {
             return Err(AuthError::PublicKeyBuild(localized_log_format(
                 "auth.jwt.unsupported_kty_ec",
-                &[self.kty.clone()],
+                std::slice::from_ref(&self.kty),
             )));
         }
 
@@ -167,7 +167,7 @@ impl Jwk {
         {
             return Err(AuthError::PublicKeyBuild(localized_log_format(
                 "auth.jwt.unsupported_crv",
-                &[crv.to_string()],
+                std::slice::from_ref(crv),
             )));
         }
 
@@ -199,7 +199,7 @@ impl Jwk {
         if self.kty != "RSA" {
             return Err(AuthError::PublicKeyBuild(localized_log_format(
                 "auth.jwt.unsupported_kty_rsa",
-                &[self.kty.clone()],
+                std::slice::from_ref(&self.kty),
             )));
         }
 

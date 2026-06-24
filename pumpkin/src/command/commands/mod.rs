@@ -178,10 +178,15 @@ fn register_permissions(registry: &mut PermissionRegistry) {
             "permissions.selector.description",
             PermissionDefault::Allow,
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }
 
 fn translated_permission(
@@ -204,30 +209,45 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
             "permissions.pumpkin.description",
             PermissionDefault::Allow,
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.me",
             "permissions.me.description",
             PermissionDefault::Allow,
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.msg",
             "permissions.msg.description",
             PermissionDefault::Allow,
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }
 
 #[expect(clippy::too_many_lines)]
@@ -239,270 +259,405 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             "permissions.worldborder.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.effect",
             "permissions.effect.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.teleport",
             "permissions.teleport.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.time",
             "permissions.time.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.give",
             "permissions.give.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.clear",
             "permissions.clear.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.setblock",
             "permissions.setblock.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.fill",
             "permissions.fill.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.playsound",
             "permissions.playsound.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.tellraw",
             "permissions.tellraw.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.title",
             "permissions.title.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.summon",
             "permissions.summon.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.experience",
             "permissions.experience.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.weather",
             "permissions.weather.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.particle",
             "permissions.particle.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.rotate",
             "permissions.rotate.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.damage",
             "permissions.damage.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.bossbar",
             "permissions.bossbar.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.say",
             "permissions.say.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.gamemode",
             "permissions.gamemode.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.gamerule",
             "permissions.gamerule.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.stopsound",
             "permissions.stopsound.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.defaultgamemode",
             "permissions.defaultgamemode.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.data",
             "permissions.data.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.enchant",
             "permissions.enchant.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.spawnpoint",
             "permissions.spawnpoint.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "pumpkin:command.tps",
             "permissions.tps.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }
 
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
@@ -513,108 +668,163 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
             "permissions.setworldspawn.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.deop",
             "permissions.deop.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.kick",
             "permissions.kick.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "pumpkin:command.plugin",
             "permissions.plugin.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "pumpkin:command.plugins",
             "permissions.plugins.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.ban",
             "permissions.ban.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.banip",
             "permissions.banip.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.pardon",
             "permissions.pardon.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.pardonip",
             "permissions.pardonip.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.whitelist",
             "permissions.whitelist.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
         .register_permission(translated_permission(
             "minecraft:command.transfer",
             "permissions.transfer.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect(&tr_plain(
-            "debug.expect.permission_already_registered",
-            server_command_locale(),
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }

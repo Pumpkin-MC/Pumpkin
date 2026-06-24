@@ -20,9 +20,12 @@ impl OwnedRecipeIngredient {
                 let name = format!("minecraft:{}", item.registry_key);
                 name == *id
             }
-            Self::Tagged(tag) => item
-                .is_tagged_with(tag)
-                .expect(&localized_log("debug.expect.crafting_recipe_invalid_tag")),
+            Self::Tagged(tag) => item.is_tagged_with(tag).unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.crafting_recipe_invalid_tag")
+                )
+            }),
             Self::OneOf(ids) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 ids.contains(&name)

@@ -298,9 +298,14 @@ where
 {
     fn default_name(&self) -> &'static str {
         // setting a single default name for all BoundedNumArgumentConsumer variants is probably a bad idea since it would lead to confusion
-        self.name.expect(&tr_plain(
-            "debug.expect.bounded_num_requires_name",
-            server_command_locale(),
-        ))
+        self.name.unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.bounded_num_requires_name",
+                    server_command_locale(),
+                )
+            )
+        })
     }
 }

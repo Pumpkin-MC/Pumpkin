@@ -231,12 +231,12 @@ impl XoroshiroSplitter {
         let l = u64::from_be_bytes(
             bytes[0..8]
                 .try_into()
-                .expect(&localized_log("debug.expect.incorrect_length")),
+                .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.incorrect_length"))),
         );
         let m = u64::from_be_bytes(
             bytes[8..16]
                 .try_into()
-                .expect(&localized_log("debug.expect.incorrect_length")),
+                .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.incorrect_length"))),
         );
 
         Xoroshiro::new(l ^ self.lo, m ^ self.hi)

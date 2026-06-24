@@ -70,10 +70,15 @@ impl CommandExecutor for Executor {
                         .find_map(|(id, component)| {
                             (id == &MaxStackSize).then(|| get::<MaxStackSizeImpl>(*component).size)
                         })
-                        .expect(&tr_plain(
-                            "debug.expect.item_missing_max_stack_size",
-                            server_command_locale(),
-                        )),
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                tr_plain(
+                                    "debug.expect.item_missing_max_stack_size",
+                                    server_command_locale(),
+                                )
+                            )
+                        }),
                 );
                 let mut remaining = item_count;
 

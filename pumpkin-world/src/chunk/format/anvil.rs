@@ -401,9 +401,9 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             .map(|index| {
                 (
                     index,
-                    self.chunks_data[index]
-                        .as_ref()
-                        .expect(&localized_log("world.chunk.anvil.write_chunk_missing")),
+                    self.chunks_data[index].as_ref().unwrap_or_else(|| {
+                        panic!("{}", localized_log("world.chunk.anvil.write_chunk_missing"))
+                    }),
                 )
             })
             .collect::<Vec<_>>();
@@ -758,9 +758,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                             } else {
                                 // swap last element of the chunks to shift (the first because we
                                 // reversed it) and shift the rest down
-                                let swap = chunks_to_shift
-                                    .pop()
-                                    .expect(&localized_log("debug.expect.checked_exists"));
+                                let swap = chunks_to_shift.pop().unwrap_or_else(|| {
+                                    panic!("{}", localized_log("debug.expect.checked_exists"))
+                                });
 
                                 let indices_to_shift = chunks_to_shift
                                     .iter()
@@ -780,7 +780,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
                                 self.chunks_data[swapped_index]
                                     .as_mut()
-                                    .expect(&localized_log("debug.expect.checked_not_none"))
+                                    .unwrap_or_else(|| {
+                                        panic!("{}", localized_log("debug.expect.checked_not_none"))
+                                    })
                                     .file_sector_offset = old_offset;
                                 write_action.maybe_update_chunk_index(swapped_index);
 
@@ -805,7 +807,12 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 for shift_index in indices_to_shift {
                                     let chunk_data = self.chunks_data[shift_index]
                                         .as_mut()
-                                        .expect(&localized_log("debug.expect.checked_not_none"));
+                                        .unwrap_or_else(|| {
+                                            panic!(
+                                                "{}",
+                                                localized_log("debug.expect.checked_not_none")
+                                            )
+                                        });
                                     let new_offset = chunk_data.file_sector_offset as i64 + offset;
                                     chunk_data.file_sector_offset = new_offset as u32;
                                     write_action.maybe_update_chunk_index(shift_index);

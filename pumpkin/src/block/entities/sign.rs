@@ -159,9 +159,12 @@ impl From<Text> for NbtTag {
             value
                 .messages
                 .lock()
-                .expect(&localized_log(
-                    "debug.expect.text_messages_mutex_not_poisoned",
-                ))
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.text_messages_mutex_not_poisoned",)
+                    )
+                })
                 .iter()
                 .map(|s| Self::String(s.clone()))
                 .collect(),

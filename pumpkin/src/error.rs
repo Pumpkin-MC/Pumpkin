@@ -86,7 +86,7 @@ impl PumpkinError for PlayerDataError {
             )),
             Self::Nbt(err) => Some(localized_log_format(
                 "server.player_data.failed_parse",
-                &[err.to_string()],
+                &[err.clone()],
             )),
         }
     }

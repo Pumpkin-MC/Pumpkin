@@ -271,7 +271,7 @@ impl PluginManager {
                     "{}",
                     localized_log_format(
                         "server.log.plugin_unload_failed",
-                        &[name.to_string(), e.to_string()]
+                        &[name.clone(), e.to_string()]
                     )
                 );
             }
@@ -548,9 +548,12 @@ impl PluginManager {
                 input == "y" || input == "yes"
             })
         } else {
-            let mut rl = DefaultEditor::new().expect(&localized_log(
-                "debug.expect.rustyline_editor_create_failed",
-            ));
+            let mut rl = DefaultEditor::new().unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.rustyline_editor_create_failed",)
+                )
+            });
             rl.readline(&prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
@@ -665,7 +668,7 @@ impl PluginManager {
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg =
-                        localized_log_format("plugin.initialization.failed", &[e.to_string()]);
+                        localized_log_format("plugin.initialization.failed", &[e.clone()]);
                     let _ = instance.on_unload(context).await;
 
                     // Get the loader data before removing the plugin
@@ -702,7 +705,7 @@ impl PluginManager {
                         "{}",
                         localized_log_format(
                             "server.log.plugin_init_failed",
-                            &[plugin_name.to_string(), error_msg.to_string()]
+                            &[plugin_name.clone(), error_msg.clone()]
                         )
                     );
                 }

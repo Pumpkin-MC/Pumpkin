@@ -673,14 +673,21 @@ impl JavaClient {
     pub fn start_outgoing_packet_task(&mut self) {
         const MAX_BATCH_SIZE: usize = 64;
 
-        let mut packet_receiver = self
-            .outgoing_packet_queue_recv
-            .take()
-            .expect(&localized_log("debug.expect.outgoing_packet_receiver_set"));
+        let mut packet_receiver = self.outgoing_packet_queue_recv.take().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.outgoing_packet_receiver_set")
+            )
+        });
         let mut priority_packet_receiver = self
             .outgoing_packet_priority_recv
             .take()
-            .expect(&localized_log("debug.expect.outgoing_packet_receiver_set"));
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.outgoing_packet_receiver_set")
+                )
+            });
         let close_token = self.close_token.clone();
         let writer = self.network_writer.clone();
         let id = self.id;

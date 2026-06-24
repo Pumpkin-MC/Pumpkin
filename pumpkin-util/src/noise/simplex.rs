@@ -300,10 +300,10 @@ impl OctaveSimplexNoiseSampler {
 
         let i = -**octaves
             .first()
-            .expect(&localized_log("debug.expect.octaves_not_empty"));
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.octaves_not_empty")));
         let j = **octaves
             .last()
-            .expect(&localized_log("debug.expect.octaves_not_empty"));
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.octaves_not_empty")));
         let k = i.wrapping_add(j).wrapping_add(1);
 
         let sampler = SimplexNoiseSampler::new(random);

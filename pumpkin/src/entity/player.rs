@@ -3616,9 +3616,12 @@ impl Player {
         {
             let screen_handler_temp = screen_handler.lock().await;
             let sync_id = screen_handler_temp.sync_id();
-            let window_type = screen_handler_temp.window_type().expect(&localized_log(
-                "debug.expect.open_player_screen_handler_failed",
-            ));
+            let window_type = screen_handler_temp.window_type().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.open_player_screen_handler_failed",)
+                )
+            });
 
             let display_name = screen_handler_factory.get_display_name();
             let java_packet =
@@ -3684,9 +3687,12 @@ impl Player {
 
         let screen_handler_temp = screen_handler.lock().await;
         let sync_id = screen_handler_temp.sync_id();
-        let window_type = screen_handler_temp.window_type().expect(&localized_log(
-            "debug.expect.open_player_screen_handler_failed",
-        ));
+        let window_type = screen_handler_temp.window_type().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.open_player_screen_handler_failed",)
+            )
+        });
 
         let java_packet = COpenScreen::new(sync_id.into(), (window_type as i32).into(), &title);
 

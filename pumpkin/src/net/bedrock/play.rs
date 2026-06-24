@@ -144,8 +144,9 @@ impl BedrockClient {
             let old_vd = current_config.view_distance;
             let mut new_config = (**current_config).clone();
 
-            new_config.view_distance = NonZero::new(view_distance as u8)
-                .expect(&localized_log("debug.expect.view_distance_positive"));
+            new_config.view_distance = NonZero::new(view_distance as u8).unwrap_or_else(|| {
+                panic!("{}", localized_log("debug.expect.view_distance_positive"))
+            });
             player.config.store(std::sync::Arc::new(new_config));
 
             old_vd
@@ -561,7 +562,7 @@ impl BedrockClient {
                 let server = world
                     .server
                     .upgrade()
-                    .expect(&localized_log("debug.expect.server_gone"));
+                    .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.server_gone")));
 
                 if player.gamemode.load() == GameMode::Spectator {
                     // TODO: openMenu ?
@@ -621,10 +622,9 @@ impl BedrockClient {
                             let held = player.inventory.held_item();
                             let mut stack = held.lock().await;
                             if !target.interact(player, &mut stack).await {
-                                let server = world
-                                    .server
-                                    .upgrade()
-                                    .expect(&localized_log("debug.expect.server_gone"));
+                                let server = world.server.upgrade().unwrap_or_else(|| {
+                                    panic!("{}", localized_log("debug.expect.server_gone"))
+                                });
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, target)
@@ -654,11 +654,10 @@ impl BedrockClient {
             TransactionData::ReleaseItem(_data) => {
                 let item_in_use = player.living_entity.item_in_use.lock().await.clone();
                 if let Some(stack) = item_in_use {
-                    let server = player
-                        .world()
-                        .server
-                        .upgrade()
-                        .expect(&localized_log("debug.expect.server_gone"));
+                    let server =
+                        player.world().server.upgrade().unwrap_or_else(|| {
+                            panic!("{}", localized_log("debug.expect.server_gone"))
+                        });
                     server.item_registry.on_stopped_using(&stack, player).await;
                 }
                 player.living_entity.clear_active_hand().await;
@@ -945,7 +944,7 @@ impl BedrockClient {
                         "{}",
                         localized_log_format(
                             "server.log.player_executed_command",
-                            &[player.gameprofile.name.clone(), command.clone()]
+                            &[player.gameprofile.name.clone(), command]
                         )
                     );
                 }

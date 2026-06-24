@@ -164,10 +164,15 @@ impl CommandSender {
 
                 let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
-                let timestamp = now.format(&format).expect(&tr_plain(
-                    "debug.expect.failed_format_timestamp",
-                    server_command_locale(),
-                ));
+                let timestamp = now.format(&format).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        tr_plain(
+                            "debug.expect.failed_format_timestamp",
+                            server_command_locale(),
+                        )
+                    )
+                });
 
                 *last_output = format!(
                     "[{}] {}",

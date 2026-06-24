@@ -116,7 +116,9 @@ pub trait Slot: Send + Sync {
             let stack = self.get_stack().await;
             let lock = timeout(Duration::from_secs(5), stack.lock())
                 .await
-                .expect(&localized_log("debug.expect.acquire_lock_timed_out"));
+                .unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.acquire_lock_timed_out"))
+                });
 
             lock.clone()
         })

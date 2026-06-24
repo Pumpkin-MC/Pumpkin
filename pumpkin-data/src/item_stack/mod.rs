@@ -641,7 +641,12 @@ impl From<&RecipeResultStruct> for ItemStack {
         Self::new(
             value.count,
             Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
-                .expect(&localized_log("debug.expect.crafting_recipe_invalid_item")),
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.crafting_recipe_invalid_item")
+                    )
+                }),
         )
     }
 }

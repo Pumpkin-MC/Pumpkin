@@ -80,8 +80,9 @@ pub async fn send_c_commands_packet(
             .copied()
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
             .map(|i| {
-                i.try_into()
-                    .expect(&localized_log("debug.expect.i32_limit_reached"))
+                i.try_into().unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.i32_limit_reached"))
+                })
             })
             .collect();
 
@@ -90,8 +91,9 @@ pub async fn send_c_commands_packet(
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
             .map(|i| {
-                i.try_into()
-                    .expect(&localized_log("debug.expect.i32_limit_reached"))
+                i.try_into().unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.i32_limit_reached"))
+                })
             });
 
         let satisfies_requirements = true;
@@ -186,9 +188,12 @@ impl<'a> ProtoNodeBuilder<'a> {
             .child_nodes
             .into_iter()
             .map(|node| {
-                node.build(buffer)
-                    .try_into()
-                    .expect(&localized_log("debug.expect.buffer_index_exceeded_bounds"))
+                node.build(buffer).try_into().unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.buffer_index_exceeded_bounds")
+                    )
+                })
             })
             .collect();
 

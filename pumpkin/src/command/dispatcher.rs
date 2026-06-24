@@ -746,10 +746,15 @@ impl CommandDispatcher {
         let mut names = tree.names.iter();
         let permission = permission.into();
 
-        let primary_name = names.next().expect(&tr_plain(
-            "debug.expect.name_must_be_provided",
-            server_command_locale(),
-        ));
+        let primary_name = names.next().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.name_must_be_provided",
+                    server_command_locale(),
+                )
+            )
+        });
 
         for name in names {
             self.commands

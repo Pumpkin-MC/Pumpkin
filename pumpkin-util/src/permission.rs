@@ -110,9 +110,12 @@ impl PermissionRegistry {
     /// # Parameters
     /// - `permission`: The `Permission` instance to add.
     pub fn register_permission_or_panic(&mut self, permission: Permission) {
-        self.register_permission(permission).expect(&localized_log(
-            "debug.expect.permission_registered_successfully",
-        ));
+        self.register_permission(permission).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.permission_registered_successfully")
+            )
+        });
     }
 
     /// Retrieves a permission node by its name.

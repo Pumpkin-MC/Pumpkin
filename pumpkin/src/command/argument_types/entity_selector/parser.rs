@@ -254,7 +254,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
         let char = self
             .reader
             .read()
-            .expect(&localized_log("debug.expect.can_read_char_true"));
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.can_read_char_true")));
         let mut add_alive_predicate = false;
         match char {
             'a' => {

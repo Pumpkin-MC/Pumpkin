@@ -193,7 +193,7 @@ impl GzipRollingLogger {
                     "server.logging.max_log_ids_used",
                     &[
                         MAX_ATTEMPTS.to_string(),
-                        date_format.to_owned(),
+                        date_format,
                         path.display().to_string(),
                     ],
                 )
@@ -203,7 +203,7 @@ impl GzipRollingLogger {
 
         Err(localized_log_format(
             "server.logging.failed_unique_log_filename",
-            &[date_format.to_owned(), MAX_ATTEMPTS.to_string()],
+            &[date_format, MAX_ATTEMPTS.to_string()],
         )
         .into())
     }

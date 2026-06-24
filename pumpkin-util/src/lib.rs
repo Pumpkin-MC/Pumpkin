@@ -199,12 +199,12 @@ impl<'a, T> MutableSplitSlice<'a, T> {
     /// * if `index` is out of bounds of the base slice.
     pub fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
         let (start, end_inclusive) = base.split_at_mut(index);
-        let (value, end) =
-            end_inclusive
-                .split_first_mut()
-                .expect(&crate::translation::localized_log(
-                    "debug.expect.index_not_in_base_slice",
-                ));
+        let (value, end) = end_inclusive.split_first_mut().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                crate::translation::localized_log("debug.expect.index_not_in_base_slice")
+            )
+        });
 
         (value, Self { start, end })
     }

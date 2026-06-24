@@ -48,9 +48,12 @@ impl BlockBehaviour for LadderBlock {
                     .opposite()
                     .to_block_direction()
                     .to_horizontal_facing()
-                    .expect(&localized_log(
-                        "debug.expect.opposite_direction_not_horizontal",
-                    ));
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{}",
+                            localized_log("debug.expect.opposite_direction_not_horizontal",)
+                        )
+                    });
                 return props.to_state_id(args.block);
             }
             Block::AIR.default_state.id

@@ -124,7 +124,12 @@ async fn recipe_matches(
                     let ingredient = key
                         .iter()
                         .find_map(|(k, v)| (*k == current_key).then_some(v))
-                        .expect(&localized_log("debug.expect.crafting_recipe_invalid_key"));
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                localized_log("debug.expect.crafting_recipe_invalid_key")
+                            )
+                        });
 
                     let slot = slot.lock().await;
 
@@ -156,7 +161,12 @@ async fn recipe_matches(
                         let ingredient = key
                             .iter()
                             .find_map(|(k, v)| (*k == current_key).then_some(v))
-                            .expect(&localized_log("debug.expect.crafting_recipe_invalid_key"));
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "{}",
+                                    localized_log("debug.expect.crafting_recipe_invalid_key")
+                                )
+                            });
                         let slot = slot.lock().await;
                         if !ingredient.match_item(slot.item) {
                             matched = false;
@@ -275,11 +285,15 @@ async fn recipe_matches(
                         }
                         continue;
                     }
-                    let ingredient = key
-                        .iter()
-                        .find(|(k, _)| *k == current_key)
-                        .map(|(_, v)| v)
-                        .expect(&localized_log("debug.expect.crafting_recipe_invalid_key"));
+                    let ingredient = key.iter().find(|(k, _)| *k == current_key).map_or_else(
+                        || {
+                            panic!(
+                                "{}",
+                                localized_log("debug.expect.crafting_recipe_invalid_key")
+                            )
+                        },
+                        |(_, v)| v,
+                    );
                     let slot = slot.lock().await;
                     if !ingredient.match_item(slot.item) {
                         matched = false;

@@ -554,6 +554,8 @@ impl<'a> CommandContextBuilder<'a> {
 mod test {
     use std::sync::Arc;
 
+    use pumpkin_i18n::server_command_locale;
+
     use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder};
     use crate::command::context::command_context::{
         CommandContext, CommandContextBuilder, ContextChain, ParsedArgument, Stage,
@@ -564,6 +566,7 @@ mod test {
     use crate::command::node::dispatcher::{CommandDispatcher, EmptyResultConsumer};
     use crate::command::node::tree::ROOT_NODE_ID;
     use crate::command::node::{CommandExecutor, CommandExecutorResult, Redirection};
+    use crate::command::tr_plain;
 
     struct TenExecutor;
     impl CommandExecutor for TenExecutor {
@@ -626,10 +629,15 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
-        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
-            "debug.expect.command_context_flattened",
-            server_command_locale(),
-        ));
+        let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.command_context_flattened",
+                    server_command_locale(),
+                )
+            )
+        });
 
         assert_eq!(
             chain.execute_all(&source, &EmptyResultConsumer).await,
@@ -649,10 +657,15 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("bar foo", &source).await;
         let top_context = result.context.build("bar foo");
-        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
-            "debug.expect.command_context_flattened",
-            server_command_locale(),
-        ));
+        let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.command_context_flattened",
+                    server_command_locale(),
+                )
+            )
+        });
 
         assert_eq!(
             chain.execute_all(&source, &EmptyResultConsumer).await,
@@ -669,10 +682,15 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
-        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
-            "debug.expect.command_context_flattened",
-            server_command_locale(),
-        ));
+        let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.command_context_flattened",
+                    server_command_locale(),
+                )
+            )
+        });
 
         assert_eq!(chain.get_stage(), Stage::EXECUTE);
         assert!(chain.next_stage().is_none());
@@ -694,22 +712,37 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("bar qux foo", &source).await;
         let top_context = result.context.build("bar qux foo");
-        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
-            "debug.expect.command_context_flattened",
-            server_command_locale(),
-        ));
+        let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.command_context_flattened",
+                    server_command_locale(),
+                )
+            )
+        });
         assert_eq!(chain.get_stage(), Stage::MODIFY);
 
-        let chain2 = chain.next_stage().expect(&tr_plain(
-            "debug.expect.command_context_next_stage",
-            server_command_locale(),
-        ));
+        let chain2 = chain.next_stage().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.command_context_next_stage",
+                    server_command_locale(),
+                )
+            )
+        });
         assert_eq!(chain2.get_stage(), Stage::MODIFY);
 
-        let chain3 = chain2.next_stage().expect(&tr_plain(
-            "debug.expect.command_context_next_stage",
-            server_command_locale(),
-        ));
+        let chain3 = chain2.next_stage().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.command_context_next_stage",
+                    server_command_locale(),
+                )
+            )
+        });
         assert_eq!(chain3.get_stage(), Stage::EXECUTE);
         assert!(chain3.next_stage().is_none());
     }

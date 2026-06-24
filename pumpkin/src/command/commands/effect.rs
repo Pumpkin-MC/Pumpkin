@@ -94,10 +94,15 @@ impl CommandExecutor for GiveExecutor {
                         .living_entity
                         .get_effect(effect)
                         .await
-                        .expect(&tr_plain(
-                            "debug.expect.effect_should_exist",
-                            server_command_locale(),
-                        ))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                tr_plain(
+                                    "debug.expect.effect_should_exist",
+                                    server_command_locale(),
+                                )
+                            )
+                        })
                         .amplifier
                         >= amplifier
                 {

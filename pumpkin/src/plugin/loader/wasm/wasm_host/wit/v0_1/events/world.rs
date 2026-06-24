@@ -14,9 +14,12 @@ use crate::plugin::{
 
 impl ToFromWasmEvent for SpawnChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let world = state.add_world(self.world.clone()).expect(&localized_log(
-            "debug.expect.plugin_wasm.failed_add_world_resource",
-        ));
+        let world = state.add_world(self.world.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+            )
+        });
 
         Event::SpawnChangeEvent(SpawnChangeEventData {
             target_world: world,

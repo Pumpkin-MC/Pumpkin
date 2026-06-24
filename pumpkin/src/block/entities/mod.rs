@@ -93,11 +93,19 @@ pub trait BlockEntity: Any + Send + Sync {
                         .resource_location()
                         .split(':')
                         .next_back()
-                        .expect(&localized_log("debug.expect.resource_location_no_name"))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                localized_log("debug.expect.resource_location_no_name")
+                            )
+                        })
             })
-            .expect(&localized_log(
-                "debug.expect.block_entity_type_not_registered",
-            )) as u32
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.block_entity_type_not_registered",)
+                )
+            }) as u32
     }
 
     /// Obtain NBT data for sending to the client in [`ChunkData`](crate::chunk::ChunkData)
@@ -146,13 +154,13 @@ pub trait BlockEntity: Any + Send + Sync {
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     let x = nbt
         .get_int("x")
-        .expect(&localized_log("debug.expect.nbt_missing_x_coordinate"));
+        .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.nbt_missing_x_coordinate")));
     let y = nbt
         .get_int("y")
-        .expect(&localized_log("debug.expect.nbt_missing_y_coordinate"));
+        .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.nbt_missing_y_coordinate")));
     let z = nbt
         .get_int("z")
-        .expect(&localized_log("debug.expect.nbt_missing_z_coordinate"));
+        .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.nbt_missing_z_coordinate")));
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 

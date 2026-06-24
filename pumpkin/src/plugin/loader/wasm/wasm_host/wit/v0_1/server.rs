@@ -119,9 +119,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .get_all_players()
             .into_iter()
             .map(|player| {
-                self.add_player(player).expect(&localized_log(
-                    "debug.expect.plugin_wasm.failed_add_player_resource",
-                ))
+                self.add_player(player).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+                    )
+                })
             })
             .collect())
     }
@@ -177,9 +180,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .load()
             .iter()
             .map(|world| {
-                self.add_world(world.clone()).expect(&localized_log(
-                    "debug.expect.plugin_wasm.failed_add_world_resource",
-                ))
+                self.add_world(world.clone()).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+                    )
+                })
             })
             .collect())
     }
@@ -201,9 +207,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .iter()
             .find(|world| world.dimension.minecraft_name == name)
             .map(|world| {
-                self.add_world(world.clone()).expect(&localized_log(
-                    "debug.expect.plugin_wasm.failed_add_world_resource",
-                ))
+                self.add_world(world.clone()).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+                    )
+                })
             }))
     }
 

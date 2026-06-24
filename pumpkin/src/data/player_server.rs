@@ -62,7 +62,12 @@ impl ServerPlayerData {
         // Save to disk
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
-            .expect(&localized_log("debug.expect.player_data_save_panicked"))?;
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.player_data_save_panicked")
+                )
+            })?;
 
         Ok(())
     }
@@ -92,9 +97,14 @@ impl ServerPlayerData {
                     if let Err(e) =
                         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
                             .await
-                            .expect(&localized_log(
-                                "debug.expect.player_data_periodic_save_panicked",
-                            ))
+                            .unwrap_or_else(|_| {
+                                panic!(
+                                    "{}",
+                                    localized_log(
+                                        "debug.expect.player_data_periodic_save_panicked",
+                                    )
+                                )
+                            })
                     {
                         error!(
                             "{}",
@@ -158,7 +168,12 @@ impl ServerPlayerData {
         let uuid = *uuid;
         let result = tokio::task::spawn_blocking(move || storage.load_player_data(&uuid))
             .await
-            .expect(&localized_log("debug.expect.player_data_load_panicked"));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.player_data_load_panicked")
+                )
+            });
 
         match result {
             Ok((should_load, data)) => {
@@ -220,9 +235,12 @@ impl ServerPlayerData {
         let storage = self.storage.clone();
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
-            .expect(&localized_log(
-                "debug.expect.player_data_extract_save_panicked",
-            ))?;
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.player_data_extract_save_panicked",)
+                )
+            })?;
 
         Ok(())
     }

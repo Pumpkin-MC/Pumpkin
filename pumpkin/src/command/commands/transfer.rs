@@ -65,8 +65,8 @@ impl CommandExecutor for TargetSelfExecutor {
                     localized_log_format(
                         "server.transfer.player_transferring",
                         &[
-                            name.to_string(),
-                            name.to_string(),
+                            name.clone(),
+                            name.clone(),
                             hostname.to_string(),
                             port.to_string()
                         ]
