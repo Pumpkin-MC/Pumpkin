@@ -13,11 +13,14 @@ mod convert;
 mod io;
 mod model;
 mod reader;
+mod store;
+mod writer;
 
 pub(crate) use convert::{chunk_to_chunk_data, chunk_to_entity_data};
 pub(crate) use io::{SlimeChunkIo, SlimeEntityIo};
 pub use model::{SlimeChunk, SlimeSection, SlimeWorld};
 pub use reader::read_slime_world;
+pub(crate) use store::SlimeWorldStore;
 
 /// First two bytes of every SlimeWorld file (`SlimeFormat.SLIME_HEADER`).
 pub const SLIME_MAGIC: [u8; 2] = [0xB1, 0x0B];

@@ -1,6 +1,6 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
-use crate::chunk::format::slime::{SlimeChunkIo, SlimeEntityIo};
+use crate::chunk::format::slime::{SlimeChunkIo, SlimeEntityIo, SlimeWorldStore};
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
@@ -161,15 +161,21 @@ impl Level {
         let min_section_y = dimension.min_y >> 4;
         let world_gen = get_world_gen(seed, dimension).into();
 
+        // SlimeWorld keeps the whole world in one shared store used by both savers.
+        let slime_store = matches!(level_config.chunk, ChunkConfig::Slime)
+            .then(|| SlimeWorldStore::load(&level_folder.root_folder, min_section_y));
+
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(())),
             ChunkConfig::Anvil(config) => Arc::new(
                 ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
             ),
             ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkData>>::new(())),
-            ChunkConfig::Slime => {
-                Arc::new(SlimeChunkIo::new(&level_folder.root_folder, min_section_y))
-            }
+            ChunkConfig::Slime => Arc::new(SlimeChunkIo::new(
+                slime_store
+                    .clone()
+                    .expect("slime store created for slime config"),
+            )),
         };
         let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
             ChunkConfig::Linear => {
@@ -179,7 +185,11 @@ impl Level {
                 AnvilChunkFile<ChunkEntityData>,
             >::new(config.clone())),
             ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkEntityData>>::new(())),
-            ChunkConfig::Slime => Arc::new(SlimeEntityIo::new(&level_folder.root_folder)),
+            ChunkConfig::Slime => Arc::new(SlimeEntityIo::new(
+                slime_store
+                    .clone()
+                    .expect("slime store created for slime config"),
+            )),
         };
 
         let pending_entity_generations = Arc::new(DashMap::new());
