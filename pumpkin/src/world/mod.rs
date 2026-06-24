@@ -4751,6 +4751,18 @@ impl World {
         });
     }
 
+    pub fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
+        self.level
+            .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .insert(block_pos, nbt.clone());
+                chunk.mark_dirty(true);
+            });
+    }
+
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
         if self.block_entities.remove(block_pos).is_some() {
             self.level
