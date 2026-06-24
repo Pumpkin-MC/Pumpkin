@@ -415,7 +415,8 @@ impl<T: Math + Copy + Float> Vector3<T> {
         self.horizontal_length_squared().sqrt()
     }
 
-    /// Returns a normalized version of this vector (unit vector).
+    /// Returns a normalized version of this vector, or the zero vector when
+    /// normalization is not possible.
     ///
     /// The resulting vector will have the same direction but a length of 1.
     ///
@@ -423,11 +424,20 @@ impl<T: Math + Copy + Float> Vector3<T> {
     /// A new unit vector pointing in the same direction.
     #[must_use]
     pub fn normalize(&self) -> Self {
-        let length = self.length();
-        Self {
-            x: self.x / length,
-            y: self.y / length,
-            z: self.z / length,
+        let length_recip = self.length().recip();
+
+        if length_recip.is_finite() && length_recip > T::zero() {
+            Self {
+                x: self.x * length_recip,
+                y: self.y * length_recip,
+                z: self.z * length_recip,
+            }
+        } else {
+            Self {
+                x: T::zero(),
+                y: T::zero(),
+                z: T::zero(),
+            }
         }
     }
 

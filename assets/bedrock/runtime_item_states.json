@@ -469,7 +469,7 @@
     },
     {
         "name": "minecraft:banner_pattern",
-        "id": 841,
+        "id": 842,
         "version": 2,
         "componentBased": false
     },
@@ -955,7 +955,7 @@
     },
     {
         "name": "minecraft:boat",
-        "id": 839,
+        "id": 840,
         "version": 2,
         "componentBased": false
     },
@@ -1471,7 +1471,7 @@
     },
     {
         "name": "minecraft:chemistry_table",
-        "id": 833,
+        "id": 834,
         "version": 2,
         "componentBased": false
     },
@@ -1951,7 +1951,7 @@
     },
     {
         "name": "minecraft:colored_torch_bp",
-        "id": 837,
+        "id": 838,
         "version": 2,
         "componentBased": false
     },
@@ -1975,7 +1975,7 @@
     },
     {
         "name": "minecraft:colored_torch_rg",
-        "id": 836,
+        "id": 837,
         "version": 2,
         "componentBased": false
     },
@@ -3337,7 +3337,7 @@
     },
     {
         "name": "minecraft:dye",
-        "id": 840,
+        "id": 841,
         "version": 2,
         "componentBased": false
     },
@@ -4141,7 +4141,7 @@
     },
     {
         "name": "minecraft:end_crystal",
-        "id": 843,
+        "id": 844,
         "version": 2,
         "componentBased": false
     },
@@ -4615,7 +4615,7 @@
     },
     {
         "name": "minecraft:glow_berries",
-        "id": 844,
+        "id": 845,
         "version": 0,
         "componentBased": false
     },
@@ -5239,13 +5239,13 @@
     },
     {
         "name": "minecraft:hard_stained_glass",
-        "id": 834,
+        "id": 835,
         "version": 2,
         "componentBased": false
     },
     {
         "name": "minecraft:hard_stained_glass_pane",
-        "id": 835,
+        "id": 836,
         "version": 2,
         "componentBased": false
     },
@@ -5610,12 +5610,6 @@
         "componentBased": false
     },
     {
-        "name": "minecraft:item.acacia_door",
-        "id": 196,
-        "version": 2,
-        "componentBased": false
-    },
-    {
         "name": "minecraft:item.bed",
         "id": 26,
         "version": 2,
@@ -5624,12 +5618,6 @@
     {
         "name": "minecraft:item.beetroot",
         "id": 244,
-        "version": 2,
-        "componentBased": false
-    },
-    {
-        "name": "minecraft:item.birch_door",
-        "id": 194,
         "version": 2,
         "componentBased": false
     },
@@ -5664,18 +5652,6 @@
         "componentBased": false
     },
     {
-        "name": "minecraft:item.crimson_door",
-        "id": -244,
-        "version": 2,
-        "componentBased": false
-    },
-    {
-        "name": "minecraft:item.dark_oak_door",
-        "id": 197,
-        "version": 2,
-        "componentBased": false
-    },
-    {
         "name": "minecraft:item.flower_pot",
         "id": 140,
         "version": 2,
@@ -5700,26 +5676,8 @@
         "componentBased": false
     },
     {
-        "name": "minecraft:item.iron_door",
-        "id": 71,
-        "version": 2,
-        "componentBased": false
-    },
-    {
-        "name": "minecraft:item.jungle_door",
-        "id": 195,
-        "version": 2,
-        "componentBased": false
-    },
-    {
         "name": "minecraft:item.kelp",
         "id": -138,
-        "version": 2,
-        "componentBased": false
-    },
-    {
-        "name": "minecraft:item.mangrove_door",
-        "id": -493,
         "version": 2,
         "componentBased": false
     },
@@ -5748,26 +5706,8 @@
         "componentBased": false
     },
     {
-        "name": "minecraft:item.spruce_door",
-        "id": 193,
-        "version": 2,
-        "componentBased": false
-    },
-    {
-        "name": "minecraft:item.warped_door",
-        "id": -245,
-        "version": 2,
-        "componentBased": false
-    },
-    {
         "name": "minecraft:item.wheat",
         "id": 59,
-        "version": 2,
-        "componentBased": false
-    },
-    {
-        "name": "minecraft:item.wooden_door",
-        "id": 64,
         "version": 2,
         "componentBased": false
     },
@@ -6049,7 +5989,7 @@
     },
     {
         "name": "minecraft:light_block",
-        "id": 838,
+        "id": 839,
         "version": 2,
         "componentBased": false
     },
@@ -6992,6 +6932,12 @@
     {
         "name": "minecraft:music_disc_blocks",
         "id": 575,
+        "version": 2,
+        "componentBased": true
+    },
+    {
+        "name": "minecraft:music_disc_bounce",
+        "id": 833,
         "version": 2,
         "componentBased": true
     },
@@ -9589,7 +9535,7 @@
     },
     {
         "name": "minecraft:spawn_egg",
-        "id": 842,
+        "id": 843,
         "version": 2,
         "componentBased": false
     },
@@ -10184,6 +10130,12 @@
     {
         "name": "minecraft:sulfur_slab",
         "id": -1093,
+        "version": 2,
+        "componentBased": false
+    },
+    {
+        "name": "minecraft:sulfur_spike",
+        "id": -1125,
         "version": 2,
         "componentBased": false
     },

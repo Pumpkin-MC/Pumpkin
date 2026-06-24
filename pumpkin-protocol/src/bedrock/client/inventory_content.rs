@@ -1,8 +1,9 @@
 use pumpkin_macros::packet;
 
 use crate::{
-    bedrock::network_item::FullContainerName, bedrock::network_item::NetworkItemStackDescriptor,
-    codec::var_uint::VarUInt, serial::PacketWrite,
+    bedrock::network_item::{FullContainerName, NetworkItemStackDescriptor},
+    codec::var_uint::VarUInt,
+    serial::PacketWrite,
 };
 
 #[derive(PacketWrite)]

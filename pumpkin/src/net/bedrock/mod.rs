@@ -981,6 +981,7 @@ impl BedrockClient {
             if event.cancelled {
                 continue;
             }
+
             if let Err(err) = self.handle_play_packet(player, server, packet).await {
                 error!("Failed to handle Bedrock play packet: {err}");
             }
@@ -1209,8 +1210,20 @@ impl BedrockClient {
     {
         if self.close_token.is_cancelled() {
             None
-        } else {
+        } else if tokio::runtime::Handle::try_current().is_ok() {
             Some(self.tasks.spawn(task))
+        } else {
+            warn!("No Tokio runtime in current thread; running task on dedicated runtime thread");
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build fallback runtime");
+                rt.block_on(async move {
+                    let _ = task.await;
+                });
+            });
+            None
         }
     }
 }

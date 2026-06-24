@@ -132,7 +132,7 @@ impl From<&ItemStack> for NetworkItemDescriptor {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct NetworkItemStackDescriptor {
+pub struct ItemStackWrapper {
     pub id: i16,
     pub stack_size: u16,
     pub aux_value: VarUInt,
@@ -144,7 +144,7 @@ pub struct NetworkItemStackDescriptor {
     pub net_id: Option<NonZeroI32>,
 }
 
-impl PacketWrite for NetworkItemStackDescriptor {
+impl PacketWrite for ItemStackWrapper {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.id.write(writer)?;
         if self.id != 0 {
@@ -187,7 +187,7 @@ impl PacketWrite for NetworkItemStackDescriptor {
     }
 }
 
-impl PacketRead for NetworkItemStackDescriptor {
+impl PacketRead for ItemStackWrapper {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let id = i16::read(buf)?;
         if id == 0 {
@@ -222,7 +222,7 @@ impl PacketRead for NetworkItemStackDescriptor {
     }
 }
 
-impl From<&ItemStack> for NetworkItemStackDescriptor {
+impl From<&ItemStack> for ItemStackWrapper {
     fn from(stack: &ItemStack) -> Self {
         if stack.is_empty() {
             Self::default()
@@ -239,6 +239,99 @@ impl From<&ItemStack> for NetworkItemStackDescriptor {
                     destroy_blocks: Vec::default(),
                     shield_blocking_tick: 0,
                     net_id: Some(stack.uid),
+                },
+            )
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct NetworkItemStackDescriptor {
+    pub id: i16,
+    pub stack_size: u16,
+    pub aux_value: VarUInt,
+    pub block_runtime_id: VarUInt,
+    pub extra_data: Vec<u8>,
+    pub net_id_variant: Option<VarUInt>,
+    pub net_id: Option<NonZeroI32>,
+}
+
+impl PacketWrite for NetworkItemStackDescriptor {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.id.write(writer)?;
+
+        self.stack_size.write(writer)?;
+        self.aux_value.write(writer)?;
+
+        self.net_id.is_some().write(writer)?;
+        if let Some(id) = self.net_id {
+            let variant = self.net_id_variant.unwrap_or(VarUInt(0));
+            variant.write(writer)?;
+            VarInt(id.get()).write(writer)?;
+        }
+
+        self.block_runtime_id.write(writer)?;
+
+        VarUInt(self.extra_data.len() as u32).write(writer)?;
+        writer.write_all(&self.extra_data)?;
+
+        Ok(())
+    }
+}
+
+impl PacketRead for NetworkItemStackDescriptor {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        let id = i16::read(buf)?;
+
+        let stack_size = u16::read(buf)?;
+        let aux_value = VarUInt::read(buf)?;
+
+        let has_net_id = bool::read(buf)?;
+        let (net_id_variant, net_id) = if has_net_id {
+            let variant = VarUInt::read(buf)?;
+            let stack_id = VarInt::read(buf)?;
+            (Some(variant), NonZeroI32::new(stack_id.0))
+        } else {
+            (None, None)
+        };
+
+        let block_runtime_id = VarUInt::read(buf)?;
+
+        let extra_data_len = VarUInt::read(buf)?.0;
+        let mut extra_data = vec![0u8; extra_data_len as usize];
+        buf.read_exact(&mut extra_data)?;
+
+        Ok(Self {
+            id,
+            stack_size,
+            aux_value,
+            block_runtime_id,
+            extra_data,
+            net_id_variant,
+            net_id,
+        })
+    }
+}
+
+impl From<&ItemStack> for NetworkItemStackDescriptor {
+    fn from(stack: &ItemStack) -> Self {
+        if stack.is_empty() {
+            Self::default()
+        } else {
+            JavaToBedrockItemMapping::from_java_item_id(stack.get_item().id).map_or(
+                Self::default(),
+                |mapping| {
+                    let extra_data = vec![0u8, 0u8];
+
+                    Self {
+                        id: mapping.bedrock_item.id,
+                        stack_size: stack.item_count as u16,
+                        aux_value: VarUInt(mapping.bedrock_data),
+                        block_runtime_id: VarUInt(mapping.bedrock_block_state as u32),
+                        extra_data,
+                        net_id_variant: Some(VarUInt(0)),
+                        net_id: Some(stack.uid),
+                    }
                 },
             )
         }

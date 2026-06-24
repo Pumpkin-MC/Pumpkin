@@ -7,13 +7,13 @@ use pumpkin_util::math::vector3::Vector3;
 use std::io::{Error, Write};
 
 use super::set_actor_data::EntityMetadata;
-use crate::bedrock::network_item::NetworkItemStackDescriptor;
+use crate::bedrock::network_item::ItemStackWrapper;
 
 #[packet(15)]
 pub struct CAddItemActor {
     pub entity_unique_id: VarLong,
     pub entity_runtime_id: VarULong,
-    pub item: NetworkItemStackDescriptor,
+    pub item: ItemStackWrapper,
     pub position: Vector3<f32>,
     pub velocity: Vector3<f32>,
     pub metadata: EntityMetadata,
