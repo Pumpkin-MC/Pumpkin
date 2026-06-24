@@ -39,6 +39,7 @@ enum Amplifier {
 struct GiveExecutor(Time, Amplifier, bool);
 
 impl CommandExecutor for GiveExecutor {
+    #[allow(clippy::too_many_lines)]
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,

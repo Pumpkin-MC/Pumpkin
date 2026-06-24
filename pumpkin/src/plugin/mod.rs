@@ -338,7 +338,7 @@ impl PluginManager {
                                     "{}",
                                     localized_log_format(
                                         "server.log.plugin_change_detected",
-                                        &[format!("{path:?}")]
+                                        &[path.display().to_string()]
                                     )
                                 );
                                 // Give it a small delay to ensure file is completely written
@@ -358,7 +358,7 @@ impl PluginManager {
                                         "{}",
                                         localized_log_format(
                                             "server.log.plugin_hot_reloading",
-                                            &[name.clone()]
+                                            std::slice::from_ref(&name)
                                         )
                                     );
                                     let _ = self_ref.unload_plugin(&name).await;
@@ -372,7 +372,7 @@ impl PluginManager {
                                         "{}",
                                         localized_log_format(
                                             "server.log.plugin_hot_reload_failed",
-                                            &[format!("{path:?}"), e.to_string()]
+                                            &[path.display().to_string(), e.to_string()]
                                         )
                                     );
                                 }
@@ -667,8 +667,10 @@ impl PluginManager {
                 }
                 Err(e) => {
                     // Handle initialization failure
-                    let error_msg =
-                        localized_log_format("plugin.initialization.failed", &[e.clone()]);
+                    let error_msg = localized_log_format(
+                        "plugin.initialization.failed",
+                        std::slice::from_ref(&e),
+                    );
                     let _ = instance.on_unload(context).await;
 
                     // Get the loader data before removing the plugin
@@ -716,6 +718,7 @@ impl PluginManager {
     }
 
     /// Load all plugins from the plugin directory
+    #[allow(clippy::too_many_lines)]
     pub async fn load_plugins(&self) -> Result<std::time::Duration, ManagerError> {
         let path = Path::new(PLUGIN_DIR);
 
@@ -765,7 +768,7 @@ impl PluginManager {
                             "{}",
                             localized_log_format(
                                 "server.log.plugin_load_failed",
-                                &[format!("{path:?}"), err.to_string()]
+                                &[path.display().to_string(), err.to_string()]
                             )
                         ),
                     }
@@ -819,7 +822,7 @@ impl PluginManager {
                         "{}",
                         localized_log_format(
                             "server.log.plugin_permission_denied",
-                            &[metadata.name.clone()]
+                            std::slice::from_ref(&metadata.name)
                         )
                     );
                     continue;
@@ -904,7 +907,7 @@ impl PluginManager {
                         "{}",
                         localized_log_format(
                             "server.log.plugin_permission_denied",
-                            &[metadata.name.clone()]
+                            std::slice::from_ref(&metadata.name)
                         )
                     );
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(

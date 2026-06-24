@@ -497,6 +497,7 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
+    #[allow(clippy::too_many_lines)]
     pub async fn add_player(
         &self,
         client: ClientPlatform,

@@ -41,7 +41,7 @@ impl BlockStateResolver {
                 "{}",
                 localized_log_format(
                     "world.structure.unknown_block_in_template",
-                    &[entry.name.clone()]
+                    std::slice::from_ref(&entry.name)
                 )
             );
             return None;

@@ -2414,7 +2414,7 @@ impl World {
             "{}",
             localized_log_format(
                 "server.log.sending_player_teleport",
-                &[player.gameprofile.name.clone()]
+                std::slice::from_ref(&player.gameprofile.name)
             )
         );
         player.request_teleport(position, yaw, pitch).await;
@@ -2551,7 +2551,7 @@ impl World {
                 "{}",
                 localized_log_format(
                     "server.log.sending_player_info",
-                    &[player.gameprofile.name.clone()]
+                    std::slice::from_ref(&player.gameprofile.name)
                 )
             );
             client
@@ -2853,7 +2853,7 @@ impl World {
             "{}",
             localized_log_format(
                 "server.log.sending_waiting_chunks",
-                &[player.gameprofile.name.clone()]
+                std::slice::from_ref(&player.gameprofile.name)
             )
         );
         client

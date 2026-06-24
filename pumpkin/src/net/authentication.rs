@@ -44,6 +44,17 @@ pub struct MojangPublicKeys {
     pub authentication_keys: Option<Vec<JsonPublicKey>>,
 }
 
+/// Resolves an authentication URL from config or a localized default.
+fn resolve_auth_url<'a>(configured: Option<&'a str>, default_key: &str) -> Cow<'a, str> {
+    configured.map_or_else(
+        || {
+            let default = localized_log(default_key);
+            Cow::Owned(default)
+        },
+        Cow::Borrowed,
+    )
+}
+
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///
 /// **Purpose:**
@@ -63,34 +74,25 @@ pub fn authenticate(
     ip: &IpAddr,
     auth_config: &AuthenticationConfig,
 ) -> Result<GameProfile, AuthError> {
-    let address = if auth_config.prevent_proxy_connections {
-        let default_auth_url;
-        let auth_url =
-            if let Some(auth_url) = auth_config.prevent_proxy_connection_auth_url.as_deref() {
-                Cow::Borrowed(auth_url)
-            } else {
-                default_auth_url =
-                    localized_log("network.authentication.mojang_prevent_proxy_authentication_url");
-                Cow::Owned(default_auth_url)
-            };
-
-        auth_url
-            .replace("{username}", username)
-            .replace("{server_hash}", server_hash)
-            .replace("{ip}", &ip.to_string())
+    let url = if auth_config.prevent_proxy_connections {
+        resolve_auth_url(
+            auth_config.prevent_proxy_connection_auth_url.as_deref(),
+            "network.authentication.mojang_prevent_proxy_authentication_url",
+        )
     } else {
-        let default_auth_url;
-        let auth_url = if let Some(auth_url) = auth_config.url.as_deref() {
-            Cow::Borrowed(auth_url)
-        } else {
-            default_auth_url = localized_log("network.authentication.mojang_authentication_url");
-            Cow::Owned(default_auth_url)
-        };
-
-        auth_url
-            .replace("{username}", username)
-            .replace("{server_hash}", server_hash)
+        resolve_auth_url(
+            auth_config.url.as_deref(),
+            "network.authentication.mojang_authentication_url",
+        )
     };
+
+    let mut address = url
+        .replace("{username}", username)
+        .replace("{server_hash}", server_hash);
+
+    if auth_config.prevent_proxy_connections {
+        address = address.replace("{ip}", &ip.to_string());
+    }
 
     let mut response = ureq::get(address)
         .call()

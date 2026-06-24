@@ -310,6 +310,7 @@ impl SnbtParser<'_, '_> {
         self.repeated_with_trailing_comma(rule, Vec::new(), Vec::push)
     }
 
+    #[allow(clippy::too_many_lines)]
     fn parse_integer_literal(
         &mut self,
         literal: &IntegerLiteral,

@@ -79,6 +79,7 @@ impl JavaClient {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_resource_pack_response(
         &self,
         server: &Server,

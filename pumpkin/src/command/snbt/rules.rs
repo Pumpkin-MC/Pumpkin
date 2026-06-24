@@ -320,6 +320,7 @@ impl SnbtParser<'_, '_> {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn float_literal(&mut self) -> Option<NbtTag> {
         struct FloatingPointIntermediate {
             whole_part: String,

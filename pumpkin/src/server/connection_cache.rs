@@ -163,7 +163,10 @@ impl CachedStatus {
                     }
                     debug!(
                         "{}",
-                        localized_log_format("server.log.loading_favicon", &[icon_path.clone()])
+                        localized_log_format(
+                            "server.log.loading_favicon",
+                            std::slice::from_ref(icon_path)
+                        )
                     );
 
                     match load_icon_from_file(icon_path) {

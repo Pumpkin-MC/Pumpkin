@@ -841,6 +841,7 @@ impl CommandDispatcher {
     }
 
     /// Internal function to recurse usages.
+    #[allow(clippy::too_many_lines)]
     fn get_usage_recursive<'a>(
         &'a self,
         node: NodeId,

@@ -189,6 +189,7 @@ impl CrashReport {
 
     /// Generates the file content of the crash report file
     /// that would be generated from this report.
+    #[allow(clippy::too_many_lines)]
     pub fn generate_file_content(&self) -> String {
         let mut output = String::new();
 

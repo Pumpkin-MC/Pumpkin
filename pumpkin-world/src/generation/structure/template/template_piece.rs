@@ -142,7 +142,7 @@ impl TemplatePiece {
                     "{}",
                     localized_log_format(
                         "world.structure.failed_resolve_block",
-                        &[palette_entry.name.clone()]
+                        std::slice::from_ref(&palette_entry.name)
                     )
                 );
                 continue;

@@ -660,6 +660,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         });
 }
 
+#[allow(clippy::too_many_lines)]
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
