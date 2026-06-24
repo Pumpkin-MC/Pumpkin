@@ -119,8 +119,17 @@ impl SlimeWorldStore {
             entity_compounds.insert(*coord, guard.values().cloned().collect());
         }
 
-        let bytes = serialize_world(self.world_version, &self.extra, &chunks, &entity_compounds);
-        std::fs::write(&self.path, bytes)
+        // Serializing (NBT + zstd) and writing the file are CPU/IO heavy; run them
+        // off the async runtime so the tokio worker is never blocked.
+        let world_version = self.world_version;
+        let extra = self.extra.clone();
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let bytes = serialize_world(world_version, &extra, &chunks, &entity_compounds);
+            std::fs::write(path, bytes)
+        })
+        .await
+        .map_err(std::io::Error::other)?
     }
 }
 
