@@ -15,6 +15,10 @@ pub struct CRespawn {
 }
 
 impl CRespawn {
+    pub const KEEP_ATTRIBUTE_MODIFIERS: u8 = 1;
+    pub const KEEP_ENTITY_DATA: u8 = 2;
+    pub const KEEP_ALL_DATA: u8 = 3;
+
     #[must_use]
     pub const fn new(player_spawn_info: PlayerSpawnData, data_kept: u8) -> Self {
         Self {
