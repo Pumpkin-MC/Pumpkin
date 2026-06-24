@@ -10,7 +10,7 @@ use crate::command::suggestion::provider::SuggestionProvider;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
-use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -18,7 +18,7 @@ use pumpkin_util::text::{
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
 
-const DESCRIPTION: &str = "Controls or queries the game's ticking state.";
+const DESCRIPTION: &str = "commands.tick.description";
 const PERMISSION: &str = "minecraft:command.tick";
 
 // Helper function to format nanoseconds to milliseconds with 2 decimal places
@@ -367,7 +367,7 @@ const fn time_argument() -> TimeArgumentType {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Op(PermissionLvl::Three),

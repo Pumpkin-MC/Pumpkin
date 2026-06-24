@@ -10,6 +10,7 @@ use crossfire::compat::AsyncRx;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -38,7 +39,10 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
         return false;
     }
 
-    let engine = chunk.light_engine.lock().expect("Mutex poisoned");
+    let engine = chunk
+        .light_engine
+        .lock()
+        .expect(&localized_log("debug.expect.mutex_not_poisoned"));
 
     // Scan for any complex lighting data
     let has_complex_light = engine.sky_light.iter().any(|lc| match lc {
@@ -59,7 +63,10 @@ pub async fn io_read_work(
     level: Arc<Level>,
     lock: IOLock,
 ) {
-    debug!("io read thread start");
+    debug!(
+        "{}",
+        localized_log("world.chunk_system.io_read_thread_start")
+    );
 
     // Cleaner loop and async recv
     while let Ok(batch) = recv.recv().await {
@@ -163,7 +170,10 @@ pub async fn io_read_work(
         }
         let _ = fetch_task.await;
     }
-    debug!("io read thread stop");
+    debug!(
+        "{}",
+        localized_log("world.chunk_system.io_read_thread_stop")
+    );
 }
 
 pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
@@ -194,7 +204,13 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             .save_chunks(&level.level_folder, vec)
             .await
         {
-            error!("Failed to save chunks: {:?}", e);
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.failed_save_chunks",
+                    &[format!("{:?}", e)]
+                )
+            );
         }
 
         for i in positions {
@@ -212,8 +228,11 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 }
                 Entry::Vacant(_) => {
                     warn!(
-                        "io_write: attempted to release missing lock entry for {:?}",
-                        i
+                        "{}",
+                        localized_log_format(
+                            "world.chunk_system.io_write_missing_lock_entry",
+                            &[format!("{:?}", i)]
+                        )
                     );
                     // continue without panicking to avoid crashing on shutdown races
                 }
@@ -230,7 +249,9 @@ pub fn run_generation(
     _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
-    let portal_ref = portal.as_deref().expect("Portal should be initialized");
+    let portal_ref = portal.as_deref().expect(&localized_log(
+        "world.chunk_system.portal_should_be_initialized",
+    ));
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);
@@ -248,14 +269,23 @@ pub fn run_generation(
                         .downcast_ref::<String>()
                         .map(std::string::String::as_str)
                 })
-                .unwrap_or("Unknown panic payload");
+                .map_or_else(
+                    || localized_log("world.chunk_system.unknown_panic_payload"),
+                    ToString::to_string,
+                );
 
-            error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.chunk_generation_failed",
+                    &[format!("{pos:?}"), format!("{stage:?}"), msg.clone()]
+                )
+            );
 
             RecvChunk::GenerationFailure {
                 pos,
                 stage,
-                error: msg.to_string(),
+                error: msg,
             }
         }
     }
@@ -272,7 +302,10 @@ pub fn generation_work(
         let (pos, cache, stage) = if let Ok(data) = recv.recv() {
             data
         } else {
-            debug!("generation channel closed, exiting");
+            debug!(
+                "{}",
+                localized_log("world.chunk_system.generation_channel_closed")
+            );
             break;
         };
 

@@ -10,6 +10,7 @@ use crate::command::node::attached::{
 };
 use crate::command::node::detached::{CommandDetachedNode, DetachedNode, GlobalNodeId};
 use crate::command::string_reader::StringReader;
+use crate::localized_log;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::num::NonZero;
@@ -17,7 +18,7 @@ use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
 /// The constant local ID occupied by the root node.
-pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).expect("1 is non-zero"));
+pub const ROOT_NODE_ID: NodeId = NodeId(NonZero::new(1).unwrap());
 
 /// A consumer which takes ambiguity of input (when two or more nodes are satisfied)
 pub trait AmbiguityConsumer {
@@ -113,7 +114,7 @@ impl Tree {
 
     /// Allocates a new [`NodeId`] by creating a new unique one.
     const fn alloc(&self) -> NodeId {
-        NodeId(NonZero::new(self.nodes.len() + 1).expect("expected a non-zero id"))
+        NodeId(NonZero::new(self.nodes.len() + 1).unwrap())
     }
 
     /// Helper to attach a given [`AttachedNode`], returning
@@ -161,7 +162,7 @@ impl Tree {
         self.nodes
             .len()
             .try_into()
-            .expect("Expected non-zero size, but Tree was somehow zero-sized")
+            .expect(&localized_log("debug.expect.tree_nonzero_size"))
     }
 
     /// Adds a [`CommandDetachedNode`] to the root node of this tree.

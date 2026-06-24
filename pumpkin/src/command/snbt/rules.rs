@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
+use crate::localized_log;
+
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
 use crate::command::parser::Parser;
 use crate::command::snbt::markers::{
     ArrayPrefix, Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
 };
 use crate::command::snbt::operations::SnbtOperations;
-use crate::command::snbt::{NUMBER_PARSE_FAILURE, SnbtParser};
+use crate::command::snbt::{NUMBER_PARSE_FAILURE, SnbtParser, tr_snbt_plain};
 use pumpkin_codecs::{DynamicOps, Number};
 use pumpkin_data::translation;
 use pumpkin_nbt::compound::NbtCompound;
@@ -438,7 +440,10 @@ impl SnbtParser<'_, '_> {
 
         match intermediate.type_suffix {
             None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
-                Err(_) => self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal"),
+                Err(_) => self.store_dynamic_error(
+                    &NUMBER_PARSE_FAILURE,
+                    tr_snbt_plain("commands.snbt.number_parse_failure.invalid_float_literal"),
+                ),
                 Ok(value) if value.is_finite() => {
                     return Some(NbtTag::Double(value));
                 }
@@ -446,7 +451,10 @@ impl SnbtParser<'_, '_> {
             },
             Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
                 Err(_) => {
-                    self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal");
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        tr_snbt_plain("commands.snbt.number_parse_failure.invalid_float_literal"),
+                    );
                 }
                 Ok(value) if value.is_finite() => {
                     return Some(NbtTag::Float(value));
@@ -523,15 +531,15 @@ impl SnbtParser<'_, '_> {
             Some('"') => Some(EscapeSequenceBranch::Return('"')),
             Some('x') => Some(EscapeSequenceBranch::CheckValidity(
                 u32::from_str_radix(&self.string_hex_2()?, 16)
-                    .expect("Hexadecimal parsed should have been valid"),
+                    .expect(&localized_log("debug.expect.hexadecimal_valid")),
             )),
             Some('u') => Some(EscapeSequenceBranch::CheckValidity(
                 u32::from_str_radix(&self.string_hex_4()?, 16)
-                    .expect("Hexadecimal parsed should have been valid"),
+                    .expect(&localized_log("debug.expect.hexadecimal_valid")),
             )),
             Some('U') => Some(EscapeSequenceBranch::CheckValidity(
                 u32::from_str_radix(&self.string_hex_8()?, 16)
-                    .expect("Hexadecimal parsed should have been valid"),
+                    .expect(&localized_log("debug.expect.hexadecimal_valid")),
             )),
             Some('N') => {
                 if self.reader.peek() != Some('{') {
@@ -840,7 +848,7 @@ impl SnbtParser<'_, '_> {
                     _ => {
                         self.store_dynamic_error(
                             &INVALID_CODEPOINT,
-                            "Expected integer".to_string(),
+                            tr_snbt_plain("commands.snbt.invalid_codepoint.expected_integer"),
                         );
                         return None;
                     }

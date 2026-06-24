@@ -107,6 +107,7 @@ use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
 use crate::world::World;
+use crate::{localized_log, localized_log_format};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
@@ -1699,7 +1700,7 @@ impl Player {
         let world = self.world();
         let respawn_point = self.respawn_point.lock().await;
         let Some(respawn_point) = respawn_point.as_ref() else {
-            warn!("Player waking up should have it's respawn point set on the bed");
+            warn!("{}", localized_log("server.log.player_waking_up_bed"));
             return;
         };
 
@@ -3615,9 +3616,9 @@ impl Player {
         {
             let screen_handler_temp = screen_handler.lock().await;
             let sync_id = screen_handler_temp.sync_id();
-            let window_type = screen_handler_temp
-                .window_type()
-                .expect("Can't open PlayerScreenHandler");
+            let window_type = screen_handler_temp.window_type().expect(&localized_log(
+                "debug.expect.open_player_screen_handler_failed",
+            ));
 
             let display_name = screen_handler_factory.get_display_name();
             let java_packet =
@@ -3683,9 +3684,9 @@ impl Player {
 
         let screen_handler_temp = screen_handler.lock().await;
         let sync_id = screen_handler_temp.sync_id();
-        let window_type = screen_handler_temp
-            .window_type()
-            .expect("Can't open PlayerScreenHandler");
+        let window_type = screen_handler_temp.window_type().expect(&localized_log(
+            "debug.expect.open_player_screen_handler_failed",
+        ));
 
         let java_packet = COpenScreen::new(sync_id.into(), (window_type as i32).into(), &title);
 
@@ -4311,7 +4312,7 @@ impl NBTStorage for PlayerInventory {
                             equipment_compound.put_compound("head", item_compound);
                         }
                         _ => {
-                            warn!("Invalid equipment slot for a player");
+                            warn!("{}", localized_log("server.log.invalid_equipment_slot"));
                         }
                     }
                 }
@@ -4963,9 +4964,18 @@ impl InventoryPlayer for Player {
 
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
-            debug!("Player::award_experience called with amount={amount}");
+            debug!(
+                "{}",
+                localized_log_format("server.log.player_experience_award", &[amount.to_string()])
+            );
             if amount > 0 {
-                debug!("Player: adding {amount} experience points");
+                debug!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.player_experience_adding",
+                        &[amount.to_string()]
+                    )
+                );
                 if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
                     player.add_experience_points(amount).await;
                 }

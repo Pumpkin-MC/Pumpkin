@@ -12,7 +12,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["rotate"];
-const DESCRIPTION: &str = "Changes the rotation of an entity.";
+const DESCRIPTION: &str = "commands.rotate.description";
 
 const ARG_TARGET: &str = "target";
 const ARG_ROTATION: &str = "rotation";

@@ -9,6 +9,7 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use pumpkin_data::{fuels::is_fuel, item::Item, statistic::StatisticCategory};
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use pumpkin_world::{block::entities::ExperienceContainer, inventory::Inventory};
 
 use tracing::debug;
@@ -143,7 +144,10 @@ impl Slot for FurnaceOutputSlot {
         stack: &'a pumpkin_data::item_stack::ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            debug!("FurnaceOutputSlot: on_take_item called");
+            debug!(
+                "{}",
+                localized_log("inventory.furnace_output_slot.on_take_item")
+            );
             player
                 .increment_stat(
                     StatisticCategory::Crafted,
@@ -153,9 +157,21 @@ impl Slot for FurnaceOutputSlot {
                 .await;
             // Extract accumulated experience and award to player
             let experience = self.experience_container.extract_experience();
-            debug!("FurnaceOutputSlot: extracted experience = {experience}");
+            debug!(
+                "{}",
+                localized_log_format(
+                    "inventory.furnace_output_slot.extracted_experience",
+                    &[experience.to_string()]
+                )
+            );
             if experience > 0 {
-                debug!("FurnaceOutputSlot: awarding {experience} xp to player");
+                debug!(
+                    "{}",
+                    localized_log_format(
+                        "inventory.furnace_output_slot.awarding_experience",
+                        &[experience.to_string()]
+                    )
+                );
                 player.award_experience(experience).await;
             }
             self.mark_dirty().await;

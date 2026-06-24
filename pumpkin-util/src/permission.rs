@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::translation::{localized_log, localized_log_format};
+
 /// Describes the default behaviour for permissions.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PermissionDefault {
@@ -90,9 +92,9 @@ impl PermissionRegistry {
     /// - `Err(String)` if a permission with the same node already exists.
     pub fn register_permission(&mut self, permission: Permission) -> Result<(), String> {
         if self.permissions.contains_key(&permission.node) {
-            return Err(format!(
-                "Permission {} is already registered",
-                permission.node
+            return Err(localized_log_format(
+                "util.permission.already_registered",
+                std::slice::from_ref(&permission.node),
             ));
         }
         self.permissions.insert(permission.node.clone(), permission);
@@ -108,8 +110,9 @@ impl PermissionRegistry {
     /// # Parameters
     /// - `permission`: The `Permission` instance to add.
     pub fn register_permission_or_panic(&mut self, permission: Permission) {
-        self.register_permission(permission)
-            .expect("Permission should have been registered successfully");
+        self.register_permission(permission).expect(&localized_log(
+            "debug.expect.permission_registered_successfully",
+        ));
     }
 
     /// Retrieves a permission node by its name.
@@ -371,8 +374,9 @@ impl<'de> Deserialize<'de> for PermissionLvl {
             2 => Ok(Self::Two),
             3 => Ok(Self::Three),
             4 => Ok(Self::Four),
-            _ => Err(serde::de::Error::custom(format!(
-                "Invalid value for OpLevel: {value}"
+            _ => Err(serde::de::Error::custom(localized_log_format(
+                "util.permission.invalid_op_level",
+                &[value.to_string()],
             ))),
         }
     }

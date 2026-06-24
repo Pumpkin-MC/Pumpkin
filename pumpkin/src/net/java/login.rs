@@ -16,6 +16,7 @@ use tracing::debug;
 use uuid::Uuid;
 
 use crate::{
+    localized_log, localized_log_format, localized_text,
     net::{
         GameProfile,
         authentication::{self, AuthError},
@@ -29,7 +30,7 @@ use crate::{
 
 impl JavaClient {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
-        debug!("login start");
+        debug!("{}", localized_log("server.log.java_login_start"));
 
         // Don't allow new logons when the server is full.
         // If `max_players` is set to zero, then there is no max player count enforced.
@@ -46,8 +47,11 @@ impl JavaClient {
         }
 
         if !is_valid_player_name(&login_start.name) {
-            self.kick(TextComponent::text("Invalid characters in username"))
-                .await;
+            self.kick(localized_text(
+                "client.disconnect.invalid_username_characters",
+                [],
+            ))
+            .await;
             return;
         }
         // Default game profile, when no online mode
@@ -77,7 +81,8 @@ impl JavaClient {
             let id = if server.basic_config.online_mode {
                 login_start.uuid
             } else {
-                offline_uuid(&login_start.name).expect("This is very not safe and bad")
+                offline_uuid(&login_start.name)
+                    .expect(&localized_log("debug.expect.offline_uuid_failed"))
             };
 
             let profile = GameProfile {
@@ -113,7 +118,7 @@ impl JavaClient {
         server: &Server,
         encryption_response: SEncryptionResponse,
     ) {
-        debug!("Handling encryption");
+        debug!("{}", localized_log("server.log.java_handling_encryption"));
         let shared_secret = server
             .decrypt(&encryption_response.shared_secret)
             .await
@@ -127,7 +132,8 @@ impl JavaClient {
         let mut gameprofile = self.gameprofile.lock().await;
 
         let Some(profile) = gameprofile.as_mut() else {
-            self.kick(TextComponent::text("No `GameProfile`")).await;
+            self.kick(localized_text("client.disconnect.missing_game_profile", []))
+                .await;
             return;
         };
 
@@ -279,9 +285,14 @@ impl JavaClient {
     pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
         // TODO: allow plugins to access this
         debug!(
-            "Received cookie_response[login]: key: \"{}\", payload_length: \"{:?}\"",
-            packet.key,
-            packet.payload.as_ref().map(|p| p.len())
+            "{}",
+            localized_log_format(
+                "server.log.login_cookie_response",
+                &[
+                    packet.key.to_string(),
+                    format!("{:?}", packet.payload.as_ref().map(|p| p.len()))
+                ]
+            )
         );
     }
     pub async fn handle_plugin_response(
@@ -289,7 +300,7 @@ impl JavaClient {
         server: &Server,
         plugin_response: SLoginPluginResponse,
     ) {
-        debug!("Handling plugin");
+        debug!("{}", localized_log("server.log.java_handling_plugin"));
         let velocity_config = &server.advanced_config.networking.proxy.velocity;
         if velocity_config.enabled {
             let mut address = self.address.lock().await;
@@ -310,7 +321,7 @@ impl JavaClient {
     }
 
     pub async fn handle_login_acknowledged(&self, server: &Server) {
-        debug!("Handling login acknowledgement");
+        debug!("{}", localized_log("server.log.java_login_acknowledgement"));
         self.connection_state.store(ConnectionState::Config);
         self.send_packet_now(&server.get_branding()).await;
 
@@ -397,7 +408,7 @@ impl JavaClient {
             // This will be invoked by our resource pack handler in the case of the above branch.
             self.send_known_packs().await;
         }
-        debug!("login acknowledged");
+        debug!("{}", localized_log("server.log.java_login_acknowledged"));
     }
 
     /// Send the known data packs to the client.

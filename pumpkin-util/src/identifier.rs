@@ -4,6 +4,8 @@ use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::translation::localized_log_format;
+
 pub const VANILLA_NAMESPACE: &str = "minecraft";
 pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
 
@@ -388,7 +390,12 @@ comap_flat_map_codec_impl!(String => Identifier, Identifier::flat_try_from, ToSt
 impl FlatTryFrom<String> for Identifier {
     fn flat_try_from(value: String) -> DataResult<Self> {
         Self::parse(&value).map_or_else(
-            |_| DataResult::new_error(format!("Not a valid resource location: {value}")),
+            |_| {
+                DataResult::new_error(localized_log_format(
+                    "util.identifier.not_valid_resource_location",
+                    std::slice::from_ref(&value),
+                ))
+            },
             DataResult::new_success,
         )
     }

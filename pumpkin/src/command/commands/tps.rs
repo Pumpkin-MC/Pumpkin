@@ -1,10 +1,10 @@
 use crate::command::CommandResult;
-use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tr, tree::CommandTree};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 const NAMES: [&str; 1] = ["tps"];
 
-const DESCRIPTION: &str = "Displays the server TPS and MSPT.";
+const DESCRIPTION: &str = "commands.tps.description";
 
 struct Executor;
 
@@ -27,11 +27,13 @@ impl CommandExecutor for Executor {
             } else {
                 NamedColor::Red
             };
+            let locale = sender.get_locale();
 
-            let message = TextComponent::text("TPS: ")
+            let message = tr("commands.tps.tps_label", locale, [])
                 .add_child(TextComponent::text(format!("{tps:.1}")).color_named(tps_color))
-                .add_child(TextComponent::text(" MSPT: "))
-                .add_child(TextComponent::text(format!("{mspt:.2}ms")).color_named(tps_color));
+                .add_child(tr("commands.tps.mspt_label", locale, []))
+                .add_child(TextComponent::text(format!("{mspt:.2}")).color_named(tps_color))
+                .add_child(tr("commands.tps.ms_unit", locale, []).color_named(tps_color));
 
             sender.send_message(message).await;
 

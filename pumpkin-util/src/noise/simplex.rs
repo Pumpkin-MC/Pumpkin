@@ -3,6 +3,7 @@ use std::hash::Hash;
 use num_traits::Pow;
 
 use crate::random::{RandomImpl, legacy_rand::LegacyRand};
+use crate::translation::localized_log;
 
 use super::GRADIENTS;
 
@@ -297,8 +298,12 @@ impl OctaveSimplexNoiseSampler {
         let mut octaves = Vec::from_iter(octaves);
         octaves.sort();
 
-        let i = -**octaves.first().expect("Should have some octaves");
-        let j = **octaves.last().expect("Should have some octaves");
+        let i = -**octaves
+            .first()
+            .expect(&localized_log("debug.expect.octaves_not_empty"));
+        let j = **octaves
+            .last()
+            .expect(&localized_log("debug.expect.octaves_not_empty"));
         let k = i.wrapping_add(j).wrapping_add(1);
 
         let sampler = SimplexNoiseSampler::new(random);

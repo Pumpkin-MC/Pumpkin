@@ -6,6 +6,7 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 use pumpkin_macros::packet;
+use pumpkin_util::translation::localized_log_format;
 
 #[derive(Debug)]
 pub struct ItemStackRequestSlotInfo {
@@ -230,7 +231,10 @@ impl PacketRead for ItemStackRequestAction {
             }
             _ => Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("Unknown ItemStackRequestAction ID: {action_type}"),
+                localized_log_format(
+                    "protocol.bedrock.unknown_item_stack_request_action_id",
+                    &[action_type.to_string()],
+                ),
             )),
         }
     }

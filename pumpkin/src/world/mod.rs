@@ -39,6 +39,7 @@ use crate::{
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},
     error::PumpkinError,
+    localized_log, localized_log_format,
     net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
@@ -366,7 +367,10 @@ impl World {
         // Save portal POI to disk
         let save_result = self.portal_poi.lock().await.save_all();
         if let Err(e) = save_result {
-            error!("Failed to save portal POI: {e}");
+            error!(
+                "{}",
+                localized_log_format("server.log.failed_save_portal_poi", &[e.to_string()])
+            );
         }
 
         self.level.shutdown().await;
@@ -524,11 +528,17 @@ impl World {
                 Ok(packet_data) => packet_data,
                 Err(err) => {
                     error!(
-                        "Failed to serialize packet {} for version {:?}: {}",
-                        std::any::type_name::<P>(),
-                        version,
-                        err
+                            "{}",
+                            localized_log_format
+                            "Failed to serialize packet {} for version {:?}: {}",
+                            std::any::type_name::<P>(),
+                            version,
+                            err
+                            error!(
+                        "{}",
+                        localized_log_format("server.log.player_tick_panicked", &[format!("{e:?}")])
                     );
+                        );
                     continue;
                 }
             };
@@ -898,7 +908,10 @@ impl World {
         }
         while let Some(res) = player_tasks.join_next().await {
             if let Err(e) = res {
-                error!("Player tick panicked: {:?}", e);
+                error!(
+                    "{}",
+                    localized_log_format("server.log.player_tick_panicked", &[format!("{e:?}")])
+                );
             }
         }
         let player_elapsed = player_start.elapsed();
@@ -941,7 +954,10 @@ impl World {
         }
         while let Some(res) = entity_tasks.join_next().await {
             if let Err(e) = res {
-                error!("Entity tick panicked: {:?}", e);
+                error!(
+                    "{}",
+                    localized_log_format("server.log.entity_tick_panicked", &[format!("{e:?}")])
+                );
             }
         }
         let entity_elapsed = entity_start.elapsed();
@@ -965,7 +981,13 @@ impl World {
         }
         while let Some(res) = block_entity_tasks.join_next().await {
             if let Err(e) = res {
-                error!("Block entity tick panicked: {:?}", e);
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.block_entity_tick_panicked",
+                        &[format!("{e:?}")]
+                    )
+                );
             }
         }
         let block_entity_elapsed = block_entity_start.elapsed();
@@ -2389,7 +2411,13 @@ impl World {
 
         let velocity = player.get_entity().velocity.load();
 
-        debug!("Sending player teleport to {}", player.gameprofile.name);
+        debug!(
+            "{}",
+            localized_log_format(
+                "server.log.sending_player_teleport",
+                &[player.gameprofile.name.clone()]
+            )
+        );
         player.request_teleport(position, yaw, pitch).await;
 
         player.get_entity().last_pos.store(position);
@@ -2520,7 +2548,13 @@ impl World {
                 })
                 .collect::<Vec<_>>();
 
-            debug!("Sending player info to {}", player.gameprofile.name);
+            debug!(
+                "{}",
+                localized_log_format(
+                    "server.log.sending_player_info",
+                    &[player.gameprofile.name.clone()]
+                )
+            );
             client
                 .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
@@ -2816,7 +2850,13 @@ impl World {
             .await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
-        debug!("Sending waiting chunks to {}", player.gameprofile.name);
+        debug!(
+            "{}",
+            localized_log_format(
+                "server.log.sending_waiting_chunks",
+                &[player.gameprofile.name.clone()]
+            )
+        );
         client
             .send_packet_now(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
@@ -3085,7 +3125,10 @@ impl World {
             // Cross-dimension respawn: get target world from server
             self.server.upgrade().map_or_else(
                 || {
-                    warn!("Could not get server for cross-dimension respawn");
+                    warn!(
+                        "{}",
+                        localized_log("server.log.cross_dimension_respawn_no_server")
+                    );
                     None
                 },
                 |server| {
@@ -3284,7 +3327,10 @@ impl World {
             'main: loop {
                 let recv_result = tokio::select! {
                     () = player.client.await_close_interrupt() => {
-                        debug!("Canceling player packet processing");
+                        debug!(
+                            "{}",
+                            localized_log("server.log.canceling_player_packet_processing")
+                        );
                         None
                     },
                     recv_result = entity_receiver.recv() => {
@@ -3311,13 +3357,19 @@ impl World {
 
                     for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                         let Some(id) = entity_nbt.get_string("id") else {
-                            warn!("Entity has no ID");
+                            warn!("{}", localized_log("server.log.entity_no_id"));
                             continue;
                         };
                         let Some(entity_type) =
                             EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
                         else {
-                            warn!("Entity has no valid Entity Type {id}");
+                            warn!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.invalid_entity_type",
+                                    &[id.to_string()]
+                                )
+                            );
                             continue;
                         };
                         // Pos is zero since it will read from nbt
@@ -3364,13 +3416,19 @@ impl World {
                 let mut entities_to_add: Vec<Arc<dyn EntityBase>> = Vec::new();
                 for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
                     let Some(id) = entity_nbt.get_string("id") else {
-                        debug!("Entity has no ID");
+                        debug!("{}", localized_log("server.log.entity_no_id"));
                         continue;
                     };
                     let Some(entity_type) =
                         EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
                     else {
-                        warn!("Entity has no valid Entity Type {id}");
+                        warn!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.invalid_entity_type",
+                                &[id.to_string()]
+                            )
+                        );
                         continue;
                     };
 
@@ -3424,7 +3482,13 @@ impl World {
             }
 
             #[cfg(debug_assertions)]
-            debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
+            debug!(
+                "{}",
+                localized_log_format(
+                    "server.log.chunks_queued",
+                    &[inst.elapsed().as_millis().to_string()]
+                )
+            );
         });
     }
 

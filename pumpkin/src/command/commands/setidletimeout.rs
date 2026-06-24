@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 
 use pumpkin_util::{
     PermissionLvl,
-    permission::{Permission, PermissionDefault, PermissionRegistry},
+    permission::{PermissionDefault, PermissionRegistry},
     text::TextComponent,
 };
 
@@ -13,7 +13,7 @@ use crate::command::{
     node::{CommandExecutor, CommandExecutorResult, dispatcher::CommandDispatcher},
 };
 
-const DESCRIPTION: &str = "Sets the time before idle players are kicked from the server.";
+const DESCRIPTION: &str = "commands.setidletimeout.description";
 const PERMISSION: &str = "minecraft:command.setidletimeout";
 
 const ARG_MINUTES: &str = "minutes";
@@ -59,7 +59,7 @@ impl CommandExecutor for SetIdleTimeoutExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Op(PermissionLvl::Three),

@@ -21,7 +21,10 @@ use super::{
     World,
     bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
 };
-use crate::entity::{Entity, decoration::end_crystal::EndCrystalEntity};
+use crate::{
+    entity::{Entity, decoration::end_crystal::EndCrystalEntity},
+    localized_log, localized_log_format,
+};
 
 // ── Constants (match vanilla exactly) ────────────────────────────────────────
 
@@ -202,15 +205,18 @@ impl DragonFight {
     /// Runs once on the first tick with nearby players.  Determines whether
     /// this is a fresh fight or a resumed one and reconciles the entity list.
     async fn scan_state(&mut self, world: &Arc<World>) {
-        info!("Scanning End fight state...");
+        info!("{}", localized_log("server.log.end_fight_scanning"));
 
         let has_active_portal = Self::has_active_exit_portal(world);
 
         if has_active_portal {
-            info!("Exit portal found – dragon has been killed previously.");
+            info!(
+                "{}",
+                localized_log("server.log.end_fight_exit_portal_found")
+            );
             self.previously_killed = true;
         } else {
-            info!("No exit portal – fight is fresh or in progress.");
+            info!("{}", localized_log("server.log.end_fight_no_exit_portal"));
             self.previously_killed = false;
             if self.portal_location.is_none() {
                 self.spawn_exit_portal(world, false).await;
@@ -242,7 +248,13 @@ impl DragonFight {
                 self.dragon_killed = true;
             }
             Some(uuid) => {
-                info!("Found existing dragon entity {:?}.", uuid);
+                info!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.end_fight_existing_dragon",
+                        &[format!("{uuid:?}")]
+                    )
+                );
                 self.dragon_uuid = Some(uuid);
                 self.dragon_killed = false;
             }
@@ -286,11 +298,17 @@ impl DragonFight {
         };
 
         if let Some(u) = uuid {
-            debug!("Re-acquired existing dragon {:?}.", u);
+            debug!(
+                "{}",
+                localized_log_format(
+                    "server.log.end_fight_reacquired_dragon",
+                    &[format!("{u:?}")]
+                )
+            );
             self.dragon_uuid = Some(u);
             self.ticks_since_dragon_seen = 0;
         } else {
-            debug!("No dragon found – spawning one.");
+            debug!("{}", localized_log("server.log.end_fight_spawning_dragon"));
             self.create_new_dragon(world).await;
         }
     }
@@ -303,7 +321,13 @@ impl DragonFight {
 
         world.spawn_entity(dragon).await;
         self.dragon_uuid = Some(uuid);
-        info!("Spawned ender dragon {:?}.", uuid);
+        info!(
+            "{}",
+            localized_log_format(
+                "server.log.end_fight_spawned_dragon",
+                &[format!("{uuid:?}")]
+            )
+        );
     }
 
     /// Called every tick while the dragon is alive.  Updates the boss-bar
@@ -376,7 +400,13 @@ impl DragonFight {
             .iter()
             .filter(|e| e.get_entity().entity_type == &EntityType::END_CRYSTAL)
             .count() as u32;
-        debug!("Found {} end crystals still alive.", self.crystals_alive);
+        debug!(
+            "{}",
+            localized_log_format(
+                "server.log.end_fight_crystals_alive",
+                &[self.crystals_alive.to_string()]
+            )
+        );
     }
 
     // ── Crystal destruction ───────────────────────────────────────────────────
@@ -405,7 +435,10 @@ impl DragonFight {
 
         // Ensure we know where the portal is.
         if self.portal_location.is_none() {
-            info!("Tried to respawn but no portal location – placing one.");
+            info!(
+                "{}",
+                localized_log("server.log.end_fight_respawn_missing_portal")
+            );
             self.spawn_exit_portal(world, true).await;
         }
 
@@ -435,12 +468,21 @@ impl DragonFight {
             if let Some(e) = found {
                 ritual_uuids.push(e.get_entity().entity_uuid);
             } else {
-                debug!("Respawn attempt failed – missing crystal near {:?}.", check);
+                debug!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.end_fight_respawn_missing_crystal",
+                        &[format!("{check:?}")]
+                    )
+                );
                 return;
             }
         }
 
-        debug!("Found all four ritual crystals – beginning respawn.");
+        debug!(
+            "{}",
+            localized_log("server.log.end_fight_respawn_beginning")
+        );
         self.begin_respawn(world, ritual_uuids).await;
     }
 
@@ -481,7 +523,7 @@ impl DragonFight {
     }
 
     async fn abort_respawn(&mut self, world: &Arc<World>) {
-        debug!("Aborting dragon respawn sequence.");
+        debug!("{}", localized_log("server.log.end_fight_respawn_aborting"));
         self.respawn_stage = None;
         self.respawn_time = 0;
         self.respawn_crystal_uuids.clear();
@@ -547,7 +589,13 @@ impl DragonFight {
         let pos = BlockPos::new(x, GATEWAY_Y, z);
 
         world.sync_world_event(WorldEvent::AnimationEndGatewaySpawn, pos, 0);
-        info!("Spawned end gateway #{} at {:?}.", idx, pos);
+        info!(
+            "{}",
+            localized_log_format(
+                "server.log.end_fight_spawned_gateway",
+                &[idx.to_string(), format!("{pos:?}")]
+            )
+        );
     }
 
     // ── Crystal spawning ──────────────────────────────────────────────────────
@@ -587,7 +635,7 @@ impl DragonFight {
             crystal.set_show_bottom(true);
             world.spawn_entity(crystal).await;
         }
-        info!("Spawned end crystals on spike tops.");
+        info!("{}", localized_log("server.log.end_fight_spawned_crystals"));
     }
 
     // ── Exit portal ───────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ use std::{
 };
 
 use super::BlockEntity;
+use crate::localized_log;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
@@ -158,7 +159,9 @@ impl From<Text> for NbtTag {
             value
                 .messages
                 .lock()
-                .expect("Text messages mutex should not be poisoned")
+                .expect(&localized_log(
+                    "debug.expect.text_messages_mutex_not_poisoned",
+                ))
                 .iter()
                 .map(|s| Self::String(s.clone()))
                 .collect(),

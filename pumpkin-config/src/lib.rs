@@ -1,6 +1,7 @@
 use fun::FunConfig;
 use locale::LocaleConfig;
 use logging::LoggingConfig;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
 use recipe::RecipeConfig;
@@ -254,21 +255,28 @@ pub trait LoadConfiguration {
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
         if !config_dir.exists() {
-            debug!("creating new config root folder");
-            fs::create_dir(config_dir).expect("Failed to create config root folder");
+            debug!("{}", localized_log("config.load.creating_root_folder"));
+            fs::create_dir(config_dir)
+                .expect(&localized_log("config.load.create_root_folder_failed"));
         }
         let path = config_dir.join(Self::get_path());
 
         let config = if path.exists() {
             let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
-                panic!("Couldn't read configuration file at {}", path.display())
+                panic!(
+                    "{}",
+                    localized_log_format("config.load.read_failed", &[path.display().to_string()])
+                )
             });
 
-            let parsed_toml_value: toml::Value = toml::from_str(&file_content)
-                .unwrap_or_else(|err| {
+            let parsed_toml_value: toml::Value =
+                toml::from_str(&file_content).unwrap_or_else(|err| {
                     panic!(
-                        "Couldn't parse TOML at {}. Reason: {}. This is probably caused by invalid TOML syntax",
-                        path.display(), err
+                        "{}",
+                        localized_log_format(
+                            "config.load.parse_toml_failed",
+                            &[path.display().to_string(), err.to_string()]
+                        )
                     )
                 });
 
@@ -276,14 +284,19 @@ pub trait LoadConfiguration {
 
             if changed {
                 println!(
-                    "{} changed because values were missing. The missing values were filled with default values.",
-                    path.file_name().unwrap().display()
+                    "{}",
+                    localized_log_format(
+                        "config.load.missing_values_filled",
+                        &[path.file_name().unwrap().display().to_string()]
+                    )
                 );
                 if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
                     warn!(
-                        "Couldn't write merged config to {}. Reason: {}",
-                        path.display(),
-                        err
+                        "{}",
+                        localized_log_format(
+                            "config.load.write_merged_failed",
+                            &[path.display().to_string(), err.to_string()]
+                        )
                     );
                 }
             }
@@ -293,9 +306,11 @@ pub trait LoadConfiguration {
             let content = Self::default();
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 warn!(
-                    "Couldn't write default config to {:?}. Reason: {}",
-                    path.display(),
-                    err
+                    "{}",
+                    localized_log_format(
+                        "config.load.write_default_failed",
+                        &[path.display().to_string(), err.to_string()]
+                    )
                 );
             }
 
@@ -316,14 +331,14 @@ pub trait LoadConfiguration {
     {
         let default_config = Self::default();
 
-        let default_toml_value =
-            toml::Value::try_from(default_config).expect("Failed to parse default config");
+        let default_toml_value = toml::Value::try_from(default_config)
+            .expect(&localized_log("config.load.parse_default_failed"));
 
         let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
         let config = merged_value
             .try_into()
-            .expect("Failed to convert merged config");
+            .expect(&localized_log("config.load.convert_merged_failed"));
 
         (config, changed)
     }

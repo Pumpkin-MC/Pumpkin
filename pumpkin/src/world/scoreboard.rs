@@ -16,6 +16,8 @@ use pumpkin_protocol::{
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use tracing::warn;
 
+use crate::localized_log_format;
+
 use super::World;
 
 #[derive(Default)]
@@ -189,7 +191,10 @@ impl Scoreboard {
 
     pub fn update_team(&mut self, world: &World, team: Team) {
         if !self.teams.contains_key(&team.name) {
-            warn!("Tried to update Team which does not exist, {}", team.name);
+            warn!(
+                "{}",
+                localized_log_format("server.log.team_update_missing", &[team.name.clone()])
+            );
             return;
         }
 
@@ -215,7 +220,10 @@ impl Scoreboard {
 
     pub fn remove_team(&mut self, world: &World, name: &str) {
         if !self.teams.contains_key(name) {
-            warn!("Tried to remove Team which does not exist, {}", name);
+            warn!(
+                "{}",
+                localized_log_format("server.log.team_remove_missing", &[name.to_string()])
+            );
             return;
         }
 

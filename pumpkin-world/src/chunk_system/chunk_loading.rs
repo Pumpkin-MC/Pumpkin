@@ -1,6 +1,7 @@
 use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use crate::chunk_system::chunk_state::StagedChunkEnum; // Fixed path
 use itertools::Itertools;
+use pumpkin_util::translation::localized_log_format;
 use std::cmp::{Ordering, PartialEq, min};
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
@@ -145,8 +146,17 @@ impl ChunkLoading {
             }
         }
         if temp.len() != self.pos_level.len() {
-            debug!("temp: \n{temp:?}");
-            debug!("pos_level: \n{:?}", self.pos_level);
+            debug!(
+                "{}",
+                localized_log_format("world.chunk_loading.temp", &[format!("{temp:?}")])
+            );
+            debug!(
+                "{}",
+                localized_log_format(
+                    "world.chunk_loading.pos_level",
+                    &[format!("{:?}", self.pos_level)]
+                )
+            );
         }
         assert_eq!(temp.len(), self.pos_level.len());
         for val in &temp {
@@ -172,7 +182,10 @@ impl ChunkLoading {
         sy: i32,
         ty: i32,
     ) {
-        debug!("high_priority {pri:?}");
+        debug!(
+            "{}",
+            localized_log_format("world.chunk_loading.high_priority", &[format!("{pri:?}")])
+        );
 
         let mut header = "X/Y".to_string();
         for y in sy..=ty {
@@ -197,7 +210,10 @@ impl ChunkLoading {
             .collect::<Vec<_>>()
             .join("\n");
 
-        debug!("\nloading level:\n{header}\n{grid}");
+        debug!(
+            "{}",
+            localized_log_format("world.chunk_loading.loading_level", &[header, grid])
+        );
     }
 
     #[inline]

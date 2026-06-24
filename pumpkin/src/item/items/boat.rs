@@ -6,6 +6,7 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::localized_log_format;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
@@ -43,7 +44,10 @@ impl BoatItem {
             val if val == Item::BAMBOO_RAFT.id => &EntityType::BAMBOO_RAFT,
             val if val == Item::BAMBOO_CHEST_RAFT.id => &EntityType::BAMBOO_CHEST_RAFT,
             _ => {
-                tracing::error!("Unknown boat item ID: {}", item.id);
+                tracing::error!(
+                    "{}",
+                    localized_log_format("server.log.unknown_boat_item", &[item.id.to_string()])
+                );
                 &EntityType::OAK_BOAT
             }
         }

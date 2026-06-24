@@ -6,7 +6,7 @@ use tokio::net::UdpSocket;
 use tokio::{select, time};
 use tracing::{info, warn};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, localized_log, localized_log_format};
 
 /// The standard Minecraft multicast address used for LAN discovery
 ///
@@ -30,7 +30,8 @@ impl LANBroadcast {
 
         let motd = if advanced_motd.is_empty() {
             warn!(
-                "Using the server MOTD as the LAN broadcast MOTD. Note that the LAN broadcast MOTD does not support multiple lines, RGB colors, or gradients so consider defining it accordingly."
+                "{}",
+                localized_log("server.log.lan_broadcast_using_server_motd")
             );
             basic_config.motd.replace('\n', " ")
         } else {
@@ -54,7 +55,7 @@ impl LANBroadcast {
     pub async fn start(self, bound_addr: SocketAddr) {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))
             .await
-            .expect("Unable to bind to address");
+            .expect(&localized_log("debug.expect.bind_address_failed"));
 
         socket.set_broadcast(true).unwrap();
 
@@ -63,10 +64,14 @@ impl LANBroadcast {
         let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", self.motd, bound_addr.port());
 
         info!(
-            "LAN broadcast running on {}",
-            socket
-                .local_addr()
-                .expect("Unable to find running address!")
+            "{}",
+            localized_log_format(
+                "server.log.lan_broadcast_running",
+                &[socket
+                    .local_addr()
+                    .expect(&localized_log("debug.expect.running_address_not_found"))
+                    .to_string()]
+            )
         );
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {

@@ -3,6 +3,7 @@ use crate::block::{
     OnScheduledTickArgs,
 };
 use crate::entity::EntityBase;
+use crate::localized_log;
 use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, Facing, LadderLikeProperties};
 use pumpkin_data::{Block, BlockDirection, FacingExt, HorizontalFacingExt};
@@ -47,7 +48,9 @@ impl BlockBehaviour for LadderBlock {
                     .opposite()
                     .to_block_direction()
                     .to_horizontal_facing()
-                    .expect("Opposite of horizontal direction should be horizontal");
+                    .expect(&localized_log(
+                        "debug.expect.opposite_direction_not_horizontal",
+                    ));
                 return props.to_state_id(args.block);
             }
             Block::AIR.default_state.id

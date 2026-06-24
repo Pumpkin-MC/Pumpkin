@@ -4,6 +4,7 @@ use crate::command::node::{
     OwnedNodeData, RedirectModifier, Redirection, Requirements,
 };
 use crate::command::suggestion::provider::SuggestionProvider;
+use crate::localized_log;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::num::NonZero;
@@ -26,7 +27,7 @@ impl GlobalNodeId {
     pub fn new() -> Self {
         Self(
             NonZero::new(NEXT_DETACHED_NODE_ID.fetch_add(1, Ordering::Relaxed))
-                .expect("expected a non-zero id"),
+                .expect(&localized_log("debug.expect.node_nonzero_id")),
         )
     }
 }

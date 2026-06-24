@@ -11,7 +11,7 @@ use crate::entity::EntityBase;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 const NAMES: [&str; 1] = ["particle"];
 
-const DESCRIPTION: &str = "Spawns a Particle at position.";
+const DESCRIPTION: &str = "commands.particle.description";
 
 const ARG_NAME: &str = "name";
 

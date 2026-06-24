@@ -4,6 +4,7 @@ use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
+        tr_plain,
         tree::{CommandTree, builder::argument},
     },
     data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry},
@@ -15,7 +16,7 @@ use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban-ip"];
-const DESCRIPTION: &str = "bans a player-ip";
+const DESCRIPTION: &str = "commands.banip.description";
 
 const ARG_TARGET: &str = "ip";
 const ARG_REASON: &str = "reason";
@@ -80,7 +81,8 @@ async fn ban_ip(
     target: &str,
     reason: Option<String>,
 ) -> Result<i32, CommandError> {
-    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
+    let reason =
+        reason.unwrap_or_else(|| tr_plain("commands.banip.default_reason", sender.get_locale()));
 
     let Some(target_ip) = parse_ip(target, server).await else {
         return Err(CommandError::CommandFailed(TextComponent::translate_cross(

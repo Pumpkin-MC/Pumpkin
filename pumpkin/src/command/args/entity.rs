@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use crate::command::CommandSender;
 use crate::command::args::entities::TargetSelector;
 use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
+use crate::command::{CommandSender, tr_format};
 use crate::entity::EntityBase;
 use crate::server::Server;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use tracing::debug;
 
@@ -50,13 +51,27 @@ impl ArgumentConsumer for EntityArgumentConsumer {
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
-                debug!("Failed to parse target selector '{s}': {e}");
+                debug!(
+                    "{}",
+                    tr_format(
+                        "server.log.failed_parse_target_selector",
+                        server_command_locale(),
+                        &[s.to_string(), e.to_string()],
+                    )
+                );
                 return Box::pin(async move { None });
             }
         };
 
         if entity_selector.get_limit() > 1 {
-            debug!("Target selector '{s}' has limit > 1, expected single entity");
+            debug!(
+                "{}",
+                tr_format(
+                    "server.log.target_selector_limit_gt_one",
+                    server_command_locale(),
+                    &[s.to_string()],
+                )
+            );
             return Box::pin(async move { None });
         }
 

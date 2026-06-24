@@ -13,7 +13,7 @@ use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["gamerule"];
 
-const DESCRIPTION: &str = "Sets or queries a game rule value.";
+const DESCRIPTION: &str = "commands.gamerule.description";
 
 const ARG_NAME: &str = "value";
 

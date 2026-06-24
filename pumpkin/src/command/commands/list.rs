@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::translation::java::{COMMANDS_LIST_NAMEANDID, COMMANDS_LIST_PLAYERS};
 use pumpkin_util::{
-    permission::{Permission, PermissionDefault, PermissionRegistry},
+    permission::{PermissionDefault, PermissionRegistry},
     text::TextComponent,
 };
 
@@ -15,7 +15,7 @@ use crate::{
     entity::{EntityBase, EntityBaseFuture, player::Player},
 };
 
-const DESCRIPTION: &str = "Print the list of online players.";
+const DESCRIPTION: &str = "commands.list.description";
 
 const PERMISSION: &str = "minecraft:command.list";
 
@@ -85,7 +85,7 @@ fn get_player_names_and_ids(players: &[Arc<Player>]) -> TextComponent {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Allow,

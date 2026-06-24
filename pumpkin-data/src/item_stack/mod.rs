@@ -11,6 +11,7 @@ use crate::tag::Taggable;
 use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use pumpkin_util::translation::localized_log;
 use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
@@ -640,7 +641,7 @@ impl From<&RecipeResultStruct> for ItemStack {
         Self::new(
             value.count,
             Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
-                .expect("Crafting recipe gives invalid item"),
+                .expect(&localized_log("debug.expect.crafting_recipe_invalid_item")),
         )
     }
 }

@@ -1,4 +1,5 @@
 use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_i18n::Locale;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::translation::get_translation_text;
@@ -6,12 +7,12 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use serde::Deserialize;
 use std::borrow::Cow;
 
-use crate::command::CommandResult;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::command::{CommandResult, tr, tr_format, tr_plain};
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 
-const DESCRIPTION: &str = "Display information about Pumpkin.";
+const DESCRIPTION: &str = "commands.pumpkin.command_description";
 
 struct Executor;
 
@@ -24,11 +25,9 @@ struct Contributor {
     login: String,
 }
 
-fn fetch_all_contributors() -> Vec<Contributor> {
+fn fetch_all_contributors(locale: Locale) -> Vec<Contributor> {
     let mut all_contributors = Vec::new();
-    let mut next_url = Some(
-        "https://api.github.com/repos/Pumpkin-MC/Pumpkin/contributors?per_page=100".to_string(),
-    );
+    let mut next_url = Some(tr_plain("commands.pumpkin.contributors_api_url", locale));
 
     while let Some(url) = next_url {
         let response = ureq::get(&url).header("User-Agent", "Pumpkin-MC").call();
@@ -75,24 +74,27 @@ impl CommandExecutor for Executor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let contributors = fetch_all_contributors();
+            let locale = sender.get_locale();
+            let contributors = fetch_all_contributors(locale);
             let contributor_names = contributors
                 .iter()
                 .map(|c| c.login.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let locale = sender.get_locale();
             let profile = if cfg!(debug_assertions) {
                 "debug"
             } else {
                 "release"
             };
-            let version_string = format!(
-                "{} (Commit: {}/{}) - {} Contributors",
-                CARGO_PKG_VERSION,
-                GIT_HASH,
-                profile,
-                contributors.len()
+            let version_string = tr_format(
+                "commands.pumpkin.version_string",
+                locale,
+                &[
+                    CARGO_PKG_VERSION.to_owned(),
+                    GIT_HASH.to_owned(),
+                    profile.to_owned(),
+                    contributors.len().to_string(),
+                ],
             );
             sender
                 .send_message(
@@ -103,12 +105,16 @@ impl CommandExecutor for Executor {
                         vec![TextComponent::text(version_string.clone())],
                     )
                     .hover_event(HoverEvent::show_text(
-                        TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n"))
-                            .add_child(
-                                TextComponent::text(contributor_names)
-                                    .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
-                                    .new_line(),
-                            ),
+                        tr(
+                            "commands.pumpkin.commit_hover",
+                            locale,
+                            [TextComponent::text(GIT_HASH_FULL.to_owned())],
+                        )
+                        .add_child(
+                            TextComponent::text(contributor_names)
+                                .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
+                                .new_line(),
+                        ),
                     ))
                     .click_event(ClickEvent::CopyToClipboard {
                         value: Cow::from(
@@ -182,11 +188,10 @@ impl CommandExecutor for Executor {
                         )))
                         .color_named(NamedColor::Gold),
                     )
-                    // https://pumpkinmc.org/
                     .add_child(
                         TextComponent::custom("pumpkin", "commands.pumpkin.github", locale, vec![])
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::from("https://github.com/Pumpkin-MC/Pumpkin"),
+                                url: Cow::Owned(tr_plain("commands.pumpkin.github_url", locale)),
                             })
                             .hover_event(HoverEvent::show_text(TextComponent::custom(
                                 "pumpkin",
@@ -201,12 +206,14 @@ impl CommandExecutor for Executor {
                     // Spacing
                     .add_child(TextComponent::text("  "))
                     .add_child(
-                        TextComponent::text("[Donate]")
+                        tr("commands.pumpkin.donate", locale, [])
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::from("https://pumpkinmc.org/donate/"),
+                                url: Cow::Owned(tr_plain("commands.pumpkin.donate_url", locale)),
                             })
-                            .hover_event(HoverEvent::show_text(TextComponent::text(
-                                "Click to open Donate",
+                            .hover_event(HoverEvent::show_text(tr(
+                                "commands.pumpkin.donate.hover",
+                                locale,
+                                [],
                             )))
                             .rainbow()
                             .bold()
@@ -222,7 +229,7 @@ impl CommandExecutor for Executor {
                             vec![],
                         )
                         .click_event(ClickEvent::OpenUrl {
-                            url: Cow::from("https://pumpkinmc.org/"),
+                            url: Cow::Owned(tr_plain("commands.pumpkin.website_url", locale)),
                         })
                         .hover_event(HoverEvent::show_text(TextComponent::custom(
                             "pumpkin",

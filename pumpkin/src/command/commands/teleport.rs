@@ -13,12 +13,13 @@ use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandSender};
+use crate::command::{CommandExecutor, CommandSender, tr_plain};
 use crate::entity::EntityBase;
 use crate::world::World;
+use pumpkin_i18n::server_command_locale;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
-const DESCRIPTION: &str = "Teleports entities, including players."; // todo
+const DESCRIPTION: &str = "commands.teleport.description"; // todo
 
 /// position
 const ARG_LOCATION: &str = "location";
@@ -62,7 +63,10 @@ fn resolve_sender_world(
             .worlds
             .load()
             .first()
-            .expect("Server should have at least one world")
+            .expect(&tr_plain(
+                "debug.expect.server_needs_one_world",
+                server_command_locale(),
+            ))
             .clone()
     })
 }

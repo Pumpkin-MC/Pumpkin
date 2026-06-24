@@ -2,13 +2,14 @@ use core::f64;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
+use pumpkin_i18n::server_command_locale;
 use pumpkin_protocol::java::client::play::ArgumentType;
 use pumpkin_util::text::TextComponent;
 
-use crate::command::CommandSender;
 use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
+use crate::command::{CommandSender, tr, tr_plain};
 use crate::server::Server;
 
 use super::super::args::ArgumentConsumer;
@@ -86,19 +87,26 @@ pub enum NotInBounds {
 
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
+        let locale = server_command_locale();
         match value {
-            NotInBounds::LowerBound(val, min) => Self::CommandFailed(TextComponent::text(format!(
-                "{} must not be less than {}, found {}",
-                val.qualifier(),
-                min,
-                val
-            ))),
-            NotInBounds::UpperBound(val, max) => Self::CommandFailed(TextComponent::text(format!(
-                "{} must not be more than {}, found {}",
-                val.qualifier(),
-                max,
-                val
-            ))),
+            NotInBounds::LowerBound(val, min) => Self::CommandFailed(tr(
+                "commands.args.bounded_num.must_not_be_less",
+                locale,
+                [
+                    tr(val.qualifier_key(), locale, []),
+                    TextComponent::text(min.to_string()),
+                    TextComponent::text(val.to_string()),
+                ],
+            )),
+            NotInBounds::UpperBound(val, max) => Self::CommandFailed(tr(
+                "commands.args.bounded_num.must_not_be_more",
+                locale,
+                [
+                    tr(val.qualifier_key(), locale, []),
+                    TextComponent::text(max.to_string()),
+                    TextComponent::text(val.to_string()),
+                ],
+            )),
         }
     }
 }
@@ -113,10 +121,10 @@ pub enum Number {
 
 impl Number {
     #[must_use]
-    pub const fn qualifier(&self) -> &'static str {
+    pub const fn qualifier_key(&self) -> &'static str {
         match self {
-            Self::F64(_) | Self::F32(_) => "Float",
-            Self::I32(_) | Self::I64(_) => "Integer",
+            Self::F64(_) | Self::F32(_) => "commands.args.bounded_num.float",
+            Self::I32(_) | Self::I64(_) => "commands.args.bounded_num.integer",
         }
     }
 }
@@ -290,6 +298,9 @@ where
 {
     fn default_name(&self) -> &'static str {
         // setting a single default name for all BoundedNumArgumentConsumer variants is probably a bad idea since it would lead to confusion
-        self.name.expect("Only use *_default variants of methods with a BoundedNumArgumentConsumer that has a name.")
+        self.name.expect(&tr_plain(
+            "debug.expect.bounded_num_requires_name",
+            server_command_locale(),
+        ))
     }
 }

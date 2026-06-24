@@ -1,3 +1,4 @@
+use crate::localized_log;
 use std::borrow::Cow;
 use wasmtime::component::Resource;
 
@@ -52,25 +53,25 @@ impl DowncastResourceExt<TextComponentResource> for wasmtime::component::Resourc
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid handle")
+            .expect(&localized_log("debug.expect.plugin_wasm.invalid_handle"))
             .downcast_ref()
-            .expect("type mismatch")
+            .expect(&localized_log("debug.expect.plugin_wasm.type_mismatch"))
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid handle")
+            .expect(&localized_log("debug.expect.plugin_wasm.invalid_handle"))
             .downcast_mut()
-            .expect("type mismatch")
+            .expect(&localized_log("debug.expect.plugin_wasm.type_mismatch"))
     }
 
     fn consume(self, state: &mut PluginHostState) -> TextComponentResource {
         state
             .resource_table
             .delete(wasmtime::component::Resource::new_own(self.rep()))
-            .expect("invalid handle")
+            .expect(&localized_log("debug.expect.plugin_wasm.invalid_handle"))
     }
 }
 

@@ -22,6 +22,7 @@ use crate::{
 };
 
 use super::{BlockStateResolver, StructureTemplate};
+use pumpkin_util::translation::localized_log_format;
 
 /// A structure piece that places blocks from an NBT template.
 ///
@@ -137,7 +138,13 @@ impl TemplatePiece {
             {
                 s
             } else {
-                debug!("Failed to resolve block: {}", palette_entry.name);
+                debug!(
+                    "{}",
+                    localized_log_format(
+                        "world.structure.failed_resolve_block",
+                        &[palette_entry.name.clone()]
+                    )
+                );
                 continue;
             };
 

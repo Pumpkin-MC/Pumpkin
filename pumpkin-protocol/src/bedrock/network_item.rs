@@ -4,6 +4,7 @@ use std::num::NonZeroI32;
 use pumpkin_data::item::{BedrockItem, JavaToBedrockItemMapping};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::Nbt;
+use pumpkin_util::translation::localized_log_format;
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -490,7 +491,10 @@ impl TryFrom<u8> for ContainerName {
             66 => Ok(Self::RecipeFurnaceItems),
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Invalid ContainerName ID: {value}"),
+                localized_log_format(
+                    "protocol.bedrock.invalid_container_name_id",
+                    &[value.to_string()],
+                ),
             )),
         }
     }

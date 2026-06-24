@@ -2,6 +2,7 @@ use std::io::{Error, ErrorKind, Read};
 
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::translation::localized_log_format;
 
 use crate::bedrock::network_item::NetworkItemDescriptor;
 use crate::{
@@ -218,7 +219,10 @@ impl PacketRead for SInventoryTransaction {
             _ => {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    format!("Unknown inventory transaction type: {}", transaction_type.0),
+                    localized_log_format(
+                        "protocol.bedrock.unknown_inventory_transaction_type",
+                        &[transaction_type.0.to_string()],
+                    ),
                 ));
             }
         };

@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     entity::player::ChatMode,
+    localized_log, localized_log_format, localized_text,
     net::{
         PlayerConfig, can_not_join,
         java::{JavaClient, PacketHandlerResult},
@@ -33,10 +34,11 @@ impl JavaClient {
         &self,
         client_information: SClientInformationConfig,
     ) {
-        debug!("Handling client settings");
+        debug!("{}", localized_log("server.log.java_client_settings"));
         if client_information.view_distance <= 0 {
-            self.kick(TextComponent::text(
-                "Cannot have zero or negative view distance!",
+            self.kick(localized_text(
+                "client.disconnect.invalid_view_distance",
+                [],
             ))
             .await;
             return;
@@ -58,15 +60,18 @@ impl JavaClient {
                 server_listing: client_information.server_listing,
             });
         } else {
-            self.kick(TextComponent::text("Invalid hand or chat type"))
-                .await;
+            self.kick(localized_text(
+                "client.disconnect.invalid_hand_or_chat_type",
+                [],
+            ))
+            .await;
         }
     }
 
     pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {
-        debug!("Handling plugin message");
+        debug!("{}", localized_log("server.log.java_plugin_message"));
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
-            debug!("Got a client brand");
+            debug!("{}", localized_log("server.log.java_client_brand"));
             match str::from_utf8(&plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
@@ -88,57 +93,105 @@ impl JavaClient {
                 match packet.response_result() {
                     ResourcePackResponseResult::DownloadSuccess => {
                         trace!(
-                            "Client {} successfully downloaded the resource pack",
-                            self.id
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_download_success",
+                                &[self.id.to_string()]
+                            )
                         );
                     }
                     ResourcePackResponseResult::DownloadFail => {
                         warn!(
-                            "Client {} failed to downloaded the resource pack. Is it available on the internet?",
-                            self.id
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_download_failed",
+                                &[self.id.to_string()]
+                            )
                         );
                     }
                     ResourcePackResponseResult::Downloaded => {
-                        trace!("Client {} already has the resource pack", self.id);
+                        trace!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_already_downloaded",
+                                &[self.id.to_string()]
+                            )
+                        );
                     }
                     ResourcePackResponseResult::Accepted => {
-                        trace!("Client {} accepted the resource pack", self.id);
+                        trace!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_accepted",
+                                &[self.id.to_string()]
+                            )
+                        );
 
                         // Return here to wait for the next response update
                         return;
                     }
                     ResourcePackResponseResult::Declined => {
-                        trace!("Client {} declined the resource pack", self.id);
+                        trace!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_declined",
+                                &[self.id.to_string()]
+                            )
+                        );
                     }
                     ResourcePackResponseResult::InvalidUrl => {
                         warn!(
-                            "Client {} reported that the resource pack URL is invalid!",
-                            self.id
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_invalid_url",
+                                &[self.id.to_string()]
+                            )
                         );
                     }
                     ResourcePackResponseResult::ReloadFailed => {
-                        trace!("Client {} failed to reload the resource pack", self.id);
+                        trace!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_reload_failed",
+                                &[self.id.to_string()]
+                            )
+                        );
                     }
                     ResourcePackResponseResult::Discarded => {
-                        trace!("Client {} discarded the resource pack", self.id);
+                        trace!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_discarded",
+                                &[self.id.to_string()]
+                            )
+                        );
                     }
                     ResourcePackResponseResult::Unknown(result) => {
                         warn!(
-                            "Client {} responded with a bad result: {}!",
-                            self.id, result
+                            "{}",
+                            localized_log_format(
+                                "server.log.resource_pack_bad_result",
+                                &[self.id.to_string(), result.to_string()]
+                            )
                         );
                     }
                 }
             } else {
                 warn!(
-                    "Client {} returned a response for a resource pack we did not set!",
-                    self.id
+                    "{}",
+                    localized_log_format(
+                        "server.log.resource_pack_unexpected_response",
+                        &[self.id.to_string()]
+                    )
                 );
             }
         } else {
             warn!(
-                "Client {} returned a response for a resource pack that was not enabled!",
-                self.id
+                "{}",
+                localized_log_format(
+                    "server.log.resource_pack_response_when_disabled",
+                    &[self.id.to_string()]
+                )
             );
         }
         self.send_known_packs().await;
@@ -147,10 +200,15 @@ impl JavaClient {
     pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse) {
         // TODO: allow plugins to access this
         debug!(
-            "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{:?}\"",
-            packet.key,
-            packet.has_payload,
-            packet.payload.as_ref().map(|p| p.len()),
+            "{}",
+            localized_log_format(
+                "server.log.config_cookie_response",
+                &[
+                    packet.key.to_string(),
+                    packet.has_payload.to_string(),
+                    format!("{:?}", packet.payload.as_ref().map(|p| p.len()))
+                ]
+            )
         );
     }
 
@@ -159,7 +217,7 @@ impl JavaClient {
         _config_acknowledged: SKnownPacks,
         server: &Arc<Server>,
     ) -> Option<PacketHandlerResult> {
-        debug!("Handling known packs");
+        debug!("{}", localized_log("server.log.java_known_packs"));
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();
         let registry = Registry::get_synced(version);
@@ -228,7 +286,7 @@ impl JavaClient {
             return Some(self.handle_config_acknowledged(server).await);
         }
 
-        debug!("Finished config");
+        debug!("{}", localized_log("server.log.java_config_finished"));
         None
     }
 
@@ -247,7 +305,10 @@ impl JavaClient {
     }
 
     pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {
-        debug!("Handling config acknowledgement");
+        debug!(
+            "{}",
+            localized_log("server.log.java_config_acknowledgement")
+        );
         self.connection_state.store(ConnectionState::Play);
 
         let profile = self.gameprofile.lock().await.clone();

@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use pumpkin_nbt::serializer::NbtWriteHelperJava;
+use pumpkin_util::translation::localized_log_format;
 use serde::{
     Serialize,
     ser::{self},
@@ -100,7 +101,10 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
                 None,
             );
             value.serialize(&mut nbt_serializer).map_err(|err| {
-                WritingError::Serde(format!("Failed to serialize {name} NBT: {err}"))
+                WritingError::Serde(localized_log_format(
+                    "protocol.ser.failed_serialize_nbt",
+                    &[name.to_owned(), err.to_string()],
+                ))
             })
         } else {
             value.serialize(self)

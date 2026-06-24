@@ -6,8 +6,10 @@ use crate::command::node::attached::NodeId;
 use crate::command::node::dispatcher::{CommandDispatcher, ResultConsumer};
 use crate::command::node::tree::Tree;
 use crate::command::node::{Command, RedirectModifier};
+use crate::command::tr_plain;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
 use std::any::Any;
@@ -273,7 +275,10 @@ impl<'a> ContextChain<'a> {
         let context_to_use = executable.with_source(source.clone());
 
         let mut result = match &executable.command {
-            None => panic!("Expected `executable` to be executable"),
+            None => panic!(
+                "{}",
+                tr_plain("debug.expect.executable_expected", server_command_locale())
+            ),
             Some(command) => command.execute(&context_to_use).await,
         };
 
@@ -621,8 +626,10 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
-        let chain = ContextChain::try_flatten(&top_context)
-            .expect("The context should have properly flattened, as it has a command to execute");
+        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
+            "debug.expect.command_context_flattened",
+            server_command_locale(),
+        ));
 
         assert_eq!(
             chain.execute_all(&source, &EmptyResultConsumer).await,
@@ -642,8 +649,10 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("bar foo", &source).await;
         let top_context = result.context.build("bar foo");
-        let chain = ContextChain::try_flatten(&top_context)
-            .expect("The context should have properly flattened, as it has a command to execute");
+        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
+            "debug.expect.command_context_flattened",
+            server_command_locale(),
+        ));
 
         assert_eq!(
             chain.execute_all(&source, &EmptyResultConsumer).await,
@@ -660,8 +669,10 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("foo", &source).await;
         let top_context = result.context.build("foo");
-        let chain = ContextChain::try_flatten(&top_context)
-            .expect("The context should have properly flattened, as it has a command to execute");
+        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
+            "debug.expect.command_context_flattened",
+            server_command_locale(),
+        ));
 
         assert_eq!(chain.get_stage(), Stage::EXECUTE);
         assert!(chain.next_stage().is_none());
@@ -683,18 +694,22 @@ mod test {
         let source = Arc::new(CommandSource::dummy());
         let result = dispatcher.parse_input("bar qux foo", &source).await;
         let top_context = result.context.build("bar qux foo");
-        let chain = ContextChain::try_flatten(&top_context)
-            .expect("The context should have properly flattened, as it has a command to execute");
+        let chain = ContextChain::try_flatten(&top_context).expect(&tr_plain(
+            "debug.expect.command_context_flattened",
+            server_command_locale(),
+        ));
         assert_eq!(chain.get_stage(), Stage::MODIFY);
 
-        let chain2 = chain
-            .next_stage()
-            .expect("There should have been the next stage");
+        let chain2 = chain.next_stage().expect(&tr_plain(
+            "debug.expect.command_context_next_stage",
+            server_command_locale(),
+        ));
         assert_eq!(chain2.get_stage(), Stage::MODIFY);
 
-        let chain3 = chain2
-            .next_stage()
-            .expect("There should have been the next stage");
+        let chain3 = chain2.next_stage().expect(&tr_plain(
+            "debug.expect.command_context_next_stage",
+            server_command_locale(),
+        ));
         assert_eq!(chain3.get_stage(), Stage::EXECUTE);
         assert!(chain3.next_stage().is_none());
     }

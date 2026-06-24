@@ -1,6 +1,7 @@
 use crate::{
     math::lerp3,
     random::{RandomDeriverImpl, RandomImpl},
+    translation::localized_log,
 };
 
 use super::GRADIENTS;
@@ -317,8 +318,12 @@ impl OctavePerlinNoiseSampler {
         let mut octaves = Vec::from_iter(octaves);
         octaves.sort();
 
-        let i = -**octaves.first().expect("we should have some octaves");
-        let j = **octaves.last().expect("we should have some octaves");
+        let i = -**octaves
+            .first()
+            .expect(&localized_log("debug.expect.octaves_not_empty"));
+        let j = **octaves
+            .last()
+            .expect(&localized_log("debug.expect.octaves_not_empty"));
         let k = i + j + 1;
 
         let mut double_list = vec![0.0; k as usize];

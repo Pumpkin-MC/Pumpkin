@@ -3,6 +3,7 @@ use serde::Serialize;
 
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
+use pumpkin_util::translation::localized_log;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum OwnedRecipeIngredient {
@@ -21,7 +22,7 @@ impl OwnedRecipeIngredient {
             }
             Self::Tagged(tag) => item
                 .is_tagged_with(tag)
-                .expect("Crafting recipe used invalid tag"),
+                .expect(&localized_log("debug.expect.crafting_recipe_invalid_tag")),
             Self::OneOf(ids) => {
                 let name = format!("minecraft:{}", item.registry_key);
                 ids.contains(&name)

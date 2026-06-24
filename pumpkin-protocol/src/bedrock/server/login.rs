@@ -1,4 +1,5 @@
 use pumpkin_macros::packet;
+use pumpkin_util::translation::localized_log_format;
 use serde::Deserialize;
 use std::io::{Error, ErrorKind, Read};
 
@@ -21,8 +22,12 @@ impl PacketRead for SLogin {
         if connection_request_len > MAX_PACKET_DATA_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!(
-                    "Connection request length {connection_request_len} exceeds limit {MAX_PACKET_DATA_SIZE}"
+                localized_log_format(
+                    "protocol.bedrock.login.connection_request_length_exceeds_limit",
+                    &[
+                        connection_request_len.to_string(),
+                        MAX_PACKET_DATA_SIZE.to_string(),
+                    ],
                 ),
             ));
         }
@@ -31,7 +36,10 @@ impl PacketRead for SLogin {
         if jwt_len > MAX_PACKET_DATA_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("JWT length {jwt_len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
+                localized_log_format(
+                    "protocol.bedrock.login.jwt_length_exceeds_limit",
+                    &[jwt_len.to_string(), MAX_PACKET_DATA_SIZE.to_string()],
+                ),
             ));
         }
         let mut jwt = vec![0; jwt_len];
@@ -41,7 +49,10 @@ impl PacketRead for SLogin {
         if raw_token_len > MAX_PACKET_DATA_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("Raw token length {raw_token_len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
+                localized_log_format(
+                    "protocol.bedrock.login.raw_token_length_exceeds_limit",
+                    &[raw_token_len.to_string(), MAX_PACKET_DATA_SIZE.to_string()],
+                ),
             ));
         }
         let mut raw_token = vec![0; raw_token_len];

@@ -2273,7 +2273,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "arc-swap",
  "base64",
@@ -2331,7 +2331,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "either",
  "serde_json",
@@ -2340,7 +2340,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-config"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "pumpkin-util",
  "serde",
@@ -2351,7 +2351,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-data"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "crc-fast",
  "phf",
@@ -2363,7 +2363,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-i18n"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "arc-swap",
  "dashmap",
@@ -2375,7 +2375,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-inventory"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "pumpkin-data",
  "pumpkin-protocol",
@@ -2389,7 +2389,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-macros"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "proc-macro-error2",
  "pumpkin-data",
@@ -2399,7 +2399,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "bytes",
  "cesu8",
@@ -2412,7 +2412,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-protocol"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "aes",
  "async-compression",
@@ -2445,7 +2445,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "base64",
  "bytes",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-world"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "arc-swap",
  "bitflags 2.13.0",

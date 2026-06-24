@@ -8,6 +8,7 @@ use std::sync::Arc;
 use dashmap::DashMap;
 
 use super::{StructureTemplate, structure_template::TemplateError};
+use pumpkin_util::translation::localized_log_format;
 
 /// A cache for loaded structure templates.
 ///
@@ -52,7 +53,13 @@ impl TemplateCache {
                 Some(arc)
             }
             Err(e) => {
-                tracing::error!("Failed to load template '{}': {}", name, e);
+                tracing::error!(
+                    "{}",
+                    localized_log_format(
+                        "world.structure.failed_load_template",
+                        &[name.to_string(), e.to_string()]
+                    )
+                );
                 None
             }
         }
@@ -89,7 +96,13 @@ impl TemplateCache {
     pub fn preload(&self, names: &[&'static str]) {
         for name in names {
             if let Err(e) = self.get_or_error(name) {
-                tracing::warn!("Failed to preload template '{}': {}", name, e);
+                tracing::warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.structure.failed_preload_template",
+                        &[name.to_string(), e.to_string()]
+                    )
+                );
             }
         }
     }

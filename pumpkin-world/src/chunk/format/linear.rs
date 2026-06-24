@@ -16,6 +16,7 @@ use tracing::{error, warn};
 use xxhash_rust::xxh64::xxh64;
 
 use super::anvil::CHUNK_COUNT;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 
 /// The signature used as both header and footer.
 /// <https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98>
@@ -62,13 +63,22 @@ impl LinearV2Superblock {
         b = &b[8..];
 
         if sig != SIGNATURE {
-            error!("Linear v2: invalid superblock signature");
+            error!(
+                "{}",
+                localized_log("world.chunk.linear.invalid_superblock_signature")
+            );
             return Err(ChunkReadingError::InvalidHeader);
         }
 
         let version = b.get_u8();
         if version != 0x02 {
-            error!("Linear v2: unexpected version byte {version:#x} in superblock");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.chunk.linear.unexpected_version",
+                    &[format!("{version:#x}")]
+                )
+            );
             return Err(ChunkReadingError::InvalidHeader);
         }
 
@@ -78,7 +88,13 @@ impl LinearV2Superblock {
         let region_z = b.get_i32();
 
         if !VALID_GRID_SIZES.contains(&grid_size) {
-            error!("Linear v2: invalid grid size {grid_size}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.chunk.linear.invalid_grid_size",
+                    &[grid_size.to_string()]
+                )
+            );
             return Err(ChunkReadingError::InvalidHeader);
         }
 
@@ -498,7 +514,10 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         {
             let footer = &buf[footer_offset..footer_offset + SIGNATURE.len()];
             if footer != SIGNATURE {
-                error!("Linear v2: invalid footer signature");
+                error!(
+                    "{}",
+                    localized_log("world.chunk.linear.invalid_footer_signature")
+                );
                 return Err(ChunkReadingError::InvalidHeader);
             }
         }

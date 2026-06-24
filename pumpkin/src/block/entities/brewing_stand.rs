@@ -7,7 +7,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use crate::block::entities::PropertyDelegate;
+use crate::{block::entities::PropertyDelegate, localized_log};
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::item::Item;
@@ -53,7 +53,7 @@ impl BrewingStandBlockEntity {
     fn ingredient_matches(&self, ingredient: &ItemStack) -> bool {
         self.ingredient_item
             .lock()
-            .expect("Ingredient item mutex should not be poisoned")
+            .expect(&localized_log("debug.expect.ingredient_mutex_not_poisoned"))
             .is_some_and(|stored| !ingredient.is_empty() && ingredient.get_item().id == stored.id)
     }
 
@@ -353,7 +353,8 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             *entity
                 .ingredient_item
                 .lock()
-                .expect("Ingredient item mutex should not be poisoned") = Some(guard.get_item());
+                .expect(&localized_log("debug.expect.ingredient_mutex_not_poisoned")) =
+                Some(guard.get_item());
         }
 
         // Recompute last_potion_count so visuals are correct after load
@@ -365,10 +366,9 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                         || slot.get_item().id == pumpkin_data::item::Item::GLASS_BOTTLE.id);
             }
         }
-        *entity
-            .last_potion_count
-            .lock()
-            .expect("Last potion count mutex should not be poisoned") = Some(current);
+        *entity.last_potion_count.lock().expect(&localized_log(
+            "debug.expect.last_potion_count_mutex_not_poisoned",
+        )) = Some(current);
 
         entity
     }
@@ -464,7 +464,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 *self
                     .ingredient_item
                     .lock()
-                    .expect("Ingredient item mutex should not be poisoned") =
+                    .expect(&localized_log("debug.expect.ingredient_mutex_not_poisoned")) =
                     Some(ingredient.get_item());
                 self.mark_dirty();
             } else if fuel_refilled {
@@ -484,10 +484,9 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             // If potion presence changed, update last_potion_count and update block state so clients
             let mut needs_update = false;
             {
-                let mut last_guard = self
-                    .last_potion_count
-                    .lock()
-                    .expect("Last potion count mutex should not be poisoned");
+                let mut last_guard = self.last_potion_count.lock().expect(&localized_log(
+                    "debug.expect.last_potion_count_mutex_not_poisoned",
+                ));
                 if last_guard.as_ref() != Some(&current) {
                     *last_guard = Some(current);
                     needs_update = true;

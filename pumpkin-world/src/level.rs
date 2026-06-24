@@ -23,6 +23,7 @@ use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::{Arc, Mutex, Weak};
@@ -135,8 +136,10 @@ impl Level {
         let region_folder = root_folder.join("region");
         let entities_folder = root_folder.join("entities");
 
-        std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
-        std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
+        std::fs::create_dir_all(&region_folder)
+            .expect(&localized_log("world.level.create_region_folder_failed"));
+        std::fs::create_dir_all(&entities_folder)
+            .expect(&localized_log("world.level.create_entities_folder_failed"));
 
         let level_folder = Arc::new(LevelFolder {
             root_folder,
@@ -261,7 +264,9 @@ impl Level {
                         }
                     }
                 })
-                .expect("Failed to spawn entity generation thread");
+                .expect(&localized_log(
+                    "world.level.spawn_entity_generation_thread_failed",
+                ));
         }
     }
 
@@ -277,7 +282,10 @@ impl Level {
 
     pub async fn shutdown(&self) {
         let world_id = self.level_folder.root_folder.display();
-        info!("Saving level ({})...", world_id);
+        info!(
+            "{}",
+            localized_log_format("world.level.saving", &[world_id.to_string()])
+        );
         self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -291,7 +299,13 @@ impl Level {
         };
 
         let handle_count = handles.len();
-        info!("Joining {} threads for {}...", handle_count, world_id);
+        info!(
+            "{}",
+            localized_log_format(
+                "world.level.joining_threads",
+                &[handle_count.to_string(), world_id.to_string()]
+            )
+        );
         let join_task = tokio::task::spawn_blocking(move || {
             let mut failed_count = 0;
             for handle in handles {
@@ -306,23 +320,41 @@ impl Level {
             Ok(Ok(failed_count)) => {
                 if failed_count > 0 {
                     warn!(
-                        "{} threads failed to join properly for {}.",
-                        failed_count, world_id
+                        "{}",
+                        localized_log_format(
+                            "world.level.threads_failed_join",
+                            &[failed_count.to_string(), world_id.to_string()]
+                        )
                     );
                 }
             }
             Ok(Err(_)) => {
-                warn!("Thread join task panicked for {}.", world_id);
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.level.thread_join_task_panicked",
+                        &[world_id.to_string()]
+                    )
+                );
             }
             Err(_) => {
-                warn!("Timed out waiting for threads to join for {}.", world_id);
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.level.thread_join_timeout",
+                        &[world_id.to_string()]
+                    )
+                );
             }
         }
 
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        info!("Flushing data to disk for {}...", world_id);
+        info!(
+            "{}",
+            localized_log_format("world.level.flushing_data", &[world_id.to_string()])
+        );
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
@@ -345,7 +377,10 @@ impl Level {
 
     pub fn list_cached(&self) {
         for entry in self.loaded_chunks.iter() {
-            debug!("In map: {:?}", entry.key());
+            debug!(
+                "{}",
+                localized_log_format("world.level.chunk_in_map", &[format!("{:?}", entry.key())])
+            );
         }
     }
 
@@ -418,7 +453,13 @@ impl Level {
 
         let level = self.clone();
         self.spawn_task(async move {
-            debug!("Writing {} entity chunks to disk", chunks_to_process.len());
+            debug!(
+                "{}",
+                localized_log_format(
+                    "world.level.writing_entity_chunks",
+                    &[chunks_to_process.len().to_string()]
+                )
+            );
             level.write_entity_chunks(chunks_to_process).await;
         });
     }
@@ -561,7 +602,7 @@ impl Level {
 
         let chunk = recv
             .await
-            .expect("Chunk listener dropped without sending chunk");
+            .expect(&localized_log("world.level.chunk_listener_dropped"));
 
         {
             let mut lock = self.chunk_loading.lock().unwrap();
@@ -681,7 +722,9 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.expect("Entity generation worker dropped")
+            rx.await.expect(&localized_log(
+                "world.level.entity_generation_worker_dropped",
+            ))
         }
     }
 
@@ -728,12 +771,21 @@ impl Level {
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
 
-        trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
+        trace!(
+            "{}",
+            localized_log_format(
+                "world.level.sending_chunks_to_chunk_io",
+                &[chunks_to_write.len().to_string()]
+            )
+        );
         if let Err(error) = chunk_saver
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            error!("Failed writing Chunk to disk {error}");
+            error!(
+                "{}",
+                localized_log_format("world.level.failed_write_chunk", &[error.to_string()])
+            );
         }
     }
 
@@ -745,12 +797,21 @@ impl Level {
         let chunk_saver = self.entity_saver.clone();
         let level_folder = self.level_folder.clone();
 
-        trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
+        trace!(
+            "{}",
+            localized_log_format(
+                "world.level.sending_chunks_to_chunk_io",
+                &[chunks_to_write.len().to_string()]
+            )
+        );
         if let Err(error) = chunk_saver
             .save_chunks(&level_folder, chunks_to_write)
             .await
         {
-            error!("Failed writing Chunk to disk {error}");
+            error!(
+                "{}",
+                localized_log_format("world.level.failed_write_chunk", &[error.to_string()])
+            );
         }
     }
 

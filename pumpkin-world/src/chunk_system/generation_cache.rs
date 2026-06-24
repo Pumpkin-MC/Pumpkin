@@ -15,6 +15,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use tracing::debug;
 
 pub struct Cache {
@@ -194,15 +195,29 @@ impl GenerationCache for Cache {
         let dz = (pos.z >> 4) - self.z;
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             debug!(
-                "illegal add_block_entity {pos:?} cache pos ({}, {}) size {}",
-                self.x, self.z, self.size
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.illegal_add_block_entity",
+                    &[
+                        format!("{pos:?}"),
+                        self.x.to_string(),
+                        self.z.to_string(),
+                        self.size.to_string()
+                    ]
+                )
             );
             return;
         }
 
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(_) => {
-                debug!("add_block_entity on non-proto chunk at {pos:?}");
+                debug!(
+                    "{}",
+                    localized_log_format(
+                        "world.chunk_system.add_block_entity_non_proto",
+                        &[format!("{pos:?}")]
+                    )
+                );
             }
             Chunk::Proto(data) => {
                 data.add_block_entity(nbt);
@@ -349,7 +364,7 @@ impl Cache {
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
         match stage {
-            StagedChunkEnum::Empty => panic!("empty stage"),
+            StagedChunkEnum::Empty => panic!("{}", localized_log("debug.panic.empty_stage")),
             StagedChunkEnum::StructureStart => {
                 self.chunks[mid]
                     .get_proto_chunk_mut()

@@ -21,6 +21,7 @@ use crate::{
         OnSyncedBlockEventArgs, PlacedArgs,
         blocks::{piston::piston_head::PistonHeadProperties, redstone::is_emitting_redstone_power},
     },
+    localized_log,
     world::World,
 };
 
@@ -217,7 +218,7 @@ impl BlockBehaviour for PistonBlock {
 
             let mut props = PistonProps::default(block);
             props.facing = BlockDirection::by_index((data & 7) as usize)
-                .expect("Invalid block direction index")
+                .expect(&localized_log("debug.expect.invalid_block_direction"))
                 .to_facing();
 
             world.add_block_entity(Arc::new(PistonBlockEntity {
@@ -344,10 +345,13 @@ pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             if new_props.facing == props.facing
                 && let Some(entity) = world.get_block_entity(&new_pos)
             {
-                let piston = entity
-                    .as_any()
-                    .downcast_ref::<PistonBlockEntity>()
-                    .expect("Block entity at MOVING_PISTON should be PistonBlockEntity");
+                let piston =
+                    entity
+                        .as_any()
+                        .downcast_ref::<PistonBlockEntity>()
+                        .expect(&localized_log(
+                            "debug.expect.block_entity_not_command_block",
+                        ));
                 if piston.extending && piston.current_progress.load() < 0.5
                 // TODO: more stuff...
                 {

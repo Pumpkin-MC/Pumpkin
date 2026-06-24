@@ -1,3 +1,4 @@
+use crate::localized_log;
 use std::{collections::HashMap, sync::Arc};
 use wasmtime::component::Resource;
 
@@ -150,7 +151,10 @@ async fn register_player_event(
                 .await;
         }
         _ => {
-            tracing::error!("non-player event should not be routed to register_player_event");
+            tracing::error!(
+                "{}",
+                localized_log("server.log.plugin_wasm.non_player_event_route")
+            );
         }
     }
 }
@@ -184,7 +188,10 @@ async fn register_world_event(
             register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
         }
         _ => {
-            tracing::error!("non-world event should not be routed to register_world_event");
+            tracing::error!(
+                "{}",
+                localized_log("server.log.plugin_wasm.non_world_event_route")
+            );
         }
     }
 }
@@ -222,7 +229,10 @@ async fn register_block_event(
             register_typed_event::<BlockPlaceEvent>(resource, handler, priority, blocking).await;
         }
         _ => {
-            tracing::error!("non-block event should not be routed to register_block_event");
+            tracing::error!(
+                "{}",
+                localized_log("server.log.plugin_wasm.non_block_event_route")
+            );
         }
     }
 }
@@ -264,7 +274,10 @@ async fn register_server_event(
                 .await;
         }
         _ => {
-            tracing::error!("non-server event should not be routed to register_server_event");
+            tracing::error!(
+                "{}",
+                localized_log("server.log.plugin_wasm.non_server_event_route")
+            );
         }
     }
 }
@@ -274,25 +287,35 @@ impl DowncastResourceExt<ContextResource> for Resource<Context> {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid context resource handle")
+            .expect(&localized_log(
+                "debug.expect.plugin_wasm.invalid_context_resource_handle",
+            ))
             .downcast_ref()
-            .expect("resource type mismatch")
+            .expect(&localized_log(
+                "debug.expect.plugin_wasm.resource_type_mismatch",
+            ))
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut ContextResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid context resource handle")
+            .expect(&localized_log(
+                "debug.expect.plugin_wasm.invalid_context_resource_handle",
+            ))
             .downcast_mut()
-            .expect("resource type mismatch")
+            .expect(&localized_log(
+                "debug.expect.plugin_wasm.resource_type_mismatch",
+            ))
     }
 
     fn consume(self, state: &mut PluginHostState) -> ContextResource {
         state
             .resource_table
             .delete(Resource::new_own(self.rep()))
-            .expect("invalid context resource handle")
+            .expect(&localized_log(
+                "debug.expect.plugin_wasm.invalid_context_resource_handle",
+            ))
     }
 }
 
@@ -425,8 +448,11 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         context: Resource<Context>,
     ) -> wasmtime::Result<Resource<Server>> {
         let server_provider = self.get_context(&context)?.provider.server.clone();
-        self.add_server(server_provider)
-            .map_err(|_| wasmtime::Error::msg("failed to add server resource"))
+        self.add_server(server_provider).map_err(|_| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.failed_add_server_resource",
+            ))
+        })
     }
 
     async fn drop(&mut self, rep: Resource<Context>) -> wasmtime::Result<()> {

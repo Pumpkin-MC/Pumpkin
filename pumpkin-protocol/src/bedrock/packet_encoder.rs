@@ -6,6 +6,7 @@ use std::{
 };
 
 use flate2::{Compression, write::DeflateEncoder};
+use pumpkin_util::translation::localized_log;
 use tokio::{io::AsyncWrite, net::UdpSocket};
 
 use crate::{
@@ -25,7 +26,9 @@ impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
     pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
         match self {
             Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
-            Self::Encrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Encrypt(_) => {
+                panic!("{}", localized_log("debug.panic.stream_already_has_cipher"))
+            }
         }
     }
 }

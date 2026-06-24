@@ -10,7 +10,7 @@ use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["me"];
 
-const DESCRIPTION: &str = "Broadcasts a narrative message about yourself.";
+const DESCRIPTION: &str = "commands.me.description";
 
 const ARG_MESSAGE: &str = "action";
 

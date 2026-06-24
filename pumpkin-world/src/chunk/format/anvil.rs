@@ -4,6 +4,7 @@ use itertools::Itertools;
 use lz4_java_wrc::Context;
 use pumpkin_config::chunk::AnvilChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
@@ -353,7 +354,13 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     where
         I: IntoIterator<Item = usize>,
     {
-        trace!("Writing in place: {}", path.display());
+        trace!(
+            "{}",
+            localized_log_format(
+                "world.chunk.anvil.writing_in_place",
+                &[path.display().to_string()]
+            )
+        );
 
         let file = tokio::fs::OpenOptions::new()
             .write(true)
@@ -396,7 +403,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
                     index,
                     self.chunks_data[index]
                         .as_ref()
-                        .expect("We are trying to write a chunk, but it does not exist!"),
+                        .expect(&localized_log("world.chunk.anvil.write_chunk_missing")),
                 )
             })
             .collect::<Vec<_>>();
@@ -422,7 +429,13 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
 
             // Seek only if we need to
             if chunk.file_sector_offset != current_sector {
-                trace!("Seeking to sector {}", chunk.file_sector_offset);
+                trace!(
+                    "{}",
+                    localized_log_format(
+                        "world.chunk.anvil.seeking_sector",
+                        &[chunk.file_sector_offset.to_string()]
+                    )
+                );
                 let _ = write
                     .seek(SeekFrom::Start(
                         chunk.file_sector_offset as u64 * SECTOR_BYTES as u64,
@@ -431,10 +444,15 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
                 current_sector = chunk.file_sector_offset;
             }
             trace!(
-                "Writing chunk {} - {}:{}",
-                index,
-                current_sector,
-                chunk.serialized_data.sector_count()
+                "{}",
+                localized_log_format(
+                    "world.chunk.anvil.writing_chunk",
+                    &[
+                        index.to_string(),
+                        current_sector.to_string(),
+                        chunk.serialized_data.sector_count().to_string()
+                    ]
+                )
             );
 
             current_sector += chunk.serialized_data.sector_count();
@@ -448,7 +466,13 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     /// Write entire file, disregarding saved offsets
     async fn write_all(&self, path: &Path) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        trace!("Writing tmp file to disk: {temp_path:?}");
+        trace!(
+            "{}",
+            localized_log_format(
+                "world.chunk.anvil.writing_tmp_file",
+                &[format!("{temp_path:?}")]
+            )
+        );
 
         let file = tokio::fs::File::create(&temp_path).await?;
         let mut write = BufWriter::new(file);
@@ -631,7 +655,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
         match &*write_action {
             WriteAction::All => {
-                trace!("Write action is all: setting chunk in place");
+                trace!("{}", localized_log("world.chunk.anvil.write_action_all"));
                 // Doesn't matter, just add the data
                 self.chunks_data[index] = Some(AnvilChunkMetadata {
                     serialized_data: new_chunk_data,
@@ -643,10 +667,15 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 match self.chunks_data[index].as_ref() {
                     None => {
                         trace!(
-                            "Chunk {} does not exist, appending to EOF: {}:{}",
-                            index,
-                            self.end_sector,
-                            new_chunk_data.sector_count()
+                            "{}",
+                            localized_log_format(
+                                "world.chunk.anvil.appending_chunk_eof",
+                                &[
+                                    index.to_string(),
+                                    self.end_sector.to_string(),
+                                    new_chunk_data.sector_count().to_string()
+                                ]
+                            )
                         );
                         // This chunk didn't exist before; append to EOF
                         let new_eof = self.end_sector + new_chunk_data.sector_count();
@@ -662,10 +691,15 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                         if old_chunk.serialized_data.sector_count() == new_chunk_data.sector_count()
                         {
                             trace!(
-                                "Chunk {} exists, writing in place: {}:{}",
-                                index,
-                                old_chunk.file_sector_offset,
-                                new_chunk_data.sector_count()
+                                "{}",
+                                localized_log_format(
+                                    "world.chunk.anvil.chunk_exists_writing_in_place",
+                                    &[
+                                        index.to_string(),
+                                        old_chunk.file_sector_offset.to_string(),
+                                        new_chunk_data.sector_count().to_string()
+                                    ]
+                                )
                             );
                             // We can just add it
                             self.chunks_data[index] = Some(AnvilChunkMetadata {
@@ -710,7 +744,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
                             if chunks_to_shift.last().is_none_or(|chunk| chunk.0 == index) {
                                 trace!(
-                                    "Unable to find a chunk to swap with; falling back to serialize all",
+                                    "{}",
+                                    localized_log("world.chunk.anvil.no_swap_chunk_serialize_all")
                                 );
 
                                 // give up...
@@ -725,7 +760,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 // reversed it) and shift the rest down
                                 let swap = chunks_to_shift
                                     .pop()
-                                    .expect("We just checked that this exists");
+                                    .expect(&localized_log("debug.expect.checked_exists"));
 
                                 let indices_to_shift = chunks_to_shift
                                     .iter()
@@ -745,7 +780,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
                                 self.chunks_data[swapped_index]
                                     .as_mut()
-                                    .expect("We checked if this was none")
+                                    .expect(&localized_log("debug.expect.checked_not_none"))
                                     .file_sector_offset = old_offset;
                                 write_action.maybe_update_chunk_index(swapped_index);
 
@@ -755,13 +790,22 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                                 let offset = new_sectors as i64 - swapped_sectors as i64;
 
                                 trace!(
-                                    "Swapping {index} with {swapped_index}, shifting all chunks {swapped_index} and after by {offset}"
+                                    "{}",
+                                    localized_log_format(
+                                        "world.chunk.anvil.swapping_chunks",
+                                        &[
+                                            index.to_string(),
+                                            swapped_index.to_string(),
+                                            swapped_index.to_string(),
+                                            offset.to_string()
+                                        ]
+                                    )
                                 );
 
                                 for shift_index in indices_to_shift {
                                     let chunk_data = self.chunks_data[shift_index]
                                         .as_mut()
-                                        .expect("We checked if this was none");
+                                        .expect(&localized_log("debug.expect.checked_not_none"));
                                     let new_offset = chunk_data.file_sector_offset as i64 + offset;
                                     chunk_data.file_sector_offset = new_offset as u32;
                                     write_action.maybe_update_chunk_index(shift_index);

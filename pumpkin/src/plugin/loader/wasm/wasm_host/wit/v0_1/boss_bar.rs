@@ -1,3 +1,4 @@
+use crate::localized_log;
 use crate::plugin::loader::wasm::wasm_host::{
     state::{BossBarResource, PlayerResource, PluginHostState},
     wit::v0_1::pumpkin::plugin::boss_bar::{
@@ -133,7 +134,13 @@ impl boss_bar::HostBossBar for PluginHostState {
         bossbar.color = from_wit_color(color);
         bossbar.division = from_wit_division(division);
 
-        let server = self.server.as_ref().expect("server not available").clone();
+        let server = self
+            .server
+            .as_ref()
+            .expect(&localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+            .clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
             bossbar,
             Arc::downgrade(&server),
@@ -292,10 +299,11 @@ impl boss_bar::HostBossBar for PluginHostState {
             pbb.players.clone()
         };
 
-        let server = self
-            .server
-            .clone()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.clone().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         let mut wit_players = Vec::new();
         for uuid in players {

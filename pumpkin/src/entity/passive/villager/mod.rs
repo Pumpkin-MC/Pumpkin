@@ -396,7 +396,7 @@ impl ScreenHandlerFactory for VillagerEntity {
 
     fn get_display_name(&self) -> TextComponent {
         // TODO: Localized name based on profession
-        TextComponent::text("Villager")
+        TextComponent::translate_cross("entity.minecraft.villager", "entity.minecraft.villager", [])
     }
 }
 

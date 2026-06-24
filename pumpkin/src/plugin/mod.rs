@@ -25,7 +25,10 @@ pub mod loader;
 /// host features.
 pub mod permissions;
 
-use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
+use crate::{
+    LOGGER_IMPL, localized_log, localized_log_format, plugin::loader::wasm::WasmPluginLoader,
+    server::Server,
+};
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -264,7 +267,13 @@ impl PluginManager {
 
         for name in plugin_names {
             if let Err(e) = self.unload_plugin(&name).await {
-                error!("Failed to unload plugin {name}: {e}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.plugin_unload_failed",
+                        &[name.to_string(), e.to_string()]
+                    )
+                );
             }
         }
 
@@ -325,7 +334,13 @@ impl PluginManager {
                     EventKind::Modify(ModifyKind::Data(_)) | EventKind::Create(_) => {
                         for path in event.paths {
                             if path.extension().is_some_and(|ext| ext == "wasm") {
-                                debug!("Detected change in plugin: {:?}", path);
+                                debug!(
+                                    "{}",
+                                    localized_log_format(
+                                        "server.log.plugin_change_detected",
+                                        &[format!("{path:?}")]
+                                    )
+                                );
                                 // Give it a small delay to ensure file is completely written
                                 tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -339,7 +354,13 @@ impl PluginManager {
                                 };
 
                                 if let Some(name) = plugin_name {
-                                    info!("Hot-reloading plugin: {}", name);
+                                    info!(
+                                        "{}",
+                                        localized_log_format(
+                                            "server.log.plugin_hot_reloading",
+                                            &[name.clone()]
+                                        )
+                                    );
                                     let _ = self_ref.unload_plugin(&name).await;
                                 }
 
@@ -347,7 +368,13 @@ impl PluginManager {
                                 // the loader might handle it or we might get a duplicate.
                                 // Most WASM loaders will just create a new instance.
                                 if let Err(e) = self_ref.start_loading_plugin(&path).await {
-                                    error!("Failed to hot-reload plugin {:?}: {}", path, e);
+                                    error!(
+                                        "{}",
+                                        localized_log_format(
+                                            "server.log.plugin_hot_reload_failed",
+                                            &[format!("{path:?}"), e.to_string()]
+                                        )
+                                    );
                                 }
                             }
                         }
@@ -426,8 +453,9 @@ impl PluginManager {
             sorted: &mut Vec<String>,
         ) -> Result<(), String> {
             if current_path.contains(name) {
-                return Err(format!(
-                    "Circular dependency detected involving plugin: {name}"
+                return Err(localized_log_format(
+                    "plugin.dependency.circular",
+                    &[name.to_owned()],
                 ));
             }
             if !visited.contains(name) {
@@ -435,7 +463,10 @@ impl PluginManager {
                 if let Some(deps) = deps_map.get(name) {
                     for dep in *deps {
                         if !plugin_names.contains(dep) {
-                            return Err(format!("Plugin {name} depends on missing plugin: {dep}"));
+                            return Err(localized_log_format(
+                                "plugin.dependency.missing",
+                                &[name.to_owned(), dep.to_owned()],
+                            ));
                         }
                         visit(dep, deps_map, plugin_names, visited, current_path, sorted)?;
                     }
@@ -499,7 +530,7 @@ impl PluginManager {
 
         let prompt = format!(
             "\n{} [y/N]: ",
-            "Do you want to allow these permissions and load the plugin?".bold()
+            localized_log("plugin.permission.confirm_prompt").bold()
         );
 
         let mut rl_taken = if let Some(logger_option) = crate::LOGGER_IMPL.get()
@@ -517,7 +548,9 @@ impl PluginManager {
                 input == "y" || input == "yes"
             })
         } else {
-            let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
+            let mut rl = DefaultEditor::new().expect(&localized_log(
+                "debug.expect.rustyline_editor_create_failed",
+            ));
             rl.readline(&prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
@@ -611,18 +644,28 @@ impl PluginManager {
                         .insert(plugin_name.clone(), PluginState::Loaded);
                     state_notify.notify_waiters();
 
-                    info!("Loaded {} ({})", metadata.name, metadata.version);
+                    info!(
+                        "{}",
+                        localized_log_format(
+                            "server.log.plugin_loaded",
+                            &[metadata.name.clone(), metadata.version.clone()]
+                        )
+                    );
 
                     if !metadata.permissions.is_empty() {
                         warn!(
-                            "Plugin \"{}\" uses the following permissions: {:?}",
-                            metadata.name, metadata.permissions
+                            "{}",
+                            localized_log_format(
+                                "server.log.plugin_permissions_used",
+                                &[metadata.name.clone(), format!("{:?}", metadata.permissions)]
+                            )
                         );
                     }
                 }
                 Err(e) => {
                     // Handle initialization failure
-                    let error_msg = format!("Initialization failed: {e}");
+                    let error_msg =
+                        localized_log_format("plugin.initialization.failed", &[e.to_string()]);
                     let _ = instance.on_unload(context).await;
 
                     // Get the loader data before removing the plugin
@@ -655,7 +698,13 @@ impl PluginManager {
                         .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
                     state_notify.notify_waiters();
 
-                    error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
+                    error!(
+                        "{}",
+                        localized_log_format(
+                            "server.log.plugin_init_failed",
+                            &[plugin_name.to_string(), error_msg.to_string()]
+                        )
+                    );
                 }
             }
         });
@@ -709,7 +758,13 @@ impl PluginManager {
                             ));
                             loader_found = true;
                         }
-                        Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
+                        Err(err) => error!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.plugin_load_failed",
+                                &[format!("{path:?}"), err.to_string()]
+                            )
+                        ),
                     }
                     break;
                 }
@@ -758,8 +813,11 @@ impl PluginManager {
 
                 if !allowed {
                     warn!(
-                        "Permission denied for plugin \"{}\", skipping loading.",
-                        metadata.name
+                        "{}",
+                        localized_log_format(
+                            "server.log.plugin_permission_denied",
+                            &[metadata.name.clone()]
+                        )
                     );
                     continue;
                 }
@@ -771,10 +829,16 @@ impl PluginManager {
                     Ok(task) => {
                         // We must await each initialization to ensure dependencies are ready
                         if let Err(err) = task.await {
-                            error!("Plugin initialization task panicked: {}", err);
+                            error!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.plugin_initialization_task_panicked",
+                                    &[err.to_string()]
+                                )
+                            );
                         }
                     }
-                    Err(err) => error!("{}", err),
+                    Err(err) => error!("{err}"),
                 }
             }
         }
@@ -795,8 +859,11 @@ impl PluginManager {
             && entry.permissions_requested == metadata.permissions
         {
             info!(
-                "Found cached permission decision for plugin \"{}\" (approved: {})",
-                metadata.name, entry.approved
+                "{}",
+                localized_log_format(
+                    "server.log.plugin_cached_permission_decision",
+                    &[metadata.name.clone(), entry.approved.to_string()]
+                )
             );
             return (entry.approved, std::time::Duration::ZERO);
         }
@@ -831,11 +898,14 @@ impl PluginManager {
 
                 if !allowed {
                     warn!(
-                        "Permission denied for plugin \"{}\", skipping loading.",
-                        metadata.name
+                        "{}",
+                        localized_log_format(
+                            "server.log.plugin_permission_denied",
+                            &[metadata.name.clone()]
+                        )
                     );
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
-                        "Permission denied".to_string(),
+                        localized_log("server.log.plugin_permission_denied_short"),
                     )));
                 }
 

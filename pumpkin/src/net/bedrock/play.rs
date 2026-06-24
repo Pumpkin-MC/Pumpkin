@@ -45,6 +45,7 @@ use pumpkin_world::world::BlockFlags;
 use crate::{
     block::{BlockHitResult, registry::BlockActionResult},
     entity::{EntityBase, player::Player},
+    localized_log, localized_log_format,
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
         item_held::PlayerItemHeldEvent, player_chat::PlayerChatEvent,
@@ -67,9 +68,11 @@ fn descriptor_to_stack(desc: &NetworkItemDescriptor) -> ItemStack {
         ItemStack::new(desc.stack_size as u8, mapping.java_item)
     } else {
         tracing::warn!(
-            "Failed to map bedrock item id {} and data {} to Java item",
-            desc.id.0,
-            desc.aux_value.0
+            "{}",
+            localized_log_format(
+                "server.log.bedrock_item_mapping_failed",
+                &[desc.id.0.to_string(), desc.aux_value.0.to_string()]
+            )
         );
         ItemStack::EMPTY.clone()
     }
@@ -121,7 +124,7 @@ impl BedrockClient {
         if chunk_radius.0 < 1 {
             self.kick(
                 DisconnectReason::Kicked,
-                "Cannot have zero or negative view distance!".to_string(),
+                localized_log("client.disconnect.invalid_view_distance"),
             )
             .await;
             return;
@@ -141,16 +144,23 @@ impl BedrockClient {
             let old_vd = current_config.view_distance;
             let mut new_config = (**current_config).clone();
 
-            new_config.view_distance =
-                NonZero::new(view_distance as u8).expect("View distance must be > 0");
+            new_config.view_distance = NonZero::new(view_distance as u8)
+                .expect(&localized_log("debug.expect.view_distance_positive"));
             player.config.store(std::sync::Arc::new(new_config));
 
             old_vd
         };
 
         debug!(
-            "Player {} updated their render distance: {} -> {}.",
-            player.gameprofile.name, old_view_distance, view_distance
+            "{}",
+            localized_log_format(
+                "server.log.bedrock_player_render_distance_updated",
+                &[
+                    player.gameprofile.name.clone(),
+                    old_view_distance.to_string(),
+                    view_distance.to_string()
+                ]
+            )
         );
         chunker::update_position(player).await;
     }
@@ -161,8 +171,14 @@ impl BedrockClient {
         packet: &SSetLocalPlayerAsInitialized,
     ) {
         debug!(
-            "Player {} initialized (Runtime ID: {})",
-            player.gameprofile.name, packet.runtime_entity_id.0
+            "{}",
+            localized_log_format(
+                "server.log.bedrock_player_initialized",
+                &[
+                    player.gameprofile.name.clone(),
+                    packet.runtime_entity_id.0.to_string()
+                ]
+            )
         );
         // This is sent when the client has finished loading and rendering the world.
         player.set_client_loaded(true);
@@ -542,7 +558,10 @@ impl BedrockClient {
                 };
                 let world = player.world();
                 let block = world.get_block(&data.block_position);
-                let server = world.server.upgrade().expect("Server is gone");
+                let server = world
+                    .server
+                    .upgrade()
+                    .expect(&localized_log("debug.expect.server_gone"));
 
                 if player.gamemode.load() == GameMode::Spectator {
                     // TODO: openMenu ?
@@ -602,7 +621,10 @@ impl BedrockClient {
                             let held = player.inventory.held_item();
                             let mut stack = held.lock().await;
                             if !target.interact(player, &mut stack).await {
-                                let server = world.server.upgrade().expect("Server is gone");
+                                let server = world
+                                    .server
+                                    .upgrade()
+                                    .expect(&localized_log("debug.expect.server_gone"));
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, target)
@@ -619,8 +641,11 @@ impl BedrockClient {
                     }
                     _ => {
                         tracing::warn!(
-                            "invalid UseItemOnEntity action type {}",
-                            data.action_type.0
+                            "{}",
+                            localized_log_format(
+                                "server.log.bedrock_invalid_use_item_on_entity_action",
+                                &[data.action_type.0.to_string()]
+                            )
                         );
                         // Kick?
                     }
@@ -629,7 +654,11 @@ impl BedrockClient {
             TransactionData::ReleaseItem(_data) => {
                 let item_in_use = player.living_entity.item_in_use.lock().await.clone();
                 if let Some(stack) = item_in_use {
-                    let server = player.world().server.upgrade().expect("Server is gone");
+                    let server = player
+                        .world()
+                        .server
+                        .upgrade()
+                        .expect(&localized_log("debug.expect.server_gone"));
                     server.item_registry.on_stopped_using(&stack, player).await;
                 }
                 player.living_entity.clear_active_hand().await;
@@ -716,7 +745,13 @@ impl BedrockClient {
             PlayerChatEvent::new(player.clone(), packet.message, vec![]);
 
             'after: {
-                info!("<chat> {}: {}", gameprofile.name, event.message);
+                info!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.chat_message",
+                        &[gameprofile.name.clone(), event.message.clone()]
+                    )
+                );
 
                 let config = &server.advanced_config;
 
@@ -907,9 +942,11 @@ impl BedrockClient {
 
                 if server.advanced_config.commands.log_console {
                     info!(
-                        "Player ({}): executed command /{}",
-                        player.gameprofile.name,
-                        command
+                        "{}",
+                        localized_log_format(
+                            "server.log.player_executed_command",
+                            &[player.gameprofile.name.clone(), command.clone()]
+                        )
                     );
                 }
             }
@@ -976,18 +1013,30 @@ impl BedrockClient {
                                 created_item = Some(ItemStack::new(count, mapping.java_item));
                             } else {
                                 tracing::warn!(
-                                    "Failed to map bedrock item id {} and data {} to Java item",
-                                    entry.item_id,
-                                    entry.item_aux_value
+                                    "{}",
+                                    localized_log_format(
+                                        "server.log.bedrock_item_mapping_failed",
+                                        &[
+                                            entry.item_id.to_string(),
+                                            entry.item_aux_value.to_string()
+                                        ]
+                                    )
                                 );
                                 result = 1;
                                 break;
                             }
                         } else {
                             tracing::warn!(
-                                "Creative item index {} out of bounds (len: {})",
-                                index,
-                                pumpkin_data::bedrock_creative::CREATIVE_ENTRIES.len()
+                                "{}",
+                                localized_log_format(
+                                    "server.log.bedrock_creative_item_index_oob",
+                                    &[
+                                        index.to_string(),
+                                        pumpkin_data::bedrock_creative::CREATIVE_ENTRIES
+                                            .len()
+                                            .to_string()
+                                    ]
+                                )
                             );
                             result = 1;
                             break;
@@ -1016,7 +1065,10 @@ impl BedrockClient {
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() && created_item.is_none() {
-                            tracing::debug!("Source stack is empty in Take/Place");
+                            tracing::debug!(
+                                "{}",
+                                localized_log("server.log.bedrock_source_stack_empty_take_place")
+                            );
                             result = 1;
                             break;
                         }
@@ -1034,7 +1086,10 @@ impl BedrockClient {
                                 dest_stack.item_count = dest_stack.item_count.saturating_add(count);
                             } else {
                                 tracing::debug!(
-                                    "Destination stack is not compatible with source stack"
+                                    "{}",
+                                    localized_log(
+                                        "server.log.bedrock_destination_stack_incompatible"
+                                    )
                                 );
                                 result = 1;
                                 break;
@@ -1192,7 +1247,10 @@ impl BedrockClient {
                             let output_stack = output_slot.get_cloned_stack().await;
 
                             if output_stack.is_empty() {
-                                tracing::warn!("Client tried to craft, but output slot is empty!");
+                                tracing::warn!(
+                                    "{}",
+                                    localized_log("server.log.bedrock_craft_output_empty")
+                                );
                                 result = 1;
                                 break;
                             }

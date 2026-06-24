@@ -1,8 +1,9 @@
-use crate::command::CommandSender;
 use crate::command::args::{Arg, ArgumentConsumer, ConsumeResult, FindArg, GetClientSideArgParser};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
+use crate::command::{CommandSender, tr_format};
 use crate::server::Server;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use tracing::debug;
@@ -62,6 +63,15 @@ impl FindArg<'_> for TextComponentArgConsumer {
 
 fn parse_text_component(input: &str) -> Option<TextComponent> {
     serde_json::from_str(input)
-        .map_err(|e| debug!("Failed to parse text component: {e}"))
+        .map_err(|e| {
+            debug!(
+                "{}",
+                tr_format(
+                    "server.log.failed_parse_text_component",
+                    server_command_locale(),
+                    &[e.to_string()],
+                )
+            );
+        })
         .ok()
 }

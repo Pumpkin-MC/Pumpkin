@@ -9,6 +9,7 @@ use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
     dispatcher::CommandError,
+    tr,
     tree::{
         CommandTree,
         builder::{argument, literal, require},
@@ -19,7 +20,7 @@ use crate::command::CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["plugin"];
 
-const DESCRIPTION: &str = "Manage plugins.";
+const DESCRIPTION: &str = "commands.plugin.description";
 
 const PLUGIN_NAME: &str = "plugin_name";
 
@@ -34,31 +35,36 @@ impl CommandExecutor for ListExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let plugins = server.plugin_manager.active_plugins().await;
+            let locale = sender.get_locale();
 
-            let message_text = if plugins.is_empty() {
-                "There are no loaded plugins.".to_string()
+            let mut message = if plugins.is_empty() {
+                tr("commands.plugin.no_plugins", locale, [])
             } else if plugins.len() == 1 {
-                "There is 1 plugin loaded:\n".to_string()
+                tr("commands.plugin.one_plugin", locale, [])
             } else {
-                format!("There are {} plugins loaded:\n", plugins.len())
+                tr(
+                    "commands.plugin.multiple_plugins",
+                    locale,
+                    [TextComponent::text(plugins.len().to_string())],
+                )
             };
-            let mut message = TextComponent::text(message_text);
 
             for (i, metadata) in plugins.iter().enumerate() {
-                let fmt = if i == plugins.len() - 1 {
-                    metadata.name.clone()
-                } else {
-                    format!("{}, ", metadata.name)
-                };
-                let hover_text = format!(
-                    "Version: {}\nAuthors: {}\nDescription: {}",
-                    metadata.version,
-                    metadata.authors.join(", "),
-                    metadata.description
-                );
-                let component = TextComponent::text(fmt)
+                let mut component = TextComponent::text(metadata.name.clone())
                     .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
+                    .hover_event(HoverEvent::show_text(tr(
+                        "commands.plugin.hover_text",
+                        locale,
+                        [
+                            TextComponent::text(metadata.version.to_string()),
+                            TextComponent::text(metadata.authors.join(", ")),
+                            TextComponent::text(metadata.description.clone()),
+                        ],
+                    )));
+                if i != plugins.len() - 1 {
+                    component =
+                        component.add_child(tr("commands.plugin.list.separator", locale, []));
+                }
 
                 message = message.add_child(component);
             }
@@ -83,11 +89,14 @@ impl CommandExecutor for LoadExecutor {
             let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
                 return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
             };
+            let locale = sender.get_locale();
 
             if server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Plugin {plugin_name} is already loaded"
-                ))));
+                return Err(CommandError::CommandFailed(tr(
+                    "commands.plugin.already_loaded",
+                    locale,
+                    [TextComponent::text(plugin_name.to_string())],
+                )));
             }
 
             let result = server
@@ -99,17 +108,24 @@ impl CommandExecutor for LoadExecutor {
                 Ok(()) => {
                     sender
                         .send_message(
-                            TextComponent::text(format!(
-                                "Plugin {plugin_name} loaded successfully"
-                            ))
+                            tr(
+                                "commands.plugin.loaded_successfully",
+                                locale,
+                                [TextComponent::text(plugin_name.to_string())],
+                            )
                             .color_named(NamedColor::Green),
                         )
                         .await;
                     Ok(1)
                 }
-                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Failed to load plugin {plugin_name}: {e}"
-                )))),
+                Err(e) => Err(CommandError::CommandFailed(tr(
+                    "commands.plugin.failed_to_load",
+                    locale,
+                    [
+                        TextComponent::text(plugin_name.to_string()),
+                        TextComponent::text(e.to_string()),
+                    ],
+                ))),
             }
         })
     }
@@ -128,11 +144,14 @@ impl CommandExecutor for UnloadExecutor {
             let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
                 return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
             };
+            let locale = sender.get_locale();
 
             if !server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Plugin {plugin_name} is not loaded"
-                ))));
+                return Err(CommandError::CommandFailed(tr(
+                    "commands.plugin.not_loaded",
+                    locale,
+                    [TextComponent::text(plugin_name.to_string())],
+                )));
             }
 
             let result = server.plugin_manager.unload_plugin(plugin_name).await;
@@ -141,18 +160,25 @@ impl CommandExecutor for UnloadExecutor {
                 Ok(()) => {
                     sender
                         .send_message(
-                            TextComponent::text(format!(
-                                "Plugin {plugin_name} unloaded successfully",
-                            ))
+                            tr(
+                                "commands.plugin.unloaded_successfully",
+                                locale,
+                                [TextComponent::text(plugin_name.to_string())],
+                            )
                             .color_named(NamedColor::Green),
                         )
                         .await;
 
                     Ok(1)
                 }
-                Err(e) => Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Failed to unload plugin {plugin_name}: {e}"
-                )))),
+                Err(e) => Err(CommandError::CommandFailed(tr(
+                    "commands.plugin.failed_to_unload",
+                    locale,
+                    [
+                        TextComponent::text(plugin_name.to_string()),
+                        TextComponent::text(e.to_string()),
+                    ],
+                ))),
             }
         })
     }
@@ -169,23 +195,26 @@ impl CommandExecutor for HotReloadExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let enabled = self.0;
+            let locale = sender.get_locale();
 
             if enabled {
                 if let Err(e) = server.plugin_manager.start_watcher().await {
-                    return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                        "Failed to start plugin watcher: {e}"
-                    ))));
+                    return Err(CommandError::CommandFailed(tr(
+                        "commands.plugin.failed_to_start_watcher",
+                        locale,
+                        [TextComponent::text(e.to_string())],
+                    )));
                 }
 
                 sender
                     .send_message(
-                        TextComponent::text("Hot reloading has been enabled.")
+                        tr("commands.plugin.hotreload_enabled", locale, [])
                             .color_named(NamedColor::Green),
                     )
                     .await;
                 sender
                     .send_message(
-                        TextComponent::text("WARNING: Hot reloading can impact performance and should only be enabled during plugin development.")
+                        tr("commands.plugin.hotreload_warning", locale, [])
                             .color_named(NamedColor::Red),
                     )
                     .await;
@@ -194,7 +223,7 @@ impl CommandExecutor for HotReloadExecutor {
 
                 sender
                     .send_message(
-                        TextComponent::text("Hot reloading has been disabled.")
+                        tr("commands.plugin.hotreload_disabled", locale, [])
                             .color_named(NamedColor::Green),
                     )
                     .await;

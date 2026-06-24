@@ -48,6 +48,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_world::{
     block::entities::PropertyDelegate,
     inventory::{ComparableInventory, Inventory},
@@ -312,9 +313,14 @@ pub trait ScreenHandler: Send + Sync {
             behaviour.previous_tracked_stacks[slot].set_received_hash(hash);
         } else {
             warn!(
-                "Incorrect slot index: {} available slots: {}",
-                slot,
-                behaviour.previous_tracked_stacks.len()
+                "{}",
+                localized_log_format(
+                    "inventory.screen_handler.incorrect_slot_index",
+                    &[
+                        slot.to_string(),
+                        behaviour.previous_tracked_stacks.len().to_string()
+                    ]
+                )
             );
         }
     }
@@ -879,7 +885,13 @@ pub trait ScreenHandler: Send + Sync {
                     behaviour.drag_slots.clear();
                 } else if drag_type == 1 {
                     if slot_index < 0 {
-                        warn!("Invalid slot index for drag action: {slot_index}. Must be >= 0");
+                        warn!(
+                            "{}",
+                            localized_log_format(
+                                "inventory.screen_handler.invalid_drag_slot_index",
+                                &[slot_index.to_string()]
+                            )
+                        );
                         return;
                     }
                     let cursor_stack = behaviour.cursor_stack.lock().await;
@@ -932,7 +944,13 @@ pub trait ScreenHandler: Send + Sync {
                                 cursor_stack.item_count = cursor_stack.get_max_stack_size();
                                 cursor_stack.item_count
                             } else {
-                                panic!("Invalid drag button: {drag_button}");
+                                panic!(
+                                    "{}",
+                                    localized_log_format(
+                                        "debug.panic.invalid_drag_button",
+                                        &[drag_button.to_string()]
+                                    )
+                                );
                             };
                             inserting_count = inserting_count
                                 .min(max(

@@ -1,3 +1,4 @@
+use crate::{localized_log, localized_log_format};
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
@@ -88,7 +89,12 @@ impl HostEntity for PluginHostState {
         let index = names
             .iter()
             .position(|n| n == original_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
+            .ok_or_else(|| {
+                wasmtime::Error::msg(localized_log_format(
+                    "plugin.wasm.entity.unknown_entity_type",
+                    &[original_name.to_owned()],
+                ))
+            })?;
 
         // Safety: The WIT enum is generated from the sorted keys of assets/entities.json.
         Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
@@ -102,8 +108,11 @@ impl HostEntity for PluginHostState {
     async fn get_world(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Resource<World>> {
         let entity = entity_from_resource(self, &entity)?;
         let world = entity.get_entity().world.load_full();
-        self.add_world(world)
-            .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+        self.add_world(world).map_err(|_| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.failed_add_world_resource",
+            ))
+        })
     }
 
     async fn get_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
@@ -173,7 +182,11 @@ impl HostEntity for PluginHostState {
             .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
                 &Resource::new_own(world_ref.rep()),
             )
-            .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?;
+            .map_err(|_| {
+                wasmtime::Error::msg(localized_log(
+                    "debug.expect.plugin_wasm.invalid_world_resource_handle",
+                ))
+            })?;
         let world = world.provider.clone();
         entity_base
             .teleport(
@@ -312,8 +325,11 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<Resource<TextComponent>> {
         let entity = entity_from_resource(self, &entity)?;
         let name = entity.get_name();
-        self.add_text_component(name)
-            .map_err(|_| wasmtime::Error::msg("failed to add text component resource"))
+        self.add_text_component(name).map_err(|_| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.failed_add_text_component_resource",
+            ))
+        })
     }
 
     async fn set_custom_name(
@@ -344,7 +360,11 @@ impl HostEntity for PluginHostState {
         let name = entity.get_entity().custom_name.load();
         if let Some(name) = name.as_ref() {
             Ok(Some(self.add_text_component(name.clone()).map_err(
-                |_| wasmtime::Error::msg("failed to add text component resource"),
+                |_| {
+                    wasmtime::Error::msg(localized_log(
+                        "debug.expect.plugin_wasm.failed_add_text_component_resource",
+                    ))
+                },
             )?))
         } else {
             Ok(None)
@@ -537,10 +557,11 @@ impl HostEntity for PluginHostState {
         for e in entities {
             // Don't include the entity itself
             if e.get_entity().entity_id != entity.get_entity().entity_id {
-                result.push(
-                    self.add_entity(e)
-                        .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
-                );
+                result.push(self.add_entity(e).map_err(|_| {
+                    wasmtime::Error::msg(localized_log(
+                        "debug.expect.plugin_wasm.failed_add_entity_resource",
+                    ))
+                })?);
             }
         }
         Ok(result)
@@ -554,7 +575,9 @@ impl HostEntity for PluginHostState {
         let vehicle = entity.get_entity().vehicle.lock().await;
         if let Some(v) = vehicle.as_ref() {
             Ok(Some(self.add_entity(Arc::clone(v)).map_err(|_| {
-                wasmtime::Error::msg("failed to add entity resource")
+                wasmtime::Error::msg(localized_log(
+                    "debug.expect.plugin_wasm.failed_add_entity_resource",
+                ))
             })?))
         } else {
             Ok(None)
@@ -595,10 +618,11 @@ impl HostEntity for PluginHostState {
         let passengers = entity.get_entity().passengers.lock().await;
         let mut result = Vec::new();
         for p in passengers.iter() {
-            result.push(
-                self.add_entity(Arc::clone(p))
-                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
-            );
+            result.push(self.add_entity(Arc::clone(p)).map_err(|_| {
+                wasmtime::Error::msg(localized_log(
+                    "debug.expect.plugin_wasm.failed_add_entity_resource",
+                ))
+            })?);
         }
         Ok(result)
     }

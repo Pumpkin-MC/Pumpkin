@@ -30,6 +30,7 @@ use crate::{
             builder::{NonLeafNodeBuilder, argument, literal},
         },
     },
+    localized_log, localized_log_format,
     plugin::loader::wasm::wasm_host::{
         state::{
             CommandNodeResource, CommandResource, CommandSenderResource, ConsumedArgsResource,
@@ -600,13 +601,17 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             ArgumentType::Difficulty => argument(name, DifficultyArgumentConsumer),
             ArgumentType::Time(_) => argument(name, TimeArgumentConsumer),
             _ => {
-                return Err(wasmtime::Error::msg(format!(
-                    "Unimplemented argument type: {arg_type:?}"
+                return Err(wasmtime::Error::msg(localized_log_format(
+                    "plugin.wasm.commands.unimplemented_argument_type",
+                    &[format!("{arg_type:?}")],
                 )));
             }
         };
-        self.add_command_node(node)
-            .map_err(|_| wasmtime::Error::msg("Failed to add argument node"))
+        self.add_command_node(node).map_err(|_| {
+            wasmtime::Error::msg(localized_log(
+                "plugin.wasm.commands.failed_add_argument_node",
+            ))
+        })
     }
 
     async fn then(

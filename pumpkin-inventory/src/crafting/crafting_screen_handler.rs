@@ -28,6 +28,7 @@ use crate::screen_handler::{
     ScreenHandlerListener,
 };
 use crate::slot::{BoxFuture, NormalSlot, Slot};
+use pumpkin_util::translation::localized_log;
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
@@ -123,7 +124,7 @@ async fn recipe_matches(
                     let ingredient = key
                         .iter()
                         .find_map(|(k, v)| (*k == current_key).then_some(v))
-                        .expect("Crafting recipe used invalid key");
+                        .expect(&localized_log("debug.expect.crafting_recipe_invalid_key"));
 
                     let slot = slot.lock().await;
 
@@ -155,7 +156,7 @@ async fn recipe_matches(
                         let ingredient = key
                             .iter()
                             .find_map(|(k, v)| (*k == current_key).then_some(v))
-                            .expect("Crafting recipe used invalid key");
+                            .expect(&localized_log("debug.expect.crafting_recipe_invalid_key"));
                         let slot = slot.lock().await;
                         if !ingredient.match_item(slot.item) {
                             matched = false;
@@ -278,7 +279,7 @@ async fn recipe_matches(
                         .iter()
                         .find(|(k, _)| *k == current_key)
                         .map(|(_, v)| v)
-                        .expect("Crafting recipe used invalid key");
+                        .expect(&localized_log("debug.expect.crafting_recipe_invalid_key"));
                     let slot = slot.lock().await;
                     if !ingredient.match_item(slot.item) {
                         matched = false;

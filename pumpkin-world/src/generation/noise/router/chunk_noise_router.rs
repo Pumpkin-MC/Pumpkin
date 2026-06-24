@@ -1,6 +1,7 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::noise_router::WrapperType;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log;
 
 use crate::generation::biome_coords;
 
@@ -486,11 +487,14 @@ impl<'a> ChunkNoiseRouter<'a> {
             let (component_stack, component) = components.split_at_mut(*cell_cache_index);
 
             let Some(ChunkNoiseFunctionComponent::Chunk(chunk)) = component.first_mut() else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
             let ChunkSpecificNoiseFunctionComponent::CellCache(cell_cache) = chunk else {
-                tracing::error!("Expected ChunkSpecificNoiseFunctionComponent::CellCache");
+                tracing::error!(
+                    "{}",
+                    localized_log("world.noise.expected_cell_cache_component")
+                );
                 continue;
             };
 
@@ -516,14 +520,15 @@ impl<'a> ChunkNoiseRouter<'a> {
             let (component_stack, component) = components.split_at_mut(*interpolator_index);
 
             let Some(ChunkNoiseFunctionComponent::Chunk(chunk)) = component.first_mut() else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
                 tracing::error!(
-                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                    "{}",
+                    localized_log("world.noise.expected_density_interpolator_component")
                 );
                 continue;
             };
@@ -552,7 +557,7 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
 
@@ -560,7 +565,8 @@ impl<'a> ChunkNoiseRouter<'a> {
                 chunk
             else {
                 tracing::error!(
-                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                    "{}",
+                    localized_log("world.noise.expected_density_interpolator_component")
                 );
                 continue;
             };
@@ -575,7 +581,7 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
 
@@ -583,7 +589,8 @@ impl<'a> ChunkNoiseRouter<'a> {
                 chunk
             else {
                 tracing::error!(
-                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                    "{}",
+                    localized_log("world.noise.expected_density_interpolator_component")
                 );
                 continue;
             };
@@ -598,14 +605,15 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
                 tracing::error!(
-                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                    "{}",
+                    localized_log("world.noise.expected_density_interpolator_component")
                 );
                 continue;
             };
@@ -620,14 +628,15 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
                 tracing::error!(
-                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                    "{}",
+                    localized_log("world.noise.expected_density_interpolator_component")
                 );
                 continue;
             };
@@ -642,14 +651,15 @@ impl<'a> ChunkNoiseRouter<'a> {
         for interpolator_index in indices {
             let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
             else {
-                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                tracing::error!("{}", localized_log("world.noise.expected_chunk_component"));
                 continue;
             };
             let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
                 chunk
             else {
                 tracing::error!(
-                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                    "{}",
+                    localized_log("world.noise.expected_density_interpolator_component")
                 );
                 continue;
             };

@@ -1,3 +1,4 @@
+use crate::localized_log;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -13,9 +14,9 @@ use crate::plugin::{
 
 impl ToFromWasmEvent for SpawnChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let world = state
-            .add_world(self.world.clone())
-            .expect("failed to add world resource");
+        let world = state.add_world(self.world.clone()).expect(&localized_log(
+            "debug.expect.plugin_wasm.failed_add_world_resource",
+        ));
 
         Event::SpawnChangeEvent(SpawnChangeEventData {
             target_world: world,
@@ -39,7 +40,10 @@ impl ToFromWasmEvent for SpawnChangeEvent {
                 new_yaw: data.new_yaw,
                 new_pitch: data.new_pitch,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }

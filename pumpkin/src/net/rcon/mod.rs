@@ -10,7 +10,7 @@ use tokio::{
 use tracing::{debug, error, info};
 
 use crate::command::CommandSender;
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, localized_log, localized_log_format, server::Server};
 
 pub mod packet;
 
@@ -49,7 +49,7 @@ impl RCONServer {
             let password = password.clone();
             let server = server.clone();
             tokio::spawn(async move { while !client.handle(&server, &password).await {} });
-            debug!("closed RCON connection");
+            debug!("{}", localized_log("server.log.rcon_connection_closed"));
             connections -= 1;
         }
     }
@@ -83,13 +83,22 @@ impl RCONClient {
                 Ok(true) => return true,
                 Ok(false) => {}
                 Err(e) => {
-                    error!("Could not read packet: {e}");
+                    error!(
+                        "{}",
+                        localized_log_format(
+                            "server.log.rcon_packet_read_failed",
+                            &[e.to_string()]
+                        )
+                    );
                     return true;
                 }
             }
             // If we get a close here, we might have a reply, which we still want to write.
             let _ = self.poll(server, password).await.map_err(|e| {
-                error!("RCON error: {e}");
+                error!(
+                    "{}",
+                    localized_log_format("server.log.rcon_error", &[e.to_string()])
+                );
                 self.closed = true;
             });
         }
@@ -107,12 +116,24 @@ impl RCONClient {
                     self.send(ClientboundPacket::AuthResponse, packet.get_id(), "")
                         .await?;
                     if config.logging.logged_successfully {
-                        info!("RCON ({}): Client logged in successfully", self.address);
+                        info!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.rcon_client_logged_in",
+                                &[self.address.to_string()]
+                            )
+                        );
                     }
                     self.logged_in = true;
                 } else {
                     if config.logging.wrong_password {
-                        info!("RCON ({}): Client tried the wrong password", self.address);
+                        info!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.rcon_wrong_password",
+                                &[self.address.to_string()]
+                            )
+                        );
                     }
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
                     self.closed = true;
@@ -143,7 +164,13 @@ impl RCONClient {
                     let output = output.lock().await;
                     for line in output.iter() {
                         if config.logging.commands {
-                            info!("RCON ({}): {}", self.address, line);
+                            info!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.rcon_command_output",
+                                    &[self.address.to_string(), line.to_string()]
+                                )
+                            );
                         }
                         self.send(ClientboundPacket::Output, packet.get_id(), line)
                             .await?;

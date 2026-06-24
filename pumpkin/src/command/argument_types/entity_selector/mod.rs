@@ -8,6 +8,7 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::localized_log;
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::GameMode;
@@ -164,7 +165,7 @@ impl EntitySelector {
         if list.len() == 1 {
             Ok(list
                 .first()
-                .expect("List length is 1, so first should exist")
+                .expect(&localized_log("debug.expect.list_first_should_exist"))
                 .clone())
         } else {
             Err(entity::NO_PLAYERS_ERROR_TYPE.create_without_context())
