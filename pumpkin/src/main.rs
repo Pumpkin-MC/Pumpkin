@@ -25,7 +25,6 @@ use pumpkin::{
     data::VanillaData,
     localized_log, localized_log_format, localized_text, stop_or_exit_server, stop_server,
 };
-use pumpkin::{PumpkinServer, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_i18n::{
