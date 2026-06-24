@@ -49,7 +49,7 @@ impl ItemBehaviour for WindChargeItem {
 
             // TODO: Implement that the projectile will explode on impact
             world
-                .spawn_entity(Arc::new(WindChargeEntity::new(wind_charge)))
+                .spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)))
                 .await;
         })
     }
