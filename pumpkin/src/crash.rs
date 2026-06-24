@@ -17,6 +17,8 @@ use sysinfo::{Cpu, System};
 use time::OffsetDateTime;
 use tracing::error;
 
+use crate::{localized_log, localized_log_format};
+
 pub const BYTES_PER_MEBIBYTE: u64 = 1024 * 1024;
 
 /// Writes to a string which cannot fail.
@@ -108,7 +110,7 @@ impl CrashReport {
 
         error!(
             "{}",
-            TextComponent::text("Pumpkin has encountered a panic!")
+            TextComponent::text(localized_log("crash.encountered_panic"))
                 .color(RED)
                 .bold()
                 .to_pretty_console()
@@ -117,12 +119,29 @@ impl CrashReport {
         error!("");
 
         // Printing panic info.
-        let thread_name = self.thread.name().unwrap_or("<unnamed>");
+        let thread_name = self
+            .thread
+            .name()
+            .map_or_else(|| localized_log("crash.unnamed_thread"), ToOwned::to_owned);
         let thread_id = self.thread.id();
 
         let message = self.panic_location.as_ref().map_or_else(
-            || format!("Thread '{thread_name}' {thread_id:?} panicked"),
-            |location| format!("Thread '{thread_name}' with {thread_id:?} panicked at {location}"),
+            || {
+                localized_log_format(
+                    "crash.thread_panicked",
+                    &[thread_name.clone(), format!("{thread_id:?}")],
+                )
+            },
+            |location| {
+                localized_log_format(
+                    "crash.thread_panicked_at",
+                    &[
+                        thread_name.clone(),
+                        format!("{thread_id:?}"),
+                        location.to_string(),
+                    ],
+                )
+            },
         );
 
         if let Some(payload) = &self.payload {
@@ -140,7 +159,7 @@ impl CrashReport {
             BacktraceStatus::Unsupported => {
                 error!(
                     "{}",
-                    RED.console_color("Backtracing is not supported for this platform.")
+                    RED.console_color(&localized_log("crash.backtracing_unsupported"))
                 );
             }
             // It cannot possibly be BacktraceStatus::Disabled
@@ -148,19 +167,22 @@ impl CrashReport {
             BacktraceStatus::Captured => {
                 error!(
                     "{}",
-                    RED.console_color("The full backtrace will be printed to the crash report.")
+                    RED.console_color(&localized_log("crash.full_backtrace_will_print"))
                 );
 
                 if self.captured_backtrace.status() == BacktraceStatus::Captured {
                     eprintln!(
                         "{}\n{}",
-                        RED.console_color("Backtrace:"),
+                        RED.console_color(&localized_log("crash.backtrace_label")),
                         self.captured_backtrace
                     );
                 }
             }
             _ => {
-                error!("{}", RED.console_color("Backtrace status is unknown, so no backtrace will be generated for the crash report."));
+                error!(
+                    "{}",
+                    RED.console_color(&localized_log("server.log.backtrace_unknown"))
+                );
             }
         }
     }
@@ -170,71 +192,140 @@ impl CrashReport {
     pub fn generate_file_content(&self) -> String {
         let mut output = String::new();
 
-        writeln_output!(&mut output, "====== Pumpkin Crash Report ======");
+        writeln_output!(&mut output, "{}", localized_log("crash.report.title"));
         writeln_output!(&mut output);
-        writeln_output!(&mut output, "Time: {}", self.utc_time);
         writeln_output!(
             &mut output,
-            "Message: {}",
-            self.payload.as_deref().unwrap_or("<unknown>")
+            "{}",
+            localized_log_format("crash.report.time", &[self.utc_time.to_string()])
+        );
+        writeln_output!(
+            &mut output,
+            "{}",
+            localized_log_format(
+                "crash.report.message",
+                &[self
+                    .payload
+                    .clone()
+                    .unwrap_or_else(|| localized_log("crash.unknown_payload"))],
+            )
         );
 
         if let Some(panic_location) = &self.panic_location {
-            writeln_output!(&mut output, "Panic Location: {}", panic_location);
+            writeln_output!(
+                &mut output,
+                "{}",
+                localized_log_format("crash.report.panic_location", &[panic_location.to_string()],)
+            );
         }
 
         writeln_output!(&mut output);
-        writeln_output!(&mut output, "--- Panicking Thread ---");
-        writeln_output!(&mut output, "ID: {:?}", self.thread.id());
+        writeln_output!(
+            &mut output,
+            "{}",
+            localized_log("crash.report.section_panicking_thread")
+        );
+        writeln_output!(
+            &mut output,
+            "{}",
+            localized_log_format(
+                "crash.report.thread_id",
+                &[format!("{:?}", self.thread.id())]
+            )
+        );
         if let Some(thread_name) = self.thread.name() {
-            writeln_output!(&mut output, "Name: {}", thread_name);
+            writeln_output!(
+                &mut output,
+                "{}",
+                localized_log_format("crash.report.thread_name", &[thread_name.to_owned()])
+            );
         }
-        writeln_output!(&mut output, "Backtrace:");
+        writeln_output!(&mut output, "{}", localized_log("crash.backtrace_label"));
         writeln_output!(&mut output, "{}", self.full_backtrace());
 
-        writeln_output!(&mut output, "--- Server Details ---");
+        writeln_output!(
+            &mut output,
+            "{}",
+            localized_log("crash.report.section_server_details")
+        );
 
         writeln_output!(
             &mut output,
-            "Pumpkin Version: {}",
-            Self::get_pumpkin_version()
+            "{}",
+            localized_log_format(
+                "crash.report.pumpkin_version",
+                &[Self::get_pumpkin_version()]
+            )
         );
-        writeln_output!(&mut output, "Minecraft Version: {}", CURRENT_MC_VERSION);
         writeln_output!(
             &mut output,
-            "Server compiled with Rust {}",
-            rustc_version_runtime::version()
+            "{}",
+            localized_log_format(
+                "crash.report.minecraft_version",
+                &[CURRENT_MC_VERSION.to_string()],
+            )
+        );
+        writeln_output!(
+            &mut output,
+            "{}",
+            localized_log_format(
+                "crash.report.rust_version",
+                &[rustc_version_runtime::version().to_string()],
+            )
         );
 
         if sysinfo::IS_SUPPORTED_SYSTEM {
-            writeln_output!(&mut output, "\n--- System Details ---");
+            writeln_output!(&mut output);
+            writeln_output!(
+                &mut output,
+                "{}",
+                localized_log("crash.report.section_system_details")
+            );
 
             let mut sys = System::new_all();
             sys.refresh_all();
 
             writeln_output!(
                 &mut output,
-                "Operating System: {}",
-                System::long_os_version().unwrap_or("Unknown".to_string())
+                "{}",
+                localized_log_format(
+                    "crash.report.operating_system",
+                    &[System::long_os_version()
+                        .unwrap_or_else(|| localized_log("crash.report.unknown"))],
+                )
             );
             writeln_output!(
                 &mut output,
-                "Kernel: {}",
-                System::kernel_version().unwrap_or_else(|| "Unknown".to_string())
+                "{}",
+                localized_log_format(
+                    "crash.report.kernel",
+                    &[System::kernel_version()
+                        .unwrap_or_else(|| localized_log("crash.report.unknown"))],
+                )
             );
             writeln_output!(
                 &mut output,
-                "Physical Memory: {} MiB/{} MiB used, {} MiB free",
-                sys.used_memory() / BYTES_PER_MEBIBYTE,
-                sys.total_memory() / BYTES_PER_MEBIBYTE,
-                sys.free_memory() / BYTES_PER_MEBIBYTE
+                "{}",
+                localized_log_format(
+                    "crash.report.physical_memory",
+                    &[
+                        (sys.used_memory() / BYTES_PER_MEBIBYTE).to_string(),
+                        (sys.total_memory() / BYTES_PER_MEBIBYTE).to_string(),
+                        (sys.free_memory() / BYTES_PER_MEBIBYTE).to_string(),
+                    ],
+                )
             );
             writeln_output!(
                 &mut output,
-                "Swap Memory: {} MiB/{} MiB used, {} MiB free",
-                sys.used_swap() / BYTES_PER_MEBIBYTE,
-                sys.total_swap() / BYTES_PER_MEBIBYTE,
-                sys.free_swap() / BYTES_PER_MEBIBYTE
+                "{}",
+                localized_log_format(
+                    "crash.report.swap_memory",
+                    &[
+                        (sys.used_swap() / BYTES_PER_MEBIBYTE).to_string(),
+                        (sys.total_swap() / BYTES_PER_MEBIBYTE).to_string(),
+                        (sys.free_swap() / BYTES_PER_MEBIBYTE).to_string(),
+                    ],
+                )
             );
 
             Self::write_cpus(&mut output, &sys);
@@ -247,7 +338,11 @@ impl CrashReport {
         writeln_output!(output);
         let cpus = sys.cpus();
 
-        writeln_output!(output, "Total cores: {}", cpus.len());
+        writeln_output!(
+            output,
+            "{}",
+            localized_log_format("crash.report.total_cores", &[cpus.len().to_string()])
+        );
         writeln_output!(output);
 
         let mut different_brands: FxHashMap<(&str, &str), Vec<&Cpu>> = FxHashMap::default();
@@ -272,11 +367,43 @@ impl CrashReport {
 
             let avg_freq = cpus.iter().map(|cpu| cpu.frequency()).sum::<u64>() / cpus.len() as u64;
 
-            writeln_output!(output, "|{prefix} Cores: {}", cpus.len());
-            writeln_output!(output, "|{padded} Names: {}", names);
-            writeln_output!(output, "|{padded} Brand: {}", brand);
-            writeln_output!(output, "|{padded} Average Frequency: {} MHz", avg_freq);
-            writeln_output!(output, "|{padded} Vendor ID: {}", vendor_id);
+            writeln_output!(
+                output,
+                "{}",
+                localized_log_format(
+                    "crash.report.cpu_cores",
+                    &[prefix.clone(), cpus.len().to_string()],
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                localized_log_format("crash.report.cpu_names", &[padded.clone(), names])
+            );
+            writeln_output!(
+                output,
+                "{}",
+                localized_log_format(
+                    "crash.report.cpu_brand",
+                    &[padded.clone(), brand.to_string()]
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                localized_log_format(
+                    "crash.report.cpu_average_frequency",
+                    &[padded.clone(), avg_freq.to_string()],
+                )
+            );
+            writeln_output!(
+                output,
+                "{}",
+                localized_log_format(
+                    "crash.report.cpu_vendor_id",
+                    &[padded, vendor_id.to_string()]
+                )
+            );
             writeln_output!(output);
         }
     }
@@ -284,15 +411,17 @@ impl CrashReport {
     #[must_use]
     pub fn get_pumpkin_version() -> String {
         let profile = if cfg!(debug_assertions) {
-            "debug"
+            localized_log("server.log.profile_debug")
         } else {
-            "release"
+            localized_log("server.log.profile_release")
         };
-        format!(
-            "{} (Commit: {}/{})",
-            env!("CARGO_PKG_VERSION"),
-            env!("GIT_HASH"),
-            profile
+        localized_log_format(
+            "crash.report.pumpkin_version_value",
+            &[
+                env!("CARGO_PKG_VERSION").to_owned(),
+                env!("GIT_HASH").to_owned(),
+                profile,
+            ],
         )
     }
 
@@ -326,7 +455,7 @@ impl CrashReport {
                 tracing::info!(
                     "{} {}",
                     Color::Named(NamedColor::Green)
-                        .console_color("Successfully saved the crash report to file:"),
+                        .console_color(&localized_log("crash.saved_crash_report")),
                     path.display()
                 );
                 true
@@ -334,7 +463,8 @@ impl CrashReport {
             Err(error) => {
                 tracing::error!(
                     "{} {}",
-                    Color::Named(NamedColor::Red).console_color("Could not save the crash report:"),
+                    Color::Named(NamedColor::Red)
+                        .console_color(&localized_log("crash.could_not_save_crash_report")),
                     error
                 );
                 false

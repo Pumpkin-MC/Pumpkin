@@ -8,7 +8,7 @@ use sha1::Sha1;
 use sha2::Digest;
 use tracing::debug;
 
-use crate::net::EncryptionError;
+use crate::{localized_log, localized_log_format, net::EncryptionError};
 
 pub struct KeyStore {
     pub private_key: RsaPrivateKey,
@@ -19,18 +19,24 @@ impl KeyStore {
     #[must_use]
     pub fn new() -> Self {
         let instant = Instant::now();
-        debug!("Creating encryption keys...");
+        debug!("{}", localized_log("server.log.creating_encryption_keys"));
         let private_key = Self::generate_private_key();
 
         let public_key = private_key.to_public_key();
 
         let public_key_der = public_key
             .to_public_key_der()
-            .expect("Failed to encode public key to SPKI DER")
+            .expect(&localized_log("debug.expect.encode_public_key_der_failed"))
             .into_vec()
             .into_boxed_slice();
 
-        debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());
+        debug!(
+            "{}",
+            localized_log_format(
+                "server.log.created_rsa_keys",
+                &[instant.elapsed().as_millis().to_string()]
+            )
+        );
 
         Self {
             private_key,
@@ -41,7 +47,8 @@ impl KeyStore {
     fn generate_private_key() -> RsaPrivateKey {
         let mut rng = rand::rng();
 
-        RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
+        RsaPrivateKey::new(&mut rng, 1024)
+            .expect(&localized_log("debug.expect.generate_private_key_failed"))
     }
 
     pub fn encryption_request<'a>(

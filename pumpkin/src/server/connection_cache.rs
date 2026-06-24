@@ -1,4 +1,4 @@
-use crate::entity::player::Player;
+use crate::{entity::player::Player, localized_log, localized_log_format};
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
@@ -22,14 +22,18 @@ fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error:
         let height = u32::from_be_bytes([buf[20], buf[21], buf[22], buf[23]]);
 
         if width != 64 || height != 64 {
-            return Err("Invalid favicon dimensions (must be 64x64)".into());
+            return Err(localized_log("server.log.invalid_favicon_dimensions").into());
         }
     }
     Ok(load_icon_from_bytes(&buf))
 }
 
 fn load_icon_from_bytes(png_data: &[u8]) -> String {
-    assert!(!png_data.is_empty(), "PNG data is empty");
+    assert!(
+        !png_data.is_empty(),
+        "{}",
+        localized_log("debug.assert.png_data_empty")
+    );
     let mut result = "data:image/png;base64,".to_owned();
     general_purpose::STANDARD.encode_string(png_data, &mut result);
     result
@@ -90,7 +94,9 @@ impl CachedStatus {
             version.protocol = client_protocol as u32;
         }
 
-        let json = serde_json::to_string(&response).expect("Failed to serialize status response");
+        let json = serde_json::to_string(&response).expect(&localized_log(
+            "debug.expect.serialize_status_response_failed",
+        ));
 
         CStatusResponse::new(json)
     }
@@ -139,7 +145,7 @@ impl CachedStatus {
         let favicon = if config.use_favicon {
             config.favicon_path.as_ref().map_or_else(
                 || {
-                    debug!("Loading default icon");
+                    debug!("{}", localized_log("server.log.loading_default_icon"));
 
                     // Attempt to load default icon
                     Some(load_icon_from_bytes(DEFAULT_ICON))
@@ -149,25 +155,45 @@ impl CachedStatus {
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
                     {
-                        warn!("Favicon is not a PNG-image, using default.");
+                        warn!("{}", localized_log("server.log.favicon_not_png"));
                         return Some(load_icon_from_bytes(DEFAULT_ICON));
                     }
-                    debug!("Attempting to load server favicon from '{icon_path}'");
+                    debug!(
+                        "{}",
+                        localized_log_format(
+                            "server.log.loading_favicon",
+                            &[icon_path.to_string()]
+                        )
+                    );
 
                     match load_icon_from_file(icon_path) {
                         Ok(icon) => Some(icon),
                         Err(e) => {
                             let error_message = e.downcast_ref::<std::io::Error>().map_or_else(
-                                || format!("other error: {e}; using default."),
+                                || {
+                                    localized_log_format(
+                                        "server.log.favicon_other_error_default",
+                                        &[e.to_string()],
+                                    )
+                                },
                                 |io_err| {
                                     if io_err.kind() == std::io::ErrorKind::NotFound {
-                                        "not found; using default.".to_string()
+                                        localized_log("server.log.favicon_not_found_default")
                                     } else {
-                                        format!("I/O error: {io_err}; using default.")
+                                        localized_log_format(
+                                            "server.log.favicon_io_error_default",
+                                            &[io_err.to_string()],
+                                        )
                                     }
                                 },
                             );
-                            warn!("Failed to load favicon from '{icon_path}': {error_message}");
+                            warn!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.failed_load_favicon",
+                                    &[icon_path.to_string(), error_message]
+                                )
+                            );
 
                             Some(load_icon_from_bytes(DEFAULT_ICON))
                         }
@@ -175,7 +201,7 @@ impl CachedStatus {
                 },
             )
         } else {
-            info!("Favicon usage is disabled.");
+            info!("{}", localized_log("server.log.favicon_disabled"));
             None
         };
 
