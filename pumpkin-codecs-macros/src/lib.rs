@@ -46,10 +46,6 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
     decode::derive_decode(&crate_token(), &input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
-struct EnumDispatchData {
-    tag_key: String,
-}
-
 /// Expects an `Option` type, and if it is an `Option`, returns the type of the `Option` in a `Some`.
 fn option_type(ty: &Type) -> Option<&Type> {
     if let Type::Path(type_path) = ty

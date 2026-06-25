@@ -115,15 +115,14 @@ fn composite() {
 
     let example = Bookshelf {
         id: 45193,
-        // This example has no books, so no encoding of "books" will happen.
         books: vec![],
     };
 
-    assert_encode_success!(example, JsonOps, json!({ "id": 45193 }));
+    assert_encode_success!(example, JsonOps, json!({ "books": [], "id": 45193 }));
 
     assert_decode_success!(
         Bookshelf,
-        json!({ "id": 927 }),
+        json!({ "books": [], "id": 927 }),
         JsonOps,
         Bookshelf {
             id: 927,
