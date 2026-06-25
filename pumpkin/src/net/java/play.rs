@@ -2159,8 +2159,10 @@ impl JavaClient {
             return Err(BlockPlacingError::InvalidHand);
         };
 
-        //TODO this.player.resetLastActionTime();
-        //TODO this.gameModeForPlayer == GameType.SPECTATOR
+        if player.gamemode.load() == GameMode::Spectator {
+            // TODO: openMenu
+            return Ok(());
+        }
 
         let inventory = player.inventory();
         let held_item = inventory.held_item();

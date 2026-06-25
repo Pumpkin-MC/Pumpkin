@@ -544,6 +544,11 @@ impl BedrockClient {
                 let block = world.get_block(&data.block_position);
                 let server = world.server.upgrade().expect("Server is gone");
 
+                if player.gamemode.load() == GameMode::Spectator {
+                    // TODO: openMenu ?
+                    return;
+                }
+
                 if data.action_type.0 == 0 {
                     // Click block
                     let held_item = player.inventory.held_item();

@@ -161,7 +161,7 @@ impl Block {
     }
 
     #[must_use]
-    pub fn mirror(
+    pub const fn mirror(
         &self,
         state_id: u16,
         _mirror: crate::block_rotation::Mirror,
@@ -170,7 +170,7 @@ impl Block {
     }
 
     #[must_use]
-    pub fn rotate(
+    pub const fn rotate(
         &self,
         state_id: u16,
         _rotation: crate::block_rotation::Rotation,
