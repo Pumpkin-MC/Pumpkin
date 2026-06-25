@@ -1,11 +1,11 @@
-use crate::field::{FieldData, ParsedField};
-use crate::{option_type, parse_enum_dispatch_attributes, parse_enum_variant_attributes};
+use crate::field::ParsedField;
+use crate::option_type;
 use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Span;
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Fields, Ident, LitBool, LitStr,
+    Data, DataStruct, DeriveInput, Error, Fields, Ident, LitBool, LitStr,
 };
 
 pub fn derive_decode(
@@ -16,10 +16,9 @@ pub fn derive_decode(
 
     match &input.data {
         Data::Struct(data) => Ok(derive_struct_decode(&name, codecs_crate, data)),
-        Data::Enum(data) => derive_enum_decode(&name, codecs_crate, data, &input.attrs),
-        Data::Union(_) => Err(Error::new_spanned(
+        Data::Enum(_) | Data::Union(_) => Err(Error::new_spanned(
             input,
-            "Only structs and enums are supported",
+            "Only structs are supported",
         )),
     }
 }
@@ -78,92 +77,6 @@ fn derive_struct_decode(
         #decode_impl
     }
     .into()
-}
-
-fn derive_enum_decode(
-    name: &Ident,
-    codecs_crate: &proc_macro2::TokenStream,
-    data: &DataEnum,
-    attrs: &[Attribute],
-) -> Result<TokenStream, Error> {
-    // Add a special case for all variants being unit variants.
-    if data
-        .variants
-        .iter()
-        .all(|v| matches!(v.fields, Fields::Unit))
-    {
-        let mut match_arms = Vec::new();
-        for variant in &data.variants {
-            let ident = &variant.ident;
-            let ty = parse_enum_variant_attributes(&variant.ident, &variant.attrs)?;
-            let ty_lit = LitStr::new(&ty, Span::call_site());
-            match_arms.push(quote! {
-                #ty_lit => #codecs_crate::DataResult::new_success((Self::#ident, p))
-            });
-        }
-        return Ok(
-            quote! {
-                impl #codecs_crate::codec::Decode for #name {
-                    fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
-                        let string: #codecs_crate::DataResult<(String, O::Value)> = #codecs_crate::codec::Decode::decode(input, ops);
-                        string.flat_map(|(s, p)| {
-                            match s.as_str() {
-                                #( #match_arms ),* ,
-                                _ => #codecs_crate::DataResult::new_error(format!("Invalid type '{s}'"))
-                            }
-                        })
-                    }
-                }
-            }.into()
-        );
-    }
-
-    let dispatch_data = parse_enum_dispatch_attributes(attrs)?;
-    let tag_key_lit = LitStr::new(&dispatch_data.tag_key, Span::call_site());
-    let mut match_arms = Vec::new();
-    for variant in &data.variants {
-        // Try to get the variant's differentiator value first.
-        let ty = parse_enum_variant_attributes(&variant.ident, &variant.attrs)?;
-        let ty_lit = LitStr::new(&ty, Span::call_site());
-        let ident = &variant.ident;
-        let qualified_variant_ident = quote! { Self::#ident };
-        let variant_decode = if variant.fields.is_empty() {
-            quote! { #codecs_crate::DataResult::new_success(#qualified_variant_ident) }
-        } else {
-            derive_single_variant_decode(
-                codecs_crate,
-                name,
-                &variant.fields,
-                &qualified_variant_ident,
-            )
-        };
-        match_arms.push(quote! {
-            #ty_lit => {
-                #variant_decode
-            }
-        });
-    }
-    let decode_impl = decode_delegate_impl(name, codecs_crate);
-    Ok(
-        quote! {
-            impl #codecs_crate::codec::MapDecode for #name {
-                fn map_decode<O: #codecs_crate::DynamicOps>(
-                    map: impl #codecs_crate::MapLike<Value = O::Value>,
-                    ops: &'static O,
-                ) -> #codecs_crate::DataResult<Self> {
-                    let ty: #codecs_crate::DataResult<String> = #codecs_crate::codec::FieldDecode::decode_field::<O>(#tag_key_lit, &map, ops);
-                    ty.flat_map(|ty| {
-                        match ty.as_str() {
-                            #( #match_arms ),*
-                            _ => #codecs_crate::DataResult::new_error(format!("Invalid differentiator key {ty}"))
-                        }
-                    })
-                }
-            }
-
-            #decode_impl
-        }.into()
-    )
 }
 
 /// Creates a single variant's decoding in tokens.
@@ -240,55 +153,32 @@ fn decode_field_tokens(
     field: ParsedField,
     counter: &mut usize,
 ) -> Result<DecodeFieldData, Error> {
-    let ident = field.named_ident();
-    match field.generate_field_data()? {
-        FieldData::Present {
-            name,
-            lenient,
-            default,
-            implicit_default,
-        } => {
-            let encoded_name_lit = LitStr::new(&name, Span::call_site());
-            let decoded_ident = format_ident!("a{counter}");
-            let constructor_ident = ident.unwrap_or(&decoded_ident);
-            *counter += 1;
-            let builder_decode = {
-                if let Some(ty) = option_type(field.ty()) {
-                    // For an Option, it can be lenient.
-                    let lenient_token = LitBool::new(lenient, Span::call_site());
-                    quote! {
-                        let #decoded_ident: #codecs_crate::DataResult<Option<#ty>> = #codecs_crate::codec::optional_field::OptionalFieldDecode::decode_optional_field::<O>(#encoded_name_lit, &map, ops, #lenient_token);
-                    }
-                } else if default.is_some() || implicit_default {
-                    let lenient_token = LitBool::new(lenient, Span::call_site());
-                    let default_tokens = default.unwrap_or_else(|| quote! {Default::default()});
-                    let ty = field.ty();
-                    quote! {
-                        let #decoded_ident: #codecs_crate::DataResult<#ty> = #codecs_crate::codec::FieldDecode::decode_defaulted_field::<O>(#encoded_name_lit, &map, ops, #default_tokens, #lenient_token);
-                    }
-                } else {
-                    if lenient {
-                        return Err(Error::new_spanned(field.ty(), "Invalid use of `lenient`"));
-                    }
-                    quote! {
-                        let #decoded_ident = #codecs_crate::codec::FieldDecode::decode_field::<O>(#encoded_name_lit, &map, ops);
-                    }
+    if let Some(ident) = field.named_ident() {
+        let encoded_name_lit = LitStr::new(&ident.to_string(), Span::call_site());
+        let decoded_ident = format_ident!("a{counter}");
+        let constructor_ident = ident;
+        *counter += 1;
+        let builder_decode = {
+            if let Some(ty) = option_type(field.ty()) {
+                let lenient_token = LitBool::new(false, Span::call_site());
+                quote! {
+                    let #decoded_ident: #codecs_crate::DataResult<Option<#ty>> = #codecs_crate::codec::optional_field::OptionalFieldDecode::decode_optional_field::<O>(#encoded_name_lit, &map, ops, #lenient_token);
                 }
-            };
-            Ok(DecodeFieldData {
-                builder_decode: Some(builder_decode),
-                field_input: Some(constructor_ident.clone().into_token_stream()),
-                field_output: constructor_ident.into_token_stream(),
-            })
-        }
-        FieldData::Skipped { default } => {
-            let default_tokens =
-                ident.map_or_else(|| quote! { #default }, |ident| quote! { #ident: #default });
-            Ok(DecodeFieldData {
-                builder_decode: None,
-                field_input: None,
-                field_output: default_tokens,
-            })
-        }
+            } else {
+                quote! {
+                    let #decoded_ident = #codecs_crate::codec::FieldDecode::decode_field::<O>(#encoded_name_lit, &map, ops);
+                }
+            }
+        };
+        Ok(DecodeFieldData {
+            builder_decode: Some(builder_decode),
+            field_input: Some(constructor_ident.clone().into_token_stream()),
+            field_output: constructor_ident.into_token_stream(),
+        })
+    } else {
+        Err(Error::new_spanned(
+            field.ty(),
+            "Tuple structs are not supported",
+        ))
     }
 }

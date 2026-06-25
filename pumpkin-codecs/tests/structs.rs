@@ -74,8 +74,6 @@ fn composite() {
     #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
     pub struct Bookshelf {
         id: u32,
-        // Optional, defaults to no books.
-        #[codec(default)]
         books: Vec<Book>,
     }
 
