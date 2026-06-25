@@ -62,6 +62,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
+        CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
@@ -203,16 +204,22 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent
-    pub name: String,
+    pub name: TextComponent,
+}
+impl CustomNameImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|name| Self {
+            name: TextComponent::text(name.to_string()),
+        })
+    }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().into())
+        NbtTag::String(self.name.clone().get_text().into())
     }
 
     fn get_hash(&self) -> i32 {
-        get_str_hash(self.name.as_str()) as i32
+        get_str_hash(self.name.clone().get_text().as_str()) as i32
     }
 
     default_impl!(CustomName);

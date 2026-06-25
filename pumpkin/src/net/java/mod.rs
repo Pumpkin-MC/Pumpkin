@@ -293,7 +293,12 @@ impl JavaClient {
                                     .await;
                                 }
                             }
-                            e.log();
+                            error!(
+                                "Failed to handle play packet id {} (payload {} bytes): {}",
+                                packet.id,
+                                packet.payload.len(),
+                                e
+                            );
                         }
                     }
                 }

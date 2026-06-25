@@ -1,17 +1,21 @@
 use crate::VarInt;
 use crate::codec::data_component::{deserialize, serialize};
-use crate::ser::{WritingError, serializer};
+use crate::ser::{NetworkReadExt, ReadingError, WritingError, deserializer, serializer};
 use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,
-    de::{self, SeqAccess},
+    de::{self, DeserializeSeed, SeqAccess},
 };
 use std::borrow::Cow;
+use std::io::{Cursor, Read};
 
 #[derive(Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
@@ -61,6 +65,70 @@ fn serialize_item_stack_with_id<S: Serializer>(
 
         seq.end()
     }
+}
+
+struct ComponentAccess<R: Read> {
+    deserializer: deserializer::Deserializer<R>,
+}
+
+impl<'de, R: Read> SeqAccess<'de> for ComponentAccess<R> {
+    type Error = ReadingError;
+
+    fn next_element_seed<T: DeserializeSeed<'de>>(
+        &mut self,
+        seed: T,
+    ) -> Result<Option<T::Value>, Self::Error> {
+        seed.deserialize(&mut self.deserializer).map(Some)
+    }
+}
+
+fn read_component_id(read: &mut impl Read) -> Result<DataComponent, ReadingError> {
+    let id_val = read.get_var_int()?.0;
+    let id_u8 = id_val
+        .try_into()
+        .map_err(|_| ReadingError::Message(format!("Invalid component ID: {id_val}")))?;
+    DataComponent::try_from_id(id_u8)
+        .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))
+}
+
+fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
+    let mut cursor = Cursor::new(component_data);
+    let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+    let tag = NbtTag::deserialize(&mut nbt_reader)
+        .map_err(|err| ReadingError::Message(format!("Failed to decode CustomName NBT: {err}")))?;
+    let name = match tag {
+        NbtTag::String(name) => TextComponent::text(name.to_string()),
+        NbtTag::Compound(compound) => compound
+            .get_string("text")
+            .map_or_else(TextComponent::empty, |name| {
+                TextComponent::text(name.to_string())
+            }),
+        _ => TextComponent::empty(),
+    };
+    Ok(CustomNameImpl { name }.to_dyn())
+}
+
+fn read_length_prefixed_component(
+    read: &mut impl Read,
+) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
+    let id = read_component_id(read)?;
+    let byte_len = read.get_var_int()?.0;
+    let byte_len = byte_len
+        .try_into()
+        .map_err(|_| ReadingError::Message("Negative component data length".into()))?;
+    let component_data = read.read_boxed_slice(byte_len)?;
+
+    let component_impl = if id == DataComponent::CustomName {
+        decode_custom_name(component_data.as_ref())?
+    } else {
+        let cursor = Cursor::new(component_data);
+        let mut access = ComponentAccess {
+            deserializer: deserializer::Deserializer::new(cursor),
+        };
+        deserialize(id, &mut access)?
+    };
+
+    Ok((id, component_impl))
 }
 
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
@@ -159,6 +227,63 @@ impl Serialize for ItemStackSerializer<'_> {
 }
 
 impl ItemStackSerializer<'_> {
+    pub fn read_length_prefixed_optional(
+        mut read: impl Read,
+    ) -> Result<ItemStackSerializer<'static>, ReadingError> {
+        const MAX_COMPONENTS: i32 = 256;
+
+        let item_count = read.get_var_int()?;
+        if item_count.0 == 0 {
+            return Ok(ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)));
+        }
+        let item_count_u8 = item_count
+            .0
+            .try_into()
+            .map_err(|_| ReadingError::Message("Invalid item count!".into()))?;
+
+        let item_id = read.get_var_int()?;
+        let num_to_add = read.get_var_int()?.0;
+        let num_to_remove = read.get_var_int()?.0;
+
+        if num_to_add < 0 || num_to_remove < 0 {
+            return Err(ReadingError::Message("Negative component count".into()));
+        }
+
+        let total_components = num_to_add
+            .checked_add(num_to_remove)
+            .ok_or_else(|| ReadingError::Message("Component count overflow".into()))?;
+
+        if total_components > MAX_COMPONENTS {
+            return Err(ReadingError::Message(
+                "Too many components in ItemStack patch".into(),
+            ));
+        }
+
+        let mut patch = Vec::with_capacity(total_components as usize);
+
+        for _ in 0..num_to_add {
+            let (id, component_impl) = read_length_prefixed_component(&mut read)?;
+            patch.push((id, Some(component_impl)));
+        }
+
+        for _ in 0..num_to_remove {
+            patch.push((read_component_id(&mut read)?, None));
+        }
+
+        let item_id_u16 = item_id
+            .0
+            .try_into()
+            .map_err(|_| ReadingError::Message("Invalid item id!".into()))?;
+
+        Ok(ItemStackSerializer(Cow::Owned(
+            ItemStack::new_with_component(
+                item_count_u8,
+                Item::from_id(item_id_u16).unwrap_or(&Item::AIR),
+                patch,
+            ),
+        )))
+    }
+
     pub fn write_with_version(
         &self,
         write: impl std::io::Write,
