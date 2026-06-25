@@ -246,8 +246,7 @@ impl HostItemStack for PluginHostState {
             .find(|(id, _)| *id == DataComponent::CustomName)
             && let Some(name_impl) = data.as_any().downcast_ref::<CustomNameImpl>()
         {
-            let text = pumpkin_util::text::TextComponent::text(name_impl.name.clone());
-            return Ok(Some(self.add_text_component(text)?));
+            return Ok(Some(self.add_text_component(name_impl.name.clone())?));
         }
         Ok(None)
     }
@@ -260,19 +259,17 @@ impl HostItemStack for PluginHostState {
         let stack = self.get_item_stack(&res)?;
         let mut stack = stack.lock().await;
         if let Some(name_res) = name {
-            let text = text_component_from_resource(self, &name_res);
-            // This is a hack to get some string representation.
-            let name_str = format!("{:?}", text.0.content);
+            let name = text_component_from_resource(self, &name_res);
             if let Some((_, data)) = stack
                 .patch
                 .iter_mut()
                 .find(|(id, _)| *id == DataComponent::CustomName)
             {
-                *data = Some(Box::new(CustomNameImpl { name: name_str }));
+                *data = Some(Box::new(CustomNameImpl { name }));
             } else {
                 stack.patch.push((
                     DataComponent::CustomName,
-                    Some(Box::new(CustomNameImpl { name: name_str })),
+                    Some(Box::new(CustomNameImpl { name })),
                 ));
             }
         } else {

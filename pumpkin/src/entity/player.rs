@@ -723,7 +723,7 @@ impl Player {
             tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
-            tab_list_listed: AtomicBool::new(false),
+            tab_list_listed: AtomicBool::new(true),
             fishing_bobber: AtomicI32::new(-1),
             bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
         }
