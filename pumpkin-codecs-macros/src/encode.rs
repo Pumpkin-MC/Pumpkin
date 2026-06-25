@@ -14,10 +14,9 @@ pub fn derive_encode(
 
     match &input.data {
         Data::Struct(data) => Ok(derive_struct_encode(&name, codecs_crate, data)),
-        Data::Enum(_) | Data::Union(_) => Err(Error::new_spanned(
-            input,
-            "Only structs are supported",
-        )),
+        Data::Enum(_) | Data::Union(_) => {
+            Err(Error::new_spanned(input, "Only structs are supported"))
+        }
     }
 }
 
@@ -106,24 +105,26 @@ fn encode_field_tokens(
     access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream,
 ) -> Result<EncodeFieldData, Error> {
     let access = access_fn(&field);
-    if let Some(ident) = field.named_ident() {
-        let encoded_name_lit = LitStr::new(&ident.to_string(), Span::call_site());
-        let builder_encode = if option_type(field.ty()).is_some() {
-            quote! {
-                builder = #codecs_crate::codec::optional_field::OptionalFieldEncode::encode_optional_field(#access, #encoded_name_lit, ops, builder);
-            }
-        } else {
-            quote! {
-                builder = #codecs_crate::codec::FieldEncode::encode_field(#access, #encoded_name_lit, ops, builder);
-            }
-        };
-        Ok(EncodeFieldData {
-            builder_encode: Some(builder_encode),
-        })
-    } else {
-        Err(Error::new_spanned(
+
+    field.named_ident().map_or_else(
+        || Err(Error::new_spanned(
             field.ty(),
             "Tuple structs are not supported",
-        ))
-    }
+        )),
+        |ident| {
+            let encoded_name_lit = LitStr::new(&ident.to_string(), Span::call_site());
+            let builder_encode = if option_type(field.ty()).is_some() {
+                quote! {
+                builder = #codecs_crate::codec::optional_field::OptionalFieldEncode::encode_optional_field(#access, #encoded_name_lit, ops, builder);
+            }
+            } else {
+                quote! {
+                builder = #codecs_crate::codec::FieldEncode::encode_field(#access, #encoded_name_lit, ops, builder);
+            }
+            };
+            Ok(EncodeFieldData {
+                builder_encode: Some(builder_encode),
+            })
+        }
+    )
 }

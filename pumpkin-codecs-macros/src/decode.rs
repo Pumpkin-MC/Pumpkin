@@ -4,9 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Span;
 use quote::{ToTokens, format_ident, quote};
-use syn::{
-    Data, DataStruct, DeriveInput, Error, Fields, Ident, LitBool, LitStr,
-};
+use syn::{Data, DataStruct, DeriveInput, Error, Fields, Ident, LitBool, LitStr};
 
 pub fn derive_decode(
     codecs_crate: &proc_macro2::TokenStream,
@@ -16,10 +14,9 @@ pub fn derive_decode(
 
     match &input.data {
         Data::Struct(data) => Ok(derive_struct_decode(&name, codecs_crate, data)),
-        Data::Enum(_) | Data::Union(_) => Err(Error::new_spanned(
-            input,
-            "Only structs are supported",
-        )),
+        Data::Enum(_) | Data::Union(_) => {
+            Err(Error::new_spanned(input, "Only structs are supported"))
+        }
     }
 }
 
@@ -153,32 +150,34 @@ fn decode_field_tokens(
     field: ParsedField,
     counter: &mut usize,
 ) -> Result<DecodeFieldData, Error> {
-    if let Some(ident) = field.named_ident() {
-        let encoded_name_lit = LitStr::new(&ident.to_string(), Span::call_site());
-        let decoded_ident = format_ident!("a{counter}");
-        let constructor_ident = ident;
-        *counter += 1;
-        let builder_decode = {
-            if let Some(ty) = option_type(field.ty()) {
-                let lenient_token = LitBool::new(false, Span::call_site());
-                quote! {
-                    let #decoded_ident: #codecs_crate::DataResult<Option<#ty>> = #codecs_crate::codec::optional_field::OptionalFieldDecode::decode_optional_field::<O>(#encoded_name_lit, &map, ops, #lenient_token);
-                }
-            } else {
-                quote! {
-                    let #decoded_ident = #codecs_crate::codec::FieldDecode::decode_field::<O>(#encoded_name_lit, &map, ops);
-                }
-            }
-        };
-        Ok(DecodeFieldData {
-            builder_decode: Some(builder_decode),
-            field_input: Some(constructor_ident.clone().into_token_stream()),
-            field_output: constructor_ident.into_token_stream(),
-        })
-    } else {
-        Err(Error::new_spanned(
+    field.named_ident().map_or_else(
+        || Err(Error::new_spanned(
             field.ty(),
             "Tuple structs are not supported",
-        ))
-    }
+        )),
+        |ident| {
+            let encoded_name_lit = LitStr::new(&ident.to_string(), Span::call_site());
+            let decoded_ident = format_ident!("a{counter}");
+            let constructor_ident = ident;
+            *counter += 1;
+            let builder_decode = {
+                option_type(field.ty()).map_or_else(
+                    || quote! {
+                        let #decoded_ident = #codecs_crate::codec::FieldDecode::decode_field::<O>(#encoded_name_lit, &map, ops);
+                    },
+                    |ty| {
+                        let lenient_token = LitBool::new(false, Span::call_site());
+                        quote! {
+                            let #decoded_ident: #codecs_crate::DataResult<Option<#ty>> = #codecs_crate::codec::optional_field::OptionalFieldDecode::decode_optional_field::<O>(#encoded_name_lit, &map, ops, #lenient_token);
+                        }
+                    }
+                )
+            };
+            Ok(DecodeFieldData {
+                builder_decode: Some(builder_decode),
+                field_input: Some(constructor_ident.clone().into_token_stream()),
+                field_output: constructor_ident.into_token_stream(),
+            })
+        }
+    )
 }
