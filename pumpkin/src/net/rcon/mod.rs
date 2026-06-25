@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::atomic::Ordering};
+use std::{
+    net::SocketAddr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::RCONConfig;
@@ -22,7 +25,7 @@ impl RCONServer {
 
         let password = Arc::new(config.password.clone());
 
-        let mut connections = 0;
+        let connections = Arc::new(AtomicU32::new(0));
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let await_new_client = || async {
                 let t1 = listener.accept();
@@ -39,18 +42,23 @@ impl RCONServer {
                 break;
             };
 
-            if config.max_connections != 0 && connections >= config.max_connections {
+            if config.max_connections != 0
+                && connections.load(Ordering::Relaxed) >= config.max_connections
+            {
                 continue;
             }
 
-            connections += 1;
+            connections.fetch_add(1, Ordering::Relaxed);
             let mut client = RCONClient::new(connection, address);
 
             let password = password.clone();
             let server = server.clone();
-            tokio::spawn(async move { while !client.handle(&server, &password).await {} });
-            debug!("closed RCON connection");
-            connections -= 1;
+            let connections = connections.clone();
+            tokio::spawn(async move {
+                while !client.handle(&server, &password).await {}
+                debug!("closed RCON connection");
+                connections.fetch_sub(1, Ordering::Relaxed);
+            });
         }
     }
 }
