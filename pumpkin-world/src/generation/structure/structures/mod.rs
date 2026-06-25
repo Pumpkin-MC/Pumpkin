@@ -4,6 +4,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_util::HeightMap;
+use pumpkin_util::translation::localized_log;
 use pumpkin_util::{
     BlockDirection,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
@@ -411,7 +412,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            trace!("Structure out of bounds");
+            trace!("{}", localized_log("world.structure.out_of_bounds"));
             return Block::AIR.default_state;
         }
 
@@ -431,7 +432,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            trace!("Structure out of bounds");
+            trace!("{}", localized_log("world.structure.out_of_bounds"));
             return;
         }
 
@@ -624,7 +625,7 @@ impl StructurePiecesCollector {
         }
 
         let bbox = BlockBox::encompass_all(self.pieces.iter().map(|p| p.bounding_box()))
-            .expect("Structure must have at least one piece to calculate a bounding box");
+            .unwrap_or_else(|| panic!("{}", localized_log("world.structure.must_have_one_piece")));
 
         self.cached_box = Some(bbox);
         bbox

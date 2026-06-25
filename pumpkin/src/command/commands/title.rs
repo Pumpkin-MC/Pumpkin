@@ -19,7 +19,7 @@ use crate::{
 
 const NAMES: [&str; 1] = ["title"];
 
-const DESCRIPTION: &str = "Displays a title.";
+const DESCRIPTION: &str = "commands.title.description";
 
 const ARG_TARGETS: &str = "targets";
 

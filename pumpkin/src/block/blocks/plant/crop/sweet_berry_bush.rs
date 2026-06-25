@@ -7,6 +7,7 @@ use crate::{
         blocks::plant::{PlantBlockBase, crop::CropBlockBase},
         registry::BlockActionResult,
     },
+    localized_log,
     world::World,
 };
 use pumpkin_data::{
@@ -107,7 +108,12 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 return;
             }
 
-            let living_entity = living_entity_opt.expect("Living entity should exist");
+            let living_entity = living_entity_opt.unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.living_entity_should_exist")
+                )
+            });
             entity
                 .slow_movement(args.state, Vector3::new(0.8, 0.75, 0.8))
                 .await;

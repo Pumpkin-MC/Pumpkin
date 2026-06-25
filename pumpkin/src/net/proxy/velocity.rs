@@ -19,6 +19,8 @@ use std::{
 use thiserror::Error;
 use tracing::debug;
 
+use crate::localized_log;
+
 use crate::net::{GameProfile, java::JavaClient};
 
 type HmacSha256 = Hmac<Sha256>;
@@ -67,8 +69,8 @@ pub async fn velocity_login(client: &JavaClient) {
 pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     let (signature, data_without_signature) = data;
     // Our fault, we can panic/expect?
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.hmac_key_any_size")));
     mac.update(data_without_signature);
     mac.verify_slice(signature).is_ok()
 }
@@ -110,7 +112,7 @@ pub fn receive_velocity_plugin_response(
     config: &VelocityConfig,
     response: SLoginPluginResponse,
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
-    debug!("Received velocity response");
+    debug!("{}", localized_log("server.log.velocity_response_received"));
     if let Some(data) = response.data {
         let (signature, mut data_without_signature) = data.split_at(32);
 

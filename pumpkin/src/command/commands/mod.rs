@@ -1,5 +1,7 @@
 use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::tr_plain;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
@@ -171,310 +173,659 @@ fn register_permissions(registry: &mut PermissionRegistry) {
 
     // Register our entity selector permission as well.
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.selector",
-            "Allows a player to use selector variables",
+            "permissions.selector.description",
             PermissionDefault::Allow,
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
+}
+
+fn translated_permission(
+    node: &str,
+    description_key: &str,
+    default: PermissionDefault,
+) -> Permission {
+    Permission::new(
+        node,
+        &tr_plain(description_key, server_command_locale()),
+        default,
+    )
 }
 
 fn register_level_0_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for builtin commands that are allowed for everyone
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "pumpkin:command.pumpkin",
-            "Shows information about the Pumpkin server",
+            "permissions.pumpkin.description",
             PermissionDefault::Allow,
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.me",
-            "Broadcasts a narrative message about the player",
+            "permissions.me.description",
             PermissionDefault::Allow,
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.msg",
-            "Sends a private message to another player",
+            "permissions.msg.description",
             PermissionDefault::Allow,
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }
 
 #[expect(clippy::too_many_lines)]
 fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Two
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.worldborder",
-            "Manages the world border",
+            "permissions.worldborder.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.effect",
-            "Adds or removes status effects",
+            "permissions.effect.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.teleport",
-            "Teleports entities to other locations",
+            "permissions.teleport.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.time",
-            "Changes or queries the world's game time",
+            "permissions.time.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.give",
-            "Gives an item to a player",
+            "permissions.give.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.clear",
-            "Clears items from player inventory",
+            "permissions.clear.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.setblock",
-            "Changes a block to another block",
+            "permissions.setblock.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.fill",
-            "Fills a region with a specific block",
+            "permissions.fill.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.playsound",
-            "Plays a sound to players",
+            "permissions.playsound.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.tellraw",
-            "Displays a JSON message to players",
+            "permissions.tellraw.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.title",
-            "Controls screen titles displayed to players",
+            "permissions.title.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.summon",
-            "Summons an entity",
+            "permissions.summon.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.experience",
-            "Adds, removes or queries player experience",
+            "permissions.experience.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.weather",
-            "Sets the weather in the server",
+            "permissions.weather.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.particle",
-            "Creates particles in the world",
+            "permissions.particle.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.rotate",
-            "Changes the rotation of an entity",
+            "permissions.rotate.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.damage",
-            "Damages entities",
+            "permissions.damage.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.bossbar",
-            "Creates and manages boss bars",
+            "permissions.bossbar.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.say",
-            "Broadcasts a message to multiple players",
+            "permissions.say.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.gamemode",
-            "Sets a player's game mode",
+            "permissions.gamemode.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.gamerule",
-            "Sets a player's game mode",
+            "permissions.gamerule.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.stopsound",
-            "Stops sounds from playing",
+            "permissions.stopsound.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.defaultgamemode",
-            "Sets the default game mode for new players",
+            "permissions.defaultgamemode.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.data",
-            "Query and modify data of entities and blocks",
+            "permissions.data.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.enchant",
-            "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            "permissions.enchant.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.spawnpoint",
-            "Sets the spawn point for a player",
+            "permissions.spawnpoint.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "pumpkin:command.tps",
-            "Displays the server TPS and MSPT",
+            "permissions.tps.description",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }
 
+#[allow(clippy::too_many_lines)]
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.setworldspawn",
-            "Sets the world spawn point",
+            "permissions.setworldspawn.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.deop",
-            "Revokes operator status from a player",
+            "permissions.deop.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.kick",
-            "Removes players from the server",
+            "permissions.kick.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "pumpkin:command.plugin",
-            "Manages server plugins",
+            "permissions.plugin.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "pumpkin:command.plugins",
-            "Lists all plugins loaded on the server",
+            "permissions.plugins.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.ban",
-            "Adds players to banlist",
+            "permissions.ban.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.banip",
-            "Adds IP addresses to banlist",
+            "permissions.banip.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.pardon",
-            "Removes entries from the player banlist",
+            "permissions.pardon.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.pardonip",
-            "Removes entries from the IP banlist",
+            "permissions.pardonip.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.whitelist",
-            "Manages server whitelist",
+            "permissions.whitelist.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
     registry
-        .register_permission(Permission::new(
+        .register_permission(translated_permission(
             "minecraft:command.transfer",
-            "Transfers the player to another server",
+            "permissions.transfer.description",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
-        .expect("Permission already registered");
+        .unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.permission_already_registered",
+                    server_command_locale(),
+                )
+            )
+        });
 }

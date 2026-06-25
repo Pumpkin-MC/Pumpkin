@@ -20,7 +20,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];
-const DESCRIPTION: &str = "Display bossbar";
+const DESCRIPTION: &str = "commands.bossbar.description";
 
 const ARG_NAME: &str = "name";
 

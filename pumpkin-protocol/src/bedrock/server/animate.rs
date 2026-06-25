@@ -4,6 +4,7 @@ use std::{
 };
 
 use pumpkin_macros::packet;
+use pumpkin_util::translation::localized_log_format;
 
 use crate::{
     codec::var_ulong::VarULong,
@@ -28,7 +29,10 @@ impl PacketRead for AnimateAction {
             3 => Ok(Self::StopSleep),
             4 => Ok(Self::CriticalHit),
             5 => Ok(Self::MagicCriticalHit),
-            _ => Err(Error::other(format!("Invalid animate action ID: {action}"))),
+            _ => Err(Error::other(localized_log_format(
+                "protocol.bedrock.invalid_animate_action_id",
+                &[action.to_string()],
+            ))),
         }
     }
 }
@@ -66,7 +70,10 @@ impl FromStr for AnimateSwingSource {
             "throwitem" => Ok(Self::ThrowItem),
             "dropitem" => Ok(Self::DropItem),
             "event" => Ok(Self::Event),
-            _ => Err(Error::other(format!("Unknown swing source: {s}"))),
+            _ => Err(Error::other(localized_log_format(
+                "protocol.bedrock.unknown_swing_source",
+                &[s.to_owned()],
+            ))),
         }
     }
 }

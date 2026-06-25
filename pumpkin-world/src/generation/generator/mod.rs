@@ -16,6 +16,7 @@ pub trait GeneratorInit {
 }
 
 use pumpkin_data::structures::{StructurePlacementCalculator, StructureSet};
+use pumpkin_util::translation::localized_log_format;
 use rustc_hash::FxHashMap;
 
 pub struct VanillaGenerator {
@@ -48,7 +49,13 @@ impl GeneratorInit for VanillaGenerator {
         } else if dimension == Dimension::THE_END {
             END_BASE_NOISE_ROUTER
         } else {
-            tracing::error!("Unsupported dimension for noise router: {:?}", dimension);
+            tracing::error!(
+                "{}",
+                localized_log_format(
+                    "world.generation.unsupported_noise_router_dimension",
+                    &[format!("{:?}", dimension)]
+                )
+            );
             OVERWORLD_BASE_NOISE_ROUTER
         };
         let terrain_cache = TerrainCache::from_random(&random_config);

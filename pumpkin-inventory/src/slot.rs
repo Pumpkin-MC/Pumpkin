@@ -32,6 +32,7 @@ use crate::screen_handler::InventoryPlayer;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_util::translation::localized_log;
 use pumpkin_world::inventory::Inventory;
 use tokio::{sync::Mutex, time::timeout};
 
@@ -115,7 +116,9 @@ pub trait Slot: Send + Sync {
             let stack = self.get_stack().await;
             let lock = timeout(Duration::from_secs(5), stack.lock())
                 .await
-                .expect("Timed out while trying to acquire lock");
+                .unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.acquire_lock_timed_out"))
+                });
 
             lock.clone()
         })

@@ -15,7 +15,7 @@ use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["deop"];
-const DESCRIPTION: &str = "Revokes operator status from a player.";
+const DESCRIPTION: &str = "commands.deop.description";
 const ARG_TARGETS: &str = "targets";
 
 struct Executor;

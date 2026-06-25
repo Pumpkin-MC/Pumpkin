@@ -1,6 +1,7 @@
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::localized_log_format;
 use indexmap::IndexMap;
 use pumpkin_data::advancement_data::{AdvancementNode, AdvancementRequirement, AdvancementReward};
 use pumpkin_data::{Advancement, translation};
@@ -223,8 +224,11 @@ impl PlayerAdvancement {
                 .and_then(|prefix| prefix.to_str())
                 .unwrap_or("unknown");
             error!(
-                "Failed to create player advancement directory for {}: {e}",
-                file_name
+                "{}",
+                localized_log_format(
+                    "server.log.failed_create_player_advancement_directory",
+                    &[file_name.to_string(), e.to_string()]
+                )
             );
             return Err(AdvancementDataError::Io(e));
         }
@@ -255,7 +259,10 @@ impl PlayerAdvancement {
                 self.progress_changed.insert(advancement_ref);
                 //TODO self.mark_for_visibility(advancement_ref);
             } else {
-                warn!("The Advancement name {} is invalid", advancement_id);
+                warn!(
+                    "{}",
+                    localized_log_format("server.log.invalid_advancement_name", &[advancement_id])
+                );
             }
         }
         Ok(())

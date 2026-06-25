@@ -4,7 +4,7 @@ use pumpkin_world::data::player_data::PlayerDataError;
 use std::fmt::Display;
 use tracing::Level;
 
-use crate::log_at_level;
+use crate::{localized_log_format, log_at_level};
 
 pub trait PumpkinError: Send + std::error::Error + Display {
     fn is_kick(&self) -> bool;
@@ -80,8 +80,14 @@ impl PumpkinError for PlayerDataError {
 
     fn client_kick_reason(&self) -> Option<String> {
         match self {
-            Self::Io(err) => Some(format!("Failed to load player data: {err}")),
-            Self::Nbt(err) => Some(format!("Failed to parse player data: {err}")),
+            Self::Io(err) => Some(localized_log_format(
+                "server.player_data.failed_load",
+                &[err.to_string()],
+            )),
+            Self::Nbt(err) => Some(localized_log_format(
+                "server.player_data.failed_parse",
+                std::slice::from_ref(err),
+            )),
         }
     }
 }

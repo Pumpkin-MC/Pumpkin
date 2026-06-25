@@ -13,6 +13,7 @@ use soul_fire::SoulFireBlock;
 use crate::block::blocks::fire::fire::FireBlock;
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, OnEntityCollisionArgs};
 use crate::entity::EntityBase;
+use crate::localized_log;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use pumpkin_data::damage::DamageType;
@@ -112,8 +113,9 @@ impl FireBlockBase {
         NetherPortal::get_new_portal(
             world,
             block_pos,
-            dir.to_horizontal_axis()
-                .expect("Direction should be horizontal"),
+            dir.to_horizontal_axis().unwrap_or_else(|| {
+                panic!("{}", localized_log("debug.expect.direction_not_horizontal"))
+            }),
         )
         .is_some()
     }

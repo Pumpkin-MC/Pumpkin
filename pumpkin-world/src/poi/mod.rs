@@ -8,6 +8,7 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 use serde::{Deserialize, Serialize};
 
 /// POI type identifier for nether portals
@@ -356,7 +357,13 @@ impl PoiRegion {
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to parse POI chunk at index {index}: {e}");
+                    warn!(
+                        "{}",
+                        localized_log_format(
+                            "world.poi.failed_parse_chunk",
+                            &[index.to_string(), e.to_string()]
+                        )
+                    );
                 }
             }
         }
@@ -398,7 +405,13 @@ impl PoiStorage {
         self.regions.entry((rx, rz)).or_insert_with(|| {
             PoiRegion::load(&path).unwrap_or_else(|e| {
                 if path.exists() {
-                    warn!("Failed to load POI region {}: {}", path.display(), e);
+                    warn!(
+                        "{}",
+                        localized_log_format(
+                            "world.poi.failed_load_region",
+                            &[path.display().to_string(), e.to_string()]
+                        )
+                    );
                 }
                 PoiRegion::new()
             })
@@ -483,7 +496,10 @@ impl PoiStorage {
         }
 
         if saved > 0 {
-            info!("Saved {saved} POI region(s)");
+            info!(
+                "{}",
+                localized_log_format("world.poi.saved_regions", &[saved.to_string()])
+            );
         }
         Ok(())
     }

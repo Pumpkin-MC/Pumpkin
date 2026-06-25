@@ -10,7 +10,7 @@ use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["stopsound"];
-const DESCRIPTION: &str = "Stops a currently playing sound.";
+const DESCRIPTION: &str = "commands.stopsound.description";
 
 const ARG_TARGETS: &str = "targets";
 const ARG_SOURCE: &str = "source";

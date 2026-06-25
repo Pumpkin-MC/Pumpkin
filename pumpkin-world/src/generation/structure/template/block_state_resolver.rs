@@ -8,6 +8,7 @@ use pumpkin_data::{Block, BlockState, Mirror, Rotation};
 use tracing::warn;
 
 use super::PaletteEntry;
+use pumpkin_util::translation::localized_log_format;
 
 /// Resolves template palette entries to block state IDs.
 ///
@@ -36,7 +37,13 @@ impl BlockStateResolver {
         let block = if let Some(b) = block {
             b
         } else {
-            warn!("Unknown block in template: {}", entry.name);
+            warn!(
+                "{}",
+                localized_log_format(
+                    "world.structure.unknown_block_in_template",
+                    std::slice::from_ref(&entry.name)
+                )
+            );
             return None;
         };
 

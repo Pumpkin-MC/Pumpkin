@@ -76,6 +76,7 @@ pub mod open_connection;
 pub mod unconnected;
 use crate::{
     entity::player::Player,
+    localized_log, localized_log_format,
     net::{DisconnectReason, PacketHandlerResult},
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
@@ -219,13 +220,13 @@ impl BedrockClient {
                 let mut guard = client.outgoing_packet_queue_recv.lock().await;
                 guard
                     .take()
-                    .expect("Outgoing packet receiver was already taken")
+                    .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.outgoing_packet_receiver_taken")))
             };
             let mut priority_packet_receiver = {
                 let mut guard = client.outgoing_packet_priority_recv.lock().await;
                 guard
                     .take()
-                    .expect("Outgoing packet receiver was already taken")
+                    .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.outgoing_packet_receiver_taken")))
             };
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
@@ -240,7 +241,13 @@ impl BedrockClient {
                     _ = interval.tick() => {
                         // Check for timeout (10 seconds)
                         if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
-                            debug!("Bedrock client {} timed out", client.address);
+                            debug!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.bedrock_client_timed_out",
+                                    &[client.address.to_string()]
+                                )
+                            );
                             client.close().await;
                             break;
                         }
@@ -274,9 +281,21 @@ impl BedrockClient {
                         if !resend.is_empty() {
                             let encoder = client.network_writer.read().await;
                             for (seq, id, data) in resend {
-                                debug!("Resending reliable sequence {} (ID: {})", seq, id);
+                                debug!(
+                                    "{}",
+                                    localized_log_format(
+                                        "server.log.bedrock_resending_reliable_sequence",
+                                        &[seq.to_string(), id.to_string()]
+                                    )
+                                );
                                 if let Err(err) = encoder.write_packet(&data, client.address, &client.socket).await {
-                                    warn!("Failed to resend packet for sequence {}: {}", seq, err);
+                                    warn!(
+                                        "{}",
+                                        localized_log_format(
+                                            "server.log.bedrock_resend_sequence_failed",
+                                            &[seq.to_string(), err.to_string()]
+                                        )
+                                    );
                                 }
                             }
                         }
@@ -303,8 +322,11 @@ impl BedrockClient {
         self.last_seen.store(std::time::Instant::now());
         if let Err(error) = self.handle_packet_payload(server, packet).await {
             error!(
-                "Failed to handle packet payload for {}: {}",
-                self.address, error
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_packet_payload_failed",
+                    &[self.address.to_string(), error.to_string()]
+                )
             );
             self.kick(DisconnectReason::BadPacket, error.to_string())
                 .await;
@@ -371,7 +393,13 @@ impl BedrockClient {
                     self.enqueue_packet_data(payload).await;
                 }
             }
-            Err(err) => error!("Failed to write game packet: {err}"),
+            Err(err) => error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_game_packet_failed",
+                    &[err.to_string()]
+                )
+            ),
         }
     }
 
@@ -379,7 +407,13 @@ impl BedrockClient {
         let mut packet_buf = Vec::new();
         match self.write_game_packet(packet, &mut packet_buf).await {
             Ok(()) => self.enqueue_packet_data(packet_buf.into()).await,
-            Err(err) => error!("Failed to write game packet: {err}"),
+            Err(err) => error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_game_packet_failed",
+                    &[err.to_string()]
+                )
+            ),
         }
     }
 
@@ -387,13 +421,22 @@ impl BedrockClient {
         let mut packet_buf = Vec::new();
         let mut packet_payload = Vec::new();
         if let Err(err) = packet.write_packet(&mut packet_payload) {
-            error!("Failed to write packet for try_enqueue_packet: {err}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_try_enqueue_write_packet_failed",
+                    &[err.to_string()]
+                )
+            );
             return;
         }
 
         {
             let Ok(network_writer) = self.network_writer.try_read() else {
-                debug!("Failed to lock network writer for try_enqueue_packet");
+                debug!(
+                    "{}",
+                    localized_log("server.log.bedrock_try_enqueue_lock_writer_failed")
+                );
                 return;
             };
 
@@ -404,7 +447,13 @@ impl BedrockClient {
                 &packet_payload,
                 &mut packet_buf,
             ) {
-                error!("Failed to write game packet for try_enqueue_packet: {err}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_try_enqueue_write_game_packet_failed",
+                        &[err.to_string()]
+                    )
+                );
                 return;
             }
         }
@@ -426,7 +475,13 @@ impl BedrockClient {
         {
             // This is expected to fail if we are closed
             if !self.is_closed() {
-                error!("Failed to add packet to the outgoing packet queue for client: {err}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_enqueue_packet_failed",
+                        &[err.to_string()]
+                    )
+                );
             }
         }
     }
@@ -439,13 +494,15 @@ impl BedrockClient {
             match err {
                 tokio::sync::mpsc::error::TrySendError::Full(_) => {
                     debug!(
-                        "Failed to add packet to the outgoing packet queue for client: channel full"
+                        "{}",
+                        localized_log("server.log.bedrock_enqueue_packet_channel_full")
                     );
                 }
                 tokio::sync::mpsc::error::TrySendError::Closed(_) => {
                     if !self.is_closed() {
                         error!(
-                            "Failed to add packet to the outgoing packet queue for client: channel closed"
+                            "{}",
+                            localized_log("server.log.bedrock_enqueue_packet_channel_closed")
                         );
                     }
                 }
@@ -486,7 +543,13 @@ impl BedrockClient {
     ) {
         let mut data = Vec::new();
         if let Err(err) = Self::write_raw_packet(packet, &mut data) {
-            error!("Failed to write offline packet: {err}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_offline_packet_failed",
+                    &[err.to_string()]
+                )
+            );
             return;
         }
         // We dont care if it works, if not the client will try again!
@@ -516,13 +579,25 @@ impl BedrockClient {
                     .await
                 {
                     if !self.is_closed() {
-                        error!("Failed to add priority packet to the outgoing packet queue: {err}");
+                        error!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.bedrock_enqueue_priority_packet_failed",
+                                &[err.to_string()]
+                            )
+                        );
                     }
                 } else {
                     let _ = rx.await;
                 }
             }
-            Err(err) => error!("Failed to write game packet: {err}"),
+            Err(err) => error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_game_packet_failed",
+                    &[err.to_string()]
+                )
+            ),
         }
     }
 
@@ -536,7 +611,13 @@ impl BedrockClient {
             Ok(()) => {
                 frame_set.frames.push(Frame::new_unreliable(payload));
             }
-            Err(err) => error!("Failed to write game packet to set: {err}"),
+            Err(err) => error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_game_packet_to_set_failed",
+                    &[err.to_string()]
+                )
+            ),
         }
     }
 
@@ -548,7 +629,13 @@ impl BedrockClient {
         let mut packet_buf = Vec::new();
         match Self::write_raw_packet(packet, &mut packet_buf) {
             Ok(()) => self.send_framed_packet_data(packet_buf, reliability).await,
-            Err(err) => error!("Failed to write framed packet: {err}"),
+            Err(err) => error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_framed_packet_failed",
+                    &[err.to_string()]
+                )
+            ),
         }
     }
 
@@ -624,7 +711,13 @@ impl BedrockClient {
 
         let mut frame_set_buf = Vec::new();
         if let Err(err) = frame_set.write_packet_data(&mut frame_set_buf, id) {
-            error!("Failed to write frame set data: {err}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_write_frame_set_failed",
+                    &[err.to_string()]
+                )
+            );
             return;
         }
 
@@ -643,7 +736,13 @@ impl BedrockClient {
             .await
             && !self.is_closed()
         {
-            warn!("Failed to send packet to client {}: {}", self.address, err);
+            warn!(
+                "{}",
+                localized_log_format(
+                    "server.log.failed_send_packet_to_client",
+                    &[self.address.to_string(), err.to_string()]
+                )
+            );
             self.close_token.cancel();
         }
     }
@@ -683,7 +782,13 @@ impl BedrockClient {
             .write_packet(&packet_buf, self.address, &self.socket)
             .await
         {
-            warn!("Failed to send acknowledgement to {}: {err}", self.address);
+            warn!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_ack_send_failed",
+                    &[self.address.to_string(), err.to_string()]
+                )
+            );
             self.close().await;
             return Err(err);
         }
@@ -709,7 +814,13 @@ impl BedrockClient {
                     .await?;
             }
             id => {
-                warn!("Bedrock: Received unknown packet header {id}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_unknown_packet_header",
+                        &[id.to_string()]
+                    )
+                );
             }
         }
         Ok(())
@@ -723,7 +834,13 @@ impl BedrockClient {
     }
 
     async fn handle_nack(&self, nack: &Acknowledge) {
-        debug!("Received NACK for sequences: {:?}", nack.sequences);
+        debug!(
+            "{}",
+            localized_log_format(
+                "server.log.bedrock_received_nack",
+                &[format!("{:?}", nack.sequences)]
+            )
+        );
         let mut resend_data = Vec::new();
         {
             let unacked = self.unacked_outgoing_frames.lock().await;
@@ -742,7 +859,13 @@ impl BedrockClient {
                 .write_packet(&data, self.address, &self.socket)
                 .await
             {
-                warn!("Failed to resend packet from NACK: {}", err);
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_resend_from_nack_failed",
+                        &[err.to_string()]
+                    )
+                );
             }
         }
     }
@@ -757,7 +880,13 @@ impl BedrockClient {
         {
             let mut received = self.received_sequences.lock().await;
             if received.contains(&sequence) {
-                debug!("Received duplicate RakNet sequence: {}", sequence);
+                debug!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_duplicate_raknet_sequence",
+                        &[sequence.to_string()]
+                    )
+                );
                 return Ok(());
             }
             received.insert(sequence);
@@ -915,7 +1044,13 @@ impl BedrockClient {
         packet: RawPacket,
     ) -> Result<(), Error> {
         if let Err(err) = self.incoming_game_packet_send.send(packet).await {
-            debug!("Failed to send game packet to session task: {err}");
+            debug!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_send_game_packet_to_session_failed",
+                    &[err.to_string()]
+                )
+            );
         }
         Ok(())
     }
@@ -931,7 +1066,13 @@ impl BedrockClient {
                     let packet = match SRequestNetworkSettings::read(payload) {
                         Ok(p) => p,
                         Err(err) => {
-                            error!("Failed to read SRequestNetworkSettings: {err}");
+                            error!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.bedrock_read_request_network_settings_failed",
+                                    &[err.to_string()]
+                                )
+                            );
                             continue;
                         }
                     };
@@ -941,7 +1082,13 @@ impl BedrockClient {
                     let packet = match SLogin::read(payload) {
                         Ok(p) => p,
                         Err(err) => {
-                            error!("Failed to read SLogin: {err}");
+                            error!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.bedrock_read_login_failed",
+                                    &[err.to_string()]
+                                )
+                            );
                             self.kick(DisconnectReason::BadPacket, err.to_string())
                                 .await;
                             return PacketHandlerResult::Stop;
@@ -957,8 +1104,11 @@ impl BedrockClient {
                 }
                 _ => {
                     debug!(
-                        "Received unexpected game packet {} during login sequence",
-                        packet.id
+                        "{}",
+                        localized_log_format(
+                            "server.log.bedrock_unexpected_login_packet",
+                            &[packet.id.to_string()]
+                        )
                     );
                 }
             }
@@ -983,7 +1133,13 @@ impl BedrockClient {
             }
 
             if let Err(err) = self.handle_play_packet(player, server, packet).await {
-                error!("Failed to handle Bedrock play packet: {err}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_handle_play_packet_failed",
+                        &[err.to_string()]
+                    )
+                );
             }
         }
     }
@@ -1075,7 +1231,13 @@ impl BedrockClient {
                     .await;
             }
             _ => {
-                warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_unknown_game_packet",
+                        &[packet.id.to_string()]
+                    )
+                );
             }
         }
         Ok(())
@@ -1114,7 +1276,13 @@ impl BedrockClient {
                 self.close().await;
             }
             _ => {
-                warn!("Bedrock: Received Unknown RakNet Online packet: {packet_id}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_unknown_raknet_online_packet",
+                        &[packet_id.to_string()]
+                    )
+                );
             }
         }
         Ok(())
@@ -1136,8 +1304,11 @@ impl BedrockClient {
             };
             if let Some(client) = old_client {
                 debug!(
-                    "Closing old Bedrock client connection for {} due to new connection request",
-                    addr
+                    "{}",
+                    localized_log_format(
+                        "server.log.bedrock_closing_old_client",
+                        &[addr.to_string()]
+                    )
                 );
                 client.close().await;
             }
@@ -1171,7 +1342,13 @@ impl BedrockClient {
                 )
                 .await;
             }
-            _ => error!("Bedrock: Received Unknown RakNet Offline packet: {packet_id}"),
+            _ => error!(
+                "{}",
+                localized_log_format(
+                    "server.log.bedrock_unknown_raknet_offline_packet",
+                    &[packet_id.to_string()]
+                )
+            ),
         }
         Ok(())
     }
@@ -1184,7 +1361,7 @@ impl BedrockClient {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {
             () = self.await_close_interrupt() => {
-                debug!("Canceling player packet processing");
+                debug!("{}", localized_log("server.log.canceling_player_packet_processing"));
                 None
             },
             packet_result = network_reader.get_packet_payload(packet) => {
@@ -1192,8 +1369,17 @@ impl BedrockClient {
                     Ok(packet) => Some(packet),
                     Err(err) => {
                         if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                            warn!("Failed to decode packet from client: {err}");
-                            let text = format!("Error while reading incoming packet {err}");
+                            warn!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.bedrock_failed_decode_packet_from_client",
+                                &[err.to_string()]
+                            )
+                        );
+                            let text = localized_log_format(
+                                "client.disconnect.error_reading_incoming_packet",
+                                &[err.to_string()],
+                            );
                             self.kick(DisconnectReason::BadPacket, text).await;
                         }
                         None

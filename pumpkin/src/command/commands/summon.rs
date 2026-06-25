@@ -18,7 +18,7 @@ use crate::block::entities::BlockEntity;
 
 const NAMES: [&str; 1] = ["summon"];
 
-const DESCRIPTION: &str = "Spawns a Entity at position.";
+const DESCRIPTION: &str = "commands.summon.description";
 
 const ARG_ENTITY: &str = "entity";
 

@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    LoggerOption, command::client_suggestions, net::ClientPlatform, plugin::PluginMetadata,
-    plugin_log,
+    LoggerOption, command::client_suggestions, localized_log_format, net::ClientPlatform,
+    plugin::PluginMetadata, plugin_log,
 };
 use pumpkin_util::{
     PermissionLvl,
@@ -233,9 +233,9 @@ impl Context {
             .node
             .starts_with(&format!("{}:", self.metadata.name))
         {
-            return Err(format!(
-                "Permission {} must use the plugin's namespace ({})",
-                permission.node, self.metadata.name
+            return Err(localized_log_format(
+                "plugin.permission.invalid_namespace",
+                &[permission.node, self.metadata.name.clone()],
             ));
         }
 

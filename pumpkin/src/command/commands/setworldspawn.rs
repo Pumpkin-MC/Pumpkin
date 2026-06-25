@@ -9,6 +9,7 @@ use crate::command::{
         rotation::RotationArgumentConsumer,
     },
     dispatcher::CommandError,
+    tr,
     tree::{CommandTree, builder::argument},
 };
 use crate::plugin::world::spawn_change::SpawnChangeEvent;
@@ -19,7 +20,7 @@ use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
 const NAMES: [&str; 1] = ["setworldspawn"];
 
-const DESCRIPTION: &str = "Sets the world spawn point.";
+const DESCRIPTION: &str = "commands.setworldspawn.description";
 
 const ARG_BLOCK_POS: &str = "position";
 
@@ -37,12 +38,16 @@ impl CommandExecutor for NoArgsWorldSpawnExecutor {
         Box::pin(async move {
             let Some(player) = sender.as_player() else {
                 if sender.is_console() {
-                    return Err(CommandError::CommandFailed(TextComponent::text(
-                        "You must specify a Position!",
+                    return Err(CommandError::CommandFailed(tr(
+                        "commands.setworldspawn.error.require_position",
+                        sender.get_locale(),
+                        [],
                     )));
                 }
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Failed to get Sender as Player!",
+                return Err(CommandError::CommandFailed(tr(
+                    "commands.setworldspawn.error.sender_not_player",
+                    sender.get_locale(),
+                    [],
                 )));
             };
             let block_pos = player.position();
@@ -103,8 +108,10 @@ async fn setworldspawn(
     pitch: f32,
 ) -> Result<i32, CommandError> {
     let Some(world) = sender.world() else {
-        return Err(CommandError::CommandFailed(TextComponent::text(
-            "Failed to get world.",
+        return Err(CommandError::CommandFailed(tr(
+            "commands.setworldspawn.error.world_not_found",
+            sender.get_locale(),
+            [],
         )));
     };
     if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {

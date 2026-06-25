@@ -4,7 +4,8 @@ use std::{collections::BTreeMap, fs};
 
 pub fn build() -> TokenStream {
     let java_json: BTreeMap<String, String> = serde_json::from_str(
-        &fs::read_to_string("../assets/en_us_java.json").expect("en_us_java is missing"),
+        &fs::read_to_string("../assets/translations/vanilla/en_us_java.json")
+            .expect("en_us_java is missing"),
     )
     .unwrap();
 
@@ -22,8 +23,8 @@ pub fn build() -> TokenStream {
         });
     }
 
-    let bedrock_content =
-        fs::read_to_string("../assets/en_us_bedrock.lang").expect("en_us_bedrock is missing");
+    let bedrock_content = fs::read_to_string("../assets/translations/vanilla/en_us_bedrock.lang")
+        .expect("en_us_bedrock is missing");
     let mut bedrock_constants = TokenStream::new();
 
     for line in bedrock_content.lines() {

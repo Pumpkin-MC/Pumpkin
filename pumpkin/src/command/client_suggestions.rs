@@ -13,6 +13,7 @@ use crate::command::node::{
     tree::ROOT_NODE_ID,
 };
 use crate::entity::player::Player;
+use crate::localized_log;
 use crate::server::Server;
 use pumpkin_protocol::bedrock::client::available_commands::{
     CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter, arg_flags,
@@ -78,14 +79,22 @@ pub async fn send_c_commands_packet(
             .values()
             .copied()
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| i.try_into().expect("i32 limit reached for ids"))
+            .map(|i| {
+                i.try_into().unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.i32_limit_reached"))
+                })
+            })
             .collect();
 
         let redirect_target = node
             .redirect()
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| i.try_into().expect("i32 limit reached for ids"));
+            .map(|i| {
+                i.try_into().unwrap_or_else(|_| {
+                    panic!("{}", localized_log("debug.expect.i32_limit_reached"))
+                })
+            });
 
         let satisfies_requirements = true;
 
@@ -179,9 +188,12 @@ impl<'a> ProtoNodeBuilder<'a> {
             .child_nodes
             .into_iter()
             .map(|node| {
-                node.build(buffer)
-                    .try_into()
-                    .expect("Buffer index exceeded i32 bounds")
+                node.build(buffer).try_into().unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.buffer_index_exceeded_bounds")
+                    )
+                })
             })
             .collect();
 

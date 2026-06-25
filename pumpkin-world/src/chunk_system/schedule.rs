@@ -14,6 +14,7 @@ use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use slotmap::Key;
 use std::cmp::{Ordering, max};
 use std::collections::{BinaryHeap, HashMap};
@@ -130,7 +131,12 @@ impl GenerationSchedule {
                     .spawn(move || {
                         generation_work(recv_gen, send_chunk, level_clone);
                     })
-                    .expect("Failed to spawn Generation Thread");
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "{}",
+                            localized_log("world.chunk_system.spawn_generation_thread_failed",)
+                        )
+                    });
 
                 thread_tracker.push(handle);
             }
@@ -172,7 +178,12 @@ impl GenerationSchedule {
                 };
                 scheduler.work(level_sched);
             })
-            .expect("Failed to spawn Scheduler Thread");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("world.chunk_system.spawn_scheduler_thread_failed",)
+                )
+            });
 
         thread_tracker.push(handle);
     }
@@ -672,9 +683,11 @@ impl GenerationSchedule {
         }
 
         info!(
-            "Saving {} chunks (collected from {} holders)...",
-            chunks.len(),
-            self.chunk_map.len()
+            "{}",
+            localized_log_format(
+                "world.chunk_system.saving_chunks",
+                &[chunks.len().to_string(), self.chunk_map.len().to_string()]
+            )
         );
 
         let mut data = self.io_lock.0.lock().unwrap();
@@ -684,7 +697,13 @@ impl GenerationSchedule {
         drop(data);
 
         if let Err(e) = self.io_write.send(chunks) {
-            error!("Failed to send chunks to io write thread: {:?}", e);
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.failed_send_chunks_io_write",
+                    &[format!("{:?}", e)]
+                )
+            );
         }
     }
 
@@ -973,11 +992,20 @@ impl GenerationSchedule {
                     self.chunk_map.insert(pos, holder);
 
                     warn!(
-                        "Chunk {:?} reset to None and re-queued for regeneration (target: {:?})",
-                        pos, target_stage
+                        "{}",
+                        localized_log_format(
+                            "world.chunk_system.chunk_requeued",
+                            &[format!("{:?}", pos), format!("{:?}", target_stage)]
+                        )
                     );
                 } else {
-                    error!("Failed to find holder for failed chunk {:?}", pos);
+                    error!(
+                        "{}",
+                        localized_log_format(
+                            "world.chunk_system.failed_find_holder",
+                            &[format!("{:?}", pos)]
+                        )
+                    );
                 }
             }
         }
@@ -986,9 +1014,14 @@ impl GenerationSchedule {
 
     fn work(mut self, level: Arc<Level>) {
         debug!(
-            "schedule thread start id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
+            "{}",
+            localized_log_format(
+                "world.chunk_system.schedule_thread_start",
+                &[
+                    format!("{:?}", thread::current().id()),
+                    thread::current().name().unwrap_or("unknown").to_string()
+                ]
+            )
         );
         loop {
             if level.should_unload.swap(false, Relaxed) {
@@ -999,7 +1032,10 @@ impl GenerationSchedule {
                 self.save_all_chunk(false);
             }
             if level.shut_down_chunk_system.load(Relaxed) {
-                info!("Saving chunks before shutdown...");
+                info!(
+                    "{}",
+                    localized_log("world.chunk_system.saving_chunks_before_shutdown")
+                );
                 self.garbage_collect_dependencies();
                 self.process_unload_queue();
                 self.save_all_chunk(true);
@@ -1030,7 +1066,10 @@ impl GenerationSchedule {
             'out2: while let Some(task) = self.queue.pop() {
                 if level.shut_down_chunk_system.load(Relaxed) {
                     self.queue.push(task);
-                    info!("Shutdown detected during task processing, saving chunks...");
+                    info!(
+                        "{}",
+                        localized_log("world.chunk_system.shutdown_during_tasks")
+                    );
                     self.save_all_chunk(true);
                     break 'out2;
                 }
@@ -1076,7 +1115,10 @@ impl GenerationSchedule {
                         if io_batch.len() >= 16
                             && self.io_read.send(std::mem::take(&mut io_batch)).is_err()
                         {
-                            info!("IO read thread closed, saving remaining chunks...");
+                            info!(
+                                "{}",
+                                localized_log("world.chunk_system.io_read_thread_closed")
+                            );
                             self.save_all_chunk(true);
                             break 'out2;
                         }
@@ -1085,7 +1127,10 @@ impl GenerationSchedule {
                         if !io_batch.is_empty()
                             && self.io_read.send(std::mem::take(&mut io_batch)).is_err()
                         {
-                            info!("IO read thread closed, saving remaining chunks...");
+                            info!(
+                                "{}",
+                                localized_log("world.chunk_system.io_read_thread_closed")
+                            );
                             self.save_all_chunk(true);
                             break 'out2;
                         }
@@ -1207,7 +1252,10 @@ impl GenerationSchedule {
                             });
                         } else if self.generate.send((node.pos, cache, node.stage)).is_err() {
                             self.running_task_count = self.running_task_count.saturating_sub(1);
-                            info!("Generation thread closed, saving remaining chunks...");
+                            info!(
+                                "{}",
+                                localized_log("world.chunk_system.generation_thread_closed")
+                            );
                             self.save_all_chunk(true);
                             break 'out2;
                         }
@@ -1217,7 +1265,10 @@ impl GenerationSchedule {
 
             // Flush any remaining IO batch
             if !io_batch.is_empty() && self.io_read.send(std::mem::take(&mut io_batch)).is_err() {
-                info!("IO read thread closed, saving remaining chunks...");
+                info!(
+                    "{}",
+                    localized_log("world.chunk_system.io_read_thread_closed")
+                );
                 self.save_all_chunk(true);
             }
 
@@ -1253,8 +1304,11 @@ impl GenerationSchedule {
             }
         }
         info!(
-            "schedule: waiting for {} generation tasks to finish",
-            self.running_task_count
+            "{}",
+            localized_log_format(
+                "world.chunk_system.waiting_generation_tasks",
+                &[self.running_task_count.to_string()]
+            )
         );
         let mut wait_iterations = 0;
         let max_wait_iterations = 100; // 5 seconds max wait
@@ -1266,9 +1320,14 @@ impl GenerationSchedule {
                 wait_iterations += 1;
                 if wait_iterations % 20 == 0 {
                     warn!(
-                        "Still waiting for {} tasks to complete (waited {}ms)",
-                        self.running_task_count,
-                        wait_iterations * 50
+                        "{}",
+                        localized_log_format(
+                            "world.chunk_system.still_waiting_tasks",
+                            &[
+                                self.running_task_count.to_string(),
+                                (wait_iterations * 50).to_string()
+                            ]
+                        )
                     );
                 }
                 thread::sleep(Duration::from_millis(50));
@@ -1277,8 +1336,11 @@ impl GenerationSchedule {
 
         if self.running_task_count > 0 {
             warn!(
-                "Cancelling {} in-flight generation tasks",
-                self.running_task_count
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.cancelling_generation_tasks",
+                    &[self.running_task_count.to_string()]
+                )
             );
             let mut nodes_to_drop = Vec::new();
 
@@ -1313,8 +1375,11 @@ impl GenerationSchedule {
         let unreleased_count = self.graph.nodes.len();
         if unreleased_count > 0 {
             warn!(
-                "Cleaning up {} unreleased nodes from incomplete tasks",
-                unreleased_count
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.cleaning_unreleased_nodes",
+                    &[unreleased_count.to_string()]
+                )
             );
         }
         self.graph.edges.clear();
@@ -1323,9 +1388,15 @@ impl GenerationSchedule {
     fn debug_check(&self) -> bool {
         if !self.graph.nodes.is_empty() {
             for (key, value) in &self.graph.nodes {
-                error!("unrelease node {key:?}: {value:?}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "world.chunk_system.unreleased_node",
+                        &[format!("{key:?}"), format!("{value:?}")]
+                    )
+                );
             }
-            panic!("nodes count error");
+            panic!("{}", localized_log("debug.panic.nodes_count_error"));
         }
         for (pos, holder) in &self.chunk_map {
             for i in &holder.tasks {

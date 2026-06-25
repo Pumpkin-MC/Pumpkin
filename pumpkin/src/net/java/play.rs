@@ -1,3 +1,4 @@
+use pumpkin_i18n::set_player_locale;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
@@ -33,6 +34,7 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
+use crate::{localized_log, localized_log_format, localized_text};
 
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
@@ -240,12 +242,14 @@ impl JavaClient {
                 drop(awaiting_teleport);
             } else {
                 drop(awaiting_teleport);
-                self.kick(TextComponent::text("Wrong teleport id")).await;
+                self.kick(localized_text("network.kick.wrong_teleport_id", []))
+                    .await;
             }
         } else {
             drop(awaiting_teleport);
-            self.kick(TextComponent::text(
-                "Send Teleport confirm, but we did not teleport",
+            self.kick(localized_text(
+                "network.kick.unrequested_teleport_confirm",
+                [],
             ))
             .await;
         }
@@ -794,13 +798,19 @@ impl JavaClient {
         let pos = command.pos;
         if let Some(block_entity) = player.world().get_block_entity(&pos) {
             if block_entity.resource_location() != CommandBlockEntity::ID {
-                warn!("Client tried to change Command block but not Command block entity found");
+                warn!(
+                    "{}",
+                    localized_log("server.log.client_changed_missing_command_block_entity")
+                );
                 return;
             }
 
             let Ok(command_block_mode) = CommandBlockMode::try_from(command.mode) else {
-                self.kick(TextComponent::text("Invalid Command block mode"))
-                    .await;
+                self.kick(localized_text(
+                    "client.disconnect.invalid_command_block_mode",
+                    [],
+                ))
+                .await;
                 return;
             };
 
@@ -878,7 +888,10 @@ impl JavaClient {
         let pos = jigsaw.pos;
         if let Some(block_entity) = player.world().get_block_entity(&pos) {
             if block_entity.resource_location() != JigsawBlockEntity::ID {
-                warn!("Client tried to change Jigsaw block but not Jigsaw block entity found");
+                warn!(
+                    "{}",
+                    localized_log("server.log.client_changed_missing_jigsaw_block_entity")
+                );
                 return;
             }
 
@@ -958,7 +971,7 @@ impl JavaClient {
             Action::LeaveBed => player.wake_up().await,
 
             Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
-                debug!("todo");
+                debug!("{}", localized_log("server.log.todo"));
             }
             Action::StartFlyingElytra => {
                 let fall_flying = entity.check_fall_flying();
@@ -1283,7 +1296,8 @@ impl JavaClient {
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
         player.update_last_action_time();
         let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
-            self.kick(TextComponent::text("Invalid hand")).await;
+            self.kick(localized_text("network.kick.invalid_hand", []))
+                .await;
             return;
         };
 
@@ -1357,7 +1371,13 @@ impl JavaClient {
             PlayerChatEvent::new(player.clone(), chat_message.message.to_string(), vec![]);
 
             'after: {
-                info!("<chat> {}: {}", gameprofile.name, event.message);
+                info!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.chat_message",
+                        &[gameprofile.name.clone(), event.message.clone()]
+                    )
+                );
 
                 let config = &server.advanced_config;
 
@@ -1585,6 +1605,8 @@ impl JavaClient {
                     return;
                 };
 
+                let player_locale = client_information.locale.clone();
+
                 let new_config = PlayerConfig {
                     locale: client_information.locale,
                     view_distance: new_view_distance,
@@ -1598,6 +1620,15 @@ impl JavaClient {
 
                 // 4. Atomically swap the new config into the player
                 player.config.store(std::sync::Arc::new(new_config));
+
+                // Sync locale to the i18n cache in case the player changed their language
+                if let Some(server) = player.world().server.upgrade() {
+                    set_player_locale(
+                        &player.gameprofile.id.to_string(),
+                        &player_locale,
+                        &server.advanced_config.locale.client_java_edition,
+                    );
+                }
 
                 (update_settings, update_watched, main_hand_changed)
             };
@@ -1619,7 +1650,7 @@ impl JavaClient {
                 player.send_client_information();
             }
         } else {
-            self.kick(TextComponent::text("Invalid hand or chat type"))
+            self.kick(localized_text("network.kick.invalid_hand_or_chat_type", []))
                 .await;
         }
     }
@@ -1652,7 +1683,7 @@ impl JavaClient {
                 player.send_stats().await;
             }
             _ => {
-                self.kick(TextComponent::text("Invalid client status"))
+                self.kick(localized_text("network.kick.invalid_client_status", []))
                     .await;
             }
         }
@@ -1731,7 +1762,8 @@ impl JavaClient {
             player_entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
-            self.kick(TextComponent::text("Invalid action type")).await;
+            self.kick(localized_text("network.kick.invalid_action_type", []))
+                .await;
             return;
         };
 
@@ -2047,10 +2079,13 @@ impl JavaClient {
                     player.swap_item().await;
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    debug!("{}", localized_log("server.log.todo"));
                 }
             },
-            Err(_) => self.kick(TextComponent::text("Invalid status")).await,
+            Err(_) => {
+                self.kick(localized_text("client.disconnect.invalid_status", []))
+                    .await;
+            }
         }
     }
 
@@ -2076,7 +2111,10 @@ impl JavaClient {
 
     pub fn update_sequence(&self, player: &Player, sequence: i32) {
         if sequence < 0 {
-            error!("Expected packet sequence >= 0");
+            error!(
+                "{}",
+                localized_log("server.log.expected_non_negative_packet_sequence")
+            );
         }
         player.packet_sequence.store(
             player.packet_sequence.load(Ordering::Relaxed).max(sequence),
@@ -2386,7 +2424,8 @@ impl JavaClient {
 
         let inventory = player.inventory();
         let Ok(hand) = Hand::try_from(use_item.hand.0) else {
-            self.kick(TextComponent::text("InvalidHand")).await;
+            self.kick(localized_text("network.kick.invalid_hand", []))
+                .await;
             return;
         };
         self.update_sequence(player, use_item.sequence.0);
@@ -2556,7 +2595,8 @@ impl JavaClient {
         player.update_last_action_time();
         let slot = held.slot;
         if !(0..=8).contains(&slot) {
-            self.kick(TextComponent::text("Invalid held slot")).await;
+            self.kick(localized_text("network.kick.invalid_held_slot", []))
+                .await;
             return;
         }
         let slot = slot as u8;
@@ -2619,7 +2659,13 @@ impl JavaClient {
                                 7 => EquipmentSlot::LEGS,
                                 8 => EquipmentSlot::FEET,
                                 _ => {
-                                    tracing::error!("Invalid armor slot: {}", packet.slot);
+                                    tracing::error!(
+                                        "{}",
+                                        localized_log_format(
+                                            "server.log.invalid_armor_slot",
+                                            &[packet.slot.to_string()]
+                                        )
+                                    );
                                     EquipmentSlot::HEAD
                                 }
                             },
@@ -2967,8 +3013,11 @@ impl JavaClient {
 
         let selected_item_index = packet.selected_item_index.0;
         if selected_item_index < 0 && selected_item_index != -1 {
-            self.kick(TextComponent::text("Invalid selected item index"))
-                .await;
+            self.kick(localized_text(
+                "network.kick.invalid_selected_item_index",
+                [],
+            ))
+            .await;
             return;
         }
 

@@ -3,7 +3,10 @@ use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
+use pumpkin_util::{
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+    translation::{localized_log, localized_log_format},
+};
 use uuid::Uuid;
 
 use crate::{
@@ -143,15 +146,22 @@ impl PacketRead for String {
         if len > MAX_STRING_LENGTH {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("String length {len} exceeds maximum of {MAX_STRING_LENGTH}"),
+                localized_log_format(
+                    "protocol.serial.string_length_exceeds_maximum",
+                    &[len.to_string(), MAX_STRING_LENGTH.to_string()],
+                ),
             ));
         }
 
         let mut buf = vec![0u8; len];
         reader.read_exact(&mut buf)?;
 
-        Self::from_utf8(buf)
-            .map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 sequence"))
+        Self::from_utf8(buf).map_err(|_| {
+            Error::new(
+                ErrorKind::InvalidData,
+                localized_log("protocol.serial.invalid_utf8_sequence"),
+            )
+        })
     }
 }
 

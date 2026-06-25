@@ -1,12 +1,13 @@
-use crate::command::CommandSender;
 use crate::command::argument_types::entity_anchor::EntityAnchor;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
+use crate::command::{CommandSender, tr_plain};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::translation;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
@@ -365,8 +366,13 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
     #[must_use]
-    pub const fn world(&self) -> &Arc<World> {
-        self.world.as_ref().expect("Expected world to exist")
+    pub fn world(&self) -> &Arc<World> {
+        self.world.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain("debug.expect.world_should_exist", server_command_locale(),)
+            )
+        })
     }
 
     /// Gets the server as a result:
@@ -374,8 +380,13 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     #[must_use]
-    pub const fn server(&self) -> &Arc<Server> {
-        self.server.as_ref().expect("Expected server to exist")
+    pub fn server(&self) -> &Arc<Server> {
+        self.server.as_ref().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain("debug.expect.server_should_exist", server_command_locale(),)
+            )
+        })
     }
 
     /// Gets the player as an option:

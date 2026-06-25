@@ -15,7 +15,7 @@ use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["gamemode"];
 
-const DESCRIPTION: &str = "Change a player's gamemode.";
+const DESCRIPTION: &str = "commands.gamemode.description";
 
 const ARG_GAMEMODE: &str = "gamemode";
 const ARG_TARGET: &str = "target";

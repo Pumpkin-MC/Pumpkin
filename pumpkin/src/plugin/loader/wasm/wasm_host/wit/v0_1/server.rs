@@ -1,3 +1,4 @@
+use crate::{localized_log, localized_text};
 use pumpkin_util::text::TextComponent;
 use wasmtime::component::Resource;
 
@@ -78,26 +79,29 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     async fn get_player_count(&mut self, _res: Resource<Server>) -> wasmtime::Result<u32> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         Ok(server.get_player_count() as u32)
     }
 
     async fn get_mspt(&mut self, _res: Resource<Server>) -> wasmtime::Result<f64> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         Ok(server.get_mspt())
     }
 
     async fn get_tps(&mut self, _res: Resource<Server>) -> wasmtime::Result<f64> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         Ok(server.get_tps())
     }
 
@@ -105,17 +109,22 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _res: Resource<Server>,
     ) -> wasmtime::Result<Vec<Resource<Player>>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server
             .get_all_players()
             .into_iter()
             .map(|player| {
-                self.add_player(player)
-                    .expect("failed to add player resource")
+                self.add_player(player).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+                    )
+                })
             })
             .collect())
     }
@@ -125,10 +134,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         name: String,
     ) -> wasmtime::Result<Option<Resource<Player>>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         server
             .get_player_by_name(&name)
@@ -143,10 +153,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<Player>>> {
         let uuid = WitUuid::from_wit(&id);
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         server
             .get_player_by_uuid(uuid)
@@ -158,18 +169,23 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::world::World>>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server
             .worlds
             .load()
             .iter()
             .map(|world| {
-                self.add_world(world.clone())
-                    .expect("failed to add world resource")
+                self.add_world(world.clone()).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+                    )
+                })
             })
             .collect())
     }
@@ -179,10 +195,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         name: String,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::World>>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server
             .worlds
@@ -190,8 +207,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .iter()
             .find(|world| world.dimension.minecraft_name == name)
             .map(|world| {
-                self.add_world(world.clone())
-                    .expect("failed to add world resource")
+                self.add_world(world.clone()).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+                    )
+                })
             }))
     }
 
@@ -201,10 +222,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         name: String,
         dimension: Dimension,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         let internal_dim = match dimension {
             Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
@@ -213,20 +235,24 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         };
 
         let world = server.create_world(name, internal_dim).await;
-        self.add_world(world)
-            .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+        self.add_world(world).map_err(|_| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.failed_add_world_resource",
+            ))
+        })
     }
 
     async fn broadcast(&mut self, _rep: Resource<Server>, message: String) -> wasmtime::Result<()> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         server
             .broadcast_message(
                 &TextComponent::text(message),
-                &TextComponent::text("Server"),
+                &localized_text("server.sender.server", []),
                 0,
                 None,
             )
@@ -243,10 +269,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let header = text_component_from_resource(self, &header);
         let footer = text_component_from_resource(self, &footer);
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         server
             .broadcast_tab_list_header_footer(&header, &footer)
             .await;
@@ -259,10 +286,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         command: String,
         sender: WasmCommandSender,
     ) -> wasmtime::Result<()> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         let native_sender = match sender {
             WasmCommandSender::Console => CommandSender::Console,
@@ -287,82 +315,91 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     async fn get_max_players(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u32> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.max_players)
     }
 
     async fn is_hardcore(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.hardcore)
     }
 
     async fn is_online_mode(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.advanced_config.networking.authentication.enabled)
     }
 
     async fn get_motd(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.motd.clone())
     }
 
     async fn has_whitelist(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.white_list)
     }
 
     async fn get_allow_nether(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.allow_nether)
     }
 
     async fn get_allow_end(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.allow_end)
     }
 
     async fn get_view_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.view_distance.get())
     }
 
     async fn get_simulation_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(server.basic_config.simulation_distance.get())
     }
@@ -371,10 +408,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<pumpkin::plugin::common::GameMode> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         Ok(super::events::to_wasm_game_mode(
             server.basic_config.default_gamemode,
@@ -385,10 +423,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         &mut self,
         _rep: Resource<Server>,
     ) -> wasmtime::Result<Resource<WitRecipeManager>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         self.add_recipe_manager(server.recipe_manager.clone())
     }
 

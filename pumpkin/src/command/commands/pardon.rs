@@ -13,7 +13,7 @@ use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["pardon"];
-const DESCRIPTION: &str = "unbans a player";
+const DESCRIPTION: &str = "commands.pardon.description";
 
 const ARG_TARGET: &str = "targets";
 

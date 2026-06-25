@@ -1,3 +1,4 @@
+use crate::localized_log;
 use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -46,14 +47,22 @@ impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, PluginInitError> {
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
-        let mut path = std::path::absolute(path.as_ref()).expect("Failed to get absolute path");
+        let mut path = std::path::absolute(path.as_ref()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.absolute_path_failed",)
+            )
+        });
         path.pop();
         path.push("cache");
         let mut cache_config = CacheConfig::new();
         cache_config.with_directory(&path);
-        config.cache(Some(
-            Cache::new(cache_config).expect("Failed to create cache"),
-        ));
+        config.cache(Some(Cache::new(cache_config).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.cache_create_failed",)
+            )
+        })));
 
         config.gc_support(true);
         config.wasm_gc(true);

@@ -7,6 +7,7 @@ use crate::generation::noise::router::{
 };
 
 use super::NoiseFunctionComponentRange;
+use pumpkin_util::translation::localized_log;
 
 pub enum SplineValue {
     Spline(Spline),
@@ -86,7 +87,10 @@ impl Spline {
         let input_max = input_function.max() as f32;
         let input_min = input_function.min() as f32;
 
-        let first_point = self.points.first().expect("A spline with no values?");
+        let first_point = self
+            .points
+            .first()
+            .unwrap_or_else(|| panic!("{}", localized_log("world.noise.spline_requires_points")));
         if input_min < first_point.location {
             let (point_min, point_max) = first_point.value.calculate_min_and_max(component_stack);
             let sample_min = first_point.sample_outside_range(input_min, point_min);
@@ -96,7 +100,10 @@ impl Spline {
             max = max.max(sample_min.max(sample_max));
         }
 
-        let last_point = self.points.last().expect("A spline with no values?");
+        let last_point = self
+            .points
+            .last()
+            .unwrap_or_else(|| panic!("{}", localized_log("world.noise.spline_requires_points")));
         if input_max > last_point.location {
             let (point_min, point_max) = last_point.value.calculate_min_and_max(component_stack);
             let sample_min = last_point.sample_outside_range(input_max, point_min);

@@ -5,10 +5,13 @@ use crate::command::CommandResult;
 use crate::command::args::{FindArg, time::TimeArgumentConsumer};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
+use crate::command::{
+    CommandExecutor, CommandSender, ConsumedArgs, tr, tr_plain, tree::CommandTree,
+};
+use pumpkin_i18n::server_command_locale;
 
 const NAMES: [&str; 1] = ["time"];
-const DESCRIPTION: &str = "Query the world time.";
+const DESCRIPTION: &str = "commands.time.description";
 const ARG_TIME: &str = "time";
 
 #[derive(Clone, Copy)]
@@ -56,9 +59,15 @@ impl CommandExecutor for QueryExecutor {
             let mode = self.0;
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let level_time = world.level_time.lock().await;
 
             let curr_time = match mode {
@@ -93,17 +102,25 @@ impl CommandExecutor for ChangeExecutor {
             } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
                 ticks
             } else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Invalid time specified.",
+                return Err(CommandError::CommandFailed(tr(
+                    "commands.time.invalid",
+                    sender.get_locale(),
+                    [],
                 )));
             };
 
             let mode = self.0;
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut level_time = world.level_time.lock().await;
 
             match mode {

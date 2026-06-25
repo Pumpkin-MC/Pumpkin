@@ -10,7 +10,7 @@ use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender
 
 const NAMES: [&str; 1] = ["setblock"];
 
-const DESCRIPTION: &str = "Place a block.";
+const DESCRIPTION: &str = "commands.setblock.description";
 
 const ARG_BLOCK: &str = "block";
 const ARG_BLOCK_POS: &str = "pos";

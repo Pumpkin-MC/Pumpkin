@@ -11,7 +11,7 @@ use crate::command::{
 };
 
 const NAMES: [&str; 1] = ["weather"];
-const DESCRIPTION: &str = "Changes the weather.";
+const DESCRIPTION: &str = "commands.weather.description";
 const ARG_DURATION: &str = "duration";
 
 struct Executor {

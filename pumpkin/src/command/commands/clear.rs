@@ -17,7 +17,7 @@ use crate::entity::player::Player;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["clear"];
-const DESCRIPTION: &str = "Clear your inventory or that of target(s)";
+const DESCRIPTION: &str = "commands.clear.description";
 
 const ARG_TARGETS: &str = "targets";
 const ARG_ITEM: &str = "item";

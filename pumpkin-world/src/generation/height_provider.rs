@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 
+use pumpkin_util::translation::localized_log;
 use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
     y_offset::YOffset,
@@ -68,7 +69,7 @@ impl TrapezoidHeightProvider {
         let j = self.max_inclusive.get_y(min_y as i16, height);
 
         if i > j {
-            warn!("Empty height range");
+            warn!("{}", localized_log("world.generation.empty_height_range"));
             return i;
         }
 

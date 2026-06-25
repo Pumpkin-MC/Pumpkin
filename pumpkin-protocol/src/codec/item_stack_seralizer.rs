@@ -8,6 +8,7 @@ use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_util::version::JavaMinecraftVersion;
 use serde::ser::SerializeStruct;
 use serde::{
@@ -179,7 +180,10 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                         .ok_or_else(|| de::Error::custom("Missing component ID"))?
                         .0;
                     let id = DataComponent::try_from_id(id_val as u8).ok_or_else(|| {
-                        de::Error::custom(format!("Unknown component ID: {id_val}"))
+                        de::Error::custom(localized_log_format(
+                            "protocol.data_component.unknown_component_id",
+                            &[id_val.to_string()],
+                        ))
                     })?;
 
                     // Minecraft protocol sends a byte length for the component data here

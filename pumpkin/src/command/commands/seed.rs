@@ -4,13 +4,13 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use pumpkin_data::translation::java::{CHAT_COPY_CLICK, COMMANDS_SEED_SUCCESS};
 use pumpkin_util::PermissionLvl;
-use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use std::borrow::Cow;
 
-const DESCRIPTION: &str = "Displays the world seed.";
+const DESCRIPTION: &str = "commands.seed.description";
 const PERMISSION: &str = "minecraft:command.seed";
 
 struct SeedCommandExecutor;
@@ -51,7 +51,7 @@ impl CommandExecutor for SeedCommandExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         // For integrated servers, the permission level is 0,

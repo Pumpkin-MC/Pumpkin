@@ -1,5 +1,5 @@
 use crate::{
-    STOP_INTERRUPT,
+    STOP_INTERRUPT, localized_log,
     plugin::server::{
         server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
     },
@@ -73,6 +73,6 @@ impl Ticker {
             }
         }
 
-        debug!("Ticker stopped");
+        debug!("{}", localized_log("server.log.ticker_stopped"));
     }
 }

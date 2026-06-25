@@ -69,10 +69,12 @@ macro_rules! global_path {
 macro_rules! read_data_from_file {
     ($path:expr) => {{
         use $crate::global_path;
-        $crate::serde_json::from_str(
-            &std::fs::read_to_string(global_path!($path)).expect("no data file"),
-        )
-        .expect("failed to decode data")
+        $crate::serde_json::from_str(&std::fs::read_to_string(global_path!($path)).expect(
+            &$crate::translation::localized_log("debug.expect.no_data_file"),
+        ))
+        .expect(&$crate::translation::localized_log(
+            "debug.expect.failed_decode_data",
+        ))
     }};
 }
 
@@ -81,7 +83,18 @@ macro_rules! read_data_from_file {
 macro_rules! assert_eq_delta {
     ($x:expr, $y:expr, $d:expr) => {
         if 2f64 * ($x - $y).abs() > $d * ($x.abs() + $y.abs()) {
-            panic!("{} vs {} ({} vs {})", $x, $y, ($x - $y).abs(), $d);
+            panic!(
+                "{}",
+                $crate::translation::localized_log_format(
+                    "debug.panic.float_delta_mismatch",
+                    &[
+                        $x.to_string(),
+                        $y.to_string(),
+                        ($x - $y).abs().to_string(),
+                        $d.to_string(),
+                    ],
+                )
+            );
         }
     };
 }
@@ -184,11 +197,14 @@ impl<'a, T> MutableSplitSlice<'a, T> {
     ///
     /// # Panics
     /// * if `index` is out of bounds of the base slice.
-    pub const fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
+    pub fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
         let (start, end_inclusive) = base.split_at_mut(index);
-        let (value, end) = end_inclusive
-            .split_first_mut()
-            .expect("Index is not in base slice");
+        let (value, end) = end_inclusive.split_first_mut().unwrap_or_else(|| {
+            panic!(
+                "{}",
+                crate::translation::localized_log("debug.expect.index_not_in_base_slice")
+            )
+        });
 
         (value, Self { start, end })
     }
@@ -214,7 +230,10 @@ impl<T> Index<usize> for MutableSplitSlice<'_, T> {
         if index < self.start.len() {
             &self.start[index]
         } else if index == self.start.len() {
-            panic!("We tried to index into the element that was removed");
+            panic!(
+                "{}",
+                crate::translation::localized_log("debug.panic.index_removed_element")
+            );
         } else {
             &self.end[index - self.start.len() - 1]
         }
@@ -239,7 +258,10 @@ impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
         if index < self.start.len() {
             &mut self.start[index]
         } else if index == self.start.len() {
-            panic!("We tried to index into the element that was removed");
+            panic!(
+                "{}",
+                crate::translation::localized_log("debug.panic.index_removed_element")
+            );
         } else {
             &mut self.end[index - self.start.len() - 1]
         }

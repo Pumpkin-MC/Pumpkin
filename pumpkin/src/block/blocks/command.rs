@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use super::redstone::block_receives_redstone_power;
 use crate::block::entities::{BlockEntity, command_block::CommandBlockEntity};
-use crate::command::CommandSender;
+use crate::command::{CommandSender, tr_format, tr_plain};
 use crate::entity::EntityBase;
 use crate::{
     block::{
@@ -17,6 +17,7 @@ use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::{BlockStateId, tick::TickPriority};
 use tracing::warn;
@@ -59,12 +60,25 @@ impl CommandBlock {
             return false;
         };
         let Some(before_entity) = world.get_block_entity(&before.0) else {
-            warn!("Command block has no matching entity");
+            warn!(
+                "{}",
+                tr_plain(
+                    "server.log.command_block_no_matching_entity",
+                    server_command_locale(),
+                )
+            );
             return false;
         };
         let Some(command_entity) = before_entity.as_any().downcast_ref::<CommandBlockEntity>()
         else {
-            warn!("Block entity at {} is not a command block", before.0);
+            warn!(
+                "{}",
+                tr_format(
+                    "server.log.command_not_a_command_block",
+                    server_command_locale(),
+                    &[before.0.to_string()],
+                )
+            );
             return false;
         };
 
@@ -101,15 +115,22 @@ impl CommandBlock {
         };
         let Some(behind_entity) = world.get_block_entity(&behind.0) else {
             warn!(
-                "Command Block exists at {} with no matching block entity!",
-                behind.0
+                "{}",
+                tr_format(
+                    "server.log.command_block_missing_matching_entity",
+                    server_command_locale(),
+                    &[behind.0.to_string()],
+                )
             );
             return;
         };
-        let behind_entity: &CommandBlockEntity = behind_entity
-            .as_any()
-            .downcast_ref()
-            .expect("behind should always be a command block");
+        let behind_entity: &CommandBlockEntity =
+            behind_entity.as_any().downcast_ref().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain("debug.expect.command_block_behind", server_command_locale())
+                )
+            });
 
         if behind_entity.success_count.load(Ordering::Relaxed) > 0 {
             world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
@@ -128,7 +149,13 @@ impl CommandBlock {
         }
 
         let Ok(command_entity) = Arc::downcast::<CommandBlockEntity>(block_entity) else {
-            warn!("Failed to downcast block entity to CommandBlockEntity");
+            warn!(
+                "{}",
+                tr_plain(
+                    "server.log.failed_downcast_command_block",
+                    server_command_locale()
+                )
+            );
             return;
         };
 
@@ -168,13 +195,26 @@ impl CommandBlock {
                 break;
             }
             let Some(block_entity) = world.get_block_entity(&pos) else {
-                warn!("Missing command block entity");
+                warn!(
+                    "{}",
+                    tr_plain(
+                        "server.log.missing_command_block_entity",
+                        server_command_locale()
+                    )
+                );
                 break;
             };
 
             let Some(command_entity) = block_entity.as_any().downcast_ref::<CommandBlockEntity>()
             else {
-                warn!("Block entity at {} is not a command block", pos);
+                warn!(
+                    "{}",
+                    tr_format(
+                        "server.log.command_not_a_command_block",
+                        server_command_locale(),
+                        &[pos.to_string()],
+                    )
+                );
                 break;
             };
             let powered = command_entity.powered.load(Ordering::Relaxed);
@@ -187,7 +227,13 @@ impl CommandBlock {
                 if conditions_met {
                     let command = command_entity.command.lock().await;
                     let Some(entity) = world.get_block_entity(&pos) else {
-                        warn!("Command block entity disappeared during execution");
+                        warn!(
+                            "{}",
+                            tr_plain(
+                                "server.log.command_block_disappeared",
+                                server_command_locale(),
+                            )
+                        );
                         break;
                     };
                     Self::execute(server, world.clone(), entity, &command).await;
@@ -201,8 +247,12 @@ impl CommandBlock {
             i -= 1;
             if i == 0 {
                 warn!(
-                    "Command block chain executed {} times (the maximum)!",
-                    u16::MAX
+                    "{}",
+                    tr_format(
+                        "server.log.command_block_chain_max_executed",
+                        server_command_locale(),
+                        &[u16::MAX.to_string()],
+                    )
                 );
             }
         }
@@ -256,7 +306,14 @@ impl BlockBehaviour for CommandBlock {
                 let Some(command_entity) =
                     block_entity.as_any().downcast_ref::<CommandBlockEntity>()
                 else {
-                    warn!("Block entity at {} is not a command block", args.position);
+                    warn!(
+                        "{}",
+                        tr_format(
+                            "server.log.command_not_a_command_block",
+                            server_command_locale(),
+                            &[args.position.to_string()],
+                        )
+                    );
                     return;
                 };
 
@@ -287,7 +344,14 @@ impl BlockBehaviour for CommandBlock {
 
             let Some(command_entity) = block_entity.as_any().downcast_ref::<CommandBlockEntity>()
             else {
-                warn!("Block entity at {} is not a command block", args.position);
+                warn!(
+                    "{}",
+                    tr_format(
+                        "server.log.command_not_a_command_block",
+                        server_command_locale(),
+                        &[args.position.to_string()],
+                    )
+                );
                 return;
             };
             let Some(server) = args.world.server.upgrade() else {
@@ -360,14 +424,23 @@ impl BlockBehaviour for CommandBlock {
 
             entity.map_or_else(
                 || {
-                    warn!("Command block is missing its corresponding block entity");
+                    warn!(
+                        "{}",
+                        tr_plain("server.log.command_block_missing", server_command_locale(),)
+                    );
                     None
                 },
                 |entity| {
                     let command_block_entity: &CommandBlockEntity =
-                        entity.as_any().downcast_ref().expect(
-                            "Block entity command block's position should be a matching entity",
-                        );
+                        entity.as_any().downcast_ref().unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                tr_plain(
+                                    "debug.expect.command_block_position_matching_entity",
+                                    server_command_locale(),
+                                )
+                            )
+                        });
                     Some(command_block_entity.success_count.load(Ordering::Acquire) as u8)
                 },
             )

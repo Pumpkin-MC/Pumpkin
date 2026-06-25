@@ -11,6 +11,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::SuggestionText;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+use crate::localized_log;
 use bitflags::bitflags;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
@@ -250,7 +251,10 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
         }
         let i = self.reader.cursor();
-        let char = self.reader.read().expect("can_read_char is true");
+        let char = self
+            .reader
+            .read()
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.can_read_char_true")));
         let mut add_alive_predicate = false;
         match char {
             'a' => {

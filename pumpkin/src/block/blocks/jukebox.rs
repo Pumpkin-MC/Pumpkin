@@ -8,6 +8,7 @@ use crate::block::{
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
+use crate::localized_log_format;
 use crate::world::World;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::entity::EntityType;
@@ -145,7 +146,13 @@ impl BlockBehaviour for JukeboxBlock {
             };
 
             let Some(jukebox_song) = JukeboxSong::from_name(song_name) else {
-                error!("Jukebox playable song not registered: {song_name}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.jukebox_song_not_registered",
+                        &[song_name.to_string()]
+                    )
+                );
                 return BlockActionResult::PassToDefaultBlockAction;
             };
 

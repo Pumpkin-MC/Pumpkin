@@ -1,3 +1,4 @@
+use crate::localized_log;
 use crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent;
 use crate::plugin::{
     loader::wasm::wasm_host::{
@@ -85,9 +86,12 @@ const fn from_wasm_fish_state(state: WasmPlayerFishState) -> PlayerFishState {
 
 impl ToFromWasmEvent for InventoryCloseEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::InventoryCloseEvent(InventoryCloseEventData {
             player,
@@ -101,7 +105,10 @@ impl ToFromWasmEvent for InventoryCloseEvent {
                 player: consume_player(state, &data.player),
                 window_type: None, // We don't change window_type from WASM
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -111,9 +118,12 @@ use tokio::sync::Mutex;
 
 impl ToFromWasmEvent for InventoryClickEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::InventoryClickEvent(InventoryClickEventData {
             player,
@@ -124,12 +134,26 @@ impl ToFromWasmEvent for InventoryClickEvent {
             clicked_item: self.clicked_item.as_ref().map(|stack| {
                 state
                     .add_item_stack(Arc::new(Mutex::new(stack.clone())))
-                    .expect("failed to add item stack resource")
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "{}",
+                            localized_log(
+                                "debug.expect.plugin_wasm.failed_add_item_stack_resource",
+                            )
+                        )
+                    })
             }),
             cursor: self.cursor.as_ref().map(|stack| {
                 state
                     .add_item_stack(Arc::new(Mutex::new(stack.clone())))
-                    .expect("failed to add item stack resource")
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "{}",
+                            localized_log(
+                                "debug.expect.plugin_wasm.failed_add_item_stack_resource",
+                            )
+                        )
+                    })
             }),
             hotbar_button: self.hotbar_button,
             cancelled: self.cancelled,
@@ -149,19 +173,30 @@ impl ToFromWasmEvent for InventoryClickEvent {
                 hotbar_button: data.hotbar_button,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerJoinEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
         let join_message = state
             .add_text_component(self.join_message.clone())
-            .expect("failed to add text-component resource");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
 
         Event::PlayerJoinEvent(PlayerJoinEventData {
             player,
@@ -177,19 +212,30 @@ impl ToFromWasmEvent for PlayerJoinEvent {
                 join_message: consume_text_component(state, &data.join_message),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerLeaveEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
         let leave_message = state
             .add_text_component(self.leave_message.clone())
-            .expect("failed to add text-component resource");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
 
         Event::PlayerLeaveEvent(PlayerLeaveEventData {
             player,
@@ -205,19 +251,30 @@ impl ToFromWasmEvent for PlayerLeaveEvent {
                 leave_message: consume_text_component(state, &data.leave_message),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerLoginEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
         let kick_message = state
             .add_text_component(self.kick_message.clone())
-            .expect("failed to add text-component resource");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
 
         Event::PlayerLoginEvent(PlayerLoginEventData {
             player,
@@ -233,24 +290,33 @@ impl ToFromWasmEvent for PlayerLoginEvent {
                 kick_message: consume_text_component(state, &data.kick_message),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerChatEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
         let recipients = self
             .recipients
             .iter()
             .cloned()
             .map(|recipient| {
-                state
-                    .add_player(recipient)
-                    .expect("failed to add player resource")
+                state.add_player(recipient).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+                    )
+                })
             })
             .collect();
 
@@ -274,16 +340,22 @@ impl ToFromWasmEvent for PlayerChatEvent {
                     .collect(),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerCommandSendEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerCommandSendEvent(PlayerCommandSendEventData {
             player,
@@ -299,16 +371,22 @@ impl ToFromWasmEvent for PlayerCommandSendEvent {
                 command: data.command,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerPermissionCheckEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerPermissionCheckEvent(PlayerPermissionCheckEventData {
             player,
@@ -324,16 +402,22 @@ impl ToFromWasmEvent for PlayerPermissionCheckEvent {
                 permission: data.permission,
                 result: data.permission_result,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerMoveEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerMoveEvent(PlayerMoveEventData {
             player,
@@ -351,16 +435,22 @@ impl ToFromWasmEvent for PlayerMoveEvent {
                 to: from_wasm_position(data.to_position),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerTeleportEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerTeleportEvent(PlayerTeleportEventData {
             player,
@@ -378,22 +468,36 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
                 to: from_wasm_position(data.to_position),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerChangeWorldEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
         let previous_world = state
             .add_world(self.previous_world.clone())
-            .expect("failed to add world resource");
-        let new_world = state
-            .add_world(self.new_world.clone())
-            .expect("failed to add world resource");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+                )
+            });
+        let new_world = state.add_world(self.new_world.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+            )
+        });
 
         Event::PlayerChangeWorldEvent(PlayerChangeWorldEventData {
             player,
@@ -417,7 +521,10 @@ impl ToFromWasmEvent for PlayerChangeWorldEvent {
                 pitch: data.pitch,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -463,9 +570,12 @@ impl ToFromWasmEvent for PlayerRespawnEvent {
 
 impl ToFromWasmEvent for PlayerExpChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerExpChangeEvent(PlayerExpChangeEventData {
             player,
@@ -479,16 +589,22 @@ impl ToFromWasmEvent for PlayerExpChangeEvent {
                 player: consume_player(state, &data.player),
                 amount: data.amount,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerItemHeldEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerItemHeldEvent(PlayerItemHeldEventData {
             player,
@@ -506,16 +622,22 @@ impl ToFromWasmEvent for PlayerItemHeldEvent {
                 new_slot: data.new_slot,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerChangedMainHandEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerChangedMainHandEvent(PlayerChangedMainHandEventData {
             player,
@@ -529,16 +651,22 @@ impl ToFromWasmEvent for PlayerChangedMainHandEvent {
                 player: consume_player(state, &data.player),
                 main_hand: from_wasm_hand(data.main_hand),
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerGamemodeChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerGamemodeChangeEvent(PlayerGamemodeChangeEventData {
             player,
@@ -556,16 +684,22 @@ impl ToFromWasmEvent for PlayerGamemodeChangeEvent {
                 new_gamemode: from_wasm_game_mode(data.new_gamemode),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerCustomPayloadEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerCustomPayloadEvent(PlayerCustomPayloadEventData {
             player,
@@ -581,16 +715,22 @@ impl ToFromWasmEvent for PlayerCustomPayloadEvent {
                 channel: data.channel,
                 data: Bytes::from(data.data),
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerFishEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerFishEvent(PlayerFishEventData {
             player,
@@ -616,16 +756,22 @@ impl ToFromWasmEvent for PlayerFishEvent {
                 exp_to_drop: data.exp_to_drop,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerEggThrowEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerEggThrowEvent(PlayerEggThrowEventData {
             player,
@@ -647,16 +793,22 @@ impl ToFromWasmEvent for PlayerEggThrowEvent {
                 hatching_type: from_wasm_entity_type(&data.hatching_type),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
             player,
@@ -674,7 +826,10 @@ impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
                 action: from_wasm_entity_interaction_action(data.action),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -699,9 +854,12 @@ const fn from_wasm_interact_action(action: WasmInteractAction) -> InteractAction
 
 impl ToFromWasmEvent for PlayerInteractEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerInteractEvent(PlayerInteractEventData {
             player,
@@ -721,16 +879,22 @@ impl ToFromWasmEvent for PlayerInteractEvent {
                 block: from_wasm_block_name(&data.block),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerToggleSneakEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerToggleSneakEvent(PlayerToggleSneakEventData {
             player,
@@ -746,16 +910,22 @@ impl ToFromWasmEvent for PlayerToggleSneakEvent {
                 is_sneaking: data.is_sneaking,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerToggleFlightEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerToggleFlightEvent(PlayerToggleFlightEventData {
             player,
@@ -771,16 +941,22 @@ impl ToFromWasmEvent for PlayerToggleFlightEvent {
                 is_flying: data.is_flying,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PlayerToggleSprintEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::PlayerToggleSprintEvent(PlayerToggleSprintEventData {
             player,
@@ -796,16 +972,22 @@ impl ToFromWasmEvent for PlayerToggleSprintEvent {
                 is_sprinting: data.is_sprinting,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for BedrockFormResponseEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::BedrockFormResponseEvent(BedrockFormResponseEventData {
             player,
@@ -821,7 +1003,10 @@ impl ToFromWasmEvent for BedrockFormResponseEvent {
                 form_id: data.form_id,
                 response_data: data.response_data,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -829,9 +1014,12 @@ impl ToFromWasmEvent for BedrockFormResponseEvent {
 impl ToFromWasmEvent for CustomClickActionEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         Event::CustomClickActionEvent(CustomClickActionEventData {
-            player: state
-                .add_player(self.player.clone())
-                .expect("failed to add player resource"),
+            player: state.add_player(self.player.clone()).unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+                )
+            }),
             id: self.id.clone(),
             payload: self.payload.as_ref().map(|p| p.to_vec()),
         })
@@ -844,7 +1032,10 @@ impl ToFromWasmEvent for CustomClickActionEvent {
                 id: data.id,
                 payload: data.payload.map(Bytes::from),
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }

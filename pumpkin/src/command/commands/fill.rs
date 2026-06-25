@@ -19,7 +19,7 @@ use pumpkin_world::world::BlockFlags;
 
 const NAMES: [&str; 1] = ["fill"];
 
-const DESCRIPTION: &str = "Fills all or parts of a region with a specific block.";
+const DESCRIPTION: &str = "commands.fill.description";
 
 const ARG_BLOCK: &str = "block";
 const ARG_FROM: &str = "from";

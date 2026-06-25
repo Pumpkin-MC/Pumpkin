@@ -30,6 +30,7 @@ use crate::entity::attributes::ModifierOperation;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
+use crate::localized_log;
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
@@ -1302,7 +1303,12 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
-            .expect("Entity not found in world");
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.entity_not_found_in_world")
+                )
+            });
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
@@ -1920,7 +1926,7 @@ impl NBTStorage for LivingEntity {
                         if let NbtTag::Compound(effect_nbt) = effect {
                             let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
                             if effect.is_none() {
-                                warn!("Unable to read effect from nbt");
+                                warn!("{}", localized_log("server.log.invalid_effect_from_nbt"));
                                 continue;
                             }
                             let mut effect = effect.unwrap();

@@ -10,7 +10,7 @@ use crate::data::SaveJSONConfiguration;
 use pumpkin_config::op::Op;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
-use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
 pub const ALREADY_OP_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
@@ -18,7 +18,7 @@ pub const ALREADY_OP_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
     translation::bedrock::COMMANDS_OP_FAILED,
 );
 
-const DESCRIPTION: &str = "Grants operator status to a player.";
+const DESCRIPTION: &str = "commands.op.description";
 const PERMISSION: &str = "minecraft:command.op";
 const ARG_TARGETS: &str = "targets";
 
@@ -106,7 +106,7 @@ impl SuggestionProvider for OpSuggestionProvider {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Op(PermissionLvl::Three),

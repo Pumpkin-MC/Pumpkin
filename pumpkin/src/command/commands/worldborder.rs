@@ -1,3 +1,4 @@
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::{math::vector2::Vector2, text::TextComponent};
 
 use crate::command::{
@@ -6,6 +7,7 @@ use crate::command::{
         ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
         bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
     },
+    tr_plain,
     tree::{
         CommandTree,
         builder::{argument_default_name, literal},
@@ -14,7 +16,7 @@ use crate::command::{
 
 const NAMES: [&str; 1] = ["worldborder"];
 
-const DESCRIPTION: &str = "Worldborder command.";
+const DESCRIPTION: &str = "commands.worldborder.description";
 
 const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
 
@@ -52,9 +54,15 @@ impl CommandExecutor for GetExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let border = world.worldborder.lock().await;
 
             let diameter = border.new_diameter.round() as i32;
@@ -83,9 +91,15 @@ impl CommandExecutor for SetExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -131,9 +145,15 @@ impl CommandExecutor for SetTimeExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -205,9 +225,15 @@ impl CommandExecutor for AddExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
@@ -253,9 +279,15 @@ impl CommandExecutor for AddTimeExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
@@ -327,9 +359,15 @@ impl CommandExecutor for CenterExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
@@ -362,9 +400,15 @@ impl CommandExecutor for DamageAmountExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(damage_per_block) = damage_per_block_consumer().find_arg_default_name(args)?
@@ -409,9 +453,15 @@ impl CommandExecutor for DamageBufferExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(buffer) = damage_buffer_consumer().find_arg_default_name(args)? else {
@@ -455,9 +505,15 @@ impl CommandExecutor for WarningDistanceExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = warning_distance_consumer().find_arg_default_name(args)? else {
@@ -500,9 +556,15 @@ impl CommandExecutor for WarningTimeExecutor {
         Box::pin(async move {
             // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = worlds.first().unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.there_should_always_be_one_world",
+                        server_command_locale(),
+                    )
+                )
+            });
             let mut border = world.worldborder.lock().await;
 
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {

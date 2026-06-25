@@ -18,6 +18,7 @@ use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
+use pumpkin_util::translation::localized_log_format;
 
 pub static PLACED_FEATURES: LazyLock<
     HashMap<pumpkin_data::placed_feature::PlacedFeature, PlacedFeature>,
@@ -81,9 +82,15 @@ impl PlacedFeature {
         }
 
         let feature = match &self.feature {
-            Feature::Named(name) => CONFIGURED_FEATURES
-                .get(name)
-                .expect("Name: {name:?} not found"),
+            Feature::Named(name) => CONFIGURED_FEATURES.get(name).unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log_format(
+                        "world.generation.feature_name_not_found",
+                        &[format!("{name:?}")],
+                    )
+                )
+            }),
             Feature::Inlined(feature) => feature,
         };
 

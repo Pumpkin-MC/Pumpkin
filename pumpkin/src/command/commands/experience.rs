@@ -15,7 +15,7 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
 const NAMES: [&str; 2] = ["experience", "xp"];
-const DESCRIPTION: &str = "Add, set or query player experience.";
+const DESCRIPTION: &str = "commands.experience.description";
 const ARG_TARGETS: &str = "targets";
 const ARG_AMOUNT: &str = "amount";
 

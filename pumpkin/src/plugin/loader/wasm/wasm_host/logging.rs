@@ -1,3 +1,4 @@
+use crate::localized_log_format;
 use tracing_serde_structured::{DebugRecord, SerializeValue};
 
 pub async fn log_tracing(event_bytes: Vec<u8>) {
@@ -5,7 +6,13 @@ pub async fn log_tracing(event_bytes: Vec<u8>) {
         match postcard::from_bytes(&event_bytes) {
             Ok(e) => e,
             Err(e) => {
-                tracing::error!("[plugin] failed to deserialize tracing event: {e}");
+                tracing::error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.plugin_tracing_deserialize_failed",
+                        &[e.to_string()]
+                    )
+                );
                 return;
             }
         };
