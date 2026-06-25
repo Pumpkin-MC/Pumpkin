@@ -10,6 +10,7 @@ use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
+use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
@@ -318,13 +319,21 @@ impl PumpkinServer {
             .plugin_manager
             .set_server(self.server.clone())
             .await;
-        match self.server.plugin_manager.load_plugins().await {
+        let duration = match self.server.plugin_manager.load_plugins().await {
             Ok(duration) => duration,
             Err(err) => {
                 error!("{err}");
                 std::time::Duration::ZERO
             }
-        }
+        };
+
+        let _ = self
+            .server
+            .plugin_manager
+            .fire(ServerLoadEvent::new(LoadType::Startup))
+            .await;
+
+        duration
     }
 
     pub async fn unload_plugins(&self) {

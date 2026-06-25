@@ -240,6 +240,7 @@ async fn register_server_event(
         packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
+        server_load::ServerLoadEvent,
         server_tick_end::ServerTickEndEvent,
         server_tick_start::ServerTickStartEvent,
     };
@@ -258,6 +259,9 @@ async fn register_server_event(
         EventType::ServerBroadcastEvent => {
             register_typed_event::<ServerBroadcastEvent>(resource, handler, priority, blocking)
                 .await;
+        }
+        EventType::ServerLoadEvent => {
+            register_typed_event::<ServerLoadEvent>(resource, handler, priority, blocking).await;
         }
         EventType::ServerTickEndEvent => {
             register_typed_event::<ServerTickEndEvent>(resource, handler, priority, blocking).await;
@@ -335,6 +339,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::PacketSentEvent
             | EventType::ServerCommandEvent
             | EventType::ServerBroadcastEvent
+            | EventType::ServerLoadEvent
             | EventType::ServerTickEndEvent
             | EventType::ServerTickStartEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
