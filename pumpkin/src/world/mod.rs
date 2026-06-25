@@ -43,7 +43,10 @@ use crate::{
     net::{ClientPlatform, java::JavaClient},
     plugin::{
         block::block_break::BlockBreakEvent,
-        player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
+        player::{
+            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+            player_respawn::PlayerRespawnEvent,
+        },
     },
     server::Server,
 };
@@ -3165,7 +3168,7 @@ impl World {
             // Unload watched chunks from current world
             player.unload_watched_chunks(self).await;
 
-            (new_world.as_ref(), position)
+            (new_world.clone(), position)
         } else if respawn_dimension != self.dimension {
             // Cross-dimension failed - fall back to current world's spawn
             warn!(
@@ -3182,10 +3185,26 @@ impl World {
                 (top + 1).into(),
                 f64::from(spawn_z) + 0.5,
             );
-            (self.as_ref(), fallback_pos)
+            (self.clone(), fallback_pos)
         } else {
-            (self.as_ref(), position)
+            (self.clone(), position)
         };
+
+        // Notify plugins that the player has respawned (non-cancellable).
+        if let Some(server) = self.server.upgrade() {
+            let _ = server
+                .plugin_manager
+                .fire(PlayerRespawnEvent::new(
+                    player.clone(),
+                    self.clone(),
+                    target_world.clone(),
+                    position,
+                    yaw,
+                    pitch,
+                    alive,
+                ))
+                .await;
+        }
 
         // Send respawn packet with target dimension (using send_packet_now to ensure proper order)
         player
