@@ -415,15 +415,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
-name = "fst"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
-
 name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
+name = "fst"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
 
 [[package]]
 name = "generic-array"
@@ -819,7 +820,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "either",
  "serde_json",
@@ -849,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-i18n"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "arc-swap",
  "dashmap",
@@ -861,7 +862,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "bytes",
  "cesu8",
@@ -874,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "base64",
  "bytes",
