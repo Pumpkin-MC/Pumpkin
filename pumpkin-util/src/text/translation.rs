@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use pumpkin_i18n::{Locale, SubstitutionRange, Token, resolve_translation};
+use pumpkin_i18n::{Locale, SubstitutionRange, Token, placeholder_ranges, resolve_translation};
 
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
@@ -149,68 +149,6 @@ fn resolved_text(raw_key: &str, resolved: &pumpkin_i18n::ResolvedTranslation) ->
     }
 }
 
-fn placeholder_ranges(translation: &str) -> Vec<(usize, SubstitutionRange)> {
-    let bytes = translation.as_bytes();
-    let mut ranges = Vec::new();
-    let mut cursor = 0usize;
-    let mut sequential_idx = 0usize;
-
-    while cursor < bytes.len() {
-        if bytes[cursor] != b'%' {
-            cursor += 1;
-            continue;
-        }
-
-        if cursor > 0 && bytes[cursor - 1] == b'\\' {
-            cursor += 1;
-            continue;
-        }
-
-        if cursor + 1 >= bytes.len() {
-            break;
-        }
-
-        if bytes[cursor + 1] == b'%' {
-            cursor += 2;
-            continue;
-        }
-
-        let mut look = cursor + 1;
-        let digits_start = look;
-        while look < bytes.len() && bytes[look].is_ascii_digit() {
-            look += 1;
-        }
-
-        if look > digits_start && look + 1 < bytes.len() && bytes[look] == b'$' {
-            let arg_idx = translation[digits_start..look]
-                .parse::<usize>()
-                .unwrap_or(1)
-                .saturating_sub(1);
-            ranges.push((
-                arg_idx,
-                SubstitutionRange {
-                    start: cursor,
-                    end: look + 1,
-                },
-            ));
-            cursor = look + 2;
-            continue;
-        }
-
-        ranges.push((
-            sequential_idx,
-            SubstitutionRange {
-                start: cursor,
-                end: cursor + 1,
-            },
-        ));
-        sequential_idx += 1;
-        cursor += 2;
-    }
-
-    ranges
-}
-
 fn empty_text_component() -> TextComponentBase {
     text_component("")
 }
@@ -257,10 +195,11 @@ mod tests {
     #[test]
     fn reorder_substitutions_handles_missing_args() {
         let (substitutions, ranges) =
-            reorder_substitutions("%s %2$s %%", &[TextComponent::text("A").0]);
+            reorder_substitutions("%s %2$s %% {name:?}", &[TextComponent::text("A").0]);
 
-        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges.len(), 3);
         assert_eq!(substitutions[0].clone().get_text(Locale::EnUs), "A");
         assert_eq!(substitutions[1].clone().get_text(Locale::EnUs), "");
+        assert_eq!(substitutions[2].clone().get_text(Locale::EnUs), "");
     }
 }

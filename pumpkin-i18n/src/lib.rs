@@ -23,7 +23,7 @@ pub use store::{
     TRANSLATIONS, add_translation, add_translation_file, format_translation, get_translation,
     resolve_translation, translation_engine,
 };
-pub use token::{Token, precompile};
+pub use token::{Token, placeholder_ranges, precompile};
 
 use std::str::FromStr;
 

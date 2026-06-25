@@ -1,8 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
+
+use crate::SubstitutionRange;
 
 /// A precompiled token in a translation format template.
 ///
-/// During startup, every translation string containing `%` placeholders
+/// During startup, every translation string containing placeholders
 /// is parsed into a sequence of [`Token`]s so that runtime substitution
 /// does zero parsing work — it simply streams the tokens into a buffer.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,8 +29,12 @@ pub type TokenStream = Arc<[Token]>;
 /// * `%%`       → literal `%` (emitted as [`Token::Text`])
 /// * `%s`, `%d`, `%f`, … → [`Token::Var`] with sequential index
 /// * `%1$s`, `%2$d`, …  → [`Token::Var`] with explicit 1‑based index
+/// * `{}`, `{:?}` → [`Token::Var`] with sequential index
+/// * `{name}`, `{name:?}` → [`Token::Var`] using the first-seen name order
+/// * `{0}`, `{0:?}` → [`Token::Var`] with explicit 0‑based index
+/// * `{{`, `}}` → literal braces
 ///
-/// Returns `None` if the string contains no `%` placeholders.
+/// Returns `None` if the string contains no placeholders.
 ///
 /// # Examples
 /// ```ignore
@@ -37,77 +43,242 @@ pub type TokenStream = Arc<[Token]>;
 /// ```
 #[must_use]
 pub fn precompile(template: &str) -> Option<TokenStream> {
+    let parsed = parse_template(template);
+    parsed.has_tokens.then(|| parsed.tokens.into())
+}
+
+/// Returns placeholder argument indexes and byte ranges using the same parser as
+/// [`precompile`].
+#[must_use]
+pub fn placeholder_ranges(template: &str) -> Vec<(usize, SubstitutionRange)> {
+    parse_template(template).placeholders
+}
+
+struct ParsedTemplate {
+    tokens: Vec<Token>,
+    placeholders: Vec<(usize, SubstitutionRange)>,
+    has_tokens: bool,
+}
+
+fn parse_template(template: &str) -> ParsedTemplate {
     let bytes = template.as_bytes();
     let len = bytes.len();
 
-    // Quick check: does this string contain any placeholders?
-    if !bytes.contains(&b'%') {
-        return None;
+    if !bytes.contains(&b'%') && !bytes.contains(&b'{') && !bytes.contains(&b'}') {
+        return ParsedTemplate {
+            tokens: Vec::new(),
+            placeholders: Vec::new(),
+            has_tokens: false,
+        };
     }
 
     let mut tokens: Vec<Token> = Vec::new();
+    let mut placeholders = Vec::new();
+    let mut named_args: HashMap<&str, usize> = HashMap::new();
     let mut cursor = 0usize;
     let mut text_start = 0usize;
     let mut sequential_idx = 0usize;
 
     while cursor < len {
-        if bytes[cursor] != b'%' {
-            cursor += 1;
-            continue;
+        match bytes[cursor] {
+            b'%' if !is_backslash_escaped(bytes, cursor) => {
+                parse_percent_placeholder(
+                    template,
+                    &mut tokens,
+                    &mut placeholders,
+                    &mut cursor,
+                    &mut text_start,
+                    &mut sequential_idx,
+                );
+            }
+            b'{' if !is_backslash_escaped(bytes, cursor) => {
+                parse_open_brace(
+                    template,
+                    &mut tokens,
+                    &mut placeholders,
+                    &mut named_args,
+                    &mut cursor,
+                    &mut text_start,
+                    &mut sequential_idx,
+                );
+            }
+            b'}' if cursor + 1 < len && bytes[cursor + 1] == b'}' => {
+                push_text(template, &mut tokens, text_start, cursor);
+                tokens.push(Token::Text("}".into()));
+                cursor += 2;
+                text_start = cursor;
+            }
+            _ => cursor += 1,
         }
-
-        if cursor > 0 && bytes[cursor - 1] == b'\\' {
-            cursor += 1;
-            continue;
-        }
-
-        let pct = cursor;
-        if pct > text_start {
-            tokens.push(Token::Text(template[text_start..pct].into()));
-        }
-
-        if pct + 1 >= len {
-            tokens.push(Token::Text("%".into()));
-            text_start = len;
-            break;
-        }
-
-        if pct + 1 < len && bytes[pct + 1] == b'%' {
-            tokens.push(Token::Text("%".into()));
-            cursor = pct + 2;
-            text_start = cursor;
-            continue;
-        }
-
-        let mut look = pct + 1;
-        let digits_start = look;
-        while look < len && bytes[look].is_ascii_digit() {
-            look += 1;
-        }
-
-        if look > digits_start && look + 1 < len && bytes[look] == b'$' {
-            // Explicit index: %1$s, %2$d, …
-            let idx = template[digits_start..look].parse::<usize>().unwrap_or(1);
-            tokens.push(Token::Var(idx.saturating_sub(1)));
-            cursor = look + 2;
-        } else {
-            // Sequential index: %s, %d, %f, …
-            tokens.push(Token::Var(sequential_idx));
-            sequential_idx += 1;
-            cursor = pct + 2;
-        }
-
-        text_start = cursor;
     }
 
     if text_start < len {
         tokens.push(Token::Text(template[text_start..].into()));
     }
 
-    if tokens.is_empty() {
-        None
+    let has_tokens = tokens.len() != 1
+        || !matches!(tokens.first(), Some(Token::Text(text)) if text.as_ref() == template);
+
+    ParsedTemplate {
+        tokens,
+        placeholders,
+        has_tokens,
+    }
+}
+
+fn parse_percent_placeholder(
+    template: &str,
+    tokens: &mut Vec<Token>,
+    placeholders: &mut Vec<(usize, SubstitutionRange)>,
+    cursor: &mut usize,
+    text_start: &mut usize,
+    sequential_idx: &mut usize,
+) {
+    let bytes = template.as_bytes();
+    let len = bytes.len();
+    let pct = *cursor;
+
+    push_text(template, tokens, *text_start, pct);
+
+    if pct + 1 >= len {
+        tokens.push(Token::Text("%".into()));
+        *cursor = len;
+        *text_start = len;
+        return;
+    }
+
+    if bytes[pct + 1] == b'%' {
+        tokens.push(Token::Text("%".into()));
+        *cursor = pct + 2;
+        *text_start = *cursor;
+        return;
+    }
+
+    let mut look = pct + 1;
+    let digits_start = look;
+    while look < len && bytes[look].is_ascii_digit() {
+        look += 1;
+    }
+
+    let (arg_idx, end_exclusive) = if look > digits_start && look + 1 < len && bytes[look] == b'$' {
+        let idx = template[digits_start..look].parse::<usize>().unwrap_or(1);
+        (idx.saturating_sub(1), look + 2)
     } else {
-        Some(tokens.into())
+        let idx = *sequential_idx;
+        *sequential_idx += 1;
+        (idx, pct + 2)
+    };
+
+    tokens.push(Token::Var(arg_idx));
+    placeholders.push((
+        arg_idx,
+        SubstitutionRange {
+            start: pct,
+            end: end_exclusive - 1,
+        },
+    ));
+    *cursor = end_exclusive;
+    *text_start = *cursor;
+}
+
+fn parse_open_brace<'a>(
+    template: &'a str,
+    tokens: &mut Vec<Token>,
+    placeholders: &mut Vec<(usize, SubstitutionRange)>,
+    named_args: &mut HashMap<&'a str, usize>,
+    cursor: &mut usize,
+    text_start: &mut usize,
+    sequential_idx: &mut usize,
+) {
+    let bytes = template.as_bytes();
+    let open = *cursor;
+
+    if open + 1 < bytes.len() && bytes[open + 1] == b'{' {
+        push_text(template, tokens, *text_start, open);
+        tokens.push(Token::Text("{".into()));
+        *cursor = open + 2;
+        *text_start = *cursor;
+        return;
+    }
+
+    let Some(close) = find_closing_brace(bytes, open + 1) else {
+        *cursor += 1;
+        return;
+    };
+
+    let inner = &template[open + 1..close];
+    let Some(arg_idx) = brace_arg_index(inner, named_args, sequential_idx) else {
+        *cursor += 1;
+        return;
+    };
+
+    push_text(template, tokens, *text_start, open);
+    tokens.push(Token::Var(arg_idx));
+    placeholders.push((
+        arg_idx,
+        SubstitutionRange {
+            start: open,
+            end: close,
+        },
+    ));
+    *cursor = close + 1;
+    *text_start = *cursor;
+}
+
+fn brace_arg_index<'a>(
+    inner: &'a str,
+    named_args: &mut HashMap<&'a str, usize>,
+    sequential_idx: &mut usize,
+) -> Option<usize> {
+    let field = inner.split_once(':').map_or(inner, |(field, _)| field);
+
+    if field.is_empty() {
+        let idx = *sequential_idx;
+        *sequential_idx += 1;
+        return Some(idx);
+    }
+
+    if field.bytes().all(|byte| byte.is_ascii_digit()) {
+        return field.parse::<usize>().ok();
+    }
+
+    if !is_identifier(field) {
+        return None;
+    }
+
+    if let Some(idx) = named_args.get(field) {
+        return Some(*idx);
+    }
+
+    let idx = *sequential_idx;
+    *sequential_idx += 1;
+    named_args.insert(field, idx);
+    Some(idx)
+}
+
+fn find_closing_brace(bytes: &[u8], start: usize) -> Option<usize> {
+    bytes[start..]
+        .iter()
+        .position(|byte| *byte == b'}')
+        .map(|offset| start + offset)
+}
+
+fn is_identifier(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    (first == b'_' || first.is_ascii_alphabetic())
+        && bytes.all(|byte| byte == b'_' || byte.is_ascii_alphanumeric())
+}
+
+fn is_backslash_escaped(bytes: &[u8], idx: usize) -> bool {
+    idx > 0 && bytes[idx - 1] == b'\\'
+}
+
+fn push_text(template: &str, tokens: &mut Vec<Token>, start: usize, end: usize) {
+    if end > start {
+        tokens.push(Token::Text(template[start..end].into()));
     }
 }
 
@@ -124,5 +295,27 @@ mod tests {
         format_tokens(&tokens, &["A".to_owned(), "B".to_owned()], &mut output);
 
         assert_eq!(output, "B % A \\%s end%");
+    }
+
+    #[test]
+    fn precompile_formats_rust_style_placeholders() {
+        let tokens = precompile("Chunk {pos:?} ({stage:?}): {msg}").unwrap();
+        let mut output = String::new();
+        format_tokens(
+            &tokens,
+            &["0,0".to_owned(), "Full".to_owned(), "boom".to_owned()],
+            &mut output,
+        );
+
+        assert_eq!(output, "Chunk 0,0 (Full): boom");
+    }
+
+    #[test]
+    fn precompile_reuses_named_placeholders_and_unescapes_braces() {
+        let tokens = precompile("{} {name} {name} {0} {{ }} %2$s").unwrap();
+        let mut output = String::new();
+        format_tokens(&tokens, &["A".to_owned(), "B".to_owned()], &mut output);
+
+        assert_eq!(output, "A B B A { } B");
     }
 }
