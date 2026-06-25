@@ -76,7 +76,7 @@ module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
 
 [workspace.package]
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"

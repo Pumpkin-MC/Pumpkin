@@ -42,7 +42,7 @@ fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
 
     for (block, index, state_id) in array {
         let index_lit = LitInt::new(&index.to_string(), Span::call_site());
-        ret[state_id as usize] = quote! { &Self::#block.states[#index_lit] };
+        ret[state_id as usize] = quote! { &Block::#block.states[#index_lit] };
     }
 
     ret
@@ -925,10 +925,10 @@ pub fn build() -> TokenStream {
             pub const #const_ident: Self = #block;
         });
 
-        type_from_raw_id_array.push((block.id, quote! { &Self::#const_ident }));
+        type_from_raw_id_array.push((block.id, quote! { &Block::#const_ident }));
 
         block_from_name_entries.push(quote! {
-            #name_str => Self::#const_ident,
+            #name_str => Block::#const_ident,
         });
 
         let be_name = match block.name.as_str() {
@@ -1129,7 +1129,14 @@ pub fn build() -> TokenStream {
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
-        use phf;
+
+        /// manual `const` indexing implementation to replace the currently used &[T].get_unchecked() as it is not `const`
+        /// Safety: calls with `index < N` are sound, `index >= N` is UB!
+        #[inline]
+        #[must_use]
+        const unsafe fn unchecked_index<T: Copy, const N: usize>(array: &[T; N], index: usize) -> T {
+            unsafe { *(array.as_ptr().add(index)) }
+        }
 
         #items
 
@@ -1185,9 +1192,9 @@ pub fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
+        pub const fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
             if block_state.is_solid() {
-                return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
+                return block != Block::COBWEB.id && block != Block::BAMBOO_SAPLING.id;
             }
             false
         }
@@ -1201,19 +1208,19 @@ pub fn build() -> TokenStream {
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
             #[must_use]
-            pub fn from_id(id: u16) -> &'static Self {
+            pub const fn from_id(id: u16) -> &'static Self {
                 // In debug, this avoids the slow range-checking logic
                 unsafe {
-                    Block::STATE_FROM_STATE_ID.get_unchecked(id as usize)
+                    unchecked_index(&mappings::STATE_FROM_STATE_ID, id as usize)
                 }
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
             #[inline]
             #[must_use]
-            pub fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
+            pub const fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
                 let block = Block::from_state_id(id);
-                let state: &Self = Block::STATE_FROM_STATE_ID[id as usize];
+                let state: &Self = mappings::STATE_FROM_STATE_ID[id as usize];
                 (block, state)
             }
 
@@ -1223,72 +1230,73 @@ pub fn build() -> TokenStream {
             }
         }
 
-        impl Block {
-            #(#constants_list)*
+        mod mappings {
+            use crate::{Block, BlockState};
+            use phf;
 
-            const BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
+            pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
                 #(#block_from_name_entries)*
             };
 
-            const RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
+            pub(super) static RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
                 #raw_id_from_state_id
             ];
 
-            const TYPE_FROM_RAW_ID: [&'static Self; #max_type_id] = [
+            pub(super) static TYPE_FROM_RAW_ID: [&Block; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
-            const STATE_FROM_STATE_ID: [&'static BlockState; #max_state_id] = [
+            pub(super) static STATE_FROM_STATE_ID: [&BlockState; #max_state_id] = [
                 #state_from_state_id
             ];
+        }
+        
+
+        impl Block {
+            #(#constants_list)*
 
             #[doc = r" Try to parse a block from a resource location string."]
             #[inline]
             #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
-                Self::BLOCK_FROM_NAME_MAP.get(name)
+                mappings::BLOCK_FROM_NAME_MAP.get(name)
             }
 
             #[doc = r" Try to get a block from a namespace prefixed name."]
             #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 let key = name.strip_prefix("minecraft:").unwrap_or(name);
-                Self::BLOCK_FROM_NAME_MAP.get(key)
+                mappings::BLOCK_FROM_NAME_MAP.get(key)
             }
 
             #[doc = r" Get a block from a raw block id."]
             #[inline]
             #[must_use]
             pub const fn from_id(id: u16) -> &'static Self {
-                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                if id as usize >= mappings::TYPE_FROM_RAW_ID.len() {
                     &Self::AIR
                 } else {
-                    Self::TYPE_FROM_RAW_ID[id as usize]
+                    mappings::TYPE_FROM_RAW_ID[id as usize]
                 }
             }
 
             #[doc = r" Get a raw ID from an State ID."]
             #[inline]
             #[must_use]
-            pub fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
                 let index = state_id as usize;
-                if index >= Self::RAW_ID_FROM_STATE_ID.len() {
+                if index >= mappings::RAW_ID_FROM_STATE_ID.len() {
                     0
                 } else {
-                    unsafe { *Self::RAW_ID_FROM_STATE_ID.get_unchecked(index) }
+                    unsafe { unchecked_index(&mappings::RAW_ID_FROM_STATE_ID, index) }
                 }
             }
 
             #[doc = r" Get a block from a state id."]
             #[inline]
             #[must_use]
-            pub fn from_state_id(id: u16) -> &'static Self {
-                let index = id as usize;
-                if index >= Self::RAW_ID_FROM_STATE_ID.len() {
-                    return &Self::AIR;
-                }
-                let raw_id = unsafe { *Self::RAW_ID_FROM_STATE_ID.get_unchecked(index) };
-                Self::from_id(raw_id)
+            pub const fn from_state_id(id: u16) -> &'static Self {
+                Self::from_id(Self::get_raw_id_from_state_id(id))
             }
 
             #[doc = r" Try to parse a block from an item id."]

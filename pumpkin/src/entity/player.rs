@@ -2510,14 +2510,14 @@ impl Player {
                         new_world.dimension.clone(),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
-                        self.gamemode.load() as i8,
+                        self.previous_gamemode.load().unwrap_or(self.gamemode.load()) as i8,
                         false,
                         false,
                         Some((death_dimension, death_location)),
                         VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                         new_world.sea_level.into(),
                         ),
-                        1,
+                        CRespawn::KEEP_ALL_DATA,
                     )).await;
 
                 self.send_permission_lvl_update();

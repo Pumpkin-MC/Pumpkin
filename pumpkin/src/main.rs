@@ -1,6 +1,5 @@
 // Don't warn on event sending macros
 #![recursion_limit = "512"]
-#![expect(unused_labels)]
 
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
@@ -11,7 +10,7 @@ use std::{
     io::{self},
     panic::PanicHookInfo,
     process::exit,
-    sync::{Arc, LazyLock, OnceLock, atomic::Ordering},
+    sync::{OnceLock, atomic::Ordering},
     thread::{self, ThreadId},
 };
 #[cfg(not(unix))]
@@ -25,7 +24,7 @@ use pumpkin::{
     data::VanillaData,
     stop_or_exit_server,
 };
-use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
+use pumpkin::{PumpkinServer, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_util::text::{
@@ -34,24 +33,6 @@ use pumpkin_util::text::{
 };
 use std::time::Instant;
 use tracing::{debug, info, warn};
-
-// Setup some tokens to allow us to identify which event is for which socket.
-
-pub mod block;
-pub mod command;
-pub mod crash;
-pub mod data;
-pub mod entity;
-pub mod error;
-pub mod item;
-pub mod logging;
-pub mod net;
-pub mod plugin;
-pub mod server;
-pub mod world;
-
-pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
-    LazyLock::new(|| Arc::new(OnceLock::new()));
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 

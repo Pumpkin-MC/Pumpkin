@@ -7,7 +7,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::CAddItemActor;
-use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
+use pumpkin_protocol::bedrock::network_item::ItemStackWrapper;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -603,7 +603,7 @@ impl EntityBase for ItemEntity {
             let packet = CAddItemActor {
                 entity_unique_id: VarLong(runtime_id as i64),
                 entity_runtime_id: VarULong(runtime_id),
-                item: NetworkItemStackDescriptor::from(&*item_stack),
+                item: ItemStackWrapper::from(&*item_stack),
                 position: entity.pos.load().to_f32_lossy(),
                 velocity: entity.velocity.load().to_f32_lossy(),
                 metadata: entity.bedrock_metadata(),
