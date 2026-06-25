@@ -780,7 +780,6 @@ dependencies = [
  "proc-macro-error-attr2",
  "proc-macro2",
  "quote",
- "syn",
 ]
 
 [[package]]
@@ -794,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "either",
  "pumpkin-codecs-macros",
@@ -804,7 +803,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs-macros"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "proc-macro-crate",
  "proc-macro-error2",
@@ -835,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "bytes",
  "cesu8",
@@ -848,7 +847,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 dependencies = [
  "base64",
  "bytes",
