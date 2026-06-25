@@ -1,4 +1,3 @@
-use crate::localized_log;
 use crate::plugin::{
     block::{
         block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
@@ -19,6 +18,7 @@ use crate::plugin::{
         },
     },
 };
+use pumpkin_util::translation::localized_log;
 
 impl ToFromWasmEvent for BlockRedstoneEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {

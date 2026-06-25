@@ -11,13 +11,11 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
-use pumpkin_i18n::{
-    format_translation, get_translation, locale_to_log_string, remove_player_locale,
-    server_global_locale, set_player_locale,
-};
+use pumpkin_i18n::{locale_to_log_string, remove_player_locale, set_player_locale};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
@@ -52,39 +50,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-const PUMPKIN_TRANSLATION_NAMESPACE: &str = "pumpkin";
-
-#[must_use]
-pub fn localized_log(key: &str) -> String {
-    let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
-    namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    get_translation(&namespaced, server_global_locale())
-}
-
-#[must_use]
-pub fn localized_log_format(key: &str, args: &[String]) -> String {
-    let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
-    namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    format_translation(&namespaced, server_global_locale(), args)
-}
-
-#[must_use]
-pub fn localized_text<W>(key: &'static str, with: W) -> TextComponent
-where
-    W: Into<Vec<TextComponent>>,
-{
-    TextComponent::custom(
-        PUMPKIN_TRANSLATION_NAMESPACE,
-        key,
-        server_global_locale(),
-        with,
-    )
-}
 
 #[must_use]
 pub const fn level_filter_directive(level: LevelFilter) -> &'static str {

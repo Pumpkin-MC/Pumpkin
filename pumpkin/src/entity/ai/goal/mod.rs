@@ -1,5 +1,5 @@
 use crate::entity::mob::Mob;
-use crate::localized_log;
+use pumpkin_util::translation::localized_log;
 use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 
 pub mod active_target;

@@ -13,7 +13,6 @@ use crate::block::entities::command_block::CommandBlockEntity as InternalCommand
 use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
-use crate::localized_log_format;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
     BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
@@ -27,6 +26,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
+use pumpkin_util::translation::localized_log_format;
 
 pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
     match dir {

@@ -15,8 +15,9 @@ use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
 
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
+
 use crate::{
-    localized_log, localized_log_format, localized_text,
     net::{
         GameProfile,
         authentication::{self, AuthError},

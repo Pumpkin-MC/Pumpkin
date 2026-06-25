@@ -4,7 +4,7 @@ use crate::command::node::{
     OwnedNodeData, RedirectModifier, Redirection, Requirements,
 };
 use crate::command::suggestion::provider::SuggestionProvider;
-use crate::localized_log;
+use pumpkin_util::translation::localized_log;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::num::NonZero;

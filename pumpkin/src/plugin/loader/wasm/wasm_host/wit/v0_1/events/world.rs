@@ -1,4 +1,3 @@
-use crate::localized_log;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -11,6 +10,7 @@ use crate::plugin::{
     },
     world::spawn_change::SpawnChangeEvent,
 };
+use pumpkin_util::translation::localized_log;
 
 impl ToFromWasmEvent for SpawnChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {

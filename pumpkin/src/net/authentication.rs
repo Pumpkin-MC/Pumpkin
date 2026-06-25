@@ -1,9 +1,9 @@
 use std::{borrow::Cow, collections::HashMap, net::IpAddr};
 
-use crate::localized_log;
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
+use pumpkin_util::translation::localized_log;
 use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;

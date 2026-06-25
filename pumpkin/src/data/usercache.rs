@@ -4,7 +4,7 @@ use std::{env, fs};
 
 use serde::{Deserialize, Serialize};
 
-use crate::localized_log_format;
+use pumpkin_util::translation::localized_log_format;
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 use tracing::warn;

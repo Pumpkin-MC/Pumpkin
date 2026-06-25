@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::localized_log;
+use pumpkin_util::translation::localized_log;
 
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
 use crate::command::parser::Parser;

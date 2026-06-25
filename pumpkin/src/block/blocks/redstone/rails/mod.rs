@@ -9,8 +9,8 @@ use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
-use crate::localized_log_format;
 use crate::world::World;
+use pumpkin_util::translation::localized_log_format;
 
 mod common;
 

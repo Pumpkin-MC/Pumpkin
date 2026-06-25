@@ -7,9 +7,9 @@ use std::{
 };
 
 use super::BlockEntity;
-use crate::localized_log;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::translation::localized_log;
 use tokio::sync::Mutex;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]

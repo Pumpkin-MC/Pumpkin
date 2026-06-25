@@ -30,7 +30,6 @@ use crate::entity::attributes::ModifierOperation;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
-use crate::localized_log;
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
@@ -59,6 +58,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;

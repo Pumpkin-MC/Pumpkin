@@ -1,13 +1,16 @@
-# pumpkin-i18n & pumpkin-util/src/text API Documentation
+# pumpkin-i18n & Text & Translation API Documentation
 
-> **生成日期**: 2026-06-22  
+> **生成日期**: 2026-06-26  
 > **Rust Edition**: 2024 | **MSRV**: 1.95  
-> **版本**: 0.1.0-dev+26.1
+> **版本**: 0.1.0-dev+26.2
 
 ---
 
 ## 目录
 
+- [统一的翻译入口层 (pumpkin-util/src/translation.rs)](#统一的翻译入口层-pumpkin-utilsrctranslationrs)
+  - [localized_log / localized_log_format / localized_text](#localized_log--localized_log_format--localized_text)
+  - [何时使用哪个函数](#何时使用哪个函数)
 - [pumpkin-i18n](#pumpkin-i18n)
     - [架构概览](#pumpkin-i18n-架构概览)
     - [模块结构](#pumpkin-i18n-模块结构)
@@ -30,7 +33,91 @@
     - [HoverEvent — 悬浮事件](#7-hoverevent---悬浮事件)
     - [Translation 辅助函数](#8-translation-辅助函数)
 - [翻译键命名规范](#翻译键命名规范)
-- [使用示例](#完整使用示例)
+- [使用示例](#完整使用示例)---
+
+# 统一的翻译入口层 (pumpkin-util/src/translation.rs)
+
+**文件**: `pumpkin-util/src/translation.rs`
+
+`pumpkin-util::translation` 是整个 Pumpkin 项目中**唯一的翻译函数定义位置**。所有 crate 统一从此模块导入，
+不再在 `pumpkin` crate 中重复定义。
+
+## localized_log / localized_log_format / localized_text
+
+这三个函数是服务端代码使用 i18n 的主要入口。它们内部调用 `pumpkin_i18n` 的底层函数，
+并自动使用 `server_global_locale()` 作为语言参数。
+
+### localized_log — 纯文本日志
+
+```rust
+use pumpkin_util::translation::localized_log;
+
+pub fn localized_log(key: &str) -> String;
+```
+
+- 将 key 自动加上 `pumpkin:` 命名空间前缀
+- 调用 `pumpkin_i18n::get_translation(key, server_global_locale())` 查找翻译
+- 翻译缺失时返回原始 key 字符串
+- 用于日志、panic 消息、错误信息等纯文本场景
+
+### localized_log_format — 格式化日志
+
+```rust
+use pumpkin_util::translation::localized_log_format;
+
+pub fn localized_log_format(key: &str, args: &[String]) -> String;
+```
+
+- 与 `localized_log` 类似，但额外支持占位符替换
+- 调用 `pumpkin_i18n::format_translation(key, server_global_locale(), args)`
+- args 中的 **纯字符串**（非 `TextComponent`）会按索引替换翻译模板中的 `%s` 占位符
+- 示例：`localized_log_format("server.log.build_info", &[os, arch, debug_flag])`
+
+### localized_text — 带染色子组件的翻译
+
+```rust
+use pumpkin_util::translation::localized_text;
+
+pub fn localized_text<W: Into<Vec<TextComponent>>>(key: &'static str, with: W) -> TextComponent;
+```
+
+- 创建 `TextComponent::custom("pumpkin", key, server_global_locale(), with)`
+- 子组件 `with` 会被插入到翻译模板的占位符位置，**保留颜色和样式**
+- 返回 `TextComponent`，可以继续链式调用 `.to_pretty_console()` 等方法
+- ❗**不要**将 `.to_pretty_console()` 的结果传给 `localized_log_format` — 那会导致 ANSI 码嵌套错误
+
+## 何时使用哪个函数
+
+| 场景         | 推荐函数                       | 原因                       |
+|------------|----------------------------|--------------------------|
+| 控制台纯文本日志   | `localized_log`            | 最简路径，无额外开销               |
+| 带参数的格式化日志  | `localized_log_format`     | 支持 `%s` 占位符 + 参数         |
+| 带颜色的启动横幅   | `localized_text`           | 子组件保留染色                  |
+| 玩家聊天消息     | `TextComponent::translate` | 客户端翻译，非服务端               |
+| 服务端自定义翻译消息 | `localized_text`           | `TextContent::Custom` 变体 |
+
+### 完整调用链路
+
+```
+代码中调用                    翻译入口层                       i18n 引擎
+──────────────────────────────────────────────────────────────────────────
+localized_log("key")         → get_translation("pumpkin:key", locale)  → resolve(key, locale)
+localized_log_format("k",a)  → format_translation("pumpkin:k", l, a)  → resolve → tokens → write
+localized_text("k", [c])     → TextComponent::custom → .to_pretty()   → resolve → tokens → render
+```
+
+### 导入规范
+
+所有 crate 统一从 `pumpkin-util` 导入：
+
+```rust
+// ✅ 正确 — 所有 crate 统一使用此路径
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
+
+// ❌ 错误 — pumpkin crate 中不再有这些函数的定义
+use crate::localized_log;
+use pumpkin::localized_log;
+```
 
 ---
 
@@ -40,11 +127,16 @@
 
 `pumpkin-i18n` 是 Pumpkin Minecraft 服务端的国际化（i18n）核心库，负责：
 
-- **128 种语言**的翻译键存储与检索
+- **128 种语言**的翻译键存储与检索（分布在 `assets/translations/pumpkin/` 下）
+- **1112 个翻译键**，覆盖服务端日志、命令系统、世界生成、认证等所有模块
 - 服务端日志语言解析（系统环境检测 / 配置文件覆盖）
 - 玩家语言缓存（UUID → Locale 映射）
-- 零正则、流式输出的格式化占位符预编译（`%s`, `%1$s`）
+- 零正则、流式输出的格式化占位符预编译（`%s`, `%1$s`, `{}`, `{0}`）
 - 基于 FST (Finite State Transducer) 的高性能翻译引擎
+
+> **注意**: 业务代码不应直接调用 `pumpkin_i18n` 的函数。请使用 `pumpkin-util::translation` 中的
+> `localized_log` / `localized_log_format` / `localized_text` 作为统一入口。
+> 这些函数自动处理命名空间前缀和 `server_global_locale()` 解析。
 
 ### 依赖
 
@@ -265,6 +357,36 @@ pub fn resolve_server_locale(config_value: &str) -> Locale;
 | `set_server_global_locale()` | **仅首次调用生效**（`OnceLock`），后续调用被静默忽略                                                                                                   |
 | `detect_system_locale()`     | **Linux/macOS**: 读取 `LANG` → `LC_ALL` → `LC_MESSAGES` 环境变量<br>**Windows**: 调用 `GetUserDefaultLocaleName` API<br>**其他平台**: 回退 `EnUs` |
 | `resolve_server_locale(cfg)` | 若 `cfg == "auto"` 调用 `detect_system_locale()`；否则解析配置值                                                                               |
+
+### 与服务端配置集成
+
+`server_global_locale()` 由 `pumpkin` crate 在启动时通过 `pumpkin_config` 配置初始化：
+
+```rust
+// pumpkin/src/main.rs — 启动流程
+use pumpkin_i18n::{resolve_server_locale, set_server_global_locale};
+
+let config = PumpkinConfig::load();  // 包含 advanced.locale.server_global 字段
+let server_global_locale = resolve_server_locale( & config.advanced.locale.server_global);
+set_server_global_locale(server_global_locale);
+```
+
+配置结构定义在 `pumpkin-config/src/locale.rs`：
+
+```rust
+#[derive(Deserialize, Serialize)]
+#[serde(default)]
+pub struct LocaleConfig {
+  /// 服务端日志和控制台输出的语言 ("auto" 或语言代码)
+  pub server_global: String,
+  /// Java Edition 客户端语言解析策略
+  pub client_java_edition: String,
+  /// Bedrock Edition 客户端语言解析策略
+  pub client_bedrock_edition: String,
+}
+```
+
+默认使用 `"auto"`（自动检测系统语言）。设置为 `"zh_cn"` 等具体语言代码可强制覆盖。
 
 ### 用法示例
 
@@ -544,14 +666,20 @@ impl SubstitutionRange {
 ## Text 模块结构
 
 ```
-pumpkin-util/src/text/
-├── mod.rs         # TextComponent, TextComponentBase, TextContent, 测试
-├── color.rs       # Color, NamedColor, RGBColor, ARGBColor, hsv_to_rgb
-├── style.rs       # Style (颜色、粗体、斜体、下划线、删除线、混淆、插入、点击、悬浮、字体、阴影)
-├── click.rs       # ClickEvent 枚举
-├── hover.rs       # HoverEvent 枚举
-└── translation.rs # reorder_substitutions, translation_to_pretty, get_translation_text
+pumpkin-util/src/
+├── translation.rs # localized_log, localized_log_format, localized_text (统一翻译入口)
+└── text/
+    ├── mod.rs         # TextComponent, TextComponentBase, TextContent, 测试
+    ├── color.rs       # Color, NamedColor, RGBColor, ARGBColor, hsv_to_rgb
+    ├── style.rs       # Style (颜色、粗体、斜体、下划线、删除线、混淆、插入、点击、悬浮、字体、阴影)
+    ├── click.rs       # ClickEvent 枚举
+    ├── hover.rs       # HoverEvent 枚举
+    └── translation.rs # reorder_substitutions, translation_to_pretty, get_translation_text
 ```
+
+> `pumpkin-util/src/translation.rs` 是**所有 crate 的统一翻译入口**。它封装 `pumpkin_i18n` 的底层函数，
+> 自动处理 `pumpkin:` 命名空间前缀和 `server_global_locale()` 解析。
+> `pumpkin-util/src/text/translation.rs` 是 `TextComponent` 渲染所需的低级翻译辅助函数。
 
 ---
 
@@ -1066,22 +1194,37 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
 
 整个项目使用 **namespace:key** 格式组织翻译键，namespace 通常为 crate 名称或功能模块名。
 
-### 当前命名空间
+### 当前命名空间（15 个，1112 keys）
 
-| Namespace      | 用途                | 示例键                                      |
-|----------------|-------------------|------------------------------------------|
-| `pumpkin:text` | 文本组件相关            | `text.color.hex_format_invalid`          |
-| `pumpkin:util` | pumpkin-util 通用翻译 | `util.permission.should_have_registered` |
-| `minecraft:`   | Minecraft 原生翻译键   | `minecraft:chat.type.text`               |
+| Namespace     | Keys | 用途                 | 示例键                                                |
+|---------------|------|--------------------|----------------------------------------------------|
+| `auth`        | 35   | JWT/OIDC 认证消息      | `auth.jwt.failed_read_response`                    |
+| `client`      | 8    | 客户端断开和错误消息         | `client.disconnect.error_reading_incoming_packet`  |
+| `commands`    | 162  | 命令系统（描述、错误、参数）     | `commands.args.bounded_num.must_not_be_less`       |
+| `config`      | 10   | 配置文件加载消息           | `config.load.convert_merged_failed`                |
+| `crash`       | 37   | 崩溃报告和标签            | `crash.backtrace_label`                            |
+| `debug`       | 127  | 断言、expect、panic 消息 | `debug.expect.loot_table_mutex_not_poisoned`       |
+| `inventory`   | 8    | 物品栏和容器消息           | `inventory.furnace_output_slot.on_take_item`       |
+| `network`     | 12   | 认证网络 URL           | `network.authentication.mojang_authentication_url` |
+| `permissions` | 42   | 权限节点描述             | `permissions.ban.description`                      |
+| `plugin`      | 13   | 插件加载和依赖消息          | `plugin.initialization.failed`                     |
+| `protocol`    | 20   | 协议验证和错误消息          | `protocol.bedrock.invalid_action_id`               |
+| `server`      | 329  | 服务端日志、启动、关闭        | `server.log.starting_server`                       |
+| `text`        | 6    | 文本组件颜色解析错误         | `text.color.hex_format_invalid`                    |
+| `util`        | 27   | 通用工具消息             | `util.math.expected_2_elements`                    |
+| `world`       | 276  | 世界生成、区块、结构         | `world.chunk.anvil.appending_chunk_eof`            |
+| `minecraft:`  | -    | Minecraft 原生翻译键    | `minecraft:chat.type.text`                         |
 
 ### 翻译文件位置
 
 ```
-assets/translations/pumpkin/<locale>.json
+assets/translations/pumpkin/<locale>.json   (128 files, 1112 keys each)
+assets/translations/vanilla/en_us_java.json (Minecraft native keys)
 ```
 
 - 128 个 JSON 文件，每个对应一种 `Locale`
-- 扁平的键值结构，如 `"text.color.hex_format_invalid": "Hex color must be in the format '#RRGGBB'"`
+- 扁平的键值结构，如 `"server.log.starting_server": "Starting %s %s Minecraft (Protocol %s)"`
+- 全部文件通过 `build.rs` 在编译期嵌入二进制，运行时零磁盘 I/O
 
 ---
 
@@ -1090,29 +1233,69 @@ assets/translations/pumpkin/<locale>.json
 ### 1. 初始化 i18n
 
 ```rust
-use pumpkin_i18n::{set_server_global_locale, resolve_server_locale};
+use pumpkin_i18n::{resolve_server_locale, set_server_global_locale};
 
-// 服务端启动时
-let locale = resolve_server_locale("auto"); // 或 "zh_cn"
+// 服务端启动时（通常在 main.rs 中）
+let config = PumpkinConfig::load();
+let locale = resolve_server_locale( & config.advanced.locale.server_global); // "auto" 或 "zh_cn"
 set_server_global_locale(locale);
 ```
 
-### 2. 获取翻译字符串
+### 2. 纯文本日志翻译 (localized_log)
 
 ```rust
-use pumpkin_i18n::{get_translation, server_global_locale};
+use pumpkin_util::translation::localized_log;
 
-let msg = get_translation("pumpkin:text.color.hex_format_invalid", server_global_locale());
-// → "Hex color must be in the format '#RRGGBB'" (EnUs)
-// 或 "十六进制颜色必须为 '#RRGGBB' 格式" (ZhCn)
+// 简单日志 — 自动使用 server_global_locale()
+let msg = localized_log("server.log.started_accepting_connections");
+info!("{}", msg);
+// → "Stopped accepting incoming connections" (EnUs)
 ```
 
-### 3. 构建并发送聊天消息
+### 3. 格式化日志翻译 (localized_log_format)
+
+```rust
+use pumpkin_util::translation::localized_log_format;
+
+// 带参数的日志
+let msg = localized_log_format(
+"server.log.build_info",
+& [os.to_string(), arch.to_string(), debug_flag.to_string()],
+);
+info!("{}", msg);
+// → "Build info: FAMILY: \"unix\", OS: \"linux\", ARCH: \"x86_64\", BUILD: \"Debug\""
+```
+
+### 4. 带染色的启动横幅 (localized_text)
+
+```rust
+use pumpkin_util::translation::localized_text;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
+
+// ✅ 正确 — 使用 localized_text，子组件保留染色
+let msg = localized_text(
+"server.log.starting_server",  // 翻译模板: "Starting %s %s Minecraft (Protocol %s)"
+[
+TextComponent::text("Pumpkin").color_named(NamedColor::Gold),
+TextComponent::text(CARGO_PKG_VERSION).color_named(NamedColor::Green),
+TextComponent::text(protocol_version).color_named(NamedColor::DarkBlue),
+],
+);
+info!("{}", msg.to_pretty_console());
+// → "Starting \x1b[33mPumpkin\x1b[0m \x1b[32m0.1.0-dev\x1b[0m Minecraft (Protocol \x1b[34m766\x1b[0m)"
+
+// ❌ 错误 — 不要把 .to_pretty_console() 传入 localized_log_format
+// localized_log_format("server.log.starting_server", &[
+//     TextComponent::text("Pumpkin").color_named(NamedColor::Gold).to_pretty_console(),
+// ]); // ANSI 码会被嵌套破坏！
+```
+
+### 5. 构建并发送聊天消息
 
 ```rust
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_i18n::Locale;
 
 let msg = TextComponent::empty()
 .add_child(
@@ -1132,7 +1315,7 @@ TextComponent::translate(
 let bytes: Box<[u8] > = msg.encode();
 ```
 
-### 4. 控制台日志（彩色）
+### 6. 控制台日志（彩色）
 
 ```rust
 use pumpkin_util::text::TextComponent;
@@ -1145,7 +1328,7 @@ let msg = TextComponent::text("Server started!")
 println!("{}", msg.to_pretty_console());
 ```
 
-### 5. 客户端语言缓存
+### 7. 客户端语言缓存
 
 ```rust
 use pumpkin_i18n::{set_player_locale, player_locale, remove_player_locale};
@@ -1164,7 +1347,7 @@ let locale = player_locale("550e8400-e29b-41d4-a716-446655440000");
 remove_player_locale("550e8400-e29b-41d4-a716-446655440000");
 ```
 
-### 6. 文本渐变效果
+### 8. 文本渐变效果
 
 ```rust
 use pumpkin_util::text::TextComponent;
@@ -1174,7 +1357,7 @@ let msg = TextComponent::text("Welcome to the server!")
 .gradient_named( & [NamedColor::Red, NamedColor::Gold, NamedColor::Green]);
 ```
 
-### 7. 彩虹文字
+### 9. 彩虹文字
 
 ```rust
 use pumpkin_util::text::TextComponent;
@@ -1182,7 +1365,7 @@ use pumpkin_util::text::TextComponent;
 let msg = TextComponent::text("RAINBOW TEXT").rainbow();
 ```
 
-### 8. 富文本 + 事件
+### 10. 富文本 + 事件
 
 ```rust
 use pumpkin_util::text::TextComponent;
@@ -1205,7 +1388,7 @@ TextComponent::text("Go to example.com")
 ));
 ```
 
-### 9. 动态添加翻译
+### 11. 动态添加翻译
 
 ```rust
 use pumpkin_i18n::{add_translation, add_translation_file, Locale};
@@ -1225,7 +1408,7 @@ Locale::ZhCn,
 );
 ```
 
-### 10. 使用高级翻译引擎
+### 12. 使用高级翻译引擎
 
 ```rust
 use pumpkin_i18n::engine::TranslationEngine;
@@ -1235,9 +1418,13 @@ use std::collections::HashMap;
 let data: Vec<HashMap<String, String> > = vec![/* 每种语言一个 map */];
 let engine = TranslationEngine::build( & data);
 
-// 高频翻译
+// 高频翻译（直接使用引擎，适合极高吞吐量场景）
 let resolved = engine.resolve(Locale::EnUs as usize, "pumpkin:welcome");
 let mut buf = String::new();
 resolved.write_to( & ["Steve".into()], & mut buf);
 // buf → "Welcome, Steve"  （若翻译键为 "Welcome, %s"）
+
+// 大多数场景使用表层 API 即可：
+use pumpkin_util::translation::localized_log_format;
+let msg = localized_log_format("welcome", & ["Steve".to_string()]);
 ```

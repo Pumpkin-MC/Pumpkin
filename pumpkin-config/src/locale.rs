@@ -7,10 +7,16 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Options
 /// * `"auto"` — auto-detect from the player's client settings or system environment.
-/// * `"zh_cn"`, `"ja_jp"`, etc. — force a specific locale, skipping detection.
+/// * `"zh-CN"`, `"ja-JP"`, etc. — force a specific locale, skipping detection.
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct LocaleConfig {
+    /// Language used for server logs and console/backend command output.
+    ///
+    /// `"auto"` detects the system locale from environment variables or the
+    /// platform locale API. A specific code forces server-side output to use
+    /// that language. This does not affect client display.
+    pub server_global: String,
     /// Language resolution for Java Edition players.
     ///
     /// `"auto"` reads the locale reported by the Java client.
@@ -21,25 +27,14 @@ pub struct LocaleConfig {
     /// `"auto"` reads the locale reported by the Bedrock client.
     /// A specific code forces that language for all Bedrock players.
     pub client_bedrock_edition: String,
-    /// Language used for command output in the server console.
-    ///
-    /// `"auto"` detects the system locale from environment variables.
-    /// A specific code forces command output to use that language.
-    pub server_command: String,
-    /// Language used for server log messages.
-    ///
-    /// `"auto"` detects the system locale from environment variables.
-    /// A specific code forces log output to use that language.
-    pub server_logging: String,
 }
 
 impl Default for LocaleConfig {
     fn default() -> Self {
         Self {
+            server_global: "auto".to_string(),
             client_java_edition: "auto".to_string(),
             client_bedrock_edition: "auto".to_string(),
-            server_command: "auto".to_string(),
-            server_logging: "auto".to_string(),
         }
     }
 }

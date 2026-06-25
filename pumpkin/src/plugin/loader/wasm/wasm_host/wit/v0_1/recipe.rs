@@ -1,4 +1,3 @@
-use crate::localized_log;
 use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::{
     CookingRecipe as WitCookingRecipe, CookingType as WitCookingType, Host as RecipeHost,
@@ -10,6 +9,7 @@ use pumpkin_protocol::codec::recipe::{
     DynamicRecipe, OwnedCookingRecipe, OwnedCookingRecipeType, OwnedCraftingRecipe,
     OwnedRecipeIngredient, OwnedRecipeResult,
 };
+use pumpkin_util::translation::localized_log;
 use wasmtime::component::Resource;
 
 impl RecipeHost for PluginHostState {}

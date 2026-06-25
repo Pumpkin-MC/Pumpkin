@@ -17,7 +17,7 @@ pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
 pub use locale::Locale;
 pub use server::{
     detect_system_locale, resolve_server_locale, server_command_locale, server_global_locale,
-    set_server_command_locale, set_server_global_locale,
+    set_server_global_locale,
 };
 pub use store::{
     TRANSLATIONS, add_translation, add_translation_file, format_translation, get_translation,

@@ -5,8 +5,8 @@ use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::localized_log;
 use crate::world::World;
+use pumpkin_util::translation::localized_log;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 

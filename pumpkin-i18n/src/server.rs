@@ -3,36 +3,28 @@ use std::sync::OnceLock;
 
 use crate::locale::Locale;
 
-/// Global logging locale, set by the pumpkin server crate during startup.
-static SERVER_LOGGING_LOCALE: OnceLock<Locale> = OnceLock::new();
-/// Global command locale, set by the pumpkin server crate during startup.
-static SERVER_COMMAND_LOCALE: OnceLock<Locale> = OnceLock::new();
+/// Global server locale, set by the pumpkin server crate during startup.
+static SERVER_GLOBAL_LOCALE: OnceLock<Locale> = OnceLock::new();
 
-/// Returns the server global logging locale, falling back to [`Locale::EnUs`].
+/// Returns the server global locale, falling back to [`Locale::EnUs`].
 #[must_use]
 pub fn server_global_locale() -> Locale {
-    *SERVER_LOGGING_LOCALE.get().unwrap_or(&Locale::EnUs)
+    *SERVER_GLOBAL_LOCALE.get().unwrap_or(&Locale::EnUs)
 }
 
-/// Returns the server command locale, falling back to [`server_global_locale`].
+/// Returns the locale for console/backend command output.
+///
+/// Kept as a semantic alias so command code does not need to know that command
+/// output and logs now share [`server_global_locale`].
 #[must_use]
 pub fn server_command_locale() -> Locale {
-    SERVER_COMMAND_LOCALE
-        .get()
-        .copied()
-        .unwrap_or_else(server_global_locale)
+    server_global_locale()
 }
 
-/// Sets the server global logging locale. Called from the pumpkin server crate
-/// during initialization.
-pub fn set_server_global_locale(locale: Locale) {
-    let _ = SERVER_LOGGING_LOCALE.set(locale);
-}
-
-/// Sets the server command locale. Called from the pumpkin server crate during
+/// Sets the server global locale. Called from the pumpkin server crate during
 /// initialization.
-pub fn set_server_command_locale(locale: Locale) {
-    let _ = SERVER_COMMAND_LOCALE.set(locale);
+pub fn set_server_global_locale(locale: Locale) {
+    let _ = SERVER_GLOBAL_LOCALE.set(locale);
 }
 
 /// Detects the system locale using platform-specific APIs.

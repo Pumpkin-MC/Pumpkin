@@ -8,7 +8,6 @@ use crate::block::{
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
-use crate::localized_log_format;
 use crate::world::World;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::entity::EntityType;
@@ -21,6 +20,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 

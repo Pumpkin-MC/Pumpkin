@@ -6,7 +6,6 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use crate::localized_log_format;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
@@ -14,6 +13,7 @@ use pumpkin_data::item::Item;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 
 use crate::world::World;
 

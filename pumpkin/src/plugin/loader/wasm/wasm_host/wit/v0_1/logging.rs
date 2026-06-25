@@ -1,7 +1,7 @@
-use crate::localized_log_format;
 use crate::plugin::loader::wasm::wasm_host::{
     logging::log_tracing, state::PluginHostState, wit::v0_1::pumpkin,
 };
+use pumpkin_util::translation::localized_log_format;
 
 impl pumpkin::plugin::logging::Host for PluginHostState {
     async fn log(

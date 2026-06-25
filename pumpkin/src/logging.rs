@@ -22,8 +22,8 @@ use tracing_subscriber::filter::LevelFilter;
 use crate::command::CommandSender;
 use crate::command::string_reader::StringReader;
 use crate::command::tree::NodeType;
-use crate::localized_log_format;
 use crate::server::Server;
+use pumpkin_util::translation::localized_log_format;
 
 #[macro_export]
 macro_rules! log_at_level {

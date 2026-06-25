@@ -1,11 +1,11 @@
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::localized_log_format;
 use indexmap::IndexMap;
 use pumpkin_data::advancement_data::{AdvancementNode, AdvancementRequirement, AdvancementReward};
 use pumpkin_data::{Advancement, translation};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log_format;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{from_reader, to_writer_pretty};

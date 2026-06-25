@@ -16,7 +16,7 @@ use pumpkin_protocol::{
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use tracing::warn;
 
-use crate::localized_log_format;
+use pumpkin_util::translation::localized_log_format;
 
 use super::World;
 

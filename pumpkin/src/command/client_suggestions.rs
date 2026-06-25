@@ -13,13 +13,13 @@ use crate::command::node::{
     tree::ROOT_NODE_ID,
 };
 use crate::entity::player::Player;
-use crate::localized_log;
 use crate::server::Server;
 use pumpkin_protocol::bedrock::client::available_commands::{
     CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter, arg_flags,
     arg_types, command_permissions,
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
+use pumpkin_util::translation::localized_log;
 
 #[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(

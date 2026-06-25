@@ -5,7 +5,6 @@ use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use crate::localized_log_format;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
@@ -18,6 +17,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 
 pub struct MinecartItem;
 

@@ -14,8 +14,8 @@ use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
-    command::node::dispatcher::CommandDispatcher, entity::player::Player, localized_log,
-    localized_log_format, localized_text, world::World, world::map::MapManager,
+    command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
+    world::map::MapManager,
 };
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
@@ -25,6 +25,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
 use pumpkin_world::dimension::into_level;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};

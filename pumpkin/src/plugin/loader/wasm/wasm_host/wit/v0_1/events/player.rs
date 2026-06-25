@@ -1,4 +1,3 @@
-use crate::localized_log;
 use crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent;
 use crate::plugin::{
     loader::wasm::wasm_host::{
@@ -59,6 +58,7 @@ use crate::plugin::{
     },
 };
 use bytes::Bytes;
+use pumpkin_util::translation::localized_log;
 
 const fn to_wasm_fish_state(state: PlayerFishState) -> WasmPlayerFishState {
     match state {

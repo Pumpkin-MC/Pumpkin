@@ -1,4 +1,3 @@
-use crate::localized_log;
 use crate::net::ClientPlatform;
 use crate::plugin::{
     loader::wasm::wasm_host::{
@@ -21,6 +20,7 @@ use crate::plugin::{
         server_tick_start::ServerTickStartEvent,
     },
 };
+use pumpkin_util::translation::localized_log;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {

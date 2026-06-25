@@ -3,9 +3,10 @@ use std::{
     sync::{Arc, atomic::Ordering},
 };
 
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
+
 use crate::{
     entity::player::ChatMode,
-    localized_log, localized_log_format, localized_text,
     net::{
         PlayerConfig, can_not_join,
         java::{JavaClient, PacketHandlerResult},

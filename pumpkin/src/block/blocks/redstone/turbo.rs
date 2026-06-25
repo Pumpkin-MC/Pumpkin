@@ -11,8 +11,8 @@ use pumpkin_world::world::BlockFlags;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-use crate::localized_log_format;
 use crate::world::World;
+use pumpkin_util::translation::localized_log_format;
 
 use super::get_redstone_power_no_dust;
 

@@ -13,11 +13,11 @@ use soul_fire::SoulFireBlock;
 use crate::block::blocks::fire::fire::FireBlock;
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, OnEntityCollisionArgs};
 use crate::entity::EntityBase;
-use crate::localized_log;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::translation::localized_log;
 use std::sync::atomic::Ordering;
 
 #[expect(clippy::module_inception)]

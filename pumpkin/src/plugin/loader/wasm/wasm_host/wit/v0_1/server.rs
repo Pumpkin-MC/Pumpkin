@@ -1,5 +1,5 @@
-use crate::{localized_log, localized_text};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::{localized_log, localized_text};
 use wasmtime::component::Resource;
 
 use crate::command::CommandSender;

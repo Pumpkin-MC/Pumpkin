@@ -1,4 +1,4 @@
-use crate::localized_log;
+use pumpkin_util::translation::localized_log;
 use std::sync::Arc;
 
 use pumpkin_data::{Block, entity::EntityType};

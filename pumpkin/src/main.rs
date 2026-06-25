@@ -22,14 +22,12 @@ use pumpkin::{
     CRASH_REPORT, PumpkinServer, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
-    localized_log, localized_log_format, localized_text, stop_or_exit_server, stop_server,
+    stop_or_exit_server, stop_server,
 };
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
-use pumpkin_i18n::{
-    self, locale_to_log_string, resolve_server_locale, set_server_command_locale,
-    set_server_global_locale,
-};
+use pumpkin_i18n::{self, locale_to_log_string, resolve_server_locale, set_server_global_locale};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -66,47 +64,32 @@ async fn main() {
 
     pumpkin::init_logger(&config.advanced);
 
-    // Initialize server locales from config.
-    let server_global_locale = resolve_server_locale(&config.advanced.locale.server_logging);
-    let server_command_locale = resolve_server_locale(&config.advanced.locale.server_command);
+    // Initialize the server locale from config.
+    let server_global_locale = resolve_server_locale(&config.advanced.locale.server_global);
     set_server_global_locale(server_global_locale);
-    set_server_command_locale(server_command_locale);
     info!(
         "{}",
         localized_log_format(
             "server.log.locale_info",
-            &[
-                format!(
-                    "{} ({})",
-                    locale_to_log_string(server_command_locale),
-                    config.advanced.locale.server_command
-                ),
-                format!(
-                    "{} ({})",
-                    locale_to_log_string(server_global_locale),
-                    config.advanced.locale.server_logging
-                ),
-            ],
+            &[format!(
+                "{} ({})",
+                locale_to_log_string(server_global_locale),
+                config.advanced.locale.server_global
+            )],
         )
     );
 
     info!(
         "{}",
-        TextComponent::text(localized_log_format(
+        localized_text(
             "server.log.starting_server",
-            &[
-                "Starting {} {} Minecraft (Protocol {})".to_string(),
-                TextComponent::text("Pumpkin")
-                    .color_named(NamedColor::Gold)
-                    .to_pretty_console(),
-                TextComponent::text(CARGO_PKG_VERSION.to_string())
-                    .color_named(NamedColor::Green)
-                    .to_pretty_console(),
+            [
+                TextComponent::text("Pumpkin").color_named(NamedColor::Gold),
+                TextComponent::text(CARGO_PKG_VERSION).color_named(NamedColor::Green),
                 TextComponent::text(CURRENT_MC_VERSION.protocol_version().to_string())
-                    .color_named(NamedColor::DarkBlue)
-                    .to_pretty_console(),
+                    .color_named(NamedColor::DarkBlue),
             ],
-        ))
+        )
         .to_pretty_console()
     );
 

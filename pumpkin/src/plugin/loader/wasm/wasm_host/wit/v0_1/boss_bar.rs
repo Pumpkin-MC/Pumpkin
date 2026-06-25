@@ -1,4 +1,3 @@
-use crate::localized_log;
 use crate::plugin::loader::wasm::wasm_host::{
     state::{BossBarResource, PlayerResource, PluginHostState},
     wit::v0_1::pumpkin::plugin::boss_bar::{
@@ -8,6 +7,7 @@ use crate::plugin::loader::wasm::wasm_host::{
 };
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
+use pumpkin_util::translation::localized_log;
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use uuid::Uuid;

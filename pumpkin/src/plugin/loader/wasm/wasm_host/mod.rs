@@ -1,4 +1,4 @@
-use crate::localized_log;
+use pumpkin_util::translation::localized_log;
 use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;

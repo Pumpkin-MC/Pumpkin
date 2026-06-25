@@ -1,4 +1,4 @@
-use crate::localized_log_format;
+use pumpkin_util::translation::localized_log_format;
 use tracing_serde_structured::{DebugRecord, SerializeValue};
 
 pub async fn log_tracing(event_bytes: Vec<u8>) {

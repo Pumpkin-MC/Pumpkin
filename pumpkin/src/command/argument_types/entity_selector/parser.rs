@@ -11,7 +11,6 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::SuggestionText;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::localized_log;
 use bitflags::bitflags;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
@@ -21,6 +20,7 @@ use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log;
 use std::pin::Pin;
 use uuid::Uuid;
 

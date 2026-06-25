@@ -48,6 +48,7 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
     io::{BufReader, BufWriter},
@@ -76,10 +77,7 @@ use crate::entity::player::Player;
 use crate::net::{GameProfile, PacketHandlerResult, PlayerConfig};
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
-use crate::{
-    error::PumpkinError, localized_log, localized_log_format, localized_text, net::EncryptionError,
-    server::Server,
-};
+use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,

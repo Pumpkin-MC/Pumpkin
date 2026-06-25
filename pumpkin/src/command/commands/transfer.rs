@@ -15,8 +15,8 @@ use crate::command::{
     CommandExecutor, CommandSender, args::ConsumedArgs, tr_plain, tree::CommandTree,
 };
 use crate::entity::EntityBase;
-use crate::localized_log_format;
 use crate::net::ClientPlatform;
+use pumpkin_util::translation::localized_log_format;
 
 const NAMES: [&str; 1] = ["transfer"];
 

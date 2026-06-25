@@ -34,7 +34,7 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
-use crate::{localized_log, localized_log_format, localized_text};
+use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
 
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
