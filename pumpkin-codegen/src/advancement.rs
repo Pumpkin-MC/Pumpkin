@@ -658,7 +658,18 @@ pub struct AdvancementStruct {
     #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
     pub requirements: Vec<Vec<String>>,
+    #[serde(deserialize_with = "deserialize_first_key")]
+    pub criteria : Vec<String>,
 }
+
+fn deserialize_first_key<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map = BTreeMap::<String, serde_json::Value>::deserialize(deserializer)?;
+    Ok(map.into_keys().collect())
+}
+
 #[derive(Clone)]
 pub struct AdvancementHolder(Identifier, AdvancementStruct);
 
@@ -817,6 +828,7 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut minecraft_name_to_type = TokenStream::new();
     let mut minecraft_namespaces = TokenStream::new();
+    let mut advancement_list = TokenStream::new();
     let capacity = advancements.len();
     //construct the tree
     let mut tree = AdvancementTree::default();
@@ -834,11 +846,10 @@ pub(crate) fn build() -> TokenStream {
     let advancement_tree = quote! {
         pub static ADVANCEMENT_TREE : LazyLock<AdvancementTree> = #tree;
     };
-    let advancements_holder: Vec<AdvancementHolder> = tree
+    let advancements_holder = tree
         .nodes_vector
         .into_iter()
-        .map(|node| node.value)
-        .collect();
+        .map(|node| node.value);
     for AdvancementHolder(identifier, advancement) in advancements_holder {
         let raw_name = identifier.path();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
@@ -858,6 +869,7 @@ pub(crate) fn build() -> TokenStream {
         let requirements = advancement.requirements.iter().map(|inner_req| {
             quote! { &[#(#inner_req),*]}
         });
+        let criteria = advancement.criteria;
         variants.extend([quote! {
             pub const #format_name: &Self = &Self {
                 id: Identifier::vanilla_static(#raw_name),
@@ -866,13 +878,15 @@ pub(crate) fn build() -> TokenStream {
                 display : #display,
                 reward : &#reward,
                 requirements: &[#(#requirements),*],
+                criteria: &[#(#criteria),*],
             };
         }]);
         let minecraft_name = identifier.to_string();
 
         name_to_type.extend(quote! { #raw_name => Some(Self::#format_name), });
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(Self::#format_name), });
-        minecraft_namespaces.extend(quote! { Identifier::vanilla_static(#raw_name),})
+        minecraft_namespaces.extend(quote! { Identifier::vanilla_static(#raw_name),});
+        advancement_list.extend(quote! {Self::#format_name, });
     }
 
     quote! {
@@ -897,6 +911,7 @@ pub(crate) fn build() -> TokenStream {
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
             pub requirements: &'static[&'static[&'static str]],
+            pub criteria: &'static[&'static str],
         }
 
         impl Display for Advancement {
@@ -956,7 +971,11 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            pub const fn get_list() -> [Identifier;#capacity] {
+            pub fn get_advancements_list() -> [&'static Advancement; #capacity] {
+                [#advancement_list]
+            }
+
+            pub const fn get_identifier_list() -> [Identifier;#capacity] {
                 [#minecraft_namespaces]
             }
 

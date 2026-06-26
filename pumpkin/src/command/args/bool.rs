@@ -8,7 +8,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 pub struct BoolArgConsumer;
 
 impl GetClientSideArgParser for BoolArgConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Bool
     }
 

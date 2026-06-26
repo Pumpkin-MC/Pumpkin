@@ -97,6 +97,7 @@ impl FrameType {
     }
 }
 
+#[derive(Clone)]
 pub struct AdvancementReward {
     pub experience: i32,
     pub recipes: &'static [ItemRecipe],
@@ -183,14 +184,14 @@ impl AdvancementTree {
 }
 
 #[derive(Serialize)]
-pub struct AdvancementProgress {
+pub struct AdvancementProgressData {
     pub id: Identifier,
     pub progress: Vec<Criteria>,
 }
 
 #[derive(Serialize)]
 pub struct Criteria {
-    pub criterion_id: Identifier,
+    pub criterion_id: Arc<str>,
     pub achieve_date: Option<i64>,
 }
 /// Represents the requirements needed to complete an advancement.

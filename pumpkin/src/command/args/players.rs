@@ -17,7 +17,7 @@ use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 pub struct PlayersArgumentConsumer;
 
 impl GetClientSideArgParser for PlayersArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         // todo: investigate why this does not accept target selectors
         ArgumentType::Entity {
             flags: ArgumentType::ENTITY_FLAG_PLAYERS_ONLY,

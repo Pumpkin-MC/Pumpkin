@@ -68,7 +68,7 @@ impl ArgumentType for ColumnPosArgumentType {
         })
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::ColumnPos
     }
 

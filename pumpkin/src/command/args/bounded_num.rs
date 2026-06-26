@@ -194,7 +194,7 @@ impl ToFromNumber for f64 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<f64> {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Double {
             min: self.min_inclusive,
             max: self.max_inclusive,
@@ -222,7 +222,7 @@ impl ToFromNumber for f32 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<f32> {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Float {
             min: self.min_inclusive,
             max: self.max_inclusive,
@@ -250,7 +250,7 @@ impl ToFromNumber for i32 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<i32> {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Integer {
             min: self.min_inclusive,
             max: self.max_inclusive,
@@ -278,7 +278,7 @@ impl ToFromNumber for i64 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<i64> {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Long {
             min: self.min_inclusive,
             max: self.max_inclusive,

@@ -4,6 +4,7 @@ use pumpkin_data::Advancement;
 use pumpkin_util::identifier::Identifier;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use std::slice;
 use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
@@ -36,7 +37,7 @@ impl AdvancementManager {
     #[must_use]
     #[inline]
     pub fn get_advancements(&self) -> Vec<Identifier> {
-        Advancement::get_list().to_vec()
+        Advancement::get_identifier_list().to_vec()
     }
 
     /// Creates and returns a new instance of `PlayerAdvancement` with the configured path.
@@ -47,17 +48,38 @@ impl AdvancementManager {
     }
 
     /// Saves the advancements of all provided players.
-    pub async fn save_all_players(players: Vec<Arc<Player>>) -> Result<(), AdvancementDataError> {
-        for player in players {
-            player.advancements.lock().await.save()?;
+    pub async fn save_all_players(
+        &self,
+        players: &[Arc<Player>],
+    ) -> Result<(), AdvancementDataError> {
+        if !self.save_enabled {
+            return Ok(());
         }
-        Ok(())
+        let mut to_write = Vec::with_capacity(players.len());
+        for player in players {
+            let guard = player.advancements.lock().await;
+            let json = serde_json::to_string_pretty(&*guard).map_err(AdvancementDataError::Json)?;
+            to_write.push((guard.path.clone(), json));
+        }
+
+        let advancement_path = self.advancement_path.clone();
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = create_dir_all(advancement_path) {
+                error!("Failed to create player advancement directory : {e}");
+                return Err(AdvancementDataError::Io(e));
+            }
+            for (path, json) in to_write {
+                std::fs::write(&path, json).map_err(AdvancementDataError::Io)?;
+            }
+            Ok(())
+        })
+        .await
+        .expect("spawn_blocking task panicked")
     }
 
     /// Saves the advancements of a specific player.
-    pub async fn save_player(player: &Player) -> Result<(), AdvancementDataError> {
-        player.advancements.lock().await.save()?;
-        Ok(())
+    pub async fn save_player(&self, player: &Arc<Player>) -> Result<(), AdvancementDataError> {
+        self.save_all_players(slice::from_ref(player)).await
     }
 }
 

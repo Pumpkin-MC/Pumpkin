@@ -36,9 +36,10 @@ fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
     (to_add, to_remove)
 }
 
-fn serialize_item_stack_with_id<S: Serializer>(
+fn serialize_any_item_stack_with_id<S: Serializer>(
     stack: &ItemStack,
     item_id: u16,
+    is_template: bool,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     if stack.is_empty() {
@@ -46,8 +47,13 @@ fn serialize_item_stack_with_id<S: Serializer>(
     } else {
         let (to_add, to_remove) = item_component_counts(stack);
         let mut seq = serializer.serialize_struct("", 0)?;
-        seq.serialize_field::<VarInt>("", &VarInt::from(stack.item_count))?;
-        seq.serialize_field::<VarInt>("", &VarInt::from(item_id))?;
+        if is_template {
+            seq.serialize_field("", &VarInt::from(item_id))?;
+            seq.serialize_field("", &VarInt::from(stack.item_count))?;
+        } else {
+            seq.serialize_field("", &VarInt::from(stack.item_count))?;
+            seq.serialize_field("", &VarInt::from(item_id))?;
+        }
         seq.serialize_field::<VarInt>("", &VarInt::from(to_add))?;
         seq.serialize_field::<VarInt>("", &VarInt::from(to_remove))?;
 
@@ -66,6 +72,13 @@ fn serialize_item_stack_with_id<S: Serializer>(
 
         seq.end()
     }
+}
+fn serialize_item_stack_with_id<S: Serializer>(
+    stack: &ItemStack,
+    item_id: u16,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serialize_any_item_stack_with_id(stack, item_id, false, serializer)
 }
 
 struct ComponentAccess<R: Read> {
@@ -490,5 +503,22 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
         }
 
         deserializer.deserialize_seq(Visitor)
+    }
+}
+
+pub struct ItemStackTemplate<'a>(pub Cow<'a, ItemStack>);
+
+impl From<ItemStack> for ItemStackTemplate<'_> {
+    fn from(item: ItemStack) -> Self {
+        ItemStackTemplate(Cow::Owned(item))
+    }
+}
+
+impl Serialize for ItemStackTemplate<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serialize_any_item_stack_with_id(self.0.as_ref(), self.0.item.id, true, serializer)
     }
 }

@@ -580,18 +580,19 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
-        let mut advancements = player.advancements.lock().await;
-        if let Err(e) = advancements.load() {
-            warn!(
-                "{}",
-                localized_log_format(
-                    "server.log.error_loading_player",
-                    &[player.gameprofile.id.to_string(), e.to_string()]
-                )
-            );
-        }
-        advancements.player = Arc::downgrade(&player);
-        drop(advancements);
+        {
+            let mut advancements = player.advancements.lock().await;
+            if let Err(e) = advancements.load().await {
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.error_loading_player",
+                        &[player.gameprofile.id.to_string(), e.to_string()]
+                    )
+                );
+            }
+            advancements.player = Arc::downgrade(&player);
+        };
 
         send_cancellable! {{
             self;

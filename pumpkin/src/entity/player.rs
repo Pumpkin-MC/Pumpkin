@@ -1998,6 +1998,7 @@ impl Player {
         self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
+        self.advancements.lock().await.flush_dirty(self, true);
 
         // experience handling
         self.tick_experience().await;
