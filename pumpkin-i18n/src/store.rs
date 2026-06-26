@@ -87,7 +87,10 @@ where
     };
 
     if translations_map.is_empty() {
-        // TODO: Handle the case where the file is empty or not found properly
+        warn!(
+            "no translations found in JSON string for namespace '{}' — the file may be empty or malformed",
+            namespace.as_ref()
+        );
         return;
     }
 

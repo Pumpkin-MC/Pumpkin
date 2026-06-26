@@ -128,7 +128,7 @@ use pumpkin::localized_log;
 `pumpkin-i18n` 是 Pumpkin Minecraft 服务端的国际化（i18n）核心库，负责：
 
 - **128 种语言**的翻译键存储与检索（分布在 `assets/translations/pumpkin/` 下）
-- **1112 个翻译键**，覆盖服务端日志、命令系统、世界生成、认证等所有模块
+- **1121 个翻译键**，覆盖服务端日志、命令系统、世界生成、认证等所有模块
 - 服务端日志语言解析（系统环境检测 / 配置文件覆盖）
 - 玩家语言缓存（UUID → Locale 映射）
 - 零正则、流式输出的格式化占位符预编译（`%s`, `%1$s`, `{}`, `{0}`）
@@ -1194,7 +1194,7 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
 
 整个项目使用 **namespace:key** 格式组织翻译键，namespace 通常为 crate 名称或功能模块名。
 
-### 当前命名空间（15 个，1112 keys）
+### 当前命名空间（15 个，1121 keys）
 
 | Namespace     | Keys | 用途                 | 示例键                                                |
 |---------------|------|--------------------|----------------------------------------------------|
@@ -1218,7 +1218,7 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
 ### 翻译文件位置
 
 ```
-assets/translations/pumpkin/<locale>.json   (128 files, 1112 keys each)
+assets/translations/pumpkin/<locale>.json   (128 files, 1121 keys each)
 assets/translations/vanilla/en_us_java.json (Minecraft native keys)
 ```
 

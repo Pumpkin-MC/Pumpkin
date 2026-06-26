@@ -9,7 +9,7 @@ format.
 - Use all lowercase, and connect words with underscores: `commands.pumpkin.stop.error_invalid_args`
 - The namespace (`pumpkin:` or `minecraft:`) is appended automatically by the code and **must not appear in translation
   files**.
-- The translation files are located at `assets/translations/pumpkin/<locale>.json` (128 locale files, 1112 keys each).
+- The translation files are located at `assets/translations/pumpkin/<locale>.json` (128 locale files, 1121 keys each).
 - All locale files **must** have the exact same key set. English (`en_us.json`) is the reference.
 - Keys are compared case-insensitively by the engine during lookup.
 - The translation engine falls back to `en_us` when a key is absent in the requested locale.
@@ -45,7 +45,7 @@ server.log.starting_server
   └── Top-level category (server, commands, config, chat, debug, …)
 ```
 
-## Current Namespaces (1112 keys total)
+## Current Namespaces (1121 keys total)
 
 | Namespace     | Keys | Purpose                                     |
 |---------------|------|---------------------------------------------|

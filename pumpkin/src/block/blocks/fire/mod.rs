@@ -17,7 +17,6 @@ use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::translation::localized_log;
 use std::sync::atomic::Ordering;
 
 #[expect(clippy::module_inception)]
