@@ -29,6 +29,7 @@ pub mod y_offset;
 
 pub mod identifier;
 pub mod jwt;
+pub mod resource_key;
 pub mod uuid;
 
 /// Represents the different types of height maps used for terrain generation and collision checks.

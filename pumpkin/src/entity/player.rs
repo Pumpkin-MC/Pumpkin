@@ -63,15 +63,15 @@ use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CChangeDifficulty,
-    CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CGameEvent, CItemCooldown, CMapItemData, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect,
-    CStopSound, CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
-    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction,
-    PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
+    Animation, CActionBar, CAwardStats, CChangeDifficulty, CCloseContainer, CCombatDeath,
+    CCustomPayload, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent,
+    CItemCooldown, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
+    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera, CSetContainerContent,
+    CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags,
+    PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -452,7 +452,6 @@ pub struct Player {
     pub mining: AtomicBool,
     pub start_mining_time: AtomicI32,
     pub tick_counter: AtomicI32,
-    pub packet_sequence: AtomicI32,
     pub mining_pos: Mutex<BlockPos>,
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
@@ -646,7 +645,6 @@ impl Player {
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
-            packet_sequence: AtomicI32::new(-1),
             start_mining_time: AtomicI32::new(0),
             last_input: AtomicI8::new(0),
             carried_item: Mutex::new(None),
@@ -722,7 +720,7 @@ impl Player {
             tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
-            tab_list_listed: AtomicBool::new(false),
+            tab_list_listed: AtomicBool::new(true),
             fishing_bobber: AtomicI32::new(-1),
             bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
         }
@@ -1859,7 +1857,6 @@ impl Player {
             .await;
     }
 
-    // TODO Abstract the chunk sending
     #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         if let Some(camera_id) = self.camera_target_id.load() {
@@ -1899,13 +1896,6 @@ impl Player {
         // if self.client.closed.load(Ordering::Relaxed) {
         //     return;
         // }
-
-        let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-        if seq != -1 {
-            self.client
-                .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                .await;
-        }
 
         // Statistics updates
         {
@@ -1997,6 +1987,7 @@ impl Player {
         self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
+        self.advancements.lock().await.flush_dirty(self, true);
 
         // experience handling
         self.tick_experience().await;

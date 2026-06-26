@@ -74,11 +74,7 @@ impl BlockBehaviour for TorchBlock {
                         }
                     };
                     let mut torch_props = WallTorchProps::default(&wall_block);
-                    torch_props.facing = dir
-                        .opposite()
-                        .to_block_direction()
-                        .to_horizontal_facing()
-                        .unwrap();
+                    torch_props.facing = dir.opposite().to_horizontal_facing().unwrap();
                     return torch_props.to_state_id(&wall_block);
                 }
             }
@@ -98,7 +94,7 @@ impl BlockBehaviour for TorchBlock {
             return true;
         }
         for dir in BlockDirection::horizontal() {
-            if can_place_at(args.block_accessor, args.position, dir) {
+            if can_place_at(args.block_accessor, args.position, dir.to_block_direction()) {
                 return true;
             }
         }

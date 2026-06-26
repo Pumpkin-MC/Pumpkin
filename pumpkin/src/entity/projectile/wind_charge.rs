@@ -19,26 +19,48 @@ const EXPLOSION_POWER: f32 = 1.2;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
 
+/// A kind to differentiate both types of wind charges from each other.
+enum WindChargeKind {
+    /// Represents a wind charge spawned by a player or dispenser.
+    /// This wind charge also has a deflect cooldown counter.
+    Normal { deflect_cooldown: AtomicU8 },
+    /// Represents a wind charge spawned by a breeze.
+    Breeze,
+}
+
 pub struct WindChargeEntity {
-    deflect_cooldown: AtomicU8,
+    kind: WindChargeKind,
     thrown_item_entity: ThrownItemEntity,
 }
 
 impl WindChargeEntity {
     #[must_use]
-    pub const fn new(thrown_item_entity: ThrownItemEntity) -> Self {
+    pub const fn new_normal(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
-            deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
+            kind: WindChargeKind::Normal {
+                deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
+            },
             thrown_item_entity,
         }
     }
 
-    pub fn get_deflect_cooldown(&self) -> u8 {
-        self.deflect_cooldown.load(Ordering::Relaxed)
+    #[must_use]
+    pub const fn new_breeze(thrown_item_entity: ThrownItemEntity) -> Self {
+        Self {
+            kind: WindChargeKind::Breeze,
+            thrown_item_entity,
+        }
     }
 
-    pub fn set_deflect_cooldown(&self, value: u8) {
-        self.deflect_cooldown.store(value, Ordering::Relaxed);
+    pub const fn deflect_cooldown(&self) -> Option<&AtomicU8> {
+        if let WindChargeKind::Normal {
+            deflect_cooldown, ..
+        } = &self.kind
+        {
+            Some(deflect_cooldown)
+        } else {
+            None
+        }
     }
 
     pub async fn create_explosion(&self, position: Vector3<f64>) {
@@ -55,7 +77,9 @@ impl WindChargeEntity {
         deflector: Option<&dyn EntityBase>,
         _from_attack: bool,
     ) -> bool {
-        if self.deflect_cooldown.load(Ordering::Relaxed) > 0 {
+        if let Some(cooldown) = self.deflect_cooldown()
+            && cooldown.load(Ordering::Relaxed) > 0
+        {
             return false;
         }
 
@@ -82,8 +106,11 @@ impl EntityBase for WindChargeEntity {
         Box::pin(async move {
             self.thrown_item_entity.process_tick(caller, server).await;
 
-            if self.get_deflect_cooldown() > 0 {
-                self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);
+            if let Some(cooldown) = self.deflect_cooldown() {
+                let cooldown_ticks = cooldown.load(Ordering::Relaxed);
+                if cooldown_ticks > 0 {
+                    cooldown.store(cooldown_ticks - 1, Ordering::Relaxed);
+                }
             }
         })
     }

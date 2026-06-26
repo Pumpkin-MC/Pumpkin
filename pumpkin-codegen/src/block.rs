@@ -1367,7 +1367,22 @@ pub fn build() -> TokenStream {
                 }
                 .into()
             }
-
+            #[must_use]
+            pub const fn to_axis(&self) -> HorizontalAxis {
+                match self {
+                    Self::North | Self::South => HorizontalAxis::Z,
+                    Self::West | Self::East => HorizontalAxis::X,
+                }
+            }
+             #[must_use]
+            pub const fn to_facing(&self) -> HorizontalFacing {
+                match self {
+                    Self::North => HorizontalFacing::North,
+                    Self::South => HorizontalFacing::South,
+                    Self::West => HorizontalFacing::West,
+                    Self::East => HorizontalFacing::East,
+                }
+            }
             #[must_use]
             pub const fn opposite(&self) -> Self {
                 match self {

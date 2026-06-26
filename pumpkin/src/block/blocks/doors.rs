@@ -1,6 +1,5 @@
 use crate::entity::EntityBase;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::DoorHinge;
@@ -112,14 +111,14 @@ async fn get_hinge(
 ) -> DoorHinge {
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
-    let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
+    let left_pos = pos.offset(left_dir.to_offset());
     let (left_block, left_state) = world.get_block_and_state(&left_pos);
-    let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_facing = top_pos.offset(facing.to_offset());
     let top_state = world.get_block_state(&top_facing);
     let right_dir = facing.rotate_clockwise();
-    let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
+    let right_pos = pos.offset(right_dir.to_offset());
     let (right_block, right_state) = world.get_block_and_state(&right_pos);
-    let top_right = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_right = top_pos.offset(facing.to_offset());
     let top_right_state = world.get_block_state(&top_right);
 
     let has_left_door = world
@@ -139,7 +138,7 @@ async fn get_hinge(
 
     if (!has_left_door || has_right_door) && score <= 0 {
         if (!has_right_door || has_left_door) && score >= 0 {
-            let offset = facing.to_block_direction().to_offset();
+            let offset = facing.to_offset();
             let hit = use_item.cursor_pos;
             if (offset.x >= 0 || hit.z > 0.5)
                 && (offset.x <= 0 || hit.z < 0.5)

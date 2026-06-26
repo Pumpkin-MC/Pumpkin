@@ -4,6 +4,7 @@ use std::sync::atomic::Ordering;
 use crate::block::entities::sign::SignBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::EnumVariants;
 use pumpkin_data::tag::Taggable;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -74,7 +75,7 @@ impl SignBlock {
         let mut side_direction = None;
         for direction in BlockDirection::horizontal() {
             let pos = position.offset(direction.to_offset());
-            if Self::is_valid_support(world, &pos, direction.opposite()) {
+            if Self::is_valid_support(world, &pos, direction.opposite().to_block_direction()) {
                 side_direction = Some(direction);
                 break;
             }
@@ -82,7 +83,7 @@ impl SignBlock {
 
         SupportInfo {
             above_is_valid,
-            side_direction,
+            side_direction: side_direction.map(|d| d.to_block_direction()),
         }
     }
 
@@ -334,7 +335,7 @@ impl BlockBehaviour for SignBlock {
             for d in pumpkin_data::BlockDirection::horizontal() {
                 let wall_pos = args.position.offset(d.to_offset());
                 let (block, state) = args.block_accessor.get_block_and_state(&wall_pos);
-                if state.is_side_solid(d.opposite())
+                if state.is_side_solid(d.opposite().to_block_direction())
                     || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
                     || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
                 {

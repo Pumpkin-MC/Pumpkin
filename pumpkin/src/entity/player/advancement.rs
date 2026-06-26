@@ -1,18 +1,26 @@
+mod visibility_evaluator;
+
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
-use pumpkin_data::advancement_data::{AdvancementNode, AdvancementRequirement, AdvancementReward};
-use pumpkin_data::{Advancement, translation};
+use pumpkin_data::advancement_data::{
+    AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
+};
+use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
+use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
-use serde::{Deserialize, Serialize, Serializer};
-use serde_json::{from_reader, to_writer_pretty};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::to_string_pretty;
 use std::collections::{HashMap, HashSet};
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, read, write};
 use std::path::PathBuf;
+use std::str::from_utf8;
 use std::sync::{Arc, Weak};
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::task::spawn_blocking;
 use tracing::{error, warn};
 use uuid::Uuid;
 
@@ -38,7 +46,7 @@ impl CriterionProgress {
 ///
 /// Tracks whether the advancement has been fully completed. In the future,
 /// this will also track specific criteria progress.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AdvancementProgress {
     /// Indicates the different progress of all criteria currently only a boolean
     pub criteria: HashMap<Arc<str>, CriterionProgress>,
@@ -101,10 +109,53 @@ impl AdvancementProgress {
         }
         self.requirements = requirements;
     }
+
+    #[inline]
+    pub fn get_remaining_criteria(&self) -> impl Iterator<Item = Arc<str>> {
+        self.criteria
+            .iter()
+            .filter(|&(_id, criterion)| !criterion.is_done())
+            .map(|(id, _criterion)| id.clone())
+    }
+
+    #[inline]
+    pub fn get_completed_criteria(&self) -> impl Iterator<Item = Arc<str>> {
+        self.criteria
+            .iter()
+            .filter(|&(_id, criterion)| criterion.is_done())
+            .map(|(id, _criterion)| id.clone())
+    }
+}
+
+impl Serialize for AdvancementProgress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let map: HashMap<&Arc<str>, &CriterionProgress> = self
+            .criteria
+            .iter()
+            .filter(|(_key, criteria)| criteria.is_done())
+            .collect();
+        map.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AdvancementProgress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let criteria = HashMap::<Arc<str>, CriterionProgress>::deserialize(deserializer)?;
+        Ok(Self {
+            criteria,
+            requirements: AdvancementRequirement::default(),
+        })
+    }
 }
 
 #[derive(Clone, Default)]
-struct AdvancementProgressMap {
+pub struct AdvancementProgressMap {
     pub map: IndexMap<&'static Advancement, AdvancementProgress>,
 }
 
@@ -131,11 +182,13 @@ impl AdvancementProgressMap {
         self.map.insert(advancement, progress);
     }
 
+    #[must_use]
     #[inline]
     pub fn len(&self) -> usize {
         self.map.len()
     }
 
+    #[must_use]
     #[inline]
     #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
@@ -147,14 +200,14 @@ impl AdvancementProgressMap {
 ///
 /// This handles saving, loading, and tracking the state of granted / revoked advancements.
 pub struct PlayerAdvancement {
-    progress: AdvancementProgressMap,
-    is_first_packet: bool,
-    roots_to_update: HashSet<&'static AdvancementNode>,
-    visible: HashSet<&'static Advancement>,
-    progress_changed: HashSet<&'static Advancement>,
-    manager: Arc<AdvancementManager>,
-    path: PathBuf,
-    last_selected_tab: Option<&'static Advancement>,
+    pub progress: AdvancementProgressMap,
+    pub is_first_packet: bool,
+    pub roots_to_update: HashSet<&'static AdvancementNode>,
+    pub visible: HashSet<&'static Advancement>,
+    pub progress_changed: HashSet<&'static Advancement>,
+    pub manager: Arc<AdvancementManager>,
+    pub path: PathBuf,
+    pub last_selected_tab: Option<&'static Advancement>,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
 }
@@ -192,12 +245,13 @@ impl PlayerAdvancement {
 
     /// Returns whether advancement saving is enabled for this player.
     #[must_use]
+    #[inline]
     pub fn is_save_enabled(&self) -> bool {
         self.manager.save_enabled
     }
 
     ///reload the advancements from the file
-    pub fn reload(&mut self) -> Result<(), AdvancementDataError> {
+    pub async fn reload(&mut self) -> Result<(), AdvancementDataError> {
         //self.stopListening(); TODO
         self.progress.clear();
         self.visible.clear();
@@ -205,45 +259,40 @@ impl PlayerAdvancement {
         self.progress_changed.clear();
         self.is_first_packet = true;
         self.last_selected_tab = None;
-        self.load()
+        self.load().await
     }
 
     /// Saves the player's advancement progress to disk as JSON.
-    pub fn save(&self) -> Result<(), AdvancementDataError> {
+    pub async fn save(&self) -> Result<(), AdvancementDataError> {
         if !self.is_save_enabled() {
             return Ok(());
         }
-
-        if let Some(parent) = &self.path.parent()
-            && let Err(e) = create_dir_all(parent)
-        {
-            let file_name = self
-                .path
-                .file_prefix()
-                .and_then(|prefix| prefix.to_str())
-                .unwrap_or("unknown");
-            error!(
-                "Failed to create player advancement directory for {}: {e}",
-                file_name
-            );
-            return Err(AdvancementDataError::Io(e));
-        }
-        let file = std::fs::File::create(&self.path).map_err(AdvancementDataError::Io)?;
-
-        to_writer_pretty(file, &self).map_err(AdvancementDataError::Json)?;
-        Ok(())
+        let json = to_string_pretty(self).map_err(AdvancementDataError::Json)?;
+        let path = self.path.clone();
+        spawn_blocking(move || {
+            if let Err(e) = create_dir_all(path.parent().unwrap()) {
+                error!("Failed to create player advancement directory : {e}");
+                return Err(AdvancementDataError::Io(e));
+            }
+            write(path, json).map_err(AdvancementDataError::Io)
+        })
+        .await
+        .expect("spawn_blocking task panicked")
     }
 
     /// Loads the player's advancement progress from disk.
-    pub fn load(&mut self) -> Result<(), AdvancementDataError> {
+    pub async fn load(&mut self) -> Result<(), AdvancementDataError> {
         if !self.path.exists() {
             return Ok(());
         }
 
-        let file = std::fs::File::open(&self.path).map_err(AdvancementDataError::Io)?;
+        let path = self.path.clone();
+        let json = spawn_blocking(|| read(path).map_err(AdvancementDataError::Io))
+            .await
+            .expect("spawn_blocking task panicked")?;
 
         let loaded_data: HashMap<String, AdvancementProgress> =
-            from_reader(file).map_err(AdvancementDataError::Json)?;
+            serde_json::from_str(from_utf8(&json).unwrap()).map_err(AdvancementDataError::Json)?;
 
         self.progress.clear();
         for (advancement_id, mut progress) in loaded_data {
@@ -253,7 +302,7 @@ impl PlayerAdvancement {
                 ));
                 self.progress.insert(advancement_ref, progress);
                 self.progress_changed.insert(advancement_ref);
-                //TODO self.mark_for_visibility(advancement_ref);
+                self.mark_for_visibility_update(advancement_ref);
             } else {
                 warn!("The Advancement name {} is invalid", advancement_id);
             }
@@ -261,23 +310,119 @@ impl PlayerAdvancement {
         Ok(())
     }
 
-    /// Grants the rewards (like experience) associated with completing an advancement.
-    pub async fn grant_reward(player: Arc<Player>, reward: &AdvancementReward) {
-        player.add_experience_points(reward.experience).await;
+    fn mark_for_visibility_update(&mut self, advancement: &'static Advancement) {
+        let node = ADVANCEMENT_TREE.get_node_from_id(&advancement.id);
+        if let Some(node) = node {
+            self.roots_to_update.insert(node.root());
+        }
     }
 
-    /// Fully awards an advancement to the player, updating its status to complete and granting rewards if applicable.
-    pub async fn award(&mut self, advancement: &'static Advancement, criterion: &str) -> bool {
+    fn update_tree_visibility(
+        &mut self,
+        root: &AdvancementNode,
+        added: &mut Vec<&'static Advancement>,
+        removed: &mut Vec<Identifier>,
+    ) {
+        visibility_evaluator::evaluate_visibility(
+            root,
+            self,
+            &mut |player_advancement, node| {
+                player_advancement
+                    .progress
+                    .get_mut_or_start_progress(node.value)
+                    .is_done()
+            },
+            &mut move |player_advancement, node, should_be_visible| {
+                let advancement = node.value;
+                if should_be_visible {
+                    if player_advancement.visible.insert(advancement) {
+                        added.push(advancement);
+                        if player_advancement.progress.map.contains_key(advancement) {
+                            player_advancement.progress_changed.insert(advancement);
+                        }
+                    }
+                } else if player_advancement.visible.remove(advancement) {
+                    removed.push(advancement.id.clone());
+                }
+            },
+        );
+    }
+
+    /// Flushes any pending advancement state down to the client.
+    pub fn flush_dirty(&mut self, player: &Arc<Player>, show_advancement: bool) {
+        if self.is_first_packet || !self.roots_to_update.is_empty() {
+            let mut progress: HashMap<Identifier, &AdvancementProgress> = HashMap::new();
+            let mut added: Vec<&Advancement> = Vec::new();
+            let mut removed: Vec<Identifier> = Vec::new();
+            for root in self.roots_to_update.clone() {
+                self.update_tree_visibility(root, &mut added, &mut removed);
+            }
+            self.roots_to_update.clear();
+            for advancement in &self.progress_changed {
+                if self.visible.contains(advancement) {
+                    progress.insert(advancement.id.clone(), &self.progress.map[advancement]);
+                }
+            }
+            self.progress_changed.clear();
+            if !progress.is_empty() || !added.is_empty() || !removed.is_empty() {
+                let player = player.clone();
+                let parsed_progress: Vec<AdvancementProgressData> = progress
+                    .into_iter()
+                    .map(|(key, val)| AdvancementProgressData {
+                        id: key,
+                        progress: val
+                            .criteria
+                            .iter()
+                            .map(|(key, val)| Criteria {
+                                criterion_id: key.clone(),
+                                achieve_date: val.0.map(|time| {
+                                    time.duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+                                }),
+                            })
+                            .collect(),
+                    })
+                    .collect();
+                let first_packet = self.is_first_packet;
+                tokio::spawn(async move {
+                    player
+                        .client
+                        .send_packet_now(&CUpdateAdvancements::new(
+                            first_packet,
+                            added,
+                            parsed_progress,
+                            removed,
+                            show_advancement,
+                        ))
+                        .await;
+                });
+            }
+        }
+        self.is_first_packet = false;
+    }
+
+    /// Grants the rewards (like experience) associated with completing an advancement.
+    pub fn grant_reward(player: Arc<Player>, reward: &'static AdvancementReward) {
+        tokio::spawn(async move {
+            tokio::join!(
+                player.add_experience_points(reward.experience),
+                // more reward later
+            );
+        });
+    }
+
+    /// award a criterion of an advancement to the player, updating its status to complete and granting rewards if applicable.
+    pub fn award(&mut self, advancement: &'static Advancement, criterion: &str) -> bool {
         //TODO call and creates Events for plugins
         let mut result = false;
-        let player = self.player.upgrade().unwrap().clone();
+        let player = self.player.upgrade().unwrap();
         let progress = self.progress.get_mut_or_start_progress(advancement);
         let was_done = progress.is_done();
-        if !progress.grant_progress(criterion) {
+        if progress.grant_progress(criterion) {
             result = true;
             self.progress_changed.insert(advancement);
             if !was_done && progress.is_done() {
-                Self::grant_reward(player.clone(), advancement.reward).await;
+                //TODO listener
+                Self::grant_reward(player.clone(), advancement.reward);
                 if let Some(display) = advancement.display
                     && display.announce_to_chat
                     && player
@@ -287,20 +432,22 @@ impl PlayerAdvancement {
                         .game_rules
                         .show_advancement_messages
                 {
-                    let component = TextComponent::translate_cross(
-                        display.frame_type.get_translation(),
-                        translation::bedrock::CHAT_TYPE_ACHIEVEMENT,
-                        [player.get_display_name().await, advancement.name()],
-                    );
-                    player
-                        .world()
-                        .broadcast_system_message(&component, false)
-                        .await; //send translate component for the event
+                    tokio::spawn(async move {
+                        let component = TextComponent::translate_cross(
+                            display.frame_type.get_translation(),
+                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT,
+                            [player.get_display_name().await, advancement.name()],
+                        );
+                        player
+                            .world()
+                            .broadcast_system_message(&component, false)
+                            .await; //send translate component for the event
+                    });
                 }
             }
         }
         if !was_done && progress.is_done() {
-            //TODO self.mark_for_visibility_update(advancement);
+            self.mark_for_visibility_update(advancement);
         }
         result
     }
@@ -317,9 +464,31 @@ impl PlayerAdvancement {
         }
 
         if was_done && !progress.is_done() {
-            //TODO self.mark_for_visibility_update(advancement);
+            self.mark_for_visibility_update(advancement);
         }
         result
+    }
+
+    pub async fn set_selected_tab(&mut self, advancement: Option<&'static Advancement>) {
+        let old = self.last_selected_tab;
+        if let Some(value) = advancement
+            && value.is_root()
+            && value.display.is_some()
+        {
+            self.last_selected_tab = advancement;
+        } else {
+            self.last_selected_tab = None;
+        }
+        if old != self.last_selected_tab
+            && let Some(player) = self.player.upgrade()
+        {
+            player
+                .client
+                .send_packet_now(&CSelectAdvancementsTab::new(
+                    self.last_selected_tab.map(|adv| adv.id.clone()),
+                ))
+                .await;
+        }
     }
 }
 
@@ -328,10 +497,17 @@ impl Serialize for PlayerAdvancement {
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(self.progress.len()))?;
+        let filtered_map: HashMap<&'static Advancement, &AdvancementProgress> = self
+            .progress
+            .map
+            .iter()
+            .filter(|(_key, value)| value.has_progress())
+            .map(|(&key, val)| (key, val))
+            .collect();
+        let mut map = serializer.serialize_map(Some(filtered_map.len()))?;
 
-        for (advancement, progress) in &self.progress.map {
-            map.serialize_entry(&advancement.id, progress)?;
+        for (advancement, progress) in &filtered_map {
+            map.serialize_entry(&advancement.id, &progress.criteria)?;
         }
         map.end()
     }
@@ -411,8 +587,8 @@ mod tests {
         assert!(!pa.progress.get_mut_or_start_progress(adv).is_done());
     }
 
-    #[test]
-    fn save_advancement_progress() {
+    #[tokio::test]
+    async fn save_advancement_progress() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -426,7 +602,7 @@ mod tests {
         };
 
         // Save should succeed
-        assert!(pa.save().is_ok(), "Save should succeed");
+        assert!(pa.save().await.is_ok(), "Save should succeed");
 
         // File should exist
         assert!(pa.path.exists(), "Saved file should exist");
@@ -438,8 +614,8 @@ mod tests {
             serde_json::from_str(&content).expect("Saved content should be valid JSON");
     }
 
-    #[test]
-    fn save_disabled() {
+    #[tokio::test]
+    async fn save_disabled() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), false));
         let id = Uuid::new_v4();
@@ -454,7 +630,7 @@ mod tests {
 
         // Save should return Ok but not actually save
         assert!(
-            pa.save().is_ok(),
+            pa.save().await.is_ok(),
             "Save with disabled saving should return Ok"
         );
         assert!(
@@ -463,8 +639,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn load_nonexistent_file() {
+    #[tokio::test]
+    async fn load_nonexistent_file() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -472,14 +648,14 @@ mod tests {
 
         // Load from nonexistent file should return Ok (not error)
         assert!(
-            pa.load().is_ok(),
+            pa.load().await.is_ok(),
             "Loading from nonexistent file should return Ok"
         );
         assert!(pa.progress.is_empty(), "Advancements should remain empty");
     }
 
-    #[test]
-    fn load_advancement_progress() {
+    #[tokio::test]
+    async fn load_advancement_progress() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
 
@@ -494,7 +670,7 @@ mod tests {
         std::fs::write(&pa.path, data.to_string()).unwrap();
 
         // Load the file
-        assert!(pa.load().is_ok(), "Load should succeed");
+        assert!(pa.load().await.is_ok(), "Load should succeed");
 
         // Verify the advancement was loaded
         let loaded_progress = pa.progress.get_mut_or_start_progress(adv);
@@ -504,8 +680,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn save_load_roundtrip() {
+    #[tokio::test]
+    async fn save_load_roundtrip() {
         let temp_dir = tempdir().unwrap();
 
         // Create and save advancements
@@ -519,11 +695,11 @@ mod tests {
             progress_mut.grant_progress("crafting_table");
         };
 
-        assert!(pa.save().is_ok(), "Save should succeed");
+        assert!(pa.save().await.is_ok(), "Save should succeed");
 
         // Load the saved advancements into a new instance
         let mut pa_loaded = PlayerAdvancement::new(manager, id);
-        assert!(pa_loaded.load().is_ok(), "Load should succeed");
+        assert!(pa_loaded.load().await.is_ok(), "Load should succeed");
 
         // Verify the loaded data matches the saved data
         let loaded_progress = pa_loaded.progress.get_mut_or_start_progress(adv);
@@ -538,8 +714,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn load_invalid_advancement_id() {
+    #[tokio::test]
+    async fn load_invalid_advancement_id() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
 
@@ -563,7 +739,7 @@ mod tests {
         // Load should still succeed but skip the invalid entry
 
         assert!(
-            pa.load().is_ok(),
+            pa.load().await.is_ok(),
             "Load should succeed even with invalid IDs"
         );
         assert!(
@@ -572,8 +748,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn save_multiple_advancements() {
+    #[tokio::test]
+    async fn save_multiple_advancements() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -592,7 +768,7 @@ mod tests {
             progress_mut2.grant_progress("entered_nether");
         };
 
-        assert!(pa.save().is_ok(), "Save should succeed");
+        assert!(pa.save().await.is_ok(), "Save should succeed");
 
         // Verify both were saved
         let content = std::fs::read_to_string(&pa.path).unwrap();

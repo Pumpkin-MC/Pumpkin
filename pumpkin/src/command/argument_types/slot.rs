@@ -41,7 +41,7 @@ impl ArgumentType for SlotArgumentType {
         }
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::ItemSlot
     }
 
@@ -80,7 +80,7 @@ impl ArgumentType for SlotsArgumentType {
         })
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::ItemSlots
     }
 

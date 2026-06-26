@@ -262,6 +262,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             OwnedArg::DamageType(d) => Arg::DamageType(format!("{d:?}")),
             OwnedArg::Effect(e) => Arg::Effect(e.minecraft_name.to_string()),
             OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
+            OwnedArg::Advancement(a) => Arg::Advancement(a.to_string()),
             OwnedArg::EntityAnchor(a) => Arg::EntityAnchor(match a {
                 crate::command::args::EntityAnchor::Eyes => {
                     pumpkin::plugin::command::EntityAnchor::Eyes

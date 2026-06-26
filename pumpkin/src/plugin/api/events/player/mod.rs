@@ -20,6 +20,7 @@ pub mod player_leave;
 pub mod player_login;
 pub mod player_move;
 pub mod player_permission_check;
+pub mod player_respawn;
 pub mod player_teleport;
 pub mod player_toggle_flight_event;
 pub mod player_toggle_sneak_event;

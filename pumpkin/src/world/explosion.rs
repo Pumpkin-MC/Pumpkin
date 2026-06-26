@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockState, damage::DamageType, entity::EntityType};
+use pumpkin_data::{Block, BlockState, damage::DamageType, entity::EntityType, fluid::Fluid};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
+use pumpkin_world::chunk::ChunkData;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -27,51 +28,102 @@ impl Explosion {
         &self,
         world: &World,
     ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
-        // Somethings are not vanilla here but make it way faster
         let mut map = FxHashMap::default();
-        let random_val = rand::random::<f32>();
+
+        let mut chunk_cache: FxHashMap<
+            pumpkin_util::math::vector2::Vector2<i32>,
+            Option<Arc<ChunkData>>,
+        > = FxHashMap::default();
+
         for x in 0..16 {
             for y in 0..16 {
-                'block2: for z in 0..16 {
+                for z in 0..16 {
                     if x > 0 && x < 15 && y > 0 && y < 15 && z > 0 && z < 15 {
                         continue;
                     }
 
-                    let mut x = f64::from(x) / 7.5 - 1.0;
-                    let mut y = f64::from(y) / 7.5 - 1.0;
-                    let mut z = f64::from(z) / 7.5 - 1.0;
+                    let mut dir_x = f64::from(x) / 7.5 - 1.0;
+                    let mut dir_y = f64::from(y) / 7.5 - 1.0;
+                    let mut dir_z = f64::from(z) / 7.5 - 1.0;
 
-                    let sqrt = 1.0 / (x * x + y * y + z * z).sqrt();
-                    x *= sqrt;
-                    y *= sqrt;
-                    z *= sqrt;
+                    let length = (dir_x * dir_x + dir_y * dir_y + dir_z * dir_z).sqrt();
+                    dir_x /= length;
+                    dir_y /= length;
+                    dir_z /= length;
 
                     let mut pos_x = self.pos.x;
-                    let mut pos_y = self.pos.y + 0.0625;
+                    let mut pos_y = self.pos.y;
                     let mut pos_z = self.pos.z;
 
+                    let random_val = rand::random::<f32>();
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
+
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
-                        let (block, state) = world.get_block_and_state(&block_pos);
-                        let (_, fluid_state) = world.get_fluid_and_fluid_state(&block_pos);
 
-                        // if !world.is_in_build_limit(&block_pos) {
-                        //     // Pass by reference
-                        //     continue 'block2;
-                        // }
+                        if !world.is_in_build_limit(block_pos) {
+                            break;
+                        }
+
+                        let (chunk_pos, relative) = block_pos.chunk_and_chunk_relative_position();
+
+                        let chunk_opt = chunk_cache.entry(chunk_pos).or_insert_with(|| {
+                            world
+                                .level
+                                .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
+                        });
+
+                        let state_id = if let Some(chunk) = chunk_opt {
+                            chunk
+                                .section
+                                .get_block_absolute_y(
+                                    relative.x as usize,
+                                    block_pos.0.y,
+                                    relative.z as usize,
+                                )
+                                .unwrap_or(Block::AIR.default_state.id)
+                        } else {
+                            Block::AIR.default_state.id
+                        };
+
+                        let (block, state) = BlockState::from_id_with_block(state_id);
+
+                        let (_fluid, fluid_state) = Fluid::from_state_id(state_id).map_or_else(
+                            || {
+                                let is_waterlogged =
+                                    block.properties(state_id).is_some_and(|props| {
+                                        props
+                                            .to_props()
+                                            .into_iter()
+                                            .any(|(k, v)| k == "waterlogged" && v == "true")
+                                    });
+
+                                if is_waterlogged {
+                                    (&Fluid::FLOWING_WATER, &Fluid::FLOWING_WATER.states[0])
+                                } else {
+                                    (&Fluid::EMPTY, &Fluid::EMPTY.states[0])
+                                }
+                            },
+                            |raw_fluid| {
+                                let f = raw_fluid.to_flowing();
+                                (f, &f.states[0])
+                            },
+                        );
 
                         if !state.is_air() || !fluid_state.is_empty {
                             let resistance =
                                 fluid_state.blast_resistance.max(block.blast_resistance);
-                            h -= resistance * 0.3;
+
+                            h -= (resistance + 0.3) * 0.3;
+
                             if h > 0.0 {
                                 map.insert(block_pos, (block, state));
                             }
                         }
-                        pos_x += x * 0.3;
-                        pos_y += y * 0.3;
-                        pos_z += z * 0.3;
+
+                        pos_x += dir_x * 0.3;
+                        pos_y += dir_y * 0.3;
+                        pos_z += dir_z * 0.3;
                         h -= 0.225_000_01;
                     }
                 }

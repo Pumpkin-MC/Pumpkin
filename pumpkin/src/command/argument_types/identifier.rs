@@ -19,7 +19,7 @@ impl ArgumentType for IdentifierArgumentType {
         Identifier::from_reader(reader)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::ResourceLocation
     }
 

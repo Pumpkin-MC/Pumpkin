@@ -1,4 +1,4 @@
-use pumpkin_data::{BlockDirection, BlockState, fluid::Fluid};
+use pumpkin_data::{BlockDirection, BlockState, block_properties::HorizontalFacing, fluid::Fluid};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
@@ -78,7 +78,7 @@ impl MangroveRootPlacer {
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,
-        direction: BlockDirection,
+        direction: HorizontalFacing,
         origin: BlockPos,
         offshoots: &mut Vec<BlockPos>,
         root_length: i32,
@@ -109,7 +109,7 @@ impl MangroveRootPlacer {
     fn get_offshoot_positions(
         &self,
         pos: BlockPos,
-        direction: BlockDirection,
+        direction: HorizontalFacing,
         random: &mut RandomGenerator,
         origin: BlockPos,
     ) -> Vec<BlockPos> {

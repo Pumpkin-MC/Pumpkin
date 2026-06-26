@@ -8,6 +8,7 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -207,11 +208,11 @@ impl LivingEntity {
             &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
-                stack_amount.try_into().unwrap(),
+                VarInt(stack_amount as i32),
             ),
             &CTakeItemActor::new(
-                item.entity_id.try_into().unwrap(),
-                self.entity.entity_id.try_into().unwrap(),
+                VarULong(item.entity_id as u64),
+                VarULong(self.entity.entity_id as u64),
             ),
         );
     }

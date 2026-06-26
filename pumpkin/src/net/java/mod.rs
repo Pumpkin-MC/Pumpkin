@@ -1,9 +1,9 @@
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
@@ -118,6 +118,8 @@ pub struct JavaClient {
     pub keep_alive_id: AtomicCell<i64>,
     /// The last time we sent a keep alive packet.
     pub last_keep_alive_time: AtomicCell<Instant>,
+
+    pub packet_sequence: AtomicI32,
 }
 
 pub enum OutgoingPacketType {
@@ -173,6 +175,7 @@ impl JavaClient {
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
+            packet_sequence: AtomicI32::new(-1),
         }
     }
     pub async fn set_encryption(
@@ -272,6 +275,13 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
+
+                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+                    if seq != -1 {
+                        self
+                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .await;
+                    }
                 }
 
                 // INCOMING PACKETS
@@ -293,7 +303,12 @@ impl JavaClient {
                                     .await;
                                 }
                             }
-                            e.log();
+                            error!(
+                                "Failed to handle play packet id {} (payload {} bytes): {}",
+                                packet.id,
+                                packet.payload.len(),
+                                e
+                            );
                         }
                     }
                 }

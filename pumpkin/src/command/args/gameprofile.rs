@@ -60,7 +60,7 @@ impl Default for GameProfilesArgumentConsumer {
 }
 
 impl GetClientSideArgParser for GameProfilesArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::GameProfile
     }
 

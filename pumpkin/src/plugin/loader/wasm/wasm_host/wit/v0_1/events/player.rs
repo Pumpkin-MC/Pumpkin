@@ -21,7 +21,7 @@ use crate::plugin::{
                 PlayerGamemodeChangeEventData, PlayerInteractEventData,
                 PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
                 PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
-                PlayerPermissionCheckEventData, PlayerTeleportEventData,
+                PlayerPermissionCheckEventData, PlayerRespawnEventData, PlayerTeleportEventData,
                 PlayerToggleFlightEventData, PlayerToggleSneakEventData,
                 PlayerToggleSprintEventData,
             },
@@ -50,6 +50,7 @@ use crate::plugin::{
         player_login::PlayerLoginEvent,
         player_move::PlayerMoveEvent,
         player_permission_check::PlayerPermissionCheckEvent,
+        player_respawn::PlayerRespawnEvent,
         player_teleport::PlayerTeleportEvent,
         player_toggle_flight_event::PlayerToggleFlightEvent,
         player_toggle_sneak_event::PlayerToggleSneakEvent,
@@ -415,6 +416,45 @@ impl ToFromWasmEvent for PlayerChangeWorldEvent {
                 yaw: data.yaw,
                 pitch: data.pitch,
                 cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerRespawnEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+        let previous_world = state
+            .add_world(self.previous_world.clone())
+            .expect("failed to add world resource");
+        let respawned_world = state
+            .add_world(self.respawned_world.clone())
+            .expect("failed to add world resource");
+
+        Event::PlayerRespawnEvent(PlayerRespawnEventData {
+            player,
+            previous_world,
+            respawned_world,
+            position: to_wasm_position(self.position),
+            yaw: self.yaw,
+            pitch: self.pitch,
+            alive: self.alive,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerRespawnEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                previous_world: consume_world(state, &data.previous_world),
+                respawned_world: consume_world(state, &data.respawned_world),
+                position: from_wasm_position(data.position),
+                yaw: data.yaw,
+                pitch: data.pitch,
+                alive: data.alive,
             },
             _ => panic!("unexpected event type"),
         }

@@ -148,7 +148,7 @@ impl DungeonFeature {
                             BlockProperties, ChestLikeProperties,
                         };
                         let mut props = ChestLikeProperties::default(&Block::CHEST);
-                        props.facing = dir.opposite().to_cardinal_direction();
+                        props.facing = dir.opposite();
                         let state_id = props.to_state_id(&Block::CHEST);
                         pumpkin_data::BlockState::from_id(state_id)
                     } else {

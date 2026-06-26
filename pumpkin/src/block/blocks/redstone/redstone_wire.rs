@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    BlockProperties, EastRedstone, NorthRedstone, ObserverLikeProperties,
+    BlockProperties, EastRedstone, HorizontalFacing, NorthRedstone, ObserverLikeProperties,
     RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone, WestRedstone,
 };
 use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
@@ -116,7 +116,7 @@ impl BlockBehaviour for RedstoneWireBlock {
                         args.world
                             .replace_with_state_for_neighbor_update(
                                 &up_block_pos,
-                                direction.opposite(),
+                                direction.opposite().to_block_direction(),
                                 args.flags,
                             )
                             .await;
@@ -128,7 +128,7 @@ impl BlockBehaviour for RedstoneWireBlock {
                         args.world
                             .replace_with_state_for_neighbor_update(
                                 &down_block_pos,
-                                direction.opposite(),
+                                direction.opposite().to_block_direction(),
                                 args.flags,
                             )
                             .await;
@@ -201,7 +201,7 @@ impl BlockBehaviour for RedstoneWireBlock {
         Box::pin(async move {
             let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
             if args.direction == BlockDirection::Up
-                || wire.is_side_connected(args.direction.opposite())
+                || wire.is_side_connected(args.direction.opposite().to_horizontal_facing().unwrap())
             {
                 wire.power
             } else {
@@ -217,7 +217,7 @@ impl BlockBehaviour for RedstoneWireBlock {
         Box::pin(async move {
             let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
             if args.direction == BlockDirection::Up
-                || wire.is_side_connected(args.direction.opposite())
+                || wire.is_side_connected(args.direction.opposite().to_horizontal_facing().unwrap())
             {
                 wire.power
             } else {
@@ -398,18 +398,17 @@ pub async fn get_regulated_sides(
 }
 
 trait RedstoneWireLikePropertiesExt {
-    fn is_side_connected(&self, direction: BlockDirection) -> bool;
+    fn is_side_connected(&self, direction: HorizontalFacing) -> bool;
     //fn get_connection_type(&self, direction: BlockDirection) -> WireConnection;
 }
 
 impl RedstoneWireLikePropertiesExt for RedstoneWireLikeProperties {
-    fn is_side_connected(&self, direction: BlockDirection) -> bool {
+    fn is_side_connected(&self, direction: HorizontalFacing) -> bool {
         match direction {
-            BlockDirection::North => self.north.to_wire_connection().is_connected(),
-            BlockDirection::South => self.south.to_wire_connection().is_connected(),
-            BlockDirection::East => self.east.to_wire_connection().is_connected(),
-            BlockDirection::West => self.west.to_wire_connection().is_connected(),
-            _ => false,
+            HorizontalFacing::North => self.north.to_wire_connection().is_connected(),
+            HorizontalFacing::South => self.south.to_wire_connection().is_connected(),
+            HorizontalFacing::East => self.east.to_wire_connection().is_connected(),
+            HorizontalFacing::West => self.west.to_wire_connection().is_connected(),
         }
     }
 

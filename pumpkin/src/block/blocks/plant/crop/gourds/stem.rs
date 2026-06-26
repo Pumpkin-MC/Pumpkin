@@ -5,9 +5,10 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
-    tag,
-    tag::Taggable,
+    block_properties::{
+        BlockProperties, HorizontalFacing, WallTorchLikeProperties, WheatLikeProperties,
+    },
+    tag::{self, Taggable},
 };
 use pumpkin_util::{
     math::position::BlockPos,
@@ -37,14 +38,14 @@ impl StemBlock {
         props.to_state_id(block)
     }
 
-    fn get_attached_stem(dir: BlockDirection, block: &Block) -> BlockStateId {
+    fn get_attached_stem(dir: HorizontalFacing, block: &Block) -> BlockStateId {
         let attached_block = match block.id {
             id if id == Block::PUMPKIN_STEM.id => &Block::ATTACHED_PUMPKIN_STEM,
             id if id == Block::MELON_STEM.id => &Block::ATTACHED_MELON_STEM,
             _ => &Block::ATTACHED_MELON_STEM, // Should never happen
         };
         let mut props = AttachedStemProperties::default(attached_block);
-        props.facing = dir.to_horizontal_facing().unwrap();
+        props.facing = dir;
         props.to_state_id(attached_block)
     }
 

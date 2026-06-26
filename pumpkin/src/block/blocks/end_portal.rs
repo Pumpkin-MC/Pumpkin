@@ -37,6 +37,9 @@ impl BlockBehaviour for EndPortalBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            let nbt = EndPortalBlockEntity::create_nbt(*args.position);
+            args.world.add_block_entity_nbt(*args.position, &nbt);
+
             args.world
                 .add_block_entity(Arc::new(EndPortalBlockEntity::new(*args.position)));
         })

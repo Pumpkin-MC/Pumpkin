@@ -103,19 +103,17 @@ impl FireBlockBase {
         }
 
         let dir = if direction.is_horizontal() {
-            direction.rotate_counter_clockwise()
+            direction
+                .rotate_counter_clockwise()
+                .to_horizontal_axis()
+                .unwrap()
         } else {
             BlockDirection::random_horizontal(&mut RandomGenerator::Xoroshiro(
                 Xoroshiro::from_seed(rand::rng().random()),
             ))
+            .to_axis()
         };
-        NetherPortal::get_new_portal(
-            world,
-            block_pos,
-            dir.to_horizontal_axis()
-                .expect("Direction should be horizontal"),
-        )
-        .is_some()
+        NetherPortal::get_new_portal(world, block_pos, dir).is_some()
     }
 
     /// Shared fire collision behavior used by `fire` and `soul_fire`.

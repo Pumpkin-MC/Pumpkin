@@ -15,6 +15,16 @@ impl EndPortalBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self { position }
     }
+
+    #[must_use]
+    pub fn create_nbt(position: BlockPos) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", Self::ID.to_string());
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        nbt
+    }
 }
 
 impl BlockEntity for EndPortalBlockEntity {

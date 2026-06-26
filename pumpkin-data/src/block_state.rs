@@ -107,7 +107,7 @@ impl BlockState {
         self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
-    ///`isSideSolidFullSquare()` in Java!
+    ///`isFaceSturdy()` in Java!
     #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
         match side {

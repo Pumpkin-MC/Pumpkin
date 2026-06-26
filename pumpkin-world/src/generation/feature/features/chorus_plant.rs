@@ -2,6 +2,7 @@ use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
         BlockProperties, BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties,
+        HorizontalFacing,
     },
     tag,
 };
@@ -51,7 +52,7 @@ impl ChorusPlantFeature {
 fn all_neighbors_empty<T: GenerationCache>(
     chunk: &T,
     pos: &BlockPos,
-    ignore: Option<BlockDirection>,
+    ignore: Option<HorizontalFacing>,
 ) -> bool {
     for dir in BlockDirection::horizontal() {
         if Some(dir) == ignore {
@@ -139,12 +140,9 @@ fn grow_tree_recursive<T: GenerationCache>(
             stems += 1;
         }
 
-        // The 4 horizontal directions
-        const HORIZ: [BlockDirection; 4] = BlockDirection::horizontal();
-
         for _ in 0..stems {
             // Pick a random horizontal direction
-            let dir = HORIZ[random.next_bounded_i32(4) as usize];
+            let dir = BlockDirection::horizontal()[random.next_bounded_i32(4) as usize];
             let target = top.offset(dir.to_offset());
             let target_below = target.down();
 

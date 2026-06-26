@@ -261,7 +261,7 @@ pub fn from_type(
                 has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
-            Arc::new(WindChargeEntity::new(thrown))
+            Arc::new(WindChargeEntity::new_normal(thrown))
         }
         id if id == EntityType::BREEZE_WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
@@ -271,7 +271,7 @@ pub fn from_type(
                 has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
-            Arc::new(WindChargeEntity::new(thrown))
+            Arc::new(WindChargeEntity::new_breeze(thrown))
         }
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
