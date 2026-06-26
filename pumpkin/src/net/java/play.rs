@@ -2109,15 +2109,15 @@ impl JavaClient {
         }
     }
 
-    pub fn update_sequence(&self, player: &Player, sequence: i32) {
+    pub fn update_sequence(&self, _player: &Player, sequence: i32) {
         if sequence < 0 {
             error!(
                 "{}",
                 localized_log("server.log.expected_non_negative_packet_sequence")
             );
         }
-        player.packet_sequence.store(
-            player.packet_sequence.load(Ordering::Relaxed).max(sequence),
+        self.packet_sequence.store(
+            self.packet_sequence.load(Ordering::Relaxed).max(sequence),
             Ordering::Relaxed,
         );
     }

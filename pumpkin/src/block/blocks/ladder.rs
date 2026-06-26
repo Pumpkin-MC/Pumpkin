@@ -46,7 +46,6 @@ impl BlockBehaviour for LadderBlock {
                 }
                 props.facing = dir
                     .opposite()
-                    .to_block_direction()
                     .to_horizontal_facing()
                     .unwrap_or_else(|| {
                         panic!(
@@ -65,7 +64,7 @@ impl BlockBehaviour for LadderBlock {
                 //this won't happen
                 return false;
             };
-            if can_place_ladder_at(world, args.position, dir) {
+            if can_place_ladder_at(world, args.position, dir.to_block_direction()) {
                 return true;
             }
         }

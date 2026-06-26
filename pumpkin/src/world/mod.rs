@@ -55,7 +55,7 @@ use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::is_air;
+use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -74,7 +74,7 @@ use pumpkin_data::{
     sound_id_remap::remap_sound_id_for_version,
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{BlockDirection, BlockState, translation};
+use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
 use pumpkin_i18n::locale_to_log_string;
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -1325,7 +1325,7 @@ impl World {
         false
     }
 
-    // FlowableFluid.getVelocity()
+    // FlowingFluid.getFlow()
     pub fn get_fluid_velocity(
         &self,
         pos0: BlockPos,
@@ -1335,66 +1335,57 @@ impl World {
         let mut velo = Vector3::default();
 
         for dir in BlockDirection::horizontal() {
-            let mut amplitude = 0.0;
-
             let offset = dir.to_offset();
-
             let pos = pos0.offset(offset);
 
-            let block_state_id = self.get_block_state_id(&pos);
+            let (neighbor_fluid, neighbor_state) = self.get_fluid_and_fluid_state(&pos);
 
-            let fluid = Fluid::from_state_id(block_state_id).unwrap_or(&Fluid::EMPTY);
+            if neighbor_fluid.matches_type(fluid0) {
+                let mut neighbor_height = neighbor_state.height;
+                let mut amplitude = 0.0;
 
-            if fluid.id == Fluid::EMPTY.id {
-                let block = Block::get_raw_id_from_state_id(block_state_id);
-                let block_state = BlockState::from_id(block_state_id);
+                if neighbor_height == 0.0 {
+                    let block_state_id = self.get_block_state_id(&pos);
+                    let block = Block::get_raw_id_from_state_id(block_state_id);
+                    let block_state = BlockState::from_id(block_state_id);
 
-                let blocks_movement = block_state.is_solid()
-                    && block != Block::COBWEB
-                    && block != Block::BAMBOO_SAPLING;
+                    let blocks_movement = blocks_movement(block_state, block);
 
-                if !blocks_movement {
-                    let down_pos = pos.down();
+                    if !blocks_movement {
+                        let down_pos = pos.down();
+                        let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos);
 
-                    let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos);
-
-                    if down_fluid.matches_type(fluid0) {
-                        amplitude = f64::from(state0.height - down_state.height) + 0.888_888_9;
+                        if down_fluid.matches_type(fluid0) {
+                            neighbor_height = down_state.height;
+                            if neighbor_height > 0.0 {
+                                amplitude = f64::from(state0.height)
+                                    - (f64::from(neighbor_height) - 0.888_888_9);
+                            }
+                        }
                     }
-                }
-            } else {
-                if !fluid.matches_type(fluid0) {
-                    continue;
+                } else if neighbor_height > 0.0 {
+                    amplitude = f64::from(state0.height) - f64::from(neighbor_height);
                 }
 
-                //let state = fluid.get_state(block_state_id);
-                amplitude = f64::from(state0.height - fluid.states[0].height);
+                if amplitude != 0.0 {
+                    velo.x += f64::from(offset.x) * amplitude;
+                    velo.z += f64::from(offset.z) * amplitude;
+                }
             }
-
-            if amplitude == 0.0 {
-                continue;
-            }
-
-            velo.x += f64::from(offset.x) * amplitude;
-
-            velo.z += f64::from(offset.z) * amplitude;
         }
-
-        // TODO: FALLING
 
         if state0.falling {
             for dir in BlockDirection::horizontal() {
                 let pos = pos0.offset(dir.to_offset());
 
-                if self.is_flow_blocked(fluid0.id, pos, dir)
-                    || self.is_flow_blocked(fluid0.id, pos.up(), dir)
+                if self.is_solid_face(fluid0.id, pos, dir.to_block_direction())
+                    || self.is_solid_face(fluid0.id, pos.up(), dir.to_block_direction())
                 {
                     if velo.length_squared() != 0.0 {
                         velo = velo.normalize();
                     }
 
                     velo.y -= 6.0;
-
                     break;
                 }
             }
@@ -1407,9 +1398,8 @@ impl World {
         }
     }
 
-    // FlowableFluid.isFlowBlocked()
-
-    fn is_flow_blocked(&self, fluid0_id: u16, pos: BlockPos, direction: BlockDirection) -> bool {
+    // FlowingFluid.isSolidFace()
+    fn is_solid_face(&self, fluid0_id: u16, pos: BlockPos, direction: BlockDirection) -> bool {
         let id = self.get_block_state_id(&pos);
 
         let fluid = Fluid::from_state_id(id).unwrap_or(&Fluid::EMPTY);

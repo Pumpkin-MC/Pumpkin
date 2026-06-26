@@ -3,7 +3,9 @@ use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
@@ -53,13 +55,17 @@ pub fn compute_fence_state(
         let other_block_pos = block_pos.offset(direction.to_offset());
         let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
-        let connected = connects_to(block, other_block, other_block_state, direction);
+        let connected = connects_to(
+            block,
+            other_block,
+            other_block_state,
+            direction.to_block_direction(),
+        );
         match direction {
-            BlockDirection::North => fence_props.north = connected,
-            BlockDirection::South => fence_props.south = connected,
-            BlockDirection::West => fence_props.west = connected,
-            BlockDirection::East => fence_props.east = connected,
-            _ => {}
+            HorizontalFacing::North => fence_props.north = connected,
+            HorizontalFacing::South => fence_props.south = connected,
+            HorizontalFacing::West => fence_props.west = connected,
+            HorizontalFacing::East => fence_props.east = connected,
         }
     }
 

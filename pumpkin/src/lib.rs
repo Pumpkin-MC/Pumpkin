@@ -615,6 +615,11 @@ impl PumpkinServer {
                 match udp_result {
                     Ok((len, client_addr)) => {
                         if len > 0 {
+                            let Some(socket) = self.udp_socket.clone() else {
+                                error!("UDP socket disappeared during receive");
+                                return true;
+                            };
+
                             let id = udp_buf[0];
                             let is_online = id & 128 != 0;
 
@@ -635,7 +640,7 @@ impl PumpkinServer {
                                     *master_client_id_counter += 1;
 
                                     let new_client = Arc::new(BedrockClient::new(
-                                        self.udp_socket.as_ref().unwrap().clone(),
+                                        socket,
                                         client_addr,
                                         be_clients
                                     ));
