@@ -9,6 +9,7 @@ use pumpkin_data::{Block, BlockDirection, FacingExt, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 
@@ -47,7 +48,12 @@ impl BlockBehaviour for LadderBlock {
                     .opposite()
                     .to_block_direction()
                     .to_horizontal_facing()
-                    .expect("Opposite of horizontal direction should be horizontal");
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{}",
+                            localized_log("debug.expect.opposite_direction_not_horizontal",)
+                        )
+                    });
                 return props.to_state_id(args.block);
             }
             Block::AIR.default_state.id

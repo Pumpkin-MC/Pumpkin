@@ -1,5 +1,7 @@
 use crate::command::context::string_range::StringRange;
 use crate::command::suggestion::{Suggestion, SuggestionText};
+use crate::command::tr_plain;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::text::TextComponent;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -335,7 +337,15 @@ impl Suggestions {
             .iter()
             .map(|s| s.borrow().range)
             .reduce(StringRange::encompass)
-            .expect("Suggestions list is not empty, so range should exist");
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    tr_plain(
+                        "debug.expect.suggestions_range_exists",
+                        server_command_locale(),
+                    )
+                )
+            });
 
         let mut texts = Vec::new();
         for suggestion in &suggestions {
@@ -401,7 +411,13 @@ impl Suggestions {
                     Ordering::Less => PushSide::Text,
                     Ordering::Greater => PushSide::Integer,
                     Ordering::Equal => {
-                        tracing::error!("Duplicate suggestion found during merge");
+                        tracing::error!(
+                            "{}",
+                            tr_plain(
+                                "server.log.duplicate_suggestion_found",
+                                server_command_locale(),
+                            )
+                        );
                         PushSide::Text
                     }
                 },

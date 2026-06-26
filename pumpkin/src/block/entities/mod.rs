@@ -6,6 +6,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
+use pumpkin_util::translation::localized_log;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 
@@ -92,9 +93,19 @@ pub trait BlockEntity: Any + Send + Sync {
                         .resource_location()
                         .split(':')
                         .next_back()
-                        .expect("Resource location should have a name")
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                localized_log("debug.expect.resource_location_no_name")
+                            )
+                        })
             })
-            .expect("Block entity type should be registered") as u32
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.block_entity_type_not_registered",)
+                )
+            }) as u32
     }
 
     /// Obtain NBT data for sending to the client in [`ChunkData`](crate::chunk::ChunkData)
@@ -141,9 +152,15 @@ pub trait BlockEntity: Any + Send + Sync {
 
 #[must_use]
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
-    let x = nbt.get_int("x").expect("NBT should have x coordinate");
-    let y = nbt.get_int("y").expect("NBT should have y coordinate");
-    let z = nbt.get_int("z").expect("NBT should have z coordinate");
+    let x = nbt
+        .get_int("x")
+        .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.nbt_missing_x_coordinate")));
+    let y = nbt
+        .get_int("y")
+        .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.nbt_missing_y_coordinate")));
+    let z = nbt
+        .get_int("z")
+        .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.nbt_missing_z_coordinate")));
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 

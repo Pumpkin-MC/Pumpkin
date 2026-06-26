@@ -1,3 +1,4 @@
+use pumpkin_util::translation::localized_log;
 use std::{
     fs::File,
     io::{Cursor, Read},
@@ -37,10 +38,13 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
         data: LevelData,
     }
 
-    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
-        .map_err(|e|{
-            error!("The level.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
-            WorldInfoError::DeserializationError(e.to_string())})?;
+    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt)).map_err(|e| {
+        error!(
+            "{}",
+            localized_log("world.info.level_dat_missing_data_version")
+        );
+        WorldInfoError::DeserializationError(e.to_string())
+    })?;
 
     let data_version = info.data.data_version;
 
@@ -64,10 +68,13 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
         data: LevelData,
     }
 
-    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
-        .map_err(|e|{
-            error!("The level.dat file does not have a level version! This means it is either corrupt or very old (read unsupported)");
-            WorldInfoError::DeserializationError(e.to_string())})?;
+    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt)).map_err(|e| {
+        error!(
+            "{}",
+            localized_log("world.info.level_dat_missing_level_version")
+        );
+        WorldInfoError::DeserializationError(e.to_string())
+    })?;
 
     let level_version = info.data.version;
 
@@ -107,7 +114,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.time_went_backwards")));
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };
@@ -120,7 +127,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let compression_writer = GzEncoder::new(world_info_file, Compression::best());
         // TODO: Proper error handling
         pumpkin_nbt::to_bytes(&level, compression_writer)
-            .expect("Failed to write level.dat to disk");
+            .unwrap_or_else(|_| panic!("{}", localized_log("world.info.write_level_dat_failed")));
         Ok(())
     }
 }

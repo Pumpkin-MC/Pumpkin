@@ -1,4 +1,7 @@
-use crate::entity::{NBTInitFuture, NBTStorage, NBTStorageInit, NbtFuture};
+use crate::{
+    entity::{NBTInitFuture, NBTStorage, NBTStorageInit, NbtFuture},
+    localized_log, localized_log_format,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -31,15 +34,21 @@ impl NBTStorageInit for pumpkin_data::potion::Effect {
     {
         Box::pin(async move {
             let Some(effect_id) = nbt.get_string("id") else {
-                warn!("Unable to read effect. Effect id is not present");
+                warn!("{}", localized_log("server.log.effect_id_not_present"));
                 return None;
             };
             let Some(effect_type) = StatusEffect::from_minecraft_name(effect_id) else {
-                warn!("Unable to read effect. Unknown effect type: {effect_id}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.effect_unknown_type",
+                        &[effect_id.to_string()]
+                    )
+                );
                 return None;
             };
             let Some(show_icon) = nbt.get_byte("show_icon") else {
-                warn!("Unable to read effect. Show icon is not present");
+                warn!("{}", localized_log("server.log.show_icon_not_present"));
                 return None;
             };
             let amplifier = nbt.get_int("amplifier").unwrap_or(0) as u8;

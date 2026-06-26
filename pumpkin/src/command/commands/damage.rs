@@ -9,6 +9,7 @@ use crate::command::{
         resource::damage_type::DamageTypeArgumentConsumer,
     },
     dispatcher::CommandError,
+    tr,
     tree::{
         CommandTree,
         builder::{argument, literal},
@@ -17,7 +18,7 @@ use crate::command::{
 use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["damage"];
-const DESCRIPTION: &str = "Deals damage to entities";
+const DESCRIPTION: &str = "commands.damage.description";
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
 const ARG_DAMAGE_TYPE: &str = "damageType";
@@ -69,8 +70,10 @@ impl CommandExecutor for LocationExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Invalid damage amount",
+                return Err(CommandError::CommandFailed(tr(
+                    "commands.damage.invalid_amount",
+                    sender.get_locale(),
+                    [],
                 )));
             };
 
@@ -104,8 +107,10 @@ impl CommandExecutor for EntityExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Invalid damage amount",
+                return Err(CommandError::CommandFailed(tr(
+                    "commands.damage.invalid_amount",
+                    sender.get_locale(),
+                    [],
                 )));
             };
 

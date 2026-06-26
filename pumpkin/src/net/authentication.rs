@@ -1,8 +1,9 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{borrow::Cow, collections::HashMap, net::IpAddr};
 
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
+use pumpkin_util::translation::localized_log;
 use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;
@@ -43,11 +44,16 @@ pub struct MojangPublicKeys {
     pub authentication_keys: Option<Vec<JsonPublicKey>>,
 }
 
-const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
-const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
-const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
-const MOJANG_PROFILE_BY_NAME_URL: &str =
-    "https://api.mojang.com/users/profiles/minecraft/{username}";
+/// Resolves an authentication URL from config or a localized default.
+fn resolve_auth_url<'a>(configured: Option<&'a str>, default_key: &str) -> Cow<'a, str> {
+    configured.map_or_else(
+        || {
+            let default = localized_log(default_key);
+            Cow::Owned(default)
+        },
+        Cow::Borrowed,
+    )
+}
 
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///
@@ -68,26 +74,25 @@ pub fn authenticate(
     ip: &IpAddr,
     auth_config: &AuthenticationConfig,
 ) -> Result<GameProfile, AuthError> {
-    let address = if auth_config.prevent_proxy_connections {
-        let auth_url = auth_config
-            .prevent_proxy_connection_auth_url
-            .as_deref()
-            .unwrap_or(MOJANG_PREVENT_PROXY_AUTHENTICATION_URL);
-
-        auth_url
-            .replace("{username}", username)
-            .replace("{server_hash}", server_hash)
-            .replace("{ip}", &ip.to_string())
+    let url = if auth_config.prevent_proxy_connections {
+        resolve_auth_url(
+            auth_config.prevent_proxy_connection_auth_url.as_deref(),
+            "network.authentication.mojang_prevent_proxy_authentication_url",
+        )
     } else {
-        let auth_url = auth_config
-            .url
-            .as_deref()
-            .unwrap_or(MOJANG_AUTHENTICATION_URL);
-
-        auth_url
-            .replace("{username}", username)
-            .replace("{server_hash}", server_hash)
+        resolve_auth_url(
+            auth_config.url.as_deref(),
+            "network.authentication.mojang_authentication_url",
+        )
     };
+
+    let mut address = url
+        .replace("{username}", username)
+        .replace("{server_hash}", server_hash);
+
+    if auth_config.prevent_proxy_connections {
+        address = address.replace("{ip}", &ip.to_string());
+    }
 
     let mut response = ureq::get(address)
         .call()
@@ -144,10 +149,10 @@ pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), Tex
 pub fn fetch_mojang_public_keys(
     auth_config: &AuthenticationConfig,
 ) -> Result<Vec<RsaPublicKey>, AuthError> {
-    let services_url = auth_config
-        .services_url
-        .as_deref()
-        .unwrap_or(MOJANG_SERVICES_URL);
+    let services_url = auth_config.services_url.as_deref().map_or_else(
+        || Cow::Owned(localized_log("network.authentication.mojang_services_url")),
+        Cow::Borrowed,
+    );
 
     let url = format!("{services_url}/publickeys");
 
@@ -190,7 +195,8 @@ pub fn lookup_profile_by_name(
     name: &str,
     _auth_config: &AuthenticationConfig,
 ) -> Result<Option<(Uuid, String)>, AuthError> {
-    let url = MOJANG_PROFILE_BY_NAME_URL.replace("{username}", name);
+    let url = localized_log("network.authentication.mojang_profile_by_name_url")
+        .replace("{username}", name);
 
     let mut response = ureq::get(url)
         .call()

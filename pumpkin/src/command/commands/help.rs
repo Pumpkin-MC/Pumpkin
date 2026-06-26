@@ -3,26 +3,21 @@ use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgu
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{
-    CommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW, LiteralCommandErrorType,
-};
+use crate::command::errors::error_types::{CommandErrorType, INTEGER_TOO_HIGH, INTEGER_TOO_LOW};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
+use crate::command::{localized_description, tr, tr_format, tr_plain};
 use pumpkin_protocol::java::client::play::StringProtoArgBehavior;
-use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
-const NO_COMMANDS_ERROR_TYPE: LiteralCommandErrorType =
-    LiteralCommandErrorType::new("No commands are available to show help for");
 const FAILED_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new("commands.help.failed", "commands.help.failed");
-const PLUGIN_NOT_FOUND_ERROR_TYPE: LiteralCommandErrorType =
-    LiteralCommandErrorType::new("Plugin not found or has no commands");
 
-const DESCRIPTION: &str = "Print a help message.";
+const DESCRIPTION: &str = "commands.help.description";
 const PERMISSION: &str = "minecraft:command.help";
 
 const ARG: &str = "commandOrPage";
@@ -102,10 +97,11 @@ impl ArgumentType for HelpArgumentType {
 impl HelpCommandExecutor {
     fn create_help_command_with_given_page_number(
         page_number: usize,
-        arrow: &'static str,
+        arrow_key: &'static str,
+        locale: pumpkin_i18n::Locale,
     ) -> TextComponent {
         let cmd = format!("/help {page_number}");
-        TextComponent::text(arrow)
+        TextComponent::text(tr_plain(arrow_key, locale))
             .color(Color::Named(NamedColor::Aqua))
             .click_event(ClickEvent::RunCommand {
                 command: cmd.into(),
@@ -115,6 +111,7 @@ impl HelpCommandExecutor {
     fn page<'a>(context: &'a CommandContext, page_number: usize) -> CommandExecutorResult<'a> {
         Box::pin(async move {
             let server = context.server();
+            let locale = context.source.output.get_locale();
 
             let dispatcher = server.command_dispatcher.read().await;
             let commands = dispatcher
@@ -123,7 +120,10 @@ impl HelpCommandExecutor {
 
             let commands_available = commands.len();
             if commands_available == 0 {
-                return Err(NO_COMMANDS_ERROR_TYPE.create_without_context());
+                return Err(CommandSyntaxError::create_without_context(
+                    &FAILED_ERROR_TYPE,
+                    tr("commands.help.no_commands", locale, []),
+                ));
             }
 
             let total_pages = commands_available.div_ceil(COMMANDS_PER_PAGE);
@@ -135,18 +135,30 @@ impl HelpCommandExecutor {
             let page_commands = commands.into_iter().skip(start).take(end - start);
 
             let arrow_left = if page > 1 {
-                Self::create_help_command_with_given_page_number(page - 1, "<<<")
+                Self::create_help_command_with_given_page_number(
+                    page - 1,
+                    "commands.help.previous_page",
+                    locale,
+                )
             } else {
-                TextComponent::text("<<<").color(Color::Named(NamedColor::Gray))
+                tr("commands.help.previous_page", locale, []).color(Color::Named(NamedColor::Gray))
             };
 
             let arrow_right = if page < total_pages {
-                Self::create_help_command_with_given_page_number(page + 1, ">>>")
+                Self::create_help_command_with_given_page_number(
+                    page + 1,
+                    "commands.help.next_page",
+                    locale,
+                )
             } else {
-                TextComponent::text(">>>").color(Color::Named(NamedColor::Gray))
+                tr("commands.help.next_page", locale, []).color(Color::Named(NamedColor::Gray))
             };
 
-            let header_text = format!(" Help - Page {page}/{total_pages} ");
+            let header_text = tr_format(
+                "commands.help.page_header",
+                locale,
+                &[page.to_string(), total_pages.to_string()],
+            );
 
             let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
 
@@ -167,13 +179,18 @@ impl HelpCommandExecutor {
                 message = message.add_child(
                     TextComponent::text(command_declaration.clone())
                         .color_named(NamedColor::Gold)
-                        .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
                         .add_child(
-                            TextComponent::text(description.to_owned() + "\n")
+                            tr("commands.help.separator", locale, [])
+                                .color_named(NamedColor::Yellow),
+                        )
+                        .add_child(
+                            localized_description(description, locale)
+                                .add_child(TextComponent::text("\n"))
                                 .color_named(NamedColor::White),
                         )
                         .add_child(
-                            TextComponent::text("    Usage: ").color_named(NamedColor::Yellow),
+                            tr("commands.help.usage_indent", locale, [])
+                                .color_named(NamedColor::Yellow),
                         )
                         .add_child(
                             TextComponent::text(usage.into_string()).color_named(NamedColor::White),
@@ -185,7 +202,11 @@ impl HelpCommandExecutor {
                 );
             }
 
-            let footer_text = format!(" Page {page}/{total_pages} ");
+            let footer_text = tr_format(
+                "commands.help.page_footer",
+                locale,
+                &[page.to_string(), total_pages.to_string()],
+            );
             message = message
                 .add_child(
                     TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
@@ -206,6 +227,7 @@ impl HelpCommandExecutor {
 
     fn command<'a>(context: &'a CommandContext, command: &'a str) -> CommandExecutorResult<'a> {
         Box::pin(async move {
+            let locale = context.source.output.get_locale();
             let dispatcher = context.server().command_dispatcher.read().await;
 
             let Some((description, usage)) = dispatcher
@@ -216,7 +238,11 @@ impl HelpCommandExecutor {
             };
 
             let command_with_slash = format!("/{command}");
-            let header_text = format!(" Help - /{command} ");
+            let header_text = tr_format(
+                "commands.help.command_header",
+                locale,
+                &[command.to_owned()],
+            );
 
             let dashes = 52usize.saturating_sub(header_text.len()) / 2;
 
@@ -230,7 +256,7 @@ impl HelpCommandExecutor {
                         .color_named(NamedColor::Yellow),
                 )
                 .add_child(
-                    TextComponent::text("Command: ")
+                    tr("commands.help.command_label", locale, [])
                         .color_named(NamedColor::Aqua)
                         .add_child(
                             TextComponent::text(command_with_slash.clone())
@@ -243,15 +269,16 @@ impl HelpCommandExecutor {
                         }),
                 )
                 .add_child(
-                    TextComponent::text("Description: ")
+                    tr("commands.help.description_label", locale, [])
                         .color_named(NamedColor::Aqua)
                         .add_child(
-                            TextComponent::text(format!("{description}\n"))
+                            localized_description(description, locale)
                                 .color_named(NamedColor::White),
-                        ),
+                        )
+                        .add_child(TextComponent::text("\n").color_named(NamedColor::White)),
                 )
                 .add_child(
-                    TextComponent::text("Usage: ")
+                    tr("commands.help.usage_label", locale, [])
                         .color_named(NamedColor::Aqua)
                         .add_child(
                             TextComponent::text(format!("{usage}\n"))
@@ -278,12 +305,20 @@ impl HelpCommandExecutor {
             let commands = dispatcher
                 .get_all_permitted_commands_usage_by_plugin(&context.source, plugin_name)
                 .await;
+            let locale = context.source.output.get_locale();
 
             if commands.is_empty() {
-                return Err(PLUGIN_NOT_FOUND_ERROR_TYPE.create_without_context());
+                return Err(CommandSyntaxError::create_without_context(
+                    &FAILED_ERROR_TYPE,
+                    tr("commands.help.plugin_not_found", locale, []),
+                ));
             }
 
-            let header_text = format!(" Help - Plugin: {plugin_name} ");
+            let header_text = tr_format(
+                "commands.help.plugin_header",
+                locale,
+                &[plugin_name.to_owned()],
+            );
             let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
 
             let mut message = TextComponent::empty()
@@ -302,13 +337,18 @@ impl HelpCommandExecutor {
                 message = message.add_child(
                     TextComponent::text(command_declaration.clone())
                         .color_named(NamedColor::Gold)
-                        .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
                         .add_child(
-                            TextComponent::text(description.to_owned() + "\n")
+                            tr("commands.help.separator", locale, [])
+                                .color_named(NamedColor::Yellow),
+                        )
+                        .add_child(
+                            localized_description(description, locale)
+                                .add_child(TextComponent::text("\n"))
                                 .color_named(NamedColor::White),
                         )
                         .add_child(
-                            TextComponent::text("    Usage: ").color_named(NamedColor::Yellow),
+                            tr("commands.help.usage_indent", locale, [])
+                                .color_named(NamedColor::Yellow),
                         )
                         .add_child(
                             TextComponent::text(usage.into_string()).color_named(NamedColor::White),
@@ -374,7 +414,7 @@ impl CommandExecutor for HelpCommandExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Allow,

@@ -9,6 +9,7 @@ use std::{
 use super::BlockEntity;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::translation::localized_log;
 use tokio::sync::Mutex;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
@@ -158,7 +159,12 @@ impl From<Text> for NbtTag {
             value
                 .messages
                 .lock()
-                .expect("Text messages mutex should not be poisoned")
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.text_messages_mutex_not_poisoned",)
+                    )
+                })
                 .iter()
                 .map(|s| Self::String(s.clone()))
                 .collect(),

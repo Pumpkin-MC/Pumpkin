@@ -20,6 +20,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 
@@ -145,7 +146,13 @@ impl BlockBehaviour for JukeboxBlock {
             };
 
             let Some(jukebox_song) = JukeboxSong::from_name(song_name) else {
-                error!("Jukebox playable song not registered: {song_name}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.jukebox_song_not_registered",
+                        &[song_name.to_string()]
+                    )
+                );
                 return BlockActionResult::PassToDefaultBlockAction;
             };
 

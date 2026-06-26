@@ -8,13 +8,13 @@ use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandError, CommandResult};
-use crate::command::{CommandExecutor, CommandSender};
+use crate::command::{CommandExecutor, CommandSender, tr};
 use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["kick"];
-const DESCRIPTION: &str = "Kicks the target player from the server.";
+const DESCRIPTION: &str = "commands.kick.description";
 
 const ARG_TARGETS: &str = "targets";
 
@@ -45,7 +45,7 @@ impl CommandExecutor for Executor {
 
             for target in targets {
                 target.kick(DisconnectReason::Kicked, reason.clone()).await;
-                let mut msg = TextComponent::text("Kicked: ");
+                let mut msg = tr("commands.kick.kicked_message", sender.get_locale(), []);
                 msg = msg.add_child(target.get_display_name().await);
                 sender.send_message(msg.color_named(NamedColor::Blue)).await;
             }

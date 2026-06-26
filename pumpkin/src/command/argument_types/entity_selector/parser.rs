@@ -20,6 +20,7 @@ use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log;
 use std::pin::Pin;
 use uuid::Uuid;
 
@@ -250,7 +251,10 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
         }
         let i = self.reader.cursor();
-        let char = self.reader.read().expect("can_read_char is true");
+        let char = self
+            .reader
+            .read()
+            .unwrap_or_else(|| panic!("{}", localized_log("debug.expect.can_read_char_true")));
         let mut add_alive_predicate = false;
         match char {
             'a' => {

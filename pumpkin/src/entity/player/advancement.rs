@@ -11,6 +11,7 @@ use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
 use pumpkin_protocol::java::client::play::{CSelectAdvancementsTab, CUpdateAdvancements};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log_format;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::to_string_pretty;
@@ -304,7 +305,10 @@ impl PlayerAdvancement {
                 self.progress_changed.insert(advancement_ref);
                 self.mark_for_visibility_update(advancement_ref);
             } else {
-                warn!("The Advancement name {} is invalid", advancement_id);
+                warn!(
+                    "{}",
+                    localized_log_format("server.log.invalid_advancement_name", &[advancement_id])
+                );
             }
         }
         Ok(())

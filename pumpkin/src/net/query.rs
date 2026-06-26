@@ -15,13 +15,13 @@ use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 use tracing::{error, info};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, localized_log, localized_log_format, server::Server};
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
         UdpSocket::bind(query_addr)
             .await
-            .expect("Unable to bind to address"),
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.bind_address_failed"))),
     );
 
     // Challenge tokens are bound to the IP address and port
@@ -38,16 +38,22 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     });
 
     info!(
-        "Server query running on port {}",
-        TextComponent::text(format!(
-            "{}",
-            socket
-                .local_addr()
-                .expect("Unable to find running address!")
-                .port()
-        ))
-        .color_named(NamedColor::DarkBlue)
-        .to_pretty_console()
+        "{}",
+        localized_log_format(
+            "server.log.query_running",
+            &[TextComponent::text(format!(
+                "{}",
+                socket
+                    .local_addr()
+                    .unwrap_or_else(|_| panic!(
+                        "{}",
+                        localized_log("debug.expect.running_address_not_found")
+                    ))
+                    .port()
+            ))
+            .color_named(NamedColor::DarkBlue)
+            .to_pretty_console()]
+        )
     );
 
     while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -78,7 +84,10 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             )
             .await
             {
-                error!("Interior 0 bytes found! Cannot encode query response! {err}");
+                error!(
+                    "{}",
+                    localized_log_format("server.log.query_response_nul_error", &[err.to_string()])
+                );
             }
         });
     }

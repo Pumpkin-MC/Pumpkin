@@ -421,7 +421,15 @@ macro_rules! vector_codec_impl {
                         let [ $( $components, )+ ]: [T; $number] = arr;
                         DataResult::new_success(Self { $( $components, )+ })
                     } else {
-                        DataResult::new_error(format!("Expected {} elements", $number))
+                        DataResult::new_error(match $number {
+                            2 => $crate::translation::localized_log("util.math.expected_2_elements"),
+                            3 => $crate::translation::localized_log("util.math.expected_3_elements"),
+                            6 => $crate::translation::localized_log("util.math.expected_6_elements"),
+                            _ => $crate::translation::localized_log_format(
+                                "util.math.expected_elements",
+                                &[$number.to_string()],
+                            ),
+                        })
                     }
                 })
             }

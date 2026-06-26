@@ -7,6 +7,7 @@ use crate::plugin::loader::wasm::wasm_host::{
 };
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
+use pumpkin_util::translation::localized_log;
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -133,7 +134,16 @@ impl boss_bar::HostBossBar for PluginHostState {
         bossbar.color = from_wit_color(color);
         bossbar.division = from_wit_division(division);
 
-        let server = self.server.as_ref().expect("server not available").clone();
+        let server = self
+            .server
+            .as_ref()
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.server_not_available",)
+                )
+            })
+            .clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
             bossbar,
             Arc::downgrade(&server),
@@ -292,10 +302,11 @@ impl boss_bar::HostBossBar for PluginHostState {
             pbb.players.clone()
         };
 
-        let server = self
-            .server
-            .clone()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.clone().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
 
         let mut wit_players = Vec::new();
         for uuid in players {

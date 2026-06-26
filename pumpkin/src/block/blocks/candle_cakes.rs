@@ -15,6 +15,7 @@ use crate::{
         OnScheduledTickArgs, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
     },
     entity::player::Player,
+    localized_log_format,
     world::World,
 };
 
@@ -43,7 +44,15 @@ pub fn cake_from_candle(item: &Item) -> &'static Block {
     CANDLE_MAP
         .binary_search_by_key(&item.id, |(key, _)| key.id)
         .map_or_else(
-            |_| panic!("Expected a candle item, got {}", item.id),
+            |_| {
+                panic!(
+                    "{}",
+                    localized_log_format(
+                        "debug.panic.expected_candle_item",
+                        &[item.id.to_string()]
+                    )
+                )
+            },
             |index| CANDLE_MAP[index].1,
         )
 }
@@ -53,7 +62,15 @@ pub fn candle_from_cake(block: &Block) -> &'static Item {
     CANDLE_MAP
         .binary_search_by_key(&block.id, |(_, value)| value.id)
         .map_or_else(
-            |_| panic!("Expected a candle cake block, got {}", block.id),
+            |_| {
+                panic!(
+                    "{}",
+                    localized_log_format(
+                        "debug.panic.expected_candle_cake_block",
+                        &[block.id.to_string()]
+                    )
+                )
+            },
             |index| CANDLE_MAP[index].0,
         )
 }

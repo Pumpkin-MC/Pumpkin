@@ -7,7 +7,9 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
+use crate::command::tr_format;
 use pumpkin_data::translation;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
@@ -279,7 +281,14 @@ impl EntitySelectorOption {
                 }
             }
             _ => {
-                tracing::warn!("Unimplemented entity selector option: {:?}", self);
+                tracing::warn!(
+                    "{}",
+                    tr_format(
+                        "server.log.entity_selector_unimplemented",
+                        server_command_locale(),
+                        &[format!("{self:?}")],
+                    )
+                );
                 Err(UNKNOWN_OPTION_ERROR_TYPE.create_without_context(self.name_component()))
             }
         }

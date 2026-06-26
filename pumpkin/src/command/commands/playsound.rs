@@ -31,7 +31,7 @@ use crate::{
 /// - pitch: Sound pitch (0.5-2.0, default: 1.0)
 /// - minVolume: Minimum volume for distant players (0.0-1.0, default: 0.0)
 const NAMES: [&str; 1] = ["playsound"];
-const DESCRIPTION: &str = "Plays a sound at a position.";
+const DESCRIPTION: &str = "commands.playsound.description";
 const ARG_SOUND: &str = "sound";
 const ARG_SOURCE: &str = "source";
 const ARG_TARGETS: &str = "targets";

@@ -1,15 +1,16 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::command::CommandSender;
 use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
 use crate::command::dispatcher::CommandError;
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use crate::command::errors::error_types;
 use crate::command::tree::{RawArg, RawArgs};
+use crate::command::{CommandSender, tr_format, tr_plain};
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::{entity::EntityType, translation};
+use pumpkin_i18n::server_command_locale;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::GameMode;
@@ -81,8 +82,18 @@ impl FromStr for EntityFilter {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '=');
-        let key = parts.next().ok_or("Missing key in entity filter")?;
-        let mut value = parts.next().ok_or("Missing value in entity filter")?;
+        let key = parts.next().ok_or_else(|| {
+            tr_plain(
+                "commands.selector.error.missing_key",
+                server_command_locale(),
+            )
+        })?;
+        let mut value = parts.next().ok_or_else(|| {
+            tr_plain(
+                "commands.selector.error.missing_value",
+                server_command_locale(),
+            )
+        })?;
         let negate = value.starts_with('!');
         if negate {
             value = &value[1..];
@@ -90,8 +101,13 @@ impl FromStr for EntityFilter {
 
         match key {
             "type" => {
-                let entity_type =
-                    EntityType::from_name(value).ok_or(format!("Invalid entity type {value}"))?;
+                let entity_type = EntityType::from_name(value).ok_or_else(|| {
+                    tr_format(
+                        "commands.selector.error.invalid_entity_type",
+                        server_command_locale(),
+                        &[value.to_owned()],
+                    )
+                })?;
                 Ok(Self::Type(if negate {
                     ValueCondition::NotEquals(entity_type)
                 } else {
@@ -99,11 +115,17 @@ impl FromStr for EntityFilter {
                 }))
             }
             "limit" => {
-                let limit = value
-                    .parse::<usize>()
-                    .map_err(|_| "Invalid limit value".to_string())?;
+                let limit = value.parse::<usize>().map_err(|_| {
+                    tr_plain(
+                        "commands.selector.error.invalid_limit",
+                        server_command_locale(),
+                    )
+                })?;
                 if negate {
-                    return Err("Negation of limit is not allowed".to_string());
+                    return Err(tr_plain(
+                        "commands.selector.error.limit_negation",
+                        server_command_locale(),
+                    ));
                 }
                 Ok(Self::Limit(limit))
             }
@@ -113,14 +135,27 @@ impl FromStr for EntityFilter {
                     "nearest" => EntityFilterSort::Nearest,
                     "furthest" => EntityFilterSort::Furthest,
                     "random" => EntityFilterSort::Random,
-                    _ => return Err(format!("Invalid sort type {value}")),
+                    _ => {
+                        return Err(tr_format(
+                            "commands.selector.error.invalid_sort",
+                            server_command_locale(),
+                            &[value.to_owned()],
+                        ));
+                    }
                 };
                 if negate {
-                    return Err("Negation of sort is not allowed".to_string());
+                    return Err(tr_plain(
+                        "commands.selector.error.sort_negation",
+                        server_command_locale(),
+                    ));
                 }
                 Ok(Self::Sort(sort))
             }
-            _ => Err(format!("Unimplemented key: {key}")),
+            _ => Err(tr_format(
+                "commands.selector.error.unimplemented_key",
+                server_command_locale(),
+                &[key.to_owned()],
+            )),
         }
     }
 }
@@ -167,7 +202,15 @@ impl TargetSelector {
 
     #[must_use]
     pub fn includes_entities(&self) -> bool {
-        let player_type = EntityType::from_name("player").expect("entity type player must exist");
+        let player_type = EntityType::from_name("player").unwrap_or_else(|| {
+            panic!(
+                "{}",
+                tr_plain(
+                    "debug.expect.entity_type_player_must_exist",
+                    server_command_locale(),
+                )
+            )
+        });
         let mut includes_entities = self.base_includes_entities();
 
         for condition in &self.conditions {
@@ -247,7 +290,11 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
         "@n" => EntitySelectorType::NearestEntity,
         _ => {
             return Err(TargetSelectorParseError {
-                message: format!("Invalid target selector type {type_str}"),
+                message: tr_format(
+                    "commands.selector.error.invalid_selector_type",
+                    server_command_locale(),
+                    &[type_str.to_owned()],
+                ),
                 cursor: selector_type_end.saturating_sub(1),
             });
         }
@@ -260,7 +307,10 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
 
     if !arg.ends_with(']') {
         return Err(TargetSelectorParseError {
-            message: "Target selector must end with ]".to_string(),
+            message: tr_plain(
+                "commands.selector.error.missing_bracket",
+                server_command_locale(),
+            ),
             cursor: arg.len(),
         });
     }
@@ -343,7 +393,14 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
-                debug!("Failed to parse target selector '{s}': {e}");
+                debug!(
+                    "{}",
+                    tr_format(
+                        "server.log.failed_parse_target_selector",
+                        server_command_locale(),
+                        &[s.to_string(), e],
+                    )
+                );
                 return Box::pin(async move { None }); // Return a Future resolving to None
             }
         };

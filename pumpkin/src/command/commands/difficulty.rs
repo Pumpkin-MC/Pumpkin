@@ -4,11 +4,11 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{Difficulty, PermissionLvl};
 
-const DESCRIPTION: &str = "Query or change the difficulty of the world.";
+const DESCRIPTION: &str = "commands.difficulty.description";
 const PERMISSION: &str = "minecraft:command.difficulty";
 
 const FAILURE_ERROR_TYPE: CommandErrorType<1> =
@@ -83,7 +83,7 @@ impl CommandExecutor for DifficultySetExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Op(PermissionLvl::Two),

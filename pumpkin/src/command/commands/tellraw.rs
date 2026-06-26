@@ -9,7 +9,7 @@ use crate::command::{
 
 const NAMES: [&str; 1] = ["tellraw"];
 
-const DESCRIPTION: &str = "Send raw message to players.";
+const DESCRIPTION: &str = "commands.tellraw.description";
 
 const ARG_TARGETS: &str = "targets";
 

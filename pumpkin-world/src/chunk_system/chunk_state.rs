@@ -10,6 +10,7 @@ use crate::ProtoChunk;
 use crate::level::SyncChunk;
 
 use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_util::translation::localized_log;
 use std::sync::Mutex;
 
 #[repr(u8)]
@@ -207,14 +208,14 @@ impl Chunk {
     }
     pub fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
         match self {
-            Self::Level(_) => panic!("chunk isn't a ProtoChunk"),
+            Self::Level(_) => panic!("{}", localized_log("debug.panic.chunk_not_proto")),
             Self::Proto(chunk) => chunk,
         }
     }
     #[must_use]
     pub fn get_proto_chunk(&self) -> &ProtoChunk {
         match self {
-            Self::Level(_) => panic!("chunk isn't a ProtoChunk"),
+            Self::Level(_) => panic!("{}", localized_log("debug.panic.chunk_not_proto")),
             Self::Proto(chunk) => chunk,
         }
     }
@@ -243,7 +244,10 @@ impl Chunk {
             })),
         ) {
             Self::Proto(proto) => proto,
-            Self::Level(_) => panic!("Cannot upgrade a Level chunk"),
+            Self::Level(_) => panic!(
+                "{}",
+                localized_log("debug.panic.cannot_upgrade_level_chunk")
+            ),
         };
 
         let proto_chunk = *proto_chunk_box;

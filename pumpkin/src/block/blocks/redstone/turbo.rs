@@ -12,6 +12,7 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use crate::world::World;
+use pumpkin_util::translation::localized_log_format;
 
 use super::get_redstone_power_no_dust;
 
@@ -119,7 +120,10 @@ impl RedstoneWireTurbo {
             3 | 4 => Self::WEST,
             6..=8 => Self::SOUTH,
             _ => {
-                tracing::error!("Invalid turbo heading code: {}", code);
+                tracing::error!(
+                    "{}",
+                    localized_log_format("server.log.invalid_turbo_heading", &[code.to_string()])
+                );
                 Self::NORTH
             }
         }

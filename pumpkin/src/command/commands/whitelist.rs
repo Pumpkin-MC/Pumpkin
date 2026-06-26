@@ -24,7 +24,7 @@ use crate::{
 };
 
 const NAMES: [&str; 1] = ["whitelist"];
-const DESCRIPTION: &str = "Manage server whitelists.";
+const DESCRIPTION: &str = "commands.whitelist.description";
 const ARG_TARGETS: &str = "targets";
 
 async fn kick_non_whitelisted_players(server: &Server) {

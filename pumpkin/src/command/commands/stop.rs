@@ -1,6 +1,6 @@
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
-use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
@@ -10,7 +10,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::stop_server;
 
-const DESCRIPTION: &str = "Stop the server.";
+const DESCRIPTION: &str = "commands.stop.description";
 
 const PERMISSION: &str = "minecraft:command.stop";
 
@@ -38,7 +38,7 @@ impl CommandExecutor for StopCommandExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry.register_permission_or_panic(Permission::new(
+    registry.register_permission_or_panic(super::translated_permission(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Op(PermissionLvl::Four),

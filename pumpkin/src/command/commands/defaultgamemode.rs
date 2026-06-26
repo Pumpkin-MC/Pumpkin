@@ -9,7 +9,7 @@ use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["defaultgamemode"];
 
-const DESCRIPTION: &str = "Change the default gamemode";
+const DESCRIPTION: &str = "commands.defaultgamemode.description";
 
 pub const ARG_GAMEMODE: &str = "gamemode";
 

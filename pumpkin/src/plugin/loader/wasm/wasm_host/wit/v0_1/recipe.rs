@@ -9,6 +9,7 @@ use pumpkin_protocol::codec::recipe::{
     DynamicRecipe, OwnedCookingRecipe, OwnedCookingRecipeType, OwnedCraftingRecipe,
     OwnedRecipeIngredient, OwnedRecipeResult,
 };
+use pumpkin_util::translation::localized_log;
 use wasmtime::component::Resource;
 
 impl RecipeHost for PluginHostState {}
@@ -39,10 +40,11 @@ impl HostRecipeManager for PluginHostState {
             },
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         server
             .recipe_manager
             .add_recipe(DynamicRecipe::Crafting(owned_recipe))
@@ -73,10 +75,11 @@ impl HostRecipeManager for PluginHostState {
             },
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         server
             .recipe_manager
             .add_recipe(DynamicRecipe::Crafting(owned_recipe))
@@ -122,10 +125,11 @@ impl HostRecipeManager for PluginHostState {
             }
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = self.server.as_ref().ok_or_else(|| {
+            wasmtime::Error::msg(localized_log(
+                "debug.expect.plugin_wasm.server_not_available",
+            ))
+        })?;
         server.recipe_manager.add_recipe(dynamic_recipe).await;
         Ok(())
     }

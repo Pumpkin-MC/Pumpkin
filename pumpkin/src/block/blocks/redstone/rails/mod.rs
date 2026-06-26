@@ -10,6 +10,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 use crate::world::World;
+use pumpkin_util::translation::localized_log_format;
 
 mod common;
 
@@ -264,7 +265,13 @@ impl RailProperties {
                     RailShape::AscendingNorth => RailShapeStraight::AscendingNorth,
                     RailShape::AscendingSouth => RailShapeStraight::AscendingSouth,
                     _ => {
-                        tracing::error!("Trying to make a straight rail curved: {:?}", shape);
+                        tracing::error!(
+                            "{}",
+                            localized_log_format(
+                                "server.log.straight_rail_curved",
+                                &[format!("{shape:?}")]
+                            )
+                        );
                         return;
                     }
                 }

@@ -19,6 +19,7 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{fuels::is_fuel, item_stack::ItemStack, screen::WindowType};
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use pumpkin_world::{
     block::entities::{ExperienceContainer, PropertyDelegate},
     inventory::Inventory,
@@ -169,7 +170,13 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
             const FUEL_SLOT: i32 = 1; // Note: Slots 0, 1, 2 are Furnace slots.
             const OUTPUT_SLOT: i32 = 2;
 
-            debug!("FurnaceLikeScreenHandler::quick_move slot_index={slot_index}");
+            debug!(
+                "{}",
+                localized_log_format(
+                    "inventory.furnace_like_screen_handler.quick_move_slot",
+                    &[slot_index.to_string()]
+                )
+            );
 
             let mut stack_left = ItemStack::EMPTY.clone();
 
@@ -213,7 +220,10 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
 
             // Award XP when taking from output slot (slot 2)
             if slot_index == OUTPUT_SLOT {
-                debug!("quick_move: taking from output slot, calling on_take_item");
+                debug!(
+                    "{}",
+                    localized_log("inventory.furnace_like_screen_handler.taking_output_slot")
+                );
                 slot.on_take_item(player, &stack_left).await;
             }
 

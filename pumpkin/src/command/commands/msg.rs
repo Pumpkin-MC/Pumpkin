@@ -17,7 +17,7 @@ use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 3] = ["msg", "tell", "w"];
 
-const DESCRIPTION: &str = "Sends a private message to one or more players.";
+const DESCRIPTION: &str = "commands.msg.description";
 
 const ARG_MESSAGE: &str = "message";
 

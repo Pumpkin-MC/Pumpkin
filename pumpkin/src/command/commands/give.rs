@@ -11,12 +11,13 @@ use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::{CommandExecutor, CommandResult, CommandSender, tr_format, tr_plain};
 use crate::entity::EntityBase;
+use pumpkin_i18n::server_command_locale;
 
 const NAMES: [&str; 1] = ["give"];
 
-const DESCRIPTION: &str = "Give items to player(s).";
+const DESCRIPTION: &str = "commands.give.description";
 
 const ARG_ITEM: &str = "item";
 
@@ -46,12 +47,16 @@ impl CommandExecutor for Executor {
                 Ok(Ok(count)) => count,
                 Ok(Err(err)) => {
                     let err_msg = match err {
-                        NotInBounds::LowerBound(_, min) => {
-                            format!("Can't give less than {min} of {item_name}")
-                        }
-                        NotInBounds::UpperBound(_, max) => {
-                            format!("Can't give more than {max} of {item_name}")
-                        }
+                        NotInBounds::LowerBound(_, min) => tr_format(
+                            "commands.give.cant_give_less",
+                            sender.get_locale(),
+                            &[min.to_string(), item_name.to_string()],
+                        ),
+                        NotInBounds::UpperBound(_, max) => tr_format(
+                            "commands.give.cant_give_more",
+                            sender.get_locale(),
+                            &[max.to_string(), item_name.to_string()],
+                        ),
                     };
 
                     return Err(CommandError::CommandFailed(TextComponent::text(err_msg)));
@@ -65,7 +70,15 @@ impl CommandExecutor for Executor {
                         .find_map(|(id, component)| {
                             (id == &MaxStackSize).then(|| get::<MaxStackSizeImpl>(*component).size)
                         })
-                        .expect("Item should have MaxStackSize component"),
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                tr_plain(
+                                    "debug.expect.item_missing_max_stack_size",
+                                    server_command_locale(),
+                                )
+                            )
+                        }),
                 );
                 let mut remaining = item_count;
 

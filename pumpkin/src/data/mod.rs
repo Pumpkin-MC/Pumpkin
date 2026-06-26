@@ -1,6 +1,8 @@
 use std::{env, fs, path::Path};
 
 use serde::{Deserialize, Serialize};
+
+use crate::{localized_log, localized_log_format};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
@@ -43,22 +45,35 @@ pub trait LoadJSONConfiguration {
     where
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
-        let exe_dir = env::current_dir().expect("Failed to get current directory");
+        let exe_dir = env::current_dir()
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.current_dir_failed")));
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
-            debug!("creating new data root folder");
-            fs::create_dir(&data_dir).expect("Failed to create data root folder");
+            debug!("{}", localized_log("server.log.creating_data_folder"));
+            fs::create_dir(&data_dir).unwrap_or_else(|_| {
+                panic!("{}", localized_log("debug.expect.create_data_root_failed"))
+            });
         }
         let path = data_dir.join(Self::get_path());
 
         let config = if path.exists() {
             let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
-                panic!("Couldn't read configuration file at {}", path.display())
+                panic!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.failed_read_data_config",
+                        &[path.display().to_string()]
+                    )
+                )
             });
 
             serde_json::from_str(&file_content).unwrap_or_else(|err| {
                 panic!(
-                    "Couldn't parse data config at {}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.", path.display(),
+                    "{}",
+                    localized_log_format(
+                        "server.log.failed_parse_data_config",
+                        &[path.display().to_string(), err.to_string()]
+                    )
                 )
             })
         } else {
@@ -66,12 +81,19 @@ pub trait LoadJSONConfiguration {
 
             if let Err(err) = fs::write(
                 &path,
-                serde_json::to_string_pretty(&content)
-                    .expect("Failed to serialize default data config"),
+                serde_json::to_string_pretty(&content).unwrap_or_else(|_| {
+                    panic!(
+                        "{}",
+                        localized_log("debug.expect.serialize_default_data_config_failed",)
+                    )
+                }),
             ) {
                 error!(
-                    "Couldn't write default data config to {}. Reason: {err}. This is probably caused by a config update. Just delete the old data config and restart.",
-                    path.display(),
+                    "{}",
+                    localized_log_format(
+                        "server.log.failed_write_default_data_config",
+                        &[path.display().to_string(), err.to_string()]
+                    )
                 );
             }
 
@@ -92,11 +114,14 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
     where
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
-        let exe_dir = env::current_dir().expect("Failed to get current directory");
+        let exe_dir = env::current_dir()
+            .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.current_dir_failed")));
         let data_dir = exe_dir.join(DATA_FOLDER);
         if !data_dir.exists() {
-            debug!("creating new data root folder");
-            fs::create_dir(&data_dir).expect("Failed to create data root folder");
+            debug!("{}", localized_log("server.log.creating_data_folder"));
+            fs::create_dir(&data_dir).unwrap_or_else(|_| {
+                panic!("{}", localized_log("debug.expect.create_data_root_failed"))
+            });
         }
         let path = data_dir.join(Self::get_path());
 
@@ -104,8 +129,11 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
             Ok(content) => content,
             Err(err) => {
                 warn!(
-                    "Couldn't serialize operator data config to {}. Reason: {err}",
-                    path.display()
+                    "{}",
+                    localized_log_format(
+                        "server.log.failed_serialize_operator_config",
+                        &[path.display().to_string(), err.to_string()]
+                    )
                 );
                 return;
             }
@@ -113,8 +141,11 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
 
         if let Err(err) = std::fs::write(&path, content) {
             warn!(
-                "Couldn't write operator config to {}. Reason: {err}",
-                path.display()
+                "{}",
+                localized_log_format(
+                    "server.log.failed_write_operator_config",
+                    &[path.display().to_string(), err.to_string()]
+                )
             );
         }
     }

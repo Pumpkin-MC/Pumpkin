@@ -13,6 +13,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::translation::{localized_log, localized_log_format};
+
 /// Represents the claims extracted from a Minecraft Bedrock player's JWT token.
 ///
 /// This struct contains the player's display name, UUID, and XUID.
@@ -105,9 +107,9 @@ pub fn build_public_key_from_b64(b64: &str) -> Result<PublicKey, AuthError> {
         sec1.extend_from_slice(&bytes);
         PublicKey::from_sec1_bytes(&sec1).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
     } else {
-        Err(AuthError::PublicKeyBuild(format!(
-            "Unsupported key format/length: {} bytes",
-            bytes.len()
+        Err(AuthError::PublicKeyBuild(localized_log_format(
+            "auth.jwt.unsupported_key_format",
+            &[bytes.len().to_string()],
         )))
     }
 }
@@ -154,25 +156,26 @@ pub struct Jwk {
 impl Jwk {
     pub fn to_ec_public_key(&self) -> Result<PublicKey, AuthError> {
         if self.kty != "EC" {
-            return Err(AuthError::PublicKeyBuild(format!(
-                "Unsupported JWK kty for EC: {}",
-                self.kty
+            return Err(AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.unsupported_kty_ec",
+                std::slice::from_ref(&self.kty),
             )));
         }
 
         if let Some(ref crv) = self.crv
             && crv != "P-384"
         {
-            return Err(AuthError::PublicKeyBuild(format!(
-                "Unsupported JWK crv: {crv}"
+            return Err(AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.unsupported_crv",
+                std::slice::from_ref(crv),
             )));
         }
 
         let x = self.x.as_ref().ok_or_else(|| {
-            AuthError::PublicKeyBuild("JWK missing x coordinate for EC key".into())
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.missing_x_coordinate"))
         })?;
         let y = self.y.as_ref().ok_or_else(|| {
-            AuthError::PublicKeyBuild("JWK missing y coordinate for EC key".into())
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.missing_y_coordinate"))
         })?;
 
         let x_bytes = decode_b64_url_nopad(x)?;
@@ -194,18 +197,17 @@ impl Jwk {
 
     pub fn to_rsa_public_key(&self) -> Result<rsa::RsaPublicKey, AuthError> {
         if self.kty != "RSA" {
-            return Err(AuthError::PublicKeyBuild(format!(
-                "Unsupported JWK kty for RSA: {}",
-                self.kty
+            return Err(AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.unsupported_kty_rsa",
+                std::slice::from_ref(&self.kty),
             )));
         }
 
-        let n = self
-            .n
-            .as_ref()
-            .ok_or_else(|| AuthError::PublicKeyBuild("JWK missing n modulus for RSA key".into()))?;
+        let n = self.n.as_ref().ok_or_else(|| {
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.missing_n_modulus"))
+        })?;
         let e = self.e.as_ref().ok_or_else(|| {
-            AuthError::PublicKeyBuild("JWK missing e exponent for RSA key".into())
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.missing_e_exponent"))
         })?;
 
         let n_bytes = decode_b64_url_nopad(n)?;
@@ -219,18 +221,19 @@ impl Jwk {
     }
 }
 
-pub const OIDC_ISSUER: &str = "https://identity.minecraft-services.net";
-pub const OIDC_AUDIENCE: &str = "api://auth-minecraft-services/multiplayer";
-pub const OIDC_DISCOVERY_URL: &str =
-    "https://client.discovery.minecraft-services.net/api/v1.0/discovery/MinecraftPE/builds/1.0.0.0";
-
 pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
-    let discovery: Value = ureq::get(OIDC_DISCOVERY_URL)
+    let discovery_url = localized_log("auth.jwt.oidc_discovery_url");
+    let discovery: Value = ureq::get(&discovery_url)
         .call()
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
         .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
+        .map_err(|e| {
+            AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.failed_read_response",
+                &[e.to_string()],
+            ))
+        })
         .and_then(|s| {
             serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
         })?;
@@ -242,7 +245,9 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .and_then(|v| v.get("prod"))
         .and_then(|v| v.get("serviceUri"))
         .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::PublicKeyBuild("Discovery missing serviceUri".into()))?;
+        .ok_or_else(|| {
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.discovery_missing_service_uri"))
+        })?;
 
     let openid_config_url = format!("{service_uri}/.well-known/openid-configuration");
     let openid_config: Value = ureq::get(&openid_config_url)
@@ -250,7 +255,12 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
         .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
+        .map_err(|e| {
+            AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.failed_read_response",
+                &[e.to_string()],
+            ))
+        })
         .and_then(|s| {
             serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
         })?;
@@ -258,12 +268,14 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
     let jwks_uri = openid_config
         .get("jwks_uri")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::PublicKeyBuild("OpenID config missing jwks_uri".into()))?;
+        .ok_or_else(|| {
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.openid_missing_jwks_uri"))
+        })?;
 
     let issuer = openid_config
         .get("issuer")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::PublicKeyBuild("OpenID config missing issuer".into()))?
+        .ok_or_else(|| AuthError::PublicKeyBuild(localized_log("auth.jwt.openid_missing_issuer")))?
         .to_string();
 
     let jwks: Jwks = ureq::get(jwks_uri)
@@ -271,7 +283,12 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
         .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
+        .map_err(|e| {
+            AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.failed_read_response",
+                &[e.to_string()],
+            ))
+        })
         .and_then(|s| {
             serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
         })?;
@@ -293,28 +310,28 @@ pub fn verify_oidc_token(
 
     let header_bytes = decode_b64_url_nopad(header_b64)?;
     let header: Value = serde_json::from_slice(&header_bytes)?;
-    let kid = header
-        .get("kid")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing kid".into()))?;
-    let alg = header
-        .get("alg")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing alg".into()))?;
+    let kid = header.get("kid").and_then(|v| v.as_str()).ok_or_else(|| {
+        AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_header_missing_kid"))
+    })?;
+    let alg = header.get("alg").and_then(|v| v.as_str()).ok_or_else(|| {
+        AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_header_missing_alg"))
+    })?;
 
-    let jwk = jwks
-        .keys
-        .iter()
-        .find(|k| k.kid == kid)
-        .ok_or_else(|| AuthError::PublicKeyBuild(format!("Key not found in JWKS: {kid}")))?;
+    let jwk = jwks.keys.iter().find(|k| k.kid == kid).ok_or_else(|| {
+        AuthError::PublicKeyBuild(localized_log_format(
+            "auth.jwt.key_not_found_in_jwks",
+            &[kid.to_string()],
+        ))
+    })?;
 
     if alg == "ES384" {
         verify_es384_signature(&jwk.to_ec_public_key()?, &signing_input, signature_b64)?;
     } else if alg == "RS256" {
         verify_rs256_signature(jwk, &signing_input, signature_b64)?;
     } else {
-        return Err(AuthError::PublicKeyBuild(format!(
-            "Unsupported OIDC algorithm: {alg}"
+        return Err(AuthError::PublicKeyBuild(localized_log_format(
+            "auth.jwt.unsupported_oidc_algorithm",
+            &[alg.to_string()],
         )));
     }
 
@@ -336,22 +353,24 @@ pub fn verify_oidc_token_self_signed(token: &str) -> Result<PlayerClaims, AuthEr
 
     let header_bytes = decode_b64_url_nopad(header_b64)?;
     let header: Value = serde_json::from_slice(&header_bytes)?;
-    let alg = header
-        .get("alg")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing alg".into()))?;
+    let alg = header.get("alg").and_then(|v| v.as_str()).ok_or_else(|| {
+        AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_header_missing_alg"))
+    })?;
     if alg == "ES384" {
         verify_es384_signature(
             &PublicKey::from_public_key_der(&decode_b64_standard(&decode_header_get_x5u(
                 header_b64,
             )?)?)
-            .map_err(|_| AuthError::PublicKeyBuild("Couldn't build public key from x5u".into()))?,
+            .map_err(|_| {
+                AuthError::PublicKeyBuild(localized_log("auth.jwt.couldnt_build_public_key"))
+            })?,
             &signing_input,
             signature_b64,
         )?;
     } else {
-        return Err(AuthError::PublicKeyBuild(format!(
-            "Unsupported OIDC algorithm (for self-signed): {alg}"
+        return Err(AuthError::PublicKeyBuild(localized_log_format(
+            "auth.jwt.unsupported_self_signed_algorithm",
+            &[alg.to_string()],
         )));
     }
 
@@ -401,43 +420,48 @@ fn verify_rs256_signature(
 
 fn verify_oidc_claims(payload: &Value, expected_issuer: Option<&str>) -> Result<(), AuthError> {
     if let Some(expected_issuer) = expected_issuer {
-        let iss = payload
-            .get("iss")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing iss".into()))?;
+        let iss = payload.get("iss").and_then(|v| v.as_str()).ok_or_else(|| {
+            AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_payload_missing_iss"))
+        })?;
         if iss != expected_issuer {
-            return Err(AuthError::PublicKeyBuild(format!(
-                "OIDC issuer mismatch: expected {expected_issuer}, got {iss}"
+            return Err(AuthError::PublicKeyBuild(localized_log_format(
+                "auth.jwt.oidc_issuer_mismatch",
+                &[expected_issuer.to_string(), iss.to_string()],
             )));
         }
     }
 
-    let aud = payload
-        .get("aud")
-        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing aud".into()))?;
+    let aud = payload.get("aud").ok_or_else(|| {
+        AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_payload_missing_aud"))
+    })?;
+    let oidc_audience = localized_log("auth.jwt.oidc_audience");
     let aud_match = aud.as_str().map_or_else(
         || {
-            aud.as_array()
-                .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE)))
+            aud.as_array().is_some_and(|arr| {
+                arr.iter()
+                    .any(|v| v.as_str() == Some(oidc_audience.as_str()))
+            })
         },
-        |s| s == OIDC_AUDIENCE,
+        |s| s == oidc_audience.as_str(),
     );
     if !aud_match {
-        return Err(AuthError::PublicKeyBuild(format!(
-            "OIDC audience mismatch: expected {OIDC_AUDIENCE}, got {aud:?}"
+        return Err(AuthError::PublicKeyBuild(localized_log_format(
+            "auth.jwt.oidc_audience_mismatch",
+            &[oidc_audience, format!("{aud:?}")],
         )));
     }
 
-    let exp = payload
-        .get("exp")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing exp".into()))?;
+    let exp = payload.get("exp").and_then(Value::as_u64).ok_or_else(|| {
+        AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_payload_missing_exp"))
+    })?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
     if now > exp {
-        return Err(AuthError::PublicKeyBuild("OIDC token expired".into()));
+        return Err(AuthError::PublicKeyBuild(localized_log(
+            "auth.jwt.oidc_token_expired",
+        )));
     }
 
     Ok(())

@@ -9,6 +9,7 @@ use pumpkin_data::recipes::{
     RecipeIngredientTypes, RecipeResultStruct,
 };
 use pumpkin_macros::java_packet;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
@@ -114,8 +115,12 @@ fn write_item_stack_slot_display(
     version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
-    let static_item = Item::from_id(item.id)
-        .ok_or_else(|| WritingError::Message(format!("item id {} must exist", item.id)))?;
+    let static_item = Item::from_id(item.id).ok_or_else(|| {
+        WritingError::Message(localized_log_format(
+            "protocol.recipe_book.item_id_must_exist",
+            &[item.id.to_string()],
+        ))
+    })?;
     ItemStackSerializer::from(ItemStack::new(count, static_item))
         .write_with_version(write, &version)
 }
@@ -255,8 +260,12 @@ fn write_result_slot_display(
 
 fn write_optional_var_int(write: &mut impl Write, value: Option<i32>) -> Result<(), WritingError> {
     let encoded = value.map_or(Ok(0), |v| {
-        v.checked_add(1)
-            .ok_or_else(|| WritingError::Message(format!("group id {v} overflow")))
+        v.checked_add(1).ok_or_else(|| {
+            WritingError::Message(localized_log_format(
+                "protocol.recipe_book.group_id_overflow",
+                &[v.to_string()],
+            ))
+        })
     })?;
     write.write_var_int(&VarInt(encoded))?;
     Ok(())

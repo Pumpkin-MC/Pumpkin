@@ -16,8 +16,9 @@ use std::{
     io::Read,
     net::{IpAddr, SocketAddr},
 };
-use thiserror::Error;
 use tracing::debug;
+
+use pumpkin_util::translation::{localized_log, localized_log_format};
 
 use crate::net::{GameProfile, java::JavaClient};
 
@@ -26,27 +27,69 @@ type HmacSha256 = Hmac<Sha256>;
 const MAX_SUPPORTED_FORWARDING_VERSION: u8 = 4;
 const PLAYER_INFO_CHANNEL: &str = "velocity:player_info";
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum VelocityError {
-    #[error("No response data received")]
     NoData,
-    #[error("Unable to verify player details")]
     FailedVerifyIntegrity,
-    #[error("Failed to read forward version")]
     FailedReadForwardVersion,
-    #[error("Unsupported forwarding version {0}. Maximum supported version is {1}")]
     UnsupportedForwardVersion(u8, u8),
-    #[error("Failed to read address")]
     FailedReadAddress,
-    #[error("Failed to parse address")]
     FailedParseAddress,
-    #[error("Failed to read game profile name")]
     FailedReadProfileName,
-    #[error("Failed to read game profile UUID")]
     FailedReadProfileUUID,
-    #[error("Failed to read game profile properties")]
     FailedReadProfileProperties,
 }
+
+impl std::fmt::Display for VelocityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoData => write!(f, "{}", localized_log("proxy.velocity.no_data")),
+            Self::FailedVerifyIntegrity => write!(
+                f,
+                "{}",
+                localized_log("proxy.velocity.failed_verify_integrity")
+            ),
+            Self::FailedReadForwardVersion => write!(
+                f,
+                "{}",
+                localized_log("proxy.velocity.failed_read_forward_version")
+            ),
+            Self::UnsupportedForwardVersion(version, max) => write!(
+                f,
+                "{}",
+                localized_log_format(
+                    "proxy.velocity.unsupported_forward_version",
+                    &[version.to_string(), max.to_string()],
+                )
+            ),
+            Self::FailedReadAddress => {
+                write!(f, "{}", localized_log("proxy.velocity.failed_read_address"))
+            }
+            Self::FailedParseAddress => write!(
+                f,
+                "{}",
+                localized_log("proxy.velocity.failed_parse_address")
+            ),
+            Self::FailedReadProfileName => write!(
+                f,
+                "{}",
+                localized_log("proxy.velocity.failed_read_profile_name")
+            ),
+            Self::FailedReadProfileUUID => write!(
+                f,
+                "{}",
+                localized_log("proxy.velocity.failed_read_profile_uuid")
+            ),
+            Self::FailedReadProfileProperties => write!(
+                f,
+                "{}",
+                localized_log("proxy.velocity.failed_read_profile_properties")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for VelocityError {}
 
 pub async fn velocity_login(client: &JavaClient) {
     // TODO: Validate the packet transaction id from the plugin response with this
@@ -67,8 +110,8 @@ pub async fn velocity_login(client: &JavaClient) {
 pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     let (signature, data_without_signature) = data;
     // Our fault, we can panic/expect?
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .unwrap_or_else(|_| panic!("{}", localized_log("debug.expect.hmac_key_any_size")));
     mac.update(data_without_signature);
     mac.verify_slice(signature).is_ok()
 }
@@ -110,7 +153,7 @@ pub fn receive_velocity_plugin_response(
     config: &VelocityConfig,
     response: SLoginPluginResponse,
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
-    debug!("Received velocity response");
+    debug!("{}", localized_log("server.log.velocity_response_received"));
     if let Some(data) = response.data {
         let (signature, mut data_without_signature) = data.split_at(32);
 

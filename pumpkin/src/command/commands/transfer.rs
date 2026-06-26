@@ -11,13 +11,16 @@ use crate::command::args::simple::SimpleArgConsumer;
 use crate::command::args::{Arg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{self, InvalidConsumption, InvalidRequirement};
 use crate::command::tree::builder::{argument, argument_default_name, require};
-use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::command::{
+    CommandExecutor, CommandSender, args::ConsumedArgs, tr_plain, tree::CommandTree,
+};
 use crate::entity::EntityBase;
 use crate::net::ClientPlatform;
+use pumpkin_util::translation::localized_log_format;
 
 const NAMES: [&str; 1] = ["transfer"];
 
-const DESCRIPTION: &str = "Triggers a transfer of a player to another server.";
+const DESCRIPTION: &str = "commands.transfer.description";
 
 const ARG_HOSTNAME: &str = "hostname";
 
@@ -48,15 +51,27 @@ impl CommandExecutor for TargetSelfExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    return Err(InvalidConsumption(Some(
-                        "Port must be between 1 and 65535.".into(),
-                    )));
+                    return Err(InvalidConsumption(Some(tr_plain(
+                        "commands.transfer.port.invalid_range",
+                        sender.get_locale(),
+                    ))));
                 }
             };
 
             if let CommandSender::Player(player) = sender {
                 let name = &player.gameprofile.name;
-                info!("[{name}: Transferring {name} to {hostname}:{port}]");
+                info!(
+                    "{}",
+                    localized_log_format(
+                        "server.transfer.player_transferring",
+                        &[
+                            name.clone(),
+                            name.clone(),
+                            hostname.to_string(),
+                            port.to_string()
+                        ]
+                    )
+                );
 
                 match &player.client {
                     ClientPlatform::Java(client) => {
@@ -102,9 +117,10 @@ impl CommandExecutor for TargetPlayerExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    return Err(InvalidConsumption(Some(
-                        "Port must be between 1 and 65535.".into(),
-                    )));
+                    return Err(InvalidConsumption(Some(tr_plain(
+                        "commands.transfer.port.invalid_range",
+                        sender.get_locale(),
+                    ))));
                 }
             };
 

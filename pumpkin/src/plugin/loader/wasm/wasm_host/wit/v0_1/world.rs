@@ -26,6 +26,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
+use pumpkin_util::translation::localized_log_format;
 
 pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
     match dir {
@@ -130,7 +131,12 @@ impl PluginHostState {
         let index = names
             .iter()
             .position(|n| n.strip_prefix("minecraft:").unwrap_or(n) == biome.registry_id)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown biome: {}", biome.registry_id)))?;
+            .ok_or_else(|| {
+                wasmtime::Error::msg(localized_log_format(
+                    "plugin.wasm.world.unknown_biome",
+                    &[biome.registry_id.to_owned()],
+                ))
+            })?;
 
         // Safety: The WIT enum is generated from the sorted keys of assets/biome.json.
         Ok(unsafe { std::mem::transmute::<u8, pumpkin::plugin::biomes::Biome>(index as u8) })
@@ -454,8 +460,12 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
         let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name).ok_or_else(|| {
+            wasmtime::Error::msg(localized_log_format(
+                "plugin.wasm.world.unknown_sound",
+                std::slice::from_ref(&sound_name),
+            ))
+        })?;
 
         let internal_category = match category {
             pumpkin::plugin::world::SoundCategory::Master => {
@@ -512,7 +522,12 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let world_ref = self.get_world_res(&world)?;
         let particle_name = format!("{particle:?}").to_lowercase().replace('_', "-");
         let particle_data = pumpkin_data::particle::Particle::from_name(&particle_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle_name}")))?;
+            .ok_or_else(|| {
+                wasmtime::Error::msg(localized_log_format(
+                    "plugin.wasm.world.unknown_particle",
+                    std::slice::from_ref(&particle_name),
+                ))
+            })?;
 
         world_ref.provider.spawn_particle(
             pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
@@ -633,11 +648,19 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         names.sort();
 
         let type_name = names.get(entity_type as usize).ok_or_else(|| {
-            wasmtime::Error::msg(format!("Invalid entity type index: {}", entity_type as u8))
+            wasmtime::Error::msg(localized_log_format(
+                "plugin.wasm.world.invalid_entity_type_index",
+                &[(entity_type as u8).to_string()],
+            ))
         })?;
 
-        let internal_type = pumpkin_data::entity::EntityType::from_name(type_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type: {type_name}")))?;
+        let internal_type =
+            pumpkin_data::entity::EntityType::from_name(type_name).ok_or_else(|| {
+                wasmtime::Error::msg(localized_log_format(
+                    "plugin.wasm.world.invalid_entity_type",
+                    std::slice::from_ref(type_name),
+                ))
+            })?;
 
         let internal_pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
         let entity = crate::entity::r#type::from_type(

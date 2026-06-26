@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 pumpkin-nbt.workspace = true
 pumpkin-codecs.workspace = true
+pumpkin-i18n.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 bytes.workspace = true

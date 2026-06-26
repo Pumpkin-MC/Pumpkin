@@ -23,6 +23,7 @@ use crate::command::CommandSender;
 use crate::command::string_reader::StringReader;
 use crate::command::tree::NodeType;
 use crate::server::Server;
+use pumpkin_util::translation::localized_log_format;
 
 #[macro_export]
 macro_rules! log_at_level {
@@ -115,8 +116,11 @@ impl GzipRollingLogger {
         // If latest.log exists, we will gzip it
         if latest_path.exists() {
             eprintln!(
-                "Found existing log file at '{}', gzipping it now...",
-                latest_path.display()
+                "{}",
+                localized_log_format(
+                    "server.logging.gzip_existing_log_file",
+                    &[latest_path.display().to_string()],
+                )
             );
 
             let new_gz_path = Self::new_filename(true)?;
@@ -184,14 +188,22 @@ impl GzipRollingLogger {
 
         if let Some((path, _)) = oldest_log {
             eprintln!(
-                "Max log ids ({MAX_ATTEMPTS}) used for {date_format}; overwriting oldest log file: {}",
-                path.display()
+                "{}",
+                localized_log_format(
+                    "server.logging.max_log_ids_used",
+                    &[
+                        MAX_ATTEMPTS.to_string(),
+                        date_format,
+                        path.display().to_string(),
+                    ],
+                )
             );
             return Ok(path);
         }
 
-        Err(format!(
-            "Failed to find a unique log filename for date {date_format} after {MAX_ATTEMPTS} attempts.",
+        Err(localized_log_format(
+            "server.logging.failed_unique_log_filename",
+            &[date_format, MAX_ATTEMPTS.to_string()],
         )
         .into())
     }
@@ -286,7 +298,10 @@ where
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
-                    eprintln!("Failed to rotate log: {e}");
+                    eprintln!(
+                        "{}",
+                        localized_log_format("server.logging.failed_rotate_log", &[e.to_string()])
+                    );
                 }
             }
         }

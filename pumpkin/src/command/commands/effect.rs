@@ -7,13 +7,14 @@ use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::{CommandExecutor, CommandResult, CommandSender, tr_plain};
 use crate::entity::EntityBase;
 use pumpkin_data::potion::Effect;
+use pumpkin_i18n::server_command_locale;
 
 const NAMES: [&str; 1] = ["effect"];
 
-const DESCRIPTION: &str = "Adds or removes the status effects of players and other entities.";
+const DESCRIPTION: &str = "commands.effect.description";
 
 const ARG_CLEAR: &str = "clear";
 const ARG_GIVE: &str = "give";
@@ -38,6 +39,7 @@ enum Amplifier {
 struct GiveExecutor(Time, Amplifier, bool);
 
 impl CommandExecutor for GiveExecutor {
+    #[allow(clippy::too_many_lines)]
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -93,7 +95,15 @@ impl CommandExecutor for GiveExecutor {
                         .living_entity
                         .get_effect(effect)
                         .await
-                        .expect("Effect should exist because has_effect returned true")
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{}",
+                                tr_plain(
+                                    "debug.expect.effect_should_exist",
+                                    server_command_locale(),
+                                )
+                            )
+                        })
                         .amplifier
                         >= amplifier
                 {

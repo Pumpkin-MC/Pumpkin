@@ -15,8 +15,10 @@ use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::tree::Command;
+use crate::command::{tr_format, tr_plain};
 use futures::future;
 use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
@@ -228,7 +230,12 @@ impl CommandDispatcher {
                     .errors
                     .values()
                     .next()
-                    .expect("Errors length is 1, so next should exist")
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{}",
+                            tr_plain("debug.expect.node_errors_next", server_command_locale(),)
+                        )
+                    })
                     .clone())
             } else if parsed.context.range.is_empty() {
                 Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
@@ -363,7 +370,15 @@ impl CommandDispatcher {
 
                     (a_reader_remaining, a_has_errors).cmp(&(b_reader_remaining, b_has_errors))
                 })
-                .expect("Potentials list is not empty")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        tr_plain(
+                            "debug.expect.node_potentials_not_empty",
+                            server_command_locale(),
+                        )
+                    )
+                })
         }
     }
 
@@ -638,8 +653,12 @@ impl CommandDispatcher {
                     }
                 } else {
                     warn!(
-                        "Command /{} does not have a permission set up",
-                        &command_tree.names[0]
+                        "{}",
+                        tr_format(
+                            "commands.dispatcher.warn.no_permission",
+                            server_command_locale(),
+                            &[command_tree.names[0].clone()],
+                        )
                     );
                 }
             }
@@ -822,6 +841,7 @@ impl CommandDispatcher {
     }
 
     /// Internal function to recurse usages.
+    #[allow(clippy::too_many_lines)]
     fn get_usage_recursive<'a>(
         &'a self,
         node: NodeId,
@@ -902,10 +922,16 @@ impl CommandDispatcher {
                             }
                         }
                         if child_usages.len() == 1 {
-                            let mut child_usage = child_usages
-                                .into_iter()
-                                .next()
-                                .expect("Child usages length is 1, so next should exist");
+                            let mut child_usage =
+                                child_usages.into_iter().next().unwrap_or_else(|| {
+                                    panic!(
+                                        "{}",
+                                        tr_plain(
+                                            "debug.expect.node_child_usages_next",
+                                            server_command_locale(),
+                                        )
+                                    )
+                                });
                             if is_optional {
                                 child_usage = format!(
                                     "{USAGE_OPTIONAL_OPEN}{child_usage}{USAGE_OPTIONAL_CLOSE}"

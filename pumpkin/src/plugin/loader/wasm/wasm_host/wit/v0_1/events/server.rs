@@ -20,12 +20,16 @@ use crate::plugin::{
         server_tick_start::ServerTickStartEvent,
     },
 };
+use pumpkin_util::translation::localized_log;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player_res = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         let packet = match &self.player.client {
             ClientPlatform::Java(client) => {
@@ -61,19 +65,26 @@ impl ToFromWasmEvent for PacketReceivedEvent {
                 // TODO: Implement converting from WIT variant back to raw if needed.
                 // For now, we only support cancellation.
                 panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
+                    "{}",
+                    localized_log("debug.panic.plugin_wasm.modify_packets_unsupported_simple")
                 );
             }
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for PacketSentEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player_res = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         let packet = match &self.player.client {
             ClientPlatform::Java(_) => {
@@ -98,9 +109,15 @@ impl ToFromWasmEvent for PacketSentEvent {
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::PacketSentEvent(_) => {
-                panic!("Modifying packets from WASM is not yet supported.");
+                panic!(
+                    "{}",
+                    localized_log("debug.panic.plugin_wasm.modify_packets_unsupported")
+                );
             }
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -119,7 +136,10 @@ impl ToFromWasmEvent for ServerCommandEvent {
                 command: data.command,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -128,10 +148,20 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let message = state
             .add_text_component(self.message.clone())
-            .expect("failed to add text-component resource");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
         let sender = state
             .add_text_component(self.sender.clone())
-            .expect("failed to add text-component resource");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_text_component_resource",)
+                )
+            });
 
         Event::ServerBroadcastEvent(ServerBroadcastEventData {
             message,
@@ -147,7 +177,10 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
                 sender: consume_text_component(state, &data.sender),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -166,7 +199,10 @@ impl ToFromWasmEvent for ServerTickEndEvent {
                 tick: data.tick,
                 duration_nanos: data.duration_nanos,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -179,7 +215,10 @@ impl ToFromWasmEvent for ServerTickStartEvent {
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerTickStartEvent(data) => Self { tick: data.tick },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }

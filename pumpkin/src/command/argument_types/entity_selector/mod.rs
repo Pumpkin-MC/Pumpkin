@@ -15,6 +15,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
+use pumpkin_util::translation::localized_log;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -164,7 +165,9 @@ impl EntitySelector {
         if list.len() == 1 {
             Ok(list
                 .first()
-                .expect("List length is 1, so first should exist")
+                .unwrap_or_else(|| {
+                    panic!("{}", localized_log("debug.expect.list_first_should_exist"))
+                })
                 .clone())
         } else {
             Err(entity::NO_PLAYERS_ERROR_TYPE.create_without_context())

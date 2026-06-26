@@ -4,6 +4,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     math::position::BlockPos,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
+    translation::{localized_log, localized_log_format},
 };
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -150,15 +151,22 @@ where
         let delay = get_int("t")? as u8;
 
         let priority = TickPriority::try_from(get_int("p")?)
-            .map_err(|_| D::Error::custom("Invalid tick priority"))?;
+            .map_err(|_| D::Error::custom(localized_log("world.tick.invalid_priority")))?;
 
         let res_loc_str = get_str("i")?;
         let res_loc = ResourceLocation::from_str(res_loc_str).map_err(|e| {
-            D::Error::custom(format!("Invalid ResourceLocation '{res_loc_str}': {e}"))
+            D::Error::custom(localized_log_format(
+                "world.tick.invalid_resource_location",
+                &[res_loc_str.to_owned(), e.to_string()],
+            ))
         })?;
 
-        let value = T::from_resource_location(&res_loc)
-            .ok_or_else(|| D::Error::custom(format!("Unknown tick type: {res_loc_str}")))?;
+        let value = T::from_resource_location(&res_loc).ok_or_else(|| {
+            D::Error::custom(localized_log_format(
+                "world.tick.unknown_type",
+                &[res_loc_str.to_owned()],
+            ))
+        })?;
 
         Ok(Self {
             delay,

@@ -20,6 +20,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::registry::RegistryEntryList;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use serde::de::SeqAccess;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, de};
@@ -126,9 +127,14 @@ impl Clone for Box<dyn DataComponentImpl> {
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
     value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
         panic!(
-            "you are trying to cast {} to {}",
-            value.get_self_enum().to_name(),
-            T::get_enum().to_name()
+            "{}",
+            localized_log_format(
+                "debug.panic.data_component_invalid_cast",
+                &[
+                    value.get_self_enum().to_name().to_string(),
+                    T::get_enum().to_name().to_string()
+                ]
+            )
         )
     })
 }
@@ -342,9 +348,12 @@ fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<SoundEvent> {
         let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
         IdOr::Id(Sound::from_name(sound).unwrap_or(default))
     } else if let Some(sound_compound) = nbt.get_compound(key) {
-        let sound_name = sound_compound
-            .get_string("sound_id")
-            .expect("SoundEvent compound must have a 'sound_id' field");
+        let sound_name = sound_compound.get_string("sound_id").unwrap_or_else(|| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.sound_event_missing_sound_id")
+            )
+        });
         let range = sound_compound.get_float("range");
         IdOr::Value(SoundEvent {
             sound_name: sound_name.to_string(),

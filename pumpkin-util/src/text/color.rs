@@ -1,4 +1,5 @@
 use colored::{ColoredString, Colorize};
+use pumpkin_i18n::{get_translation, server_global_locale};
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// Text color for chat components.
@@ -59,22 +60,40 @@ impl<'de> Deserialize<'de> for Color {
             Ok(Self::Reset)
         } else if let Some(hex) = s.strip_prefix('#') {
             if s.len() != 7 {
-                return Err(serde::de::Error::custom(
-                    "Hex color must be in the format '#RRGGBB'",
-                ));
+                return Err(serde::de::Error::custom(get_translation(
+                    "pumpkin:text.color.hex_format_invalid",
+                    server_global_locale(),
+                )));
             }
 
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|_| serde::de::Error::custom("Invalid red component in hex color"))?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|_| serde::de::Error::custom("Invalid green component in hex color"))?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|_| serde::de::Error::custom("Invalid blue component in hex color"))?;
+            let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| {
+                serde::de::Error::custom(get_translation(
+                    "pumpkin:text.color.invalid_red_component",
+                    server_global_locale(),
+                ))
+            })?;
+            let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| {
+                serde::de::Error::custom(get_translation(
+                    "pumpkin:text.color.invalid_green_component",
+                    server_global_locale(),
+                ))
+            })?;
+            let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| {
+                serde::de::Error::custom(get_translation(
+                    "pumpkin:text.color.invalid_blue_component",
+                    server_global_locale(),
+                ))
+            })?;
 
             Ok(Self::Rgb(RGBColor::new(r, g, b)))
         } else {
             Ok(Self::Named(NamedColor::try_from(s.as_str()).map_err(
-                |()| serde::de::Error::custom("Invalid named color"),
+                |()| {
+                    serde::de::Error::custom(get_translation(
+                        "pumpkin:text.color.invalid_named_color",
+                        server_global_locale(),
+                    ))
+                },
             )?))
         }
     }

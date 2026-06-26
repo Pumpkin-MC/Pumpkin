@@ -7,6 +7,7 @@ use crate::{
         blocks::skull_block::SkullBlock,
     },
     entity::{Entity, boss::wither::WitherEntity},
+    localized_log_format,
 };
 
 pub struct WitherSkeletonSkullBlock;
@@ -39,7 +40,13 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                         1 => pos.offset(opposite.to_offset()),
                         2 => pos.offset(dir.to_offset()),
                         _ => {
-                            tracing::error!("Invalid offset in wither skull check: {}", offset);
+                            tracing::error!(
+                                "{}",
+                                localized_log_format(
+                                    "server.log.invalid_offset_wither_skull",
+                                    &[offset.to_string()]
+                                )
+                            );
                             *pos
                         }
                     };

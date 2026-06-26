@@ -4,18 +4,20 @@ use crate::command::tree::builder::literal;
 use crate::command::{
     CommandError, CommandExecutor, CommandSender,
     args::{Arg, ConsumedArgs},
+    tr,
     tree::{CommandTree, builder::argument},
 };
 use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
+use pumpkin_i18n::server_command_locale;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
 const NAMES: [&str; 1] = ["data"];
-const DESCRIPTION: &str = "Query and modify data of entities and blocks";
+const DESCRIPTION: &str = "commands.data.description";
 
 const ARG_ENTITY: &str = "entity";
 
@@ -43,10 +45,14 @@ impl CommandExecutor for GetEntityDataExecutor {
 }
 
 #[expect(clippy::too_many_lines)]
-pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, String> {
+pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, TextComponent> {
     let folded = TextComponent::text("<...>").color_named(NamedColor::Gray);
     match tag {
-        NbtTag::End => Err("Unexpected end tag".into()),
+        NbtTag::End => Err(tr(
+            "commands.data.error.unexpected_end_tag",
+            server_command_locale(),
+            [],
+        )),
         NbtTag::Byte(value) => {
             let byte_format = TextComponent::text("b").color_named(NamedColor::Red);
             Ok(TextComponent::text(format!("{value}"))
@@ -125,8 +131,14 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                 let mut content = TextComponent::text("[");
 
                 for (index, item) in value.iter().take(128).enumerate() {
-                    let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.[{index}]: {string}"))?;
+                    let item_display =
+                        snbt_colorful_display(item, depth + 1).map_err(|message| {
+                            tr(
+                                "commands.data.error.display_item",
+                                server_command_locale(),
+                                [TextComponent::text(index.to_string()), message],
+                            )
+                        })?;
                     content = content.add_child(item_display);
 
                     if index < value.len() - 1 {
@@ -153,8 +165,14 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                 let mut content = TextComponent::text("{");
 
                 for (index, (key, item)) in value.child_tags.iter().take(128).enumerate() {
-                    let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
+                    let item_display =
+                        snbt_colorful_display(item, depth + 1).map_err(|message| {
+                            tr(
+                                "commands.data.error.display_item_key",
+                                server_command_locale(),
+                                [TextComponent::text(key.to_string()), message],
+                            )
+                        })?;
                     content = content
                         .add_child(
                             TextComponent::text(key.to_string()).color_named(NamedColor::Aqua),
@@ -231,8 +249,7 @@ async fn display_data(
     let tag = NbtTag::Compound(nbt);
 
     let result = get_i32_result(&tag)?;
-    let display = snbt_colorful_display(&tag, 0)
-        .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
+    let display = snbt_colorful_display(&tag, 0).map_err(CommandError::CommandFailed)?;
     sender
         .send_message(TextComponent::translate_cross(
             translation::java::COMMANDS_DATA_ENTITY_QUERY,

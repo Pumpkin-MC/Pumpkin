@@ -17,6 +17,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 
 pub struct MinecartItem;
 
@@ -30,7 +31,13 @@ impl MinecartItem {
             val if val == Item::FURNACE_MINECART.id => &EntityType::FURNACE_MINECART,
             val if val == Item::COMMAND_BLOCK_MINECART.id => &EntityType::COMMAND_BLOCK_MINECART,
             _ => {
-                tracing::error!("Unknown minecart item ID: {}", item.id);
+                tracing::error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.unknown_minecart_item",
+                        &[item.id.to_string()]
+                    )
+                );
                 &EntityType::MINECART
             }
         }

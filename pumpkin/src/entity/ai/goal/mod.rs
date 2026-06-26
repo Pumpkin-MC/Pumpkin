@@ -1,4 +1,5 @@
 use crate::entity::mob::Mob;
+use pumpkin_util::translation::localized_log;
 use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 
 pub mod active_target;
@@ -123,7 +124,7 @@ impl Controls {
                 return i;
             }
         }
-        tracing::error!("Controls::idx called with no controls set");
+        tracing::error!("{}", localized_log("server.log.controls_idx_no_controls"));
         0
     }
 }

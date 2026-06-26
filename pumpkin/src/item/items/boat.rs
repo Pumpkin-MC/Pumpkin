@@ -13,6 +13,7 @@ use pumpkin_data::item::Item;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::translation::localized_log_format;
 
 use crate::world::World;
 
@@ -43,7 +44,10 @@ impl BoatItem {
             val if val == Item::BAMBOO_RAFT.id => &EntityType::BAMBOO_RAFT,
             val if val == Item::BAMBOO_CHEST_RAFT.id => &EntityType::BAMBOO_CHEST_RAFT,
             _ => {
-                tracing::error!("Unknown boat item ID: {}", item.id);
+                tracing::error!(
+                    "{}",
+                    localized_log_format("server.log.unknown_boat_item", &[item.id.to_string()])
+                );
                 &EntityType::OAK_BOAT
             }
         }

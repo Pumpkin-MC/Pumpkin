@@ -6,6 +6,7 @@ use pumpkin_data::{
     tracked_data::TrackedId,
 };
 use pumpkin_macros::java_packet;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_util::version::JavaMinecraftVersion;
 use serde::Serialize;
 
@@ -104,7 +105,10 @@ impl<T> Metadata<T> {
 
             let mut cursor = Cursor::new(serialized_value);
             let decoded_state = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decode block state metadata: {e}"))
+                WritingError::Message(localized_log_format(
+                    "protocol.entity_metadata.failed_decode_block_state",
+                    &[e.to_string()],
+                ))
             })?;
             let remapped_state = u16::try_from(decoded_state.0).map_or(decoded_state, |state_id| {
                 VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
@@ -124,14 +128,21 @@ impl<T> Metadata<T> {
 
             let mut cursor = Cursor::new(serialized_value);
             let item_count = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
+                WritingError::Message(localized_log_format(
+                    "protocol.entity_metadata.failed_decode_item_stack_count",
+                    &[e.to_string()],
+                ))
             })?;
 
             if item_count.0 <= 0 {
                 writer.write_var_int(&item_count)?;
             } else {
-                let item_id = VarInt::decode(&mut cursor)
-                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
+                let item_id = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(localized_log_format(
+                        "protocol.entity_metadata.failed_decode_item_id",
+                        &[e.to_string()],
+                    ))
+                })?;
                 let remapped_id = u16::try_from(item_id.0)
                     .map_or(0, |id| remap_item_id_for_version(id, *version));
                 writer.write_var_int(&item_count)?;
@@ -139,7 +150,10 @@ impl<T> Metadata<T> {
                 let remainder_start = cursor.position() as usize;
                 let inner = cursor.into_inner();
                 writer.write_all(&inner[remainder_start..]).map_err(|e| {
-                    WritingError::Message(format!("Failed to write item stack remainder: {e}"))
+                    WritingError::Message(localized_log_format(
+                        "protocol.entity_metadata.failed_write_item_stack_remainder",
+                        &[e.to_string()],
+                    ))
                 })?;
             }
             return Ok(());

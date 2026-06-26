@@ -14,6 +14,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
+use pumpkin_util::translation::localized_log_format;
 use serde::de;
 use serde::de::SeqAccess;
 use serde::ser::{SerializeStruct, Serializer};
@@ -172,7 +173,10 @@ fn serialize_status_effects<T: SerializeStruct>(
     for effect in effects {
         let effect_id = StatusEffect::from_minecraft_name(&effect.effect_id)
             .ok_or_else(|| {
-                serde::ser::Error::custom(format!("Invalid status effect: {}", effect.effect_id))
+                serde::ser::Error::custom(localized_log_format(
+                    "protocol.data_component.invalid_status_effect",
+                    &[effect.effect_id.to_string()],
+                ))
             })?
             .registry_id();
         seq.serialize_field::<VarInt>("", &VarInt(effect_id as i32))?;
@@ -967,8 +971,12 @@ fn deserialize_item_stack_template<'a, A: SeqAccess<'a>>(
             .next_element::<VarInt>()?
             .ok_or_else(|| de::Error::custom("Missing component ID"))?
             .0;
-        let id = DataComponent::try_from_id(id_val as u8)
-            .ok_or_else(|| de::Error::custom(format!("Unknown component ID: {id_val}")))?;
+        let id = DataComponent::try_from_id(id_val as u8).ok_or_else(|| {
+            de::Error::custom(localized_log_format(
+                "protocol.data_component.unknown_component_id",
+                &[id_val.to_string()],
+            ))
+        })?;
 
         let _byte_len = seq
             .next_element::<VarInt>()?

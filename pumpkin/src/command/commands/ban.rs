@@ -1,4 +1,4 @@
-use crate::command::CommandResult;
+use crate::command::{CommandResult, tr_plain};
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -17,7 +17,7 @@ use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban"];
-const DESCRIPTION: &str = "bans a player";
+const DESCRIPTION: &str = "commands.ban.description";
 
 const ARG_TARGET: &str = "player";
 const ARG_REASON: &str = "reason";
@@ -98,7 +98,8 @@ async fn ban_profile(
 ) -> bool {
     let mut banned_players = server.data.banned_player_list.write().await;
 
-    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
+    let reason =
+        reason.unwrap_or_else(|| tr_plain("commands.ban.default_reason", sender.get_locale()));
 
     if let Some(entry) = banned_players
         .banned_players

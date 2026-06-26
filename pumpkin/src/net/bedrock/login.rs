@@ -1,4 +1,5 @@
 use crate::{
+    localized_log,
     net::{
         DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig, bedrock::BedrockClient,
     },
@@ -236,19 +237,28 @@ impl BedrockClient {
 
         match packet.response {
             SResourcePackResponse::STATUS_REFUSED => {
-                debug!("Bedrock: SResourcePackResponse::STATUS_REFUSED");
+                debug!(
+                    "{}",
+                    localized_log("server.log.bedrock_resource_pack_refused")
+                );
                 self.kick(
                     DisconnectReason::ResourcePackProblem,
-                    "You must accept resource packs to join this server.".into(),
+                    localized_log("client.disconnect.resource_pack_required"),
                 )
                 .await;
             }
             SResourcePackResponse::STATUS_SEND_PACKS => {
-                debug!("Bedrock: SResourcePackResponse::STATUS_SEND_PACKS");
+                debug!(
+                    "{}",
+                    localized_log("server.log.bedrock_resource_pack_send_packs")
+                );
                 // TODO: send packs
             }
             SResourcePackResponse::STATUS_HAVE_ALL_PACKS => {
-                debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
+                debug!(
+                    "{}",
+                    localized_log("server.log.bedrock_resource_pack_have_all_packs")
+                );
                 let mut frame_set = FrameSet::default();
 
                 let br_config = &server.advanced_config.resource_pack.bedrock;
@@ -286,7 +296,10 @@ impl BedrockClient {
                 self.send_frame_set(frame_set, 0x84).await;
             }
             SResourcePackResponse::STATUS_COMPLETED => {
-                debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
+                debug!(
+                    "{}",
+                    localized_log("server.log.bedrock_resource_pack_completed")
+                );
                 let player = self.player.lock().await.clone();
                 if let Some(player) = player {
                     player
@@ -295,14 +308,18 @@ impl BedrockClient {
                         .await;
                 } else {
                     tracing::error!(
-                        "Got SResourcePackResponse::STATUS_COMPLETED before authentication was completed."
+                        "{}",
+                        localized_log("server.log.bedrock_resource_pack_completed_before_auth")
                     );
                     self.kick(DisconnectReason::Disconnected, String::new())
                         .await;
                 }
             }
             _ => {
-                tracing::error!("Bedrock: SResourcePackResponse bad response type");
+                tracing::error!(
+                    "{}",
+                    localized_log("server.log.bedrock_resource_pack_bad_response")
+                );
                 self.kick(DisconnectReason::Disconnected, String::new())
                     .await;
             }

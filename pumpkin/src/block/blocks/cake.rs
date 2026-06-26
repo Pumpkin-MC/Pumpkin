@@ -7,6 +7,7 @@ use crate::{
         registry::BlockActionResult,
     },
     entity::player::Player,
+    localized_log,
     world::World,
 };
 use pumpkin_data::item::Item;
@@ -89,7 +90,7 @@ impl CakeBlock {
                 BlockActionResult::Consume
             }
             _ => {
-                panic!("invalid bite index");
+                panic!("{}", localized_log("debug.panic.invalid_bite_index"));
             }
         }
     }

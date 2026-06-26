@@ -17,7 +17,7 @@ use crate::entity::player::Player;
 
 const NAMES: [&str; 1] = ["spawnpoint"];
 
-const DESCRIPTION: &str = "Sets the spawn point for a player.";
+const DESCRIPTION: &str = "commands.spawnpoint.description";
 
 const ARG_TARGETS: &str = "targets";
 const ARG_POS: &str = "pos";

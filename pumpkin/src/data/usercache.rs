@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::{env, fs};
 
 use serde::{Deserialize, Serialize};
+
+use pumpkin_util::translation::localized_log_format;
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 use tracing::warn;
@@ -58,7 +60,10 @@ impl UserCache {
         if let Some(parent) = path.parent()
             && let Err(error) = fs::create_dir_all(parent)
         {
-            warn!("Failed to create user cache directory: {error}");
+            warn!(
+                "{}",
+                localized_log_format("server.log.failed_user_cache_create", &[error.to_string()])
+            );
             return;
         }
 
@@ -77,7 +82,10 @@ impl UserCache {
         };
 
         if let Err(error) = fs::write(path, content) {
-            warn!("Failed to save user cache: {error}");
+            warn!(
+                "{}",
+                localized_log_format("server.log.failed_user_cache_save", &[error.to_string()])
+            );
         }
     }
 

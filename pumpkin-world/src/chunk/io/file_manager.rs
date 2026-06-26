@@ -21,6 +21,7 @@ use crate::{
 };
 
 use super::{ChunkSerializer, FileIO, LoadedData};
+use pumpkin_util::translation::{localized_log, localized_log_format};
 
 /// A simple implementation of the `ChunkSerializer` trait that loads and saves data
 /// to disk using parallelism and a lazy-loading cache keyed by file path.
@@ -99,16 +100,34 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     }
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
-        trace!("Opening file from disk: {}", self.path.display());
+        trace!(
+            "{}",
+            localized_log_format(
+                "world.chunk.file.opening",
+                &[self.path.display().to_string()]
+            )
+        );
 
         match tokio::fs::read(&self.path).await {
             Ok(bytes) => {
                 let value = S::read(bytes.into())?;
-                trace!("Successfully read file from disk: {}", self.path.display());
+                trace!(
+                    "{}",
+                    localized_log_format(
+                        "world.chunk.file.read_success",
+                        &[self.path.display().to_string()]
+                    )
+                );
                 Ok(value)
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                trace!("File not found, using default for: {}", self.path.display());
+                trace!(
+                    "{}",
+                    localized_log_format(
+                        "world.chunk.file.not_found_default",
+                        &[self.path.display().to_string()]
+                    )
+                );
                 Ok(S::default())
             }
             Err(err) => Err(ChunkReadingError::IoError(err)),
@@ -178,11 +197,20 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
 
         if removable {
             locks.remove(path);
-            trace!("Evicted serializer cache for {}", path.display());
+            trace!(
+                "{}",
+                localized_log_format(
+                    "world.chunk.file.evicted_serializer_cache",
+                    &[path.display().to_string()]
+                )
+            );
         } else {
             trace!(
-                "Skipping eviction for {} — references still live",
-                path.display()
+                "{}",
+                localized_log_format(
+                    "world.chunk.file.skipping_eviction_live_refs",
+                    &[path.display().to_string()]
+                )
             );
         }
     }
@@ -327,17 +355,29 @@ where
                 .into_iter()
                 .map(|(file_name, chunk_locks)| async move {
                     let path = P::file_path(folder, &file_name);
-                    trace!("Saving chunks into {}", path.display());
+                    trace!(
+                        "{}",
+                        localized_log_format(
+                            "world.chunk.file.saving_chunks_into",
+                            &[path.display().to_string()]
+                        )
+                    );
 
                     let chunk_serializer = match self.get_serializer(&path).await {
                         Ok(s) => s,
                         Err(ChunkReadingError::ChunkNotExist) => {
                             return Err(ChunkWritingError::IoError(std::io::Error::other(
-                                "get_serializer returned ChunkNotExist",
+                                localized_log("world.chunk.file.serializer_chunk_not_exist"),
                             )));
                         }
                         Err(ChunkReadingError::IoError(err)) => {
-                            error!("I/O error reading region before write: {err}");
+                            error!(
+                                "{}",
+                                localized_log_format(
+                                    "world.chunk.file.io_error_before_write",
+                                    &[err.to_string()]
+                                )
+                            );
                             return Err(ChunkWritingError::IoError(err));
                         }
                         Err(err) => {
@@ -363,7 +403,13 @@ where
                         // Write-lock released here — flush can proceed under a read-lock.
                     }
 
-                    trace!("Chunk data updated for {}", path.display());
+                    trace!(
+                        "{}",
+                        localized_log_format(
+                            "world.chunk.file.chunk_data_updated",
+                            &[path.display().to_string()]
+                        )
+                    );
 
                     // We check watchers *after* releasing the write-lock to honour
                     // lock ordering (serializer lock → watchers, never the reverse).
@@ -377,7 +423,13 @@ where
                         // applied all mutations above.
                         {
                             let serializer = chunk_serializer.read().await;
-                            debug!("Flushing {} to disk", path.display());
+                            debug!(
+                                "{}",
+                                localized_log_format(
+                                    "world.chunk.file.flushing",
+                                    &[path.display().to_string()]
+                                )
+                            );
                             serializer
                                 .write(&path)
                                 .await

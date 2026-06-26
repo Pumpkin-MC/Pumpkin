@@ -1,5 +1,6 @@
 use crate::{
     entity::{NBTStorage, player::Player},
+    localized_log, localized_log_format,
     server::Server,
 };
 use crossbeam::atomic::AtomicCell;
@@ -61,7 +62,13 @@ impl ServerPlayerData {
         // Save to disk
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
-            .expect("Player data save panicked")?;
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.player_data_save_panicked")
+                )
+            })?;
+
         Ok(())
     }
 
@@ -90,17 +97,27 @@ impl ServerPlayerData {
                     if let Err(e) =
                         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
                             .await
-                            .expect("Player data periodic save panicked")
+                            .unwrap_or_else(|_| {
+                                panic!(
+                                    "{}",
+                                    localized_log(
+                                        "debug.expect.player_data_periodic_save_panicked",
+                                    )
+                                )
+                            })
                     {
                         error!(
-                            "Failed to save player data for {}: {e}",
-                            player.gameprofile.id,
+                            "{}",
+                            localized_log_format(
+                                "server.log.failed_save_player_data",
+                                &[player.gameprofile.id.to_string(), e.to_string()]
+                            )
                         );
                     }
                 }
             }
 
-            debug!("Periodic player data save completed");
+            debug!("{}", localized_log("server.periodic_player_data_save"));
         }
 
         Ok(())
@@ -121,7 +138,13 @@ impl ServerPlayerData {
             }
         }
 
-        debug!("Saved data for {total_players} online players");
+        debug!(
+            "{}",
+            localized_log_format(
+                "server.player_data_saved_count",
+                &[total_players.to_string()]
+            )
+        );
         Ok(())
     }
 
@@ -145,7 +168,12 @@ impl ServerPlayerData {
         let uuid = *uuid;
         let result = tokio::task::spawn_blocking(move || storage.load_player_data(&uuid))
             .await
-            .expect("Player data load panicked");
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.player_data_load_panicked")
+                )
+            });
 
         match result {
             Ok((should_load, data)) => {
@@ -158,10 +186,22 @@ impl ServerPlayerData {
             Err(e) => {
                 if self.storage.is_save_enabled() {
                     // Only log as error if player data saving is enabled
-                    error!("Error loading player data for {uuid}: {e}");
+                    error!(
+                        "{}",
+                        localized_log_format(
+                            "server.log.error_loading_player_data",
+                            &[uuid.to_string(), e.to_string()]
+                        )
+                    );
                 } else {
                     // Otherwise just log as info since it's expected
-                    debug!("Not loading player data for {uuid} (saving disabled)");
+                    debug!(
+                        "{}",
+                        localized_log_format(
+                            "server.log.not_loading_player_data",
+                            &[uuid.to_string()]
+                        )
+                    );
                 }
                 // Continue with default data even if there's an error
                 Ok(None)
@@ -195,7 +235,12 @@ impl ServerPlayerData {
         let storage = self.storage.clone();
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
-            .expect("Player data extract and save panicked")?;
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.player_data_extract_save_panicked",)
+                )
+            })?;
 
         Ok(())
     }

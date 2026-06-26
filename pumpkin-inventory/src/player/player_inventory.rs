@@ -14,6 +14,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
+use pumpkin_util::translation::localized_log_format;
 use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 use std::any::Any;
@@ -509,7 +510,13 @@ impl Inventory for PlayerInventory {
             } else if let Some(slot) = self.equipment_slots.get(&slot) {
                 self.entity_equipment.lock().await.put(slot, stack).await;
             } else {
-                warn!("Failed to get Equipment Slot at {slot}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "inventory.player.failed_get_equipment_slot",
+                        &[slot.to_string()]
+                    )
+                );
             }
         })
     }
@@ -530,7 +537,10 @@ impl PlayerInventory {
         if Self::is_valid_hotbar_index(slot as usize) {
             self.selected_slot.store(slot, Ordering::Relaxed);
         } else {
-            panic!("Invalid hotbar slot: {slot}");
+            panic!(
+                "{}",
+                localized_log_format("debug.panic.invalid_hotbar_slot", &[slot.to_string()])
+            );
         }
     }
 

@@ -18,12 +18,16 @@ use crate::plugin::{
         },
     },
 };
+use pumpkin_util::translation::localized_log;
 
 impl ToFromWasmEvent for BlockRedstoneEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let target_world = state
-            .add_world(self.world.clone())
-            .expect("failed to add world resource");
+        let target_world = state.add_world(self.world.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+            )
+        });
 
         Event::BlockRedstoneEvent(BlockRedstoneEventData {
             target_world,
@@ -45,7 +49,10 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
                 new_current: data.new_current,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -53,9 +60,12 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
 impl ToFromWasmEvent for BlockBreakEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = self.player.as_ref().map(|player| {
-            state
-                .add_player(player.clone())
-                .expect("failed to add player resource")
+            state.add_player(player.clone()).unwrap_or_else(|_| {
+                panic!(
+                    "{}",
+                    localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+                )
+            })
         });
 
         Event::BlockBreakEvent(BlockBreakEventData {
@@ -78,7 +88,10 @@ impl ToFromWasmEvent for BlockBreakEvent {
                 drop: data.should_drop,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
@@ -99,16 +112,22 @@ impl ToFromWasmEvent for BlockBurnEvent {
                 block: from_wasm_block_name(&data.block),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for BlockCanBuildEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::BlockCanBuildEvent(BlockCanBuildEventData {
             block_to_build: to_wasm_block_name(self.block_to_build),
@@ -128,16 +147,22 @@ impl ToFromWasmEvent for BlockCanBuildEvent {
                 block: from_wasm_block_name(&data.block),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for BlockGrowEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let target_world = state
-            .add_world(self.world.clone())
-            .expect("failed to add world resource");
+        let target_world = state.add_world(self.world.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_world_resource",)
+            )
+        });
 
         Event::BlockGrowEvent(BlockGrowEventData {
             target_world,
@@ -161,16 +186,22 @@ impl ToFromWasmEvent for BlockGrowEvent {
                 block_pos: from_wasm_block_position(data.block_pos),
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }
 
 impl ToFromWasmEvent for BlockPlaceEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player = state.add_player(self.player.clone()).unwrap_or_else(|_| {
+            panic!(
+                "{}",
+                localized_log("debug.expect.plugin_wasm.failed_add_player_resource",)
+            )
+        });
 
         Event::BlockPlaceEvent(BlockPlaceEventData {
             player,
@@ -192,7 +223,10 @@ impl ToFromWasmEvent for BlockPlaceEvent {
                 can_build: data.can_build,
                 cancelled: data.cancelled,
             },
-            _ => panic!("unexpected event type"),
+            _ => panic!(
+                "{}",
+                localized_log("debug.panic.plugin_wasm.unexpected_event_type")
+            ),
         }
     }
 }

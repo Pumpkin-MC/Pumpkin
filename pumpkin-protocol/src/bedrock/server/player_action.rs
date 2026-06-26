@@ -2,6 +2,7 @@ use std::io::{Error, Read};
 
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::translation::localized_log_format;
 
 use crate::{codec::var_int::VarInt, serial::PacketRead};
 
@@ -99,7 +100,10 @@ impl TryFrom<i32> for Action {
             34 => Ok(Self::StartFlying),
             35 => Ok(Self::StopFlying),
             36 => Ok(Self::ClientAckServerData),
-            _ => Err(format!("Invalid action ID: {value}")),
+            _ => Err(localized_log_format(
+                "protocol.bedrock.invalid_action_id",
+                &[value.to_string()],
+            )),
         }
     }
 }

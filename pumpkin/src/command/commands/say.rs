@@ -10,7 +10,7 @@ use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["say"];
 
-const DESCRIPTION: &str = "Broadcast a message to all Players.";
+const DESCRIPTION: &str = "commands.say.description";
 
 const ARG_MESSAGE: &str = "message";
 
