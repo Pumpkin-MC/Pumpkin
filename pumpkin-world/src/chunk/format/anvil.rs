@@ -567,8 +567,10 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
             let sector_offset = (location >> 8) as usize;
             let end_offset = sector_offset + sector_count;
 
-            // If the sector offset or count is 0, the chunk is not present (we should not parse empty chunks)
-            if sector_offset == 0 || sector_count == 0 {
+            // If the sector offset or count is 0, the chunk is not present (we should not parse empty chunks).
+            // Sectors 0 and 1 are the location/timestamp header tables, so a valid chunk never starts before
+            // sector 2; reject offset 1 too, otherwise the `sector_offset - 2` below underflows on a corrupt file.
+            if sector_offset < 2 || sector_count == 0 {
                 continue;
             }
 
