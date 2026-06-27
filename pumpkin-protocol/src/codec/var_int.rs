@@ -221,9 +221,46 @@ impl PacketRead for VarInt {
             let byte = u8::read(read)?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(Self((val >> 1) ^ (val << 31)));
+                // ZigZag decode: logical shift right, then XOR with -(low bit).
+                // Mirrors the correct `PacketRead for VarLong` impl. The previous
+                // `(val >> 1) ^ (val << 31)` was wrong: `>>` sign-extended and
+                // `<< 31` only flipped the sign bit, so negative values (and large
+                // positives) decoded incorrectly and didn't round-trip the encoder.
+                let val = val as u32;
+                return Ok(Self(((val >> 1) as i32) ^ -((val & 1) as i32)));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `PacketRead`/`PacketWrite` impls use zig-zag encoding; every value
+    /// must survive a write/read round-trip, including negatives and bounds.
+    #[test]
+    fn zigzag_packet_roundtrip() {
+        let cases = [
+            0,
+            1,
+            -1,
+            2,
+            -2,
+            63,
+            -64,
+            123_456,
+            -123_456,
+            i32::MAX,
+            i32::MIN,
+        ];
+        for n in cases {
+            let mut buf = Vec::new();
+            PacketWrite::write(&VarInt(n), &mut buf).unwrap();
+            let mut slice = buf.as_slice();
+            let decoded = <VarInt as PacketRead>::read(&mut slice).unwrap();
+            assert_eq!(decoded.0, n, "ZigZag VarInt round-trip failed for {n}");
+        }
     }
 }
