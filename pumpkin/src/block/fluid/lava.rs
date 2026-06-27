@@ -196,7 +196,7 @@ impl FluidBehaviour for FlowingLava {
             if !base_entity.entity_type.fire_immune
                 && !base_entity.fire_immune.load(Ordering::Relaxed)
             {
-                base_entity.set_on_fire_for(15.0);
+                entity.set_on_fire_for(15.0);
 
                 // Also apply lava damage
                 base_entity.damage(entity, 4.0, DamageType::LAVA).await;
