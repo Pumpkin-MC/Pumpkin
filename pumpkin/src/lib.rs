@@ -556,6 +556,7 @@ impl PumpkinServer {
                                             &[
                                                 player.gameprofile.name.clone(),
                                                 player.gameprofile.id.to_string(),
+                                                "Java".to_owned(),
                                                 locale_to_log_string(resolved_locale),
                                                 player_locale_str.clone(),
                                             ],
@@ -575,6 +576,21 @@ impl PumpkinServer {
                                     }
                                     player.remove().await;
                                     server_clone.remove_player(&player).await;
+                                    let platform = match &player.client {
+                                        ClientPlatform::Java(_) => "Java",
+                                        ClientPlatform::Bedrock(_) => "Bedrock",
+                                    };
+                                    info!(
+                                        "{}",
+                                        localized_log_format(
+                                            "server.log.player_left_language",
+                                            &[
+                                                player.gameprofile.name.clone(),
+                                                player.gameprofile.id.to_string(),
+                                                platform.to_owned(),
+                                            ],
+                                        )
+                                    );
                                     remove_player_locale(&player.gameprofile.id.to_string());
                                     if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(&player)
@@ -680,6 +696,7 @@ impl PumpkinServer {
                                                             &[
                                                                 player.gameprofile.name.clone(),
                                                                 player.gameprofile.id.to_string(),
+                                                                "Bedrock".to_owned(),
                                                                 locale_to_log_string(resolved_locale),
                                                                 player_locale_str.clone(),
                                                             ],
@@ -694,6 +711,21 @@ impl PumpkinServer {
                                                     client_clone.await_tasks().await;
                                                     player.remove().await;
                                                     server_clone.remove_player(&player).await;
+                                                    let platform = match &player.client {
+                                                        ClientPlatform::Java(_) => "Java",
+                                                        ClientPlatform::Bedrock(_) => "Bedrock",
+                                                    };
+                                                    info!(
+                                                        "{}",
+                                                        localized_log_format(
+                                                            "server.log.player_left_language",
+                                                            &[
+                                                                player.gameprofile.name.clone(),
+                                                                player.gameprofile.id.to_string(),
+                                                                platform.to_owned(),
+                                                            ],
+                                                        )
+                                                    );
                                                     remove_player_locale(&player.gameprofile.id.to_string());
                                                     if let Err(e) = server_clone.player_data_storage
                                                         .handle_player_leave(&player)

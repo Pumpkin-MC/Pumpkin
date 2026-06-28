@@ -17,7 +17,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 pub mod chunker;
 pub mod explosion;
@@ -75,7 +75,6 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
-use pumpkin_i18n::locale_to_log_string;
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -2296,11 +2295,6 @@ impl World {
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
                 .await;
-            info!(
-                "{} language: {}",
-                event.join_message.to_pretty_console(),
-                locale_to_log_string(player.locale())
-            );
         }
     }
 
@@ -2942,12 +2936,6 @@ impl World {
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
                 .await;
-            // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
-            info!(
-                "{} language: {}",
-                event.join_message.to_pretty_console(),
-                locale_to_log_string(player.locale())
-            );
         }
     }
 
@@ -3906,7 +3894,6 @@ impl World {
                     for player in self.players.load().iter() {
                         player.send_system_message(&event.leave_message).await;
                     }
-                    info!("{}", event.leave_message.to_pretty_console());
                 }
             }
         }
