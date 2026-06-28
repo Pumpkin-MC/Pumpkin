@@ -3323,7 +3323,17 @@ impl NBTStorage for Entity {
             let pos = Vector3::new(x, y, z);
             self.set_pos(pos);
             self.last_sent_pos.store(pos);
-            self.first_loaded_chunk_position.store(Some(pos.to_i32()));
+            // Store CHUNK coordinates here. Every consumer reads this field via
+            // `Vector3::to_vec2_i32()` (which only drops Y, *without* dividing by 16) and
+            // compares it against `block_pos.chunk_position()` (which divides by 16).
+            // Storing raw block coordinates makes the value 16x too large in chunk-space,
+            // causing entity duplication and spurious far-away entity-region writes on save.
+            let loaded_block_pos = pos.to_i32();
+            self.first_loaded_chunk_position.store(Some(Vector3::new(
+                loaded_block_pos.x.div_euclid(16),
+                loaded_block_pos.y,
+                loaded_block_pos.z.div_euclid(16),
+            )));
             let velocity = nbt.get_list("Motion").unwrap();
             let x = velocity[0].extract_double().unwrap_or(0.0);
             let y = velocity[1].extract_double().unwrap_or(0.0);
