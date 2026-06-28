@@ -924,9 +924,12 @@ impl World {
             while let Some(res) = tasks.join_next().await {
                 if let Err(e) = res {
                     error!(
-                    "{}",
-                    localized_log_format("server.log.player_tick_panicked", &[format!("{e:?}")])
-                );
+                        "{}",
+                        localized_log_format(
+                            "server.log.player_tick_panicked",
+                            &[format!("{e:?}")]
+                        )
+                    );
                 }
             }
             t.elapsed()
@@ -967,9 +970,12 @@ impl World {
             while let Some(res) = tasks.join_next().await {
                 if let Err(e) = res {
                     error!(
-                    "{}",
-                    localized_log_format("server.log.entity_tick_panicked", &[format!("{e:?}")])
-                );
+                        "{}",
+                        localized_log_format(
+                            "server.log.entity_tick_panicked",
+                            &[format!("{e:?}")]
+                        )
+                    );
                 }
             }
             t.elapsed()
@@ -1002,7 +1008,8 @@ impl World {
                         localized_log_format(
                             "server.log.block_entity_tick_panicked",
                             &[format!("{e:?}")]
-                    )
+                        )
+                    );
                 }
             }
             t.elapsed()
