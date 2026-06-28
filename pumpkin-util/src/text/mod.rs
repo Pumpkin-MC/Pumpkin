@@ -123,7 +123,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => translation_to_pretty(format!("minecraft:{translate}"), locale, &with),
+            } => translation_to_pretty(format!("java_minecraft:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -242,7 +242,7 @@ impl TextComponentBase {
                 with,
             } => {
                 text.push_str(&get_translation_text(
-                    format!("minecraft:{translate}"),
+                    format!("bedrock_minecraft:{translate}"),
                     locale,
                     with,
                 ));
@@ -280,7 +280,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => get_translation_text(format!("minecraft:{translate}"), locale, &with),
+            } => get_translation_text(format!("java_minecraft:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,

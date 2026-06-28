@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -61,13 +62,13 @@ fn main() {
         "    let mut array: [std::collections::HashMap<String, String>; crate::Locale::COUNT] = std::array::from_fn(|_| std::collections::HashMap::new());\n\n",
     );
 
-    // Vanilla *_java.json files with "minecraft:" prefix
+    // Vanilla *_java.json files — Java Edition translations
     for file in &vanilla_files {
         // Strip "_java.json" suffix → e.g. "zh_cn_java.json" → "zh_cn"
         let locale_stem = file.strip_suffix("_java.json").unwrap();
         let variant = filename_to_variant(locale_stem);
 
-        let _ = writeln!(code, "    // Vanilla {locale_stem} (minecraft namespace)");
+        let _ = writeln!(code, "    // Vanilla Java {locale_stem}");
         code.push_str("    {\n");
         code.push_str(
             "        let vanilla: std::collections::HashMap<String, String> = serde_json::from_str(\n",
@@ -80,19 +81,19 @@ fn main() {
         code.push_str("        for (key, value) in vanilla {\n");
         let _ = writeln!(
             code,
-            "            array[crate::Locale::{variant} as usize].insert(format!(\"minecraft:{{key}}\"), value);"
+            "            array[crate::Locale::{variant} as usize].insert(format!(\"java_minecraft:{{key}}\"), value);"
         );
         code.push_str("        }\n");
         code.push_str("    }\n\n");
     }
 
-    // Bedrock *_bedrock.lang files with "minecraft:" prefix (key=value lines)
+    // Bedrock *_bedrock.lang files — Bedrock Edition translations
     for file in &bedrock_files {
         // Strip "_bedrock.lang" suffix → e.g. "en_us_bedrock.lang" → "en_us"
         let locale_stem = file.strip_suffix("_bedrock.lang").unwrap();
         let variant = filename_to_variant(locale_stem);
 
-        let _ = writeln!(code, "    // Bedrock {locale_stem} (minecraft namespace)");
+        let _ = writeln!(code, "    // Vanilla Bedrock {locale_stem}");
         code.push_str("    {\n");
         code.push_str("        let bedrock: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../assets/translations/vanilla/");
         code.push_str(file);
@@ -105,7 +106,7 @@ fn main() {
         code.push_str("            if let Some((key, value)) = trimmed.split_once('=') {\n");
         let _ = writeln!(
             code,
-            "                array[crate::Locale::{variant} as usize].insert(format!(\"minecraft:{{}}\", key.trim().to_ascii_lowercase()), value.trim().to_string());"
+            "                array[crate::Locale::{variant} as usize].insert(format!(\"bedrock_minecraft:{{}}\", key.trim().to_ascii_lowercase()), value.trim().to_string());"
         );
         code.push_str("            }\n");
         code.push_str("        }\n");
