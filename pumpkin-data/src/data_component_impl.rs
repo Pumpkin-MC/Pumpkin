@@ -3,11 +3,11 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlockEntityData, BlocksAttacks, BundleContents, ChargedProjectiles,
-    Consumable, Container, CustomData, CustomName, Damage, DamageResistant, DeathProtection,
-    Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel, ItemName,
-    JukeboxPlayable, MapId, MaxDamage, MaxStackSize, PotionContents, StoredEnchantments, Tool,
-    Unbreakable, UseCooldown, Weapon,
+    AttributeModifiers, BlockEntityData, BlockState, BlocksAttacks, BundleContents,
+    ChargedProjectiles, Consumable, Container, CustomData, CustomName, Damage, DamageResistant,
+    DeathProtection, Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
+    ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage, MaxStackSize, OminousBottleAmplifier,
+    PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -29,6 +29,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::{
+    collections::HashMap,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
@@ -81,6 +82,10 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::WritableBookContent => {
             Some(WritableBookContentImpl::read_data(data)?.to_dyn())
         }
+        DataComponent::OminousBottleAmplifier => {
+            Some(OminousBottleAmplifierImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::BlockState => Some(BlockStateImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -2062,7 +2067,23 @@ pub struct InstrumentImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesTrimMaterialImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct OminousBottleAmplifierImpl;
+pub struct OminousBottleAmplifierImpl {
+    pub amplifier: i32,
+}
+impl OminousBottleAmplifierImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|amplifier| Self { amplifier })
+    }
+}
+impl DataComponentImpl for OminousBottleAmplifierImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.amplifier)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.amplifier) as i32
+    }
+    default_impl!(OminousBottleAmplifier);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
@@ -2311,8 +2332,58 @@ impl ContainerImpl {
 impl DataComponentImpl for ContainerImpl {
     default_impl!(Container);
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockStateImpl;
+#[derive(Clone, Debug)]
+pub struct BlockStateImpl {
+    pub properties: HashMap<String, String>,
+}
+impl PartialEq for BlockStateImpl {
+    fn eq(&self, other: &Self) -> bool {
+        self.properties == other.properties
+    }
+}
+impl Eq for BlockStateImpl {}
+impl std::hash::Hash for BlockStateImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut keys: Vec<&String> = self.properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            key.hash(state);
+            self.properties.get(key).hash(state);
+        }
+    }
+}
+impl BlockStateImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let mut properties = HashMap::new();
+        for (key, val) in compound.child_tags.iter() {
+            if let Some(s) = val.extract_string() {
+                properties.insert(key.to_string(), s.to_string());
+            }
+        }
+        Some(Self { properties })
+    }
+}
+impl DataComponentImpl for BlockStateImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        for (k, v) in &self.properties {
+            compound.put_string(k, v.clone());
+        }
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        let mut keys: Vec<&String> = self.properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            digest.update(key.as_bytes());
+            digest.update(self.properties.get(key).unwrap().as_bytes());
+        }
+        digest.finalize() as i32
+    }
+    default_impl!(BlockState);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

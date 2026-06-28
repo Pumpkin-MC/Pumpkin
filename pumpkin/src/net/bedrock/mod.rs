@@ -49,10 +49,12 @@ use pumpkin_protocol::{
                 open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
                 unconnected_ping::SUnconnectedPing,
             },
+            request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_response::SResourcePackResponse,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
+            set_player_inventory_options::SSetPlayerInventoryOptions,
             text::SText,
         },
     },
@@ -118,6 +120,7 @@ pub struct BedrockClient {
     pub be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
 
     tasks: TaskTracker,
+    rt_handle: tokio::runtime::Handle,
     outgoing_packet_queue_send: Sender<OutgoingPacket>,
     /// A queue of serialized packets to send to the network
     outgoing_packet_queue_recv: Mutex<Option<Receiver<OutgoingPacket>>>,
@@ -166,6 +169,7 @@ impl BedrockClient {
         let (send, recv) = tokio::sync::mpsc::channel(4096);
         let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
         let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
+        let rt_handle = tokio::runtime::Handle::current();
         Self {
             socket,
             player: Mutex::new(None),
@@ -176,6 +180,7 @@ impl BedrockClient {
             network_writer: Arc::new(RwLock::new(UDPNetworkEncoder::new())),
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
             tasks: TaskTracker::new(),
+            rt_handle,
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Mutex::new(Some(recv)),
             outgoing_packet_priority_send: priority_send,
@@ -338,19 +343,62 @@ impl BedrockClient {
             return;
         };
 
+        let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let event = ChunkSend::new(player.world(), chunk.clone());
             let event = server.plugin_manager.fire(event).await;
-            if event.cancelled {
-                continue;
+            if !event.cancelled {
+                valid_chunks.push(chunk.clone());
             }
+        }
 
-            self.enqueue_packet_internal(&CLevelChunk {
-                dimension: 0,
-                cache_enabled: false,
-                chunk,
-            })
-            .await;
+        if valid_chunks.is_empty() {
+            return;
+        }
+
+        let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
+        for chunk in valid_chunks {
+            serialize_tasks.push(tokio::task::spawn_blocking(move || {
+                let mut packet_payload = Vec::new();
+                let packet = CLevelChunk {
+                    dimension: 0,
+                    cache_enabled: false,
+                    chunk: &chunk,
+                };
+                packet
+                    .write_packet(&mut packet_payload)
+                    .map(|()| packet_payload)
+            }));
+        }
+
+        let mut encoded_payloads = Vec::with_capacity(serialize_tasks.len());
+        for task in serialize_tasks {
+            match task.await {
+                Ok(Ok(payload)) => encoded_payloads.push(payload),
+                Ok(Err(e)) => error!("Failed to serialize Bedrock chunk: {:?}", e),
+                Err(e) => error!("Join error in Bedrock chunk serialization: {:?}", e),
+            }
+        }
+
+        let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
+        {
+            let encoder = self.network_writer.read().await;
+            for payload in encoded_payloads {
+                let mut packet_buf = Vec::new();
+                match encoder.write_game_packet(
+                    CLevelChunk::PACKET_ID as u16,
+                    SubClient::Main,
+                    SubClient::Main,
+                    &payload,
+                    &mut packet_buf,
+                ) {
+                    Ok(()) => packets_to_enqueue.push(packet_buf),
+                    Err(err) => error!("Failed to write game packet wrapper: {err}"),
+                }
+            }
+        }
+        for packet_buf in packets_to_enqueue {
+            self.enqueue_packet_data(packet_buf.into()).await;
         }
     }
 
@@ -1040,6 +1088,10 @@ impl BedrockClient {
                     &SSetLocalPlayerAsInitialized::read(reader)?,
                 );
             }
+            SSetPlayerInventoryOptions::PACKET_ID => {
+                let _ = SSetPlayerInventoryOptions::read(reader)?;
+                // Ignore for now
+            }
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
@@ -1068,6 +1120,10 @@ impl BedrockClient {
             }
             SBlockPickRequest::PACKET_ID => {
                 self.handle_block_pick_request(player, SBlockPickRequest::read(reader)?)
+                    .await;
+            }
+            SRequestAbility::PACKET_ID => {
+                self.handle_request_ability(player, SRequestAbility::read(reader)?)
                     .await;
             }
             SMobEquipment::PACKET_ID => {
@@ -1210,20 +1266,9 @@ impl BedrockClient {
     {
         if self.close_token.is_cancelled() {
             None
-        } else if tokio::runtime::Handle::try_current().is_ok() {
-            Some(self.tasks.spawn(task))
         } else {
-            warn!("No Tokio runtime in current thread; running task on dedicated runtime thread");
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Failed to build fallback runtime");
-                rt.block_on(async move {
-                    let _ = task.await;
-                });
-            });
-            None
+            let _guard = self.rt_handle.enter();
+            Some(self.tasks.spawn(task))
         }
     }
 }

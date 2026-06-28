@@ -146,14 +146,16 @@ pub struct ItemStackWrapper {
 
 impl PacketWrite for ItemStackWrapper {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.id.write(writer)?;
+        VarInt(self.id as i32).write(writer)?;
+
         if self.id != 0 {
             self.stack_size.write(writer)?;
+
             self.aux_value.write(writer)?;
 
             self.net_id.is_some().write(writer)?;
+
             if let Some(id) = self.net_id {
-                VarUInt(0).write(writer)?; // variant
                 VarInt(id.get()).write(writer)?;
             }
 
@@ -171,10 +173,14 @@ impl PacketWrite for ItemStackWrapper {
             }
 
             (self.place_on_blocks.len() as u32).write(&mut buf)?;
-            self.place_on_blocks.write(&mut buf)?;
+            for block in &self.place_on_blocks {
+                block.write(&mut buf)?;
+            }
 
             (self.destroy_blocks.len() as u32).write(&mut buf)?;
-            self.destroy_blocks.write(&mut buf)?;
+            for block in &self.destroy_blocks {
+                block.write(&mut buf)?;
+            }
 
             if self.id == BedrockItem::SHIELD.id {
                 self.shield_blocking_tick.write(&mut buf)?;
@@ -198,7 +204,6 @@ impl PacketRead for ItemStackWrapper {
 
         let has_net_id = bool::read(buf)?;
         let net_id = if has_net_id {
-            let _variant = VarUInt::read(buf)?;
             let stack_id = VarInt::read(buf)?;
             NonZeroI32::new(stack_id.0)
         } else {

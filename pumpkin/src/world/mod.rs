@@ -143,7 +143,6 @@ use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
-use tokio::task::JoinSet;
 
 pub mod border;
 pub mod bossbar;
@@ -507,7 +506,7 @@ impl World {
         let mut recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> =
             BTreeMap::new();
         for player in players {
-            if let ClientPlatform::Java(java_client) = &player.client {
+            if let ClientPlatform::Java(java_client) = player.client.as_ref() {
                 recipients_by_version
                     .entry(java_client.version.load())
                     .or_default()
@@ -556,7 +555,7 @@ impl World {
     pub fn broadcast_packet_all_sync<P: ClientPacket>(&self, packet: &P) {
         let players = self.players.load();
         for player in players.iter() {
-            match &player.client {
+            match player.client.as_ref() {
                 ClientPlatform::Java(java) => {
                     if let Ok(data) =
                         JavaClient::serialize_packet_for_version(packet, java.version.load())
@@ -624,7 +623,7 @@ impl World {
         let mut be_recipients = Vec::new();
 
         for player in players.iter() {
-            if let ClientPlatform::Bedrock(be_client) = &player.client {
+            if let ClientPlatform::Bedrock(be_client) = player.client.as_ref() {
                 be_recipients.push(be_client.clone());
             }
         }
@@ -700,7 +699,7 @@ impl World {
             if except.contains(&p.gameprofile.id) {
                 continue;
             }
-            match &p.client {
+            match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => be_client.try_enqueue_packet(be_packet),
             }
@@ -725,7 +724,7 @@ impl World {
             if except.contains(&p.gameprofile.id) {
                 continue;
             }
-            match &p.client {
+            match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client.clone()),
             }
@@ -897,79 +896,91 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: Arc<Server>) {
         let start = tokio::time::Instant::now();
 
-        // IMPORTANT: send flush_block_updates first to prevent issues with CAcknowledgeBlockChange
         self.flush_block_updates().await;
         self.flush_synced_block_events().await;
         self.update_active_chunks();
         self.tick_environment().await;
 
-        let chunk_start = tokio::time::Instant::now();
-        self.tick_chunks().await;
-        let chunk_elapsed = chunk_start.elapsed();
+        let world_for_chunks = self.clone();
+        let chunk_future = async move {
+            let t = tokio::time::Instant::now();
+            world_for_chunks.tick_chunks().await;
+            t.elapsed()
+        };
 
-        let player_start = tokio::time::Instant::now();
-        let players = self.players.load().clone();
+        let players = self.players.load();
         let player_count = players.len();
+        let players_cache = Arc::new(
+            players
+                .iter()
+                .map(|player| {
+                    let entity = player.get_entity();
+                    let pos = entity.pos.load();
+                    let bb = entity.bounding_box.load().expand(1.0, 0.5, 1.0);
+                    (player.clone(), pos, bb)
+                })
+                .collect::<Vec<_>>(),
+        );
 
-        let mut player_tasks = tokio::task::JoinSet::new();
-        for player in players.iter() {
-            let player_clone = player.clone();
-            let server_clone = server.clone();
-            player_tasks.spawn(async move {
-                player_clone.tick(&server_clone).await;
-            });
-        }
-        while let Some(res) = player_tasks.join_next().await {
-            if let Err(e) = res {
-                error!("Player tick panicked: {:?}", e);
+        let server_for_players = server.clone();
+        let player_future = async move {
+            let t = tokio::time::Instant::now();
+            let mut tasks = tokio::task::JoinSet::new();
+            for player in players.iter() {
+                let p_clone = player.clone();
+                let s_clone = server_for_players.clone();
+                tasks.spawn(async move {
+                    p_clone.tick(&s_clone).await;
+                });
             }
-        }
-        let player_elapsed = player_start.elapsed();
-
-        let entity_start = tokio::time::Instant::now();
-        let entities_to_tick = self.entities.load().clone();
-        let entity_count = entities_to_tick.len();
-
-        let mut entity_tasks = tokio::task::JoinSet::new();
-        for entity in entities_to_tick.iter() {
-            let entity_clone = entity.clone();
-            let server_clone = server.clone();
-            let players_clone = players.clone();
-            entity_tasks.spawn(async move {
-                entity_clone.get_entity().age.fetch_add(1, Relaxed);
-                entity_clone.tick(&entity_clone, &server_clone).await;
-
-                let entity_inner = entity_clone.get_entity();
-                let entity_bb = entity_inner.bounding_box.load();
-
-                for player in players_clone.iter() {
-                    let player_pos = player.get_entity().pos.load();
-                    let entity_pos = entity_inner.pos.load();
-
-                    if (player_pos.x - entity_pos.x).abs() < 5.0
-                        && (player_pos.y - entity_pos.y).abs() < 5.0
-                        && (player_pos.z - entity_pos.z).abs() < 5.0
-                        && player
-                            .get_entity()
-                            .bounding_box
-                            .load()
-                            .expand(1.0, 0.5, 1.0)
-                            .intersects(&entity_bb)
-                    {
-                        entity_clone.on_player_collision(player).await;
-                        break;
-                    }
+            while let Some(res) = tasks.join_next().await {
+                if let Err(e) = res {
+                    error!("Player tick panicked: {:?}", e);
                 }
-            });
-        }
-        while let Some(res) = entity_tasks.join_next().await {
-            if let Err(e) = res {
-                error!("Entity tick panicked: {:?}", e);
             }
-        }
-        let entity_elapsed = entity_start.elapsed();
+            t.elapsed()
+        };
 
-        let block_entity_start = tokio::time::Instant::now();
+        let entities_to_tick = self.entities.load();
+        let entity_count = entities_to_tick.len();
+        let server_for_entities = server.clone();
+
+        let entity_future = async move {
+            let t = tokio::time::Instant::now();
+            let mut tasks = tokio::task::JoinSet::new();
+            for entity in entities_to_tick.iter() {
+                let e_clone = entity.clone();
+                let s_clone = server_for_entities.clone();
+                let p_cache = players_cache.clone();
+
+                tasks.spawn(async move {
+                    e_clone.get_entity().age.fetch_add(1, Relaxed);
+                    e_clone.tick(&e_clone, &s_clone).await;
+
+                    let entity_inner = e_clone.get_entity();
+                    let entity_pos = entity_inner.pos.load();
+                    let entity_bb = entity_inner.bounding_box.load();
+
+                    for (player, player_pos, player_bb) in p_cache.iter() {
+                        if (player_pos.x - entity_pos.x).abs() < 5.0
+                            && (player_pos.y - entity_pos.y).abs() < 5.0
+                            && (player_pos.z - entity_pos.z).abs() < 5.0
+                            && player_bb.intersects(&entity_bb)
+                        {
+                            e_clone.on_player_collision(player).await;
+                            break;
+                        }
+                    }
+                });
+            }
+            while let Some(res) = tasks.join_next().await {
+                if let Err(e) = res {
+                    error!("Entity tick panicked: {:?}", e);
+                }
+            }
+            t.elapsed()
+        };
+
         let active_chunks = self.active_chunks.load();
         let block_entities: Vec<Arc<dyn BlockEntity>> = self
             .block_entities
@@ -979,23 +990,34 @@ impl World {
             .collect();
         let block_entity_count = block_entities.len();
 
-        let mut block_entity_tasks = tokio::task::JoinSet::new();
-        for block_entity in block_entities {
-            let world_clone = self.clone();
-            block_entity_tasks.spawn(async move {
-                block_entity.tick(&world_clone).await;
-            });
-        }
-        while let Some(res) = block_entity_tasks.join_next().await {
-            if let Err(e) = res {
-                error!("Block entity tick panicked: {:?}", e);
+        let world_for_be = self.clone();
+        let block_entity_future = async move {
+            let t = tokio::time::Instant::now();
+            let mut tasks = tokio::task::JoinSet::new();
+            for be in block_entities {
+                let be_clone = be.clone();
+                let w_clone = world_for_be.clone();
+                tasks.spawn(async move {
+                    be_clone.tick(&w_clone).await;
+                });
             }
-        }
-        let block_entity_elapsed = block_entity_start.elapsed();
+            while let Some(res) = tasks.join_next().await {
+                if let Err(e) = res {
+                    error!("Block entity panicked: {:?}", e);
+                }
+            }
+            t.elapsed()
+        };
+
+        let (chunk_elapsed, player_elapsed, entity_elapsed, block_entity_elapsed) = tokio::join!(
+            chunk_future,
+            player_future,
+            entity_future,
+            block_entity_future
+        );
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
-        // Tick the End dragon fight (only on THE_END worlds).
         if let Some(ref fight_mutex) = self.dragon_fight {
             dragon_fight::DragonFight::tick(fight_mutex, self).await;
         }
@@ -1069,7 +1091,7 @@ impl World {
                 });
 
                 for p in recipients {
-                    match &p.client {
+                    match p.client.as_ref() {
                         ClientPlatform::Java(_) => java_recipients.push(p),
                         ClientPlatform::Bedrock(be_client) => {
                             for (block_pos, block_state_id) in &updates {
@@ -1161,65 +1183,84 @@ impl World {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn tick_chunks(self: &Arc<Self>) {
         let active_chunks = self.active_chunks.load();
         let tick_data = self.level.get_tick_data(&active_chunks);
+
+        // ONE JoinSet for all chunk operations
+        let mut chunk_tasks = tokio::task::JoinSet::new();
+
+        // 1. Spawn Block Ticks
         for scheduled_tick in tick_data.block_ticks {
-            let block = self.get_block(&scheduled_tick.position);
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
-                pumpkin_block
-                    .on_scheduled_tick(OnScheduledTickArgs {
-                        world: self,
-                        block,
-                        position: &scheduled_tick.position,
-                    })
-                    .await;
-            }
-        }
-        for scheduled_tick in tick_data.fluid_ticks {
-            let fluid = self.get_fluid(&scheduled_tick.position);
-            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id) {
-                pumpkin_fluid
-                    .on_scheduled_tick(self, fluid, &scheduled_tick.position)
-                    .await;
-            }
-        }
-
-        for scheduled_tick in tick_data.random_ticks {
-            let (block, fluid) = match (scheduled_tick.tick_block, scheduled_tick.tick_fluid) {
-                (true, true) => {
-                    let (block, fluid) = self.get_block_and_fluid(&scheduled_tick.position);
-                    (Some(block), Some(fluid))
+            let world = self.clone();
+            let pos = scheduled_tick.position; // Clone for the move closure
+            chunk_tasks.spawn(async move {
+                let block = world.get_block(&pos);
+                if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
+                    pumpkin_block
+                        .on_scheduled_tick(OnScheduledTickArgs {
+                            world: &world,
+                            block,
+                            position: &pos,
+                        })
+                        .await;
                 }
-                (true, false) => (Some(self.get_block(&scheduled_tick.position)), None),
-                (false, true) => (None, Some(self.get_fluid(&scheduled_tick.position))),
-                (false, false) => (None, None),
-            };
-
-            if let Some(block) = block
-                && let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id)
-            {
-                pumpkin_block
-                    .random_tick(RandomTickArgs {
-                        world: self,
-                        block,
-                        position: &scheduled_tick.position,
-                    })
-                    .await;
-            }
-
-            if let Some(fluid) = fluid
-                && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
-            {
-                pumpkin_fluid
-                    .random_tick(fluid, self, &scheduled_tick.position)
-                    .await;
-            }
+            });
         }
 
-        let spawn_state = self.spawn_state.load();
+        // 2. Spawn Fluid Ticks
+        for scheduled_tick in tick_data.fluid_ticks {
+            let world = self.clone();
+            let pos = scheduled_tick.position;
+            chunk_tasks.spawn(async move {
+                let fluid = world.get_fluid(&pos);
+                if let Some(pumpkin_fluid) = world.block_registry.get_pumpkin_fluid(fluid.id) {
+                    pumpkin_fluid.on_scheduled_tick(&world, fluid, &pos).await;
+                }
+            });
+        }
 
-        // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        // 3. Spawn Random Ticks
+        for scheduled_tick in tick_data.random_ticks {
+            let world = self.clone();
+            let pos = scheduled_tick.position;
+            let tick_block = scheduled_tick.tick_block;
+            let tick_fluid = scheduled_tick.tick_fluid;
+
+            chunk_tasks.spawn(async move {
+                let (block, fluid) = match (tick_block, tick_fluid) {
+                    (true, true) => {
+                        let (b, f) = world.get_block_and_fluid(&pos);
+                        (Some(b), Some(f))
+                    }
+                    (true, false) => (Some(world.get_block(&pos)), None),
+                    (false, true) => (None, Some(world.get_fluid(&pos))),
+                    (false, false) => (None, None),
+                };
+
+                if let Some(block) = block
+                    && let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id)
+                {
+                    pumpkin_block
+                        .random_tick(RandomTickArgs {
+                            world: &world,
+                            block,
+                            position: &pos,
+                        })
+                        .await;
+                }
+
+                if let Some(fluid) = fluid
+                    && let Some(pumpkin_fluid) = world.block_registry.get_pumpkin_fluid(fluid.id)
+                {
+                    pumpkin_fluid.random_tick(fluid, &world, &pos).await;
+                }
+            });
+        }
+
+        // 4. Calculate Spawn List (Sequential setup)
+        let spawn_state = self.spawn_state.load();
         let (spawn_mobs, spawn_monsters, peaceful) = {
             let lock = self.level_info.load();
             (
@@ -1231,43 +1272,43 @@ impl World {
         let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
         let spawn_passives = spawn_passives && spawn_mobs;
-        let spawn_list: Vec<&'static MobCategory> =
-            natural_spawner::get_filtered_spawning_categories(
-                &spawn_state,
-                spawn_mobs,
-                spawn_enemies,
-                spawn_passives,
-            );
 
-        if spawn_list.is_empty() {
-            return;
-        }
+        let spawn_list = Arc::new(natural_spawner::get_filtered_spawning_categories(
+            &spawn_state,
+            spawn_mobs,
+            spawn_enemies,
+            spawn_passives,
+        ));
 
-        let mut spawning_chunks = Vec::new();
-        for pos in active_chunks.iter() {
-            if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
-                spawning_chunks.push((*pos, chunk));
+        // 5. Spawn Chunk Spawners into the SAME JoinSet
+        if !spawn_list.is_empty() {
+            let mut spawning_chunks = Vec::new();
+            for pos in active_chunks.iter() {
+                if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
+                    spawning_chunks.push((*pos, chunk));
+                }
+            }
+
+            spawning_chunks.shuffle(&mut rng());
+
+            for (pos, chunk) in spawning_chunks {
+                let world = self.clone();
+                let s_list = spawn_list.clone();
+                let s_state = spawn_state.clone();
+
+                chunk_tasks.spawn(async move {
+                    world
+                        .tick_spawning_chunk(pos, &chunk, &s_list, &s_state)
+                        .await;
+                });
             }
         }
 
-        // log::debug!("spawning list size {}", spawn_list.len());
-        spawning_chunks.shuffle(&mut rng());
-
-        let mut spawn_tasks = JoinSet::new();
-        let spawn_list = Arc::new(spawn_list);
-
-        for (pos, chunk) in spawning_chunks {
-            let world = self.clone();
-            let spawn_list = spawn_list.clone();
-            let spawn_state = spawn_state.clone();
-            let chunk = chunk.clone();
-            spawn_tasks.spawn(async move {
-                world
-                    .tick_spawning_chunk(pos, &chunk, &spawn_list, &spawn_state)
-                    .await;
-            });
+        while let Some(res) = chunk_tasks.join_next().await {
+            if let Err(e) = res {
+                error!("Chunk task panicked: {:?}", e);
+            }
         }
-        while spawn_tasks.join_next().await.is_some() {}
     }
 
     pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
@@ -1750,6 +1791,11 @@ impl World {
     ) {
         static CREATIVE_CONTENT: std::sync::OnceLock<(Vec<Group>, Vec<Entry>)> =
             std::sync::OnceLock::new();
+
+        static BEDROCK_CRAFTING_DATA: std::sync::OnceLock<
+            Vec<pumpkin_protocol::bedrock::client::BedrockRecipe>,
+        > = std::sync::OnceLock::new();
+
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
         let runtime_id = player.entity_id() as u64;
@@ -1966,6 +2012,185 @@ impl World {
 
         client
             .send_game_packet(&CCreativeContent { groups, entries })
+            .await;
+
+        let bedrock_recipes = BEDROCK_CRAFTING_DATA.get_or_init(|| {
+            use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
+            use pumpkin_data::recipes::{CraftingRecipeTypes, RecipeIngredientTypes};
+            use pumpkin_protocol::bedrock::client::{
+                BedrockRecipe, BedrockShapedRecipe, BedrockShapelessRecipe, ItemDescriptorCount,
+                RecipeUnlockRequirement,
+            };
+            use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
+            use pumpkin_protocol::codec::{var_int::VarInt, var_uint::VarUInt};
+
+            let mut mapped_recipes = Vec::new();
+            let mut network_id_counter = 1u32;
+
+            for recipe in pumpkin_data::recipes::RECIPES_CRAFTING {
+                let map_ingredient = |ing: &RecipeIngredientTypes| -> ItemDescriptorCount {
+                    let item_key = match ing {
+                        RecipeIngredientTypes::Simple(name) => Some(*name),
+                        RecipeIngredientTypes::Tagged(tag) => {
+                            let tag_name = tag.strip_prefix('#').unwrap_or(tag);
+                            pumpkin_data::tag::get_tag_ids(
+                                pumpkin_data::tag::RegistryKey::Item,
+                                tag_name,
+                            )
+                            .and_then(|ids| {
+                                ids.first().and_then(|&first_id| {
+                                    Item::from_id(first_id).map(|item| item.registry_key)
+                                })
+                            })
+                        }
+                        RecipeIngredientTypes::OneOf(names) => names.first().copied(),
+                    };
+
+                    if let Some(key) = item_key {
+                        let registry_key = key.strip_prefix("minecraft:").unwrap_or(key);
+                        if let Some(item) = Item::from_registry_key(registry_key)
+                            && let Some(mapping) =
+                                JavaToBedrockItemMapping::from_java_item_id(item.id)
+                        {
+                            return ItemDescriptorCount {
+                                network_id: mapping.bedrock_item.id,
+                                metadata_value: mapping.bedrock_data as i16,
+                                count: 1,
+                            };
+                        }
+                    }
+
+                    ItemDescriptorCount {
+                        network_id: 0,
+                        metadata_value: 0,
+                        count: 0,
+                    }
+                };
+
+                match recipe {
+                    CraftingRecipeTypes::CraftingShaped {
+                        category: _,
+                        group: _,
+                        show_notification: _,
+                        key,
+                        pattern,
+                        result,
+                    } => {
+                        let height = pattern.len() as i32;
+                        let width = pattern.iter().map(|s| s.len()).max().unwrap_or(0) as i32;
+
+                        let mut input = Vec::new();
+                        for r in 0..height {
+                            let pattern_row = pattern[r as usize];
+                            for c in 0..width {
+                                let ch = pattern_row.chars().nth(c as usize).unwrap_or(' ');
+                                if ch == ' ' {
+                                    input.push(ItemDescriptorCount {
+                                        network_id: 0,
+                                        metadata_value: 0,
+                                        count: 0,
+                                    });
+                                } else {
+                                    let mut ingredient = None;
+                                    for &(key_ch, ref ing) in *key {
+                                        if key_ch == ch {
+                                            ingredient = Some(ing);
+                                            break;
+                                        }
+                                    }
+                                    if let Some(ing) = ingredient {
+                                        input.push(map_ingredient(ing));
+                                    } else {
+                                        input.push(ItemDescriptorCount {
+                                            network_id: 0,
+                                            metadata_value: 0,
+                                            count: 0,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        let output_item = Item::from_registry_key(result.id);
+                        if let Some(item) = output_item
+                            && let Some(mapping) =
+                                JavaToBedrockItemMapping::from_java_item_id(item.id)
+                        {
+                            let output_descriptor = NetworkItemDescriptor {
+                                id: VarInt::from(mapping.bedrock_item.id),
+                                stack_size: result.count as u16,
+                                aux_value: VarUInt(mapping.bedrock_data),
+                                block_runtime_id: VarInt::from(mapping.bedrock_block_state),
+                                nbt_data: pumpkin_nbt::Nbt::default(),
+                                place_on_blocks: Vec::new(),
+                                destroy_blocks: Vec::new(),
+                                shield_blocking_tick: 0,
+                            };
+
+                            mapped_recipes.push(BedrockRecipe::Shaped(BedrockShapedRecipe {
+                                recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
+                                width: VarInt(width),
+                                height: VarInt(height),
+                                input,
+                                output: vec![output_descriptor],
+                                uuid: [0; 16],
+                                block: "crafting_table".to_string(),
+                                priority: VarInt(1),
+                                assume_symmetry: true,
+                                unlock_requirement: RecipeUnlockRequirement { context: 1 },
+                                recipe_network_id: VarUInt(network_id_counter),
+                            }));
+                            network_id_counter += 1;
+                        }
+                    }
+                    CraftingRecipeTypes::CraftingShapeless {
+                        category: _,
+                        group: _,
+                        ingredients,
+                        result,
+                    } => {
+                        let input = ingredients.iter().map(map_ingredient).collect::<Vec<_>>();
+
+                        let output_item = Item::from_registry_key(result.id);
+                        if let Some(item) = output_item
+                            && let Some(mapping) =
+                                JavaToBedrockItemMapping::from_java_item_id(item.id)
+                        {
+                            let output_descriptor = NetworkItemDescriptor {
+                                id: VarInt::from(mapping.bedrock_item.id),
+                                stack_size: result.count as u16,
+                                aux_value: VarUInt(mapping.bedrock_data),
+                                block_runtime_id: VarInt::from(mapping.bedrock_block_state),
+                                nbt_data: pumpkin_nbt::Nbt::default(),
+                                place_on_blocks: Vec::new(),
+                                destroy_blocks: Vec::new(),
+                                shield_blocking_tick: 0,
+                            };
+
+                            mapped_recipes.push(BedrockRecipe::Shapeless(BedrockShapelessRecipe {
+                                recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
+                                input,
+                                output: vec![output_descriptor],
+                                uuid: [0; 16],
+                                block: "crafting_table".to_string(),
+                                priority: VarInt(1),
+                                unlock_requirement: RecipeUnlockRequirement { context: 1 },
+                                recipe_network_id: VarUInt(network_id_counter),
+                            }));
+                            network_id_counter += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            mapped_recipes
+        });
+
+        client
+            .send_game_packet(&pumpkin_protocol::bedrock::client::CCraftingData {
+                recipes: bedrock_recipes.clone(),
+                clean_recipes: false,
+            })
             .await;
 
         client
@@ -2894,7 +3119,7 @@ impl World {
         player.send_active_effects().await;
         self.send_player_equipment(player).await;
 
-        if let crate::net::ClientPlatform::Java(java_client) = &player.client
+        if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes
         {
             java_client
@@ -2956,7 +3181,7 @@ impl World {
         yaw: f32,
         pitch: f32,
     ) {
-        if let ClientPlatform::Java(client) = &player.client {
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
             self.worldborder.lock().await.init_client(client).await;
         }
 
@@ -3003,7 +3228,7 @@ impl World {
         };
         for player in self.players.load().iter() {
             let mut sound_id = Sound::EntityGenericExplode as u16;
-            if let ClientPlatform::Java(java_client) = &player.client {
+            if let ClientPlatform::Java(java_client) = player.client.as_ref() {
                 sound_id = remap_sound_id_for_version(sound_id, java_client.version.load());
             }
             let sound = IdOr::<SoundEvent>::Id(sound_id);
@@ -3228,7 +3453,7 @@ impl World {
             .await;
 
         // Ensure at least the center chunk is sent synchronously before teleport.
-        if let crate::net::ClientPlatform::Java(java_client) = &player.client {
+        if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
             let center_chunk = player.get_entity().chunk_pos.load();
             let chunk = target_world
                 .level
@@ -3373,10 +3598,19 @@ impl World {
                         }
                     }
                     if !ids_to_remove.is_empty() {
-                        player
-                            .client
-                            .enqueue_packet(&CRemoveEntities::new(&ids_to_remove))
-                            .await;
+                        match player.client.as_ref() {
+                            crate::net::ClientPlatform::Java(java) => {
+                                java.enqueue_packet(&CRemoveEntities::new(&ids_to_remove))
+                                    .await;
+                            }
+                            crate::net::ClientPlatform::Bedrock(bedrock) => {
+                                for id in &ids_to_remove {
+                                    bedrock
+                                        .enqueue_packet(&CRemoveActor::new(VarLong(id.0 as i64)))
+                                        .await;
+                                }
+                            }
+                        }
                     }
                     continue 'main;
                 }
@@ -3938,9 +4172,10 @@ impl World {
         });
 
         let chunk_pos = base_entity.chunk_pos.load();
-        self.broadcast_to_chunk(
+        self.broadcast_to_chunk_editioned_sync(
             chunk_pos,
             &CRemoveEntities::new(&[base_entity.entity_id.into()]),
+            &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
         );
 
         self.remove_entity_data(base_entity).await;
@@ -4226,6 +4461,7 @@ impl World {
     }
 
     // Return new state
+    #[allow(clippy::too_many_lines)]
     pub async fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -4295,7 +4531,7 @@ impl World {
                     false,
                 );
                 let chunk_pos = position.chunk_position();
-                match cause {
+                match &cause {
                     Some(player) => {
                         self.broadcast_to_chunk_except(
                             chunk_pos,
@@ -4307,6 +4543,20 @@ impl World {
                 }
             }
             if !flags.contains(BlockFlags::SKIP_DROPS) {
+                let tool = if let Some(player) = &cause {
+                    let hand_stack = player
+                        .inventory
+                        .get_stack_in_hand(pumpkin_util::Hand::Right)
+                        .await;
+                    let stack_guard = hand_stack.lock().await;
+                    (stack_guard.item_count > 0).then(|| stack_guard.clone())
+                } else {
+                    None
+                };
+
+                let is_raining = self.is_raining().await;
+                let is_thundering = self.is_thundering().await;
+
                 let params = LootContextParameters {
                     block_state: Some(BlockState::from_id(broken_state_id)),
                     luck,
@@ -4316,6 +4566,9 @@ impl World {
                         position.0.z as f64,
                     )),
                     world_time: self.level_info.load().day_time as u64,
+                    tool,
+                    is_raining: Some(is_raining),
+                    is_thundering: Some(is_thundering),
                     ..Default::default()
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;
@@ -5033,7 +5286,7 @@ impl World {
         });
 
         for p in recipients {
-            match &p.client {
+            match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => be_client.try_enqueue_packet(be_packet),
             }
@@ -5089,7 +5342,7 @@ impl World {
         let mut bedrock_recipients = Vec::new();
 
         for p in recipients {
-            match &p.client {
+            match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client.clone()),
             }

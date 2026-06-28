@@ -1250,7 +1250,7 @@ pub fn build() -> TokenStream {
                 #state_from_state_id
             ];
         }
-        
+
 
         impl Block {
             #(#constants_list)*

@@ -251,9 +251,9 @@ impl TreeNodePosition {
     /// # Arguments
     ///
     /// * `tree` - A mutable reference to the `AdvancementTree` containing all the advancement nodes.
-    ///            The method updates the x and y positions of each node's display information.
+    /// The method updates the x and y positions of each node's display information.
     /// * `root_index` - The index of the root node in the tree from which to start the positioning algorithm.
-    ///                  The root must have a display component, otherwise the function will panic.
+    /// The root must have a display component, otherwise the function will panic.
     ///
     /// # Panics
     ///
@@ -274,7 +274,8 @@ impl TreeNodePosition {
             return;
         };
         if !root_node.has_display() {
-            panic!("Can't position children of an invisible root!");
+            eprintln!("Can't position children of an invisible root!");
+            return;
         }
         let mut nodes: Vec<TreeNodePosition> = Vec::with_capacity(32);
         let root_idx = nodes.len();
@@ -317,11 +318,13 @@ impl TreeNodePosition {
         adv_node_idx: usize,
         mut previous_idx: Option<usize>,
     ) -> Option<usize> {
-        let adv_node = tree.nodes_vector.get(adv_node_idx).unwrap();
+        let adv_node = tree.nodes_vector.get(adv_node_idx)?;
         if adv_node.has_display() {
             let child_idx = nodes.len();
-            let next_child_index = nodes[parent_idx].children.len() + 1;
-            let depth = nodes[parent_idx].x + 1;
+            let node = &mut nodes[parent_idx];
+            let next_child_index = node.children.len() + 1;
+            let depth = node.x + 1;
+            node.children.push(child_idx);
 
             nodes.push(TreeNodePosition {
                 node: adv_node_idx,
@@ -337,8 +340,6 @@ impl TreeNodePosition {
                 change: 0.0,
                 shift: 0.0,
             });
-
-            nodes[parent_idx].children.push(child_idx);
 
             let mut child_prev = None;
             for child in adv_node.children.clone() {
@@ -382,7 +383,6 @@ impl TreeNodePosition {
     /// coordinates that will be refined in subsequent passes.
     fn first_walk(nodes: &mut Vec<TreeNodePosition>, idx: usize) {
         let num_children = nodes[idx].children.len();
-
         if num_children == 0 {
             if let Some(prev_sib) = nodes[idx].previous_sibling {
                 nodes[idx].y = nodes[prev_sib].y + 1.0;
@@ -390,7 +390,7 @@ impl TreeNodePosition {
                 nodes[idx].y = 0.0;
             }
         } else {
-            let mut default_ancestor = None;
+            let mut default_ancestor: Option<usize> = None;
             for i in 0..num_children {
                 let child_idx = nodes[idx].children[i];
                 Self::first_walk(nodes, child_idx);
@@ -400,8 +400,9 @@ impl TreeNodePosition {
 
             Self::execute_shifts(nodes, idx);
 
-            let first_child_idx = nodes[idx].children[0];
-            let last_child_idx = nodes[idx].children[num_children - 1];
+            let node = &mut nodes[idx];
+            let first_child_idx = node.children[0];
+            let last_child_idx = node.children[num_children - 1];
             let midpoint = (nodes[first_child_idx].y + nodes[last_child_idx].y) / 2.0;
 
             if let Some(prev_sib) = nodes[idx].previous_sibling {
@@ -424,7 +425,7 @@ impl TreeNodePosition {
     /// * `nodes` - A mutable reference to the vector of `TreeNodePosition` representing the tree structure.
     /// * `idx` - The index of the current node being processed in the `nodes` vector.
     /// * `mod_sum` - The accumulated modification offset from all ancestor nodes. This value is
-    ///              added to convert preliminary coordinates to final coordinates.
+    /// added to convert preliminary coordinates to final coordinates.
     /// * `depth` - The depth level of the current node in the tree (0 for root, increments for children).
     /// * `mut min` - The minimum y-coordinate encountered so far in the traversal.
     ///
@@ -450,15 +451,16 @@ impl TreeNodePosition {
         depth: i32,
         mut min: f32,
     ) -> f32 {
-        nodes[idx].y += mod_sum;
-        nodes[idx].x = depth;
+        let node = &mut nodes[idx];
+        node.y += mod_sum;
+        node.x = depth;
 
-        if nodes[idx].y < min {
-            min = nodes[idx].y;
+        if node.y < min {
+            min = node.y;
         }
 
-        let num_children = nodes[idx].children.len();
-        let current_mod = nodes[idx].mod_field;
+        let num_children = node.children.len();
+        let current_mod = node.mod_field;
 
         for i in 0..num_children {
             let child_idx = nodes[idx].children[i];
@@ -479,7 +481,7 @@ impl TreeNodePosition {
     /// * `nodes` - A mutable reference to the vector of `TreeNodePosition` representing the tree structure.
     /// * `idx` - The index of the current node being processed in the `nodes` vector.
     /// * `offset` - The y-coordinate offset to apply. This is typically the negation of the minimum
-    ///            y value found in the second walk.
+    /// y value found in the second walk.
     ///
     /// # Algorithm Details
     ///
@@ -492,13 +494,9 @@ impl TreeNodePosition {
     /// This is the third of three passes. It only executes if the minimum y value found in
     /// the second walk was negative, ensuring all final positions are non-negative.
     fn third_walk(nodes: &mut Vec<TreeNodePosition>, idx: usize, offset: f32) {
-        nodes[idx].y += offset;
-
-        let num_children = nodes[idx].children.len();
-        for i in 0..num_children {
-            let child_idx = nodes[idx].children[i];
-            Self::third_walk(nodes, child_idx, offset);
-        }
+        nodes.iter_mut().for_each(|node| {
+            node.y += offset;
+        });
     }
 
     fn execute_shifts(nodes: &mut [TreeNodePosition], idx: usize) {
@@ -533,27 +531,30 @@ impl TreeNodePosition {
             None => return default_ancestor,
         };
         let parent_idx = nodes[idx].parent.expect("Tree invariant broken: no parent");
-        let mut inner_left = prev_sib;
         let mut inner_right = idx;
-        let mut outer_left = nodes[parent_idx].children[0];
         let mut outer_right = idx;
+        let mut inner_left = prev_sib;
+        let mut outer_left = nodes[parent_idx].children[0];
 
-        let mut shift_inner_right = nodes[inner_right].mod_field;
-        let mut shift_outer_right = nodes[outer_right].mod_field;
+        let mod_field = nodes[idx].mod_field;
+        let mut shift_inner_right = mod_field;
+        let mut shift_outer_right = mod_field;
         let mut shift_inner_left = nodes[inner_left].mod_field;
         let mut shift_outer_left = nodes[outer_left].mod_field;
-        while let (Some(next_inner_left), Some(next_inner_right)) = (
-            Self::next_or_thread(nodes, inner_left),
-            Self::previous_or_thread(nodes, inner_right),
-        ) {
+        while let Some(next_inner_left) = Self::next_or_thread(nodes, inner_left)
+            && let Some(next_inner_right) = Self::previous_or_thread(nodes, inner_right)
+        {
             inner_left = next_inner_left;
             inner_right = next_inner_right;
-            outer_left = Self::previous_or_thread(nodes, outer_left).expect("Tree invariant broken");
+            outer_left =
+                Self::previous_or_thread(nodes, outer_left).expect("Tree invariant broken");
             outer_right = Self::next_or_thread(nodes, outer_right).expect("Tree invariant broken");
 
             nodes[outer_right].ancestor = idx;
 
-            let shift = (nodes[inner_left].y + shift_inner_left) - (nodes[inner_right].y + shift_inner_right) + 1.0;
+            let shift = (nodes[inner_left].y + shift_inner_left)
+                - (nodes[inner_right].y + shift_inner_right)
+                + 1.0;
             if shift > 0.0 {
                 let ancestor_idx = Self::get_ancestor(nodes, inner_left, idx, default_ancestor);
                 Self::move_subtree(nodes, ancestor_idx, idx, shift);
@@ -564,19 +565,18 @@ impl TreeNodePosition {
             shift_inner_left += nodes[inner_left].mod_field;
             shift_inner_right += nodes[inner_right].mod_field;
             shift_outer_left += nodes[outer_left].mod_field;
-            shift_outer_right += nodes[outer_right].mod_field;
         }
 
-        if Self::next_or_thread(nodes, inner_left).is_some()
+        if let Some(next_inner_left) = Self::next_or_thread(nodes, inner_left)
             && Self::next_or_thread(nodes, outer_right).is_none()
         {
-            nodes[outer_right].thread = Self::next_or_thread(nodes, inner_left);
+            nodes[outer_right].thread = Some(next_inner_left);
             nodes[outer_right].mod_field += shift_inner_left - shift_outer_right;
         } else {
-            if Self::previous_or_thread(nodes, inner_right).is_some()
+            if let Some(next_inner_right) = Self::previous_or_thread(nodes, inner_right)
                 && Self::previous_or_thread(nodes, outer_left).is_none()
             {
-                nodes[outer_left].thread = Self::previous_or_thread(nodes, inner_right);
+                nodes[outer_left].thread = Some(next_inner_right);
                 nodes[outer_left].mod_field += shift_inner_right - shift_outer_left;
             }
             default_ancestor = idx;
@@ -597,12 +597,12 @@ impl TreeNodePosition {
 
     fn get_ancestor(
         nodes: &[TreeNodePosition],
-        vil: usize,
         idx: usize,
+        other: usize,
         default_ancestor: usize,
     ) -> usize {
-        let ancestor = nodes[vil].ancestor;
-        let parent_idx = nodes[idx].parent.unwrap();
+        let ancestor = nodes[idx].ancestor;
+        let parent_idx = nodes[other].parent.unwrap();
 
         if nodes[parent_idx].children.contains(&ancestor) {
             ancestor
@@ -620,9 +620,9 @@ impl TreeNodePosition {
     /// # Arguments
     ///
     /// * `tree` - A mutable reference to the `AdvancementTree`. This tree is updated with the
-    ///           computed x and y positions from the `TreeNodePosition` nodes.
+    ///   computed x and y positions from the `TreeNodePosition` nodes.
     /// * `nodes` - A reference to the vector of `TreeNodePosition` containing the computed positions
-    ///           for each node in the tree.
+    ///   for each node in the tree.
     /// * `idx` - The index of the current node being processed in the `nodes` vector.
     ///
     /// # Algorithm Details
@@ -659,7 +659,7 @@ pub struct AdvancementStruct {
     pub sends_telemetry: bool,
     pub requirements: Vec<Vec<String>>,
     #[serde(deserialize_with = "deserialize_first_key")]
-    pub criteria : Vec<String>,
+    pub criteria: Vec<String>,
 }
 
 fn deserialize_first_key<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -846,10 +846,7 @@ pub(crate) fn build() -> TokenStream {
     let advancement_tree = quote! {
         pub static ADVANCEMENT_TREE : LazyLock<AdvancementTree> = #tree;
     };
-    let advancements_holder = tree
-        .nodes_vector
-        .into_iter()
-        .map(|node| node.value);
+    let advancements_holder = tree.nodes_vector.into_iter().map(|node| node.value);
     for AdvancementHolder(identifier, advancement) in advancements_holder {
         let raw_name = identifier.path();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());

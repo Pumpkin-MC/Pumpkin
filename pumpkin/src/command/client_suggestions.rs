@@ -365,7 +365,7 @@ pub async fn send_bedrock_commands_packet(
         constraints: Vec::new(),
     };
 
-    if let crate::net::ClientPlatform::Bedrock(bedrock_client) = &player.client {
+    if let crate::net::ClientPlatform::Bedrock(bedrock_client) = player.client.as_ref() {
         bedrock_client.send_game_packet(&packet).await;
     }
 }

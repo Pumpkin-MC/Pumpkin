@@ -532782,7 +532782,9 @@ impl Block {
                     content: LootPoolEntryTypes::Alternatives(AlternativeEntry {
                         children: &[
                             LootPoolEntry {
-                                content: LootPoolEntryTypes::Dynamic,
+                                content: LootPoolEntryTypes::Dynamic(DynamicEntry {
+                                    name: "minecraft:sherds",
+                                }),
                                 weight: 1i32,
                                 quality: 0i32,
                                 conditions: Some(&[LootCondition::BlockStateProperty {

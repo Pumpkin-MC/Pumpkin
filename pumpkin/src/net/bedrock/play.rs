@@ -595,8 +595,8 @@ impl BedrockClient {
                 let target_runtime_id = data.target_entity_runtime_id.0 as i32;
                 // TODO: replace with consts, i'm too lazy
                 match data.action_type.0 {
-                    // Interact
-                    0 => {
+                    // Interact / Item Interact
+                    0 | 2 => {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
                             let held = player.inventory.held_item();
@@ -1188,6 +1188,22 @@ impl BedrockClient {
                         ..
                     } => {
                         if repetitions > 0 {
+                            screen_handler.update_to_client().await;
+
+                            let is_player = screen_handler.window_type().is_none();
+                            let grid_size = if is_player { 4 } else { 9 };
+                            for i in 0..grid_size {
+                                let grid_slot_index = 1 + i;
+                                let grid_slot =
+                                    screen_handler.get_behaviour().slots[grid_slot_index].clone();
+                                let grid_stack = grid_slot.get_cloned_stack().await;
+                                tracing::info!(
+                                    "Crafting Grid slot {i} (slot index {grid_slot_index}): Item ID: {}, Count: {}",
+                                    grid_stack.item.id,
+                                    grid_stack.item_count
+                                );
+                            }
+
                             let output_slot = screen_handler.get_behaviour().slots[0].clone();
                             let output_stack = output_slot.get_cloned_stack().await;
 
@@ -1466,6 +1482,36 @@ impl BedrockClient {
         let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment);
+    }
+
+    pub async fn handle_request_ability(
+        &self,
+        player: &Arc<Player>,
+        packet: pumpkin_protocol::bedrock::server::request_ability::SRequestAbility,
+    ) {
+        player.update_last_action_time();
+        let ability_id = packet.ability.0;
+        match ability_id {
+            9 => {
+                // Flying
+                if let pumpkin_protocol::bedrock::server::request_ability::AbilityValue::Bool(
+                    requested_flying,
+                ) = packet.value
+                {
+                    let mut abilities = player.abilities.lock().await;
+                    if abilities.allow_flying {
+                        abilities.flying = requested_flying;
+                    } else {
+                        abilities.flying = false;
+                    }
+                    drop(abilities);
+                    player.send_abilities_update().await;
+                }
+            }
+            _ => {
+                debug!("Received RequestAbility packet for unhandled ability {ability_id}");
+            }
+        }
     }
 }
 

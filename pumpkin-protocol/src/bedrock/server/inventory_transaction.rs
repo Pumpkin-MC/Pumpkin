@@ -190,15 +190,19 @@ impl PacketRead for SInventoryTransaction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let legacy_request_id = VarInt::read(buf)?;
 
+        let has_legacy_slots = bool::read(buf)?;
         let mut legacy_set_item_slots = Vec::new();
-        if legacy_request_id.0 != 0 {
+        if has_legacy_slots {
             let len = VarUInt::read(buf)?.0;
             for _ in 0..len {
                 legacy_set_item_slots.push(LegacySetItemSlot::read(buf)?);
             }
         }
 
+        let _has_transaction_type = bool::read(buf)?;
         let transaction_type = VarUInt::read(buf)?;
+
+        let _has_tr_data = bool::read(buf)?;
 
         let has_value = bool::read(buf)?;
         let mut actions = Vec::new();

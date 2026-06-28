@@ -12,7 +12,7 @@ use pumpkin_util::{
 };
 use rand::RngExt;
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Clone)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
@@ -24,6 +24,9 @@ pub struct LootContextParameters {
     pub position: Option<pumpkin_util::math::vector3::Vector3<f64>>,
     pub world_time: u64,
     pub damage_type: Option<DamageType>,
+    pub tool: Option<ItemStack>,
+    pub is_raining: Option<bool>,
+    pub is_thundering: Option<bool>,
 }
 
 pub trait LootTableExt {
@@ -100,12 +103,15 @@ trait LootFunctionExt {
 
 fn apply_bonus(
     stacks: &mut [ItemStack],
+    enchantment_name: &str,
     formula: &str,
     parameters: Option<&LootFunctionBonusParameter>,
+    params: &LootContextParameters,
 ) {
-    // We currently don't have tool/enchantment data in LootContextParameters.
-    // Assuming enchantment level is 0 for now.
-    let enchantment_level = 0;
+    let enchantment_level = params.tool.as_ref().map_or(0, |tool| {
+        pumpkin_data::Enchantment::from_name(enchantment_name)
+            .map_or(0, |enchantment| tool.get_enchantment_level(enchantment))
+    });
     if enchantment_level > 0 {
         for stack in stacks {
             match formula {
@@ -145,6 +151,7 @@ fn apply_bonus(
 }
 
 impl LootFunctionExt for LootFunction {
+    #[allow(clippy::too_many_lines)]
     fn apply(&self, stacks: &mut Vec<ItemStack>, params: &LootContextParameters) {
         if let Some(conditions) = self.conditions
             && !conditions.iter().all(|cond| cond.is_fulfilled(params))
@@ -196,25 +203,128 @@ impl LootFunctionExt for LootFunction {
                 }
             }
             LootFunctionTypes::ApplyBonus {
-                enchantment: _,
+                enchantment,
                 formula,
                 parameters,
             } => {
-                apply_bonus(stacks, formula, parameters.as_ref());
+                apply_bonus(stacks, enchantment, formula, parameters.as_ref(), params);
             }
-            LootFunctionTypes::CopyComponents {
-                source: _,
-                include: _,
+            LootFunctionTypes::EnchantedCountIncrease {
+                enchantment,
+                count,
+                limit,
+            } => {
+                let level = params.tool.as_ref().map_or(0.0, |tool| {
+                    pumpkin_data::Enchantment::from_name(enchantment)
+                        .map_or(0.0, |enc| tool.get_enchantment_level(enc) as f32)
+                });
+                let mut additional = (count.generate() * level).round() as u32;
+                if let Some(lim) = limit {
+                    let lim_u32 = lim.round() as u32;
+                    if additional > lim_u32 {
+                        additional = lim_u32;
+                    }
+                }
+                for stack in stacks {
+                    stack.item_count = stack.item_count.saturating_add(additional as u8);
+                }
             }
-            | LootFunctionTypes::CopyState {
+            LootFunctionTypes::CopyComponents { source, include } => {
+                tracing::warn!(
+                    "CopyComponents not supported from source: {} for {:?}",
+                    source,
+                    include
+                );
+            }
+            LootFunctionTypes::CopyState {
                 block: _,
-                properties: _,
+                properties,
+            } => {
+                if let Some(state) = params.block_state
+                    && let Some(props_data) =
+                        Block::properties(Block::from_state_id(state.id), state.id)
+                {
+                    let actual_props = props_data.to_props();
+                    let mut properties_to_copy = std::collections::HashMap::new();
+                    for &prop_name in *properties {
+                        if let Some((_, value)) = actual_props.iter().find(|(k, _)| k == &prop_name)
+                        {
+                            properties_to_copy.insert(prop_name.to_string(), value.to_string());
+                        }
+                    }
+                    if !properties_to_copy.is_empty() {
+                        for stack in stacks.iter_mut() {
+                            if let Some(block_state_comp) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::BlockStateImpl>() {
+                                    for (k, v) in &properties_to_copy {
+                                        block_state_comp.properties.insert(k.clone(), v.clone());
+                                    }
+                                } else {
+                                    stack.patch.push((
+                                        pumpkin_data::data_component::DataComponent::BlockState,
+                                        Some(Box::new(pumpkin_data::data_component_impl::BlockStateImpl {
+                                            properties: properties_to_copy.clone(),
+                                        })),
+                                    ));
+                                }
+                        }
+                    }
+                }
             }
-            | LootFunctionTypes::EnchantedCountIncrease
-            | LootFunctionTypes::SetOminousBottleAmplifier
-            | LootFunctionTypes::SetPotion
-            | LootFunctionTypes::FurnaceSmelt => {
-                // TODO: shouldnt crash here but needs to be implemented someday
+            LootFunctionTypes::SetOminousBottleAmplifier => {
+                let amplifier = rand::random_range(0..5); // Random 0 to 4
+                for stack in stacks.iter_mut() {
+                    if let Some(amplifier_comp) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::OminousBottleAmplifierImpl>() {
+                        amplifier_comp.amplifier = amplifier;
+                    } else {
+                        stack.patch.push((
+                            pumpkin_data::data_component::DataComponent::OminousBottleAmplifier,
+                            Some(Box::new(pumpkin_data::data_component_impl::OminousBottleAmplifierImpl {
+                                amplifier,
+                            })),
+                        ));
+                    }
+                }
+            }
+            LootFunctionTypes::SetPotion { id } => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id);
+                if let Some(potion) = pumpkin_data::potion::Potion::from_name(name) {
+                    let potion_id = Some(potion.id as i32);
+                    for stack in stacks.iter_mut() {
+                        if let Some(potion_contents) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::PotionContentsImpl>() {
+                            potion_contents.potion_id = potion_id;
+                        } else {
+                            stack.patch.push((
+                                pumpkin_data::data_component::DataComponent::PotionContents,
+                                Some(Box::new(pumpkin_data::data_component_impl::PotionContentsImpl {
+                                    potion_id,
+                                    custom_color: None,
+                                    custom_effects: Vec::new(),
+                                    custom_name: None,
+                                })),
+                            ));
+                        }
+                    }
+                }
+            }
+            LootFunctionTypes::FurnaceSmelt => {
+                for stack in stacks.iter_mut() {
+                    for recipe_type in pumpkin_data::recipes::RECIPES_COOKING {
+                        if let pumpkin_data::recipes::CookingRecipeType::Smelting(recipe) =
+                            recipe_type
+                            && recipe.ingredient.match_item(stack.item)
+                        {
+                            let result_key = recipe
+                                .result
+                                .id
+                                .strip_prefix("minecraft:")
+                                .unwrap_or(recipe.result.id);
+                            if let Some(smelted_item) = Item::from_registry_key(result_key) {
+                                stack.item = smelted_item;
+                            }
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
@@ -247,7 +357,7 @@ trait LootPoolEntryTypesExt {
 impl LootPoolEntryTypesExt for LootPoolEntryTypes {
     fn get_stacks(&self, params: &LootContextParameters) -> Vec<ItemStack> {
         match self {
-            Self::Empty | Self::Dynamic => Vec::new(),
+            Self::Empty | Self::Dynamic(_) => Vec::new(),
             Self::LootTable(entry) => {
                 let key = entry
                     .value
@@ -395,7 +505,7 @@ fn check_damage_source_properties(
 }
 
 impl LootConditionExt for LootCondition {
-    // TODO: This is trash. Make this right
+    #[allow(clippy::too_many_lines)]
     fn is_fulfilled(&self, params: &LootContextParameters) -> bool {
         match self {
             Self::SurvivesExplosion => {
@@ -437,31 +547,26 @@ impl LootConditionExt for LootCondition {
             Self::AnyOf(terms) => terms.iter().any(|cond| cond.is_fulfilled(params)),
             Self::AllOf(terms) => terms.iter().all(|cond| cond.is_fulfilled(params)),
             Self::RandomChanceWithEnchantedBonus {
-                enchantment: _,
+                enchantment,
                 chances,
             } => chances.as_ref().is_some_and(|chances| {
-                // Missing tool context in params, assume enchantment level 0
-                let level = 0;
+                let level = params.tool.as_ref().map_or(0, |tool| {
+                    pumpkin_data::Enchantment::from_name(enchantment)
+                        .map_or(0, |enc| tool.get_enchantment_level(enc) as usize)
+                });
                 let chance = chances.get(level).unwrap_or(chances.last().unwrap_or(&0.0));
                 rand::rng().random::<f32>() < *chance
             }),
             Self::TableBonus {
-                enchantment: _,
+                enchantment,
                 chances,
             } => {
-                // Missing tool context in params, assume enchantment level 0
-                let level = 0;
+                let level = params.tool.as_ref().map_or(0, |tool| {
+                    pumpkin_data::Enchantment::from_name(enchantment)
+                        .map_or(0, |enc| tool.get_enchantment_level(enc) as usize)
+                });
                 let chance = chances.get(level).unwrap_or(chances.last().unwrap_or(&0.0));
                 rand::rng().random::<f32>() < *chance
-            }
-            Self::EntityScores { .. }
-            | Self::WeatherCheck { .. }
-            | Self::MatchTool { .. }
-            | Self::Reference { .. }
-            | Self::EnchantmentActiveCheck { .. }
-            | Self::LocationCheck { .. } => {
-                // TODO: Implement these
-                false
             }
             Self::TimeCheck { range, period } => {
                 let mut time = params.world_time;
@@ -483,6 +588,51 @@ impl LootConditionExt for LootCondition {
                 expected_direct_type,
             } => {
                 check_damage_source_properties(params, *expected_source_type, *expected_direct_type)
+            }
+            Self::WeatherCheck {
+                raining,
+                thundering,
+            } => {
+                let r_match = raining.is_none_or(|r| params.is_raining.unwrap_or(false) == r);
+                let t_match = thundering.is_none_or(|t| params.is_thundering.unwrap_or(false) == t);
+                r_match && t_match
+            }
+            Self::MatchTool { items } => params.tool.as_ref().is_some_and(|tool| {
+                items.as_ref().map_or_else(
+                    || {
+                        pumpkin_data::Enchantment::from_name("minecraft:silk_touch")
+                            .is_some_and(|silk_touch| tool.get_enchantment_level(silk_touch) > 0)
+                    },
+                    |items| {
+                        items.iter().any(|&item_name| {
+                            let expected =
+                                item_name.strip_prefix("minecraft:").unwrap_or(item_name);
+                            let actual = tool
+                                .item
+                                .registry_key
+                                .strip_prefix("minecraft:")
+                                .unwrap_or(tool.item.registry_key);
+                            expected == actual
+                        })
+                    },
+                )
+            }),
+            Self::LocationCheck { expected_biome, .. } => expected_biome.is_none(),
+            Self::EntityScores { entity } => {
+                tracing::warn!("EntityScores check not supported for entity: {}", entity);
+                false
+            }
+            Self::Reference { name } => {
+                tracing::warn!("Loot condition reference not supported: {}", name);
+                false
+            }
+            Self::EnchantmentActiveCheck { active } => {
+                params.tool.as_ref().map_or(!*active, |tool| {
+                    let has_enchantments = tool
+                        .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+                        .is_some_and(|e| !e.enchantment.is_empty());
+                    has_enchantments == *active
+                })
             }
         }
     }

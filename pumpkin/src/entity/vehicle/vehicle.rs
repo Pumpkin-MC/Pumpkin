@@ -89,7 +89,14 @@ impl VehicleEntity {
 
         if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
             let pos = self.entity.block_pos.load();
-            let params = LootContextParameters::default();
+            let is_raining = world.is_raining().await;
+            let is_thundering = world.is_thundering().await;
+            let params = LootContextParameters {
+                is_raining: Some(is_raining),
+                is_thundering: Some(is_thundering),
+                world_time: world.level_info.load().day_time as u64,
+                ..Default::default()
+            };
             for stack in loot_table.get_loot(params) {
                 world.drop_stack(&pos, stack).await;
             }

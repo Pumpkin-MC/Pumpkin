@@ -719,7 +719,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -826,7 +833,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -856,7 +870,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -886,11 +907,20 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: Some(1f32),
+                                },
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::SetPotion,
+                                content: LootFunctionTypes::SetPotion {
+                                    id: "minecraft:poison",
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -975,7 +1005,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 1f32,
+                                    max: 2f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -1136,7 +1173,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -1300,7 +1344,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -1330,7 +1381,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -1482,7 +1540,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -1515,7 +1580,14 @@ impl EntityType {
                                 ])]),
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -1718,7 +1790,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -1803,7 +1882,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -1846,7 +1932,14 @@ impl EntityType {
                                 ])]),
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -1987,7 +2080,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -2135,7 +2235,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                         LootFunction {
@@ -2232,7 +2339,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -2340,7 +2454,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -2469,7 +2590,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -2490,7 +2618,14 @@ impl EntityType {
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                                 LootFunction {
@@ -2516,7 +2651,14 @@ impl EntityType {
                             quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             }]),
                         },
@@ -2778,7 +2920,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -2933,7 +3082,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -3329,7 +3485,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -3359,7 +3522,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -3547,7 +3717,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -3688,7 +3865,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -3709,7 +3893,14 @@ impl EntityType {
                             conditions: None,
                             functions: Some(&[
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                                 LootFunction {
@@ -3735,7 +3926,14 @@ impl EntityType {
                             quality: 0i32,
                             conditions: None,
                             functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             }]),
                         },
@@ -3930,7 +4128,14 @@ impl EntityType {
                                 ])]),
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -3960,7 +4165,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -4067,7 +4279,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -4153,7 +4372,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -4186,7 +4412,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -4681,7 +4914,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -4797,7 +5037,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -5078,7 +5325,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -5121,7 +5375,14 @@ impl EntityType {
                                 ])]),
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -5206,7 +5467,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -5631,7 +5899,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -5661,7 +5936,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -5691,11 +5973,20 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: Some(1f32),
+                                },
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::SetPotion,
+                                content: LootFunctionTypes::SetPotion {
+                                    id: "minecraft:weakness",
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -5782,7 +6073,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -5866,7 +6164,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -5963,7 +6268,14 @@ impl EntityType {
                             ])]),
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -6282,7 +6594,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -6319,7 +6638,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -6497,7 +6823,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -6537,7 +6870,14 @@ impl EntityType {
                                 ])]),
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -6829,7 +7169,14 @@ impl EntityType {
                                 ])]),
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -7271,7 +7618,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -7301,7 +7655,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -7386,7 +7747,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -7476,7 +7844,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -7803,7 +8178,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -7833,7 +8215,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -7983,7 +8372,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -8068,7 +8464,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -8098,7 +8501,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -8128,11 +8538,20 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: Some(1f32),
+                                },
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::SetPotion,
+                                content: LootFunctionTypes::SetPotion {
+                                    id: "minecraft:slowness",
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -8217,7 +8636,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -8477,7 +8903,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -8675,7 +9108,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -8887,7 +9327,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -9118,7 +9565,14 @@ impl EntityType {
                                     conditions: None,
                                 },
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                             ]),
@@ -9142,7 +9596,14 @@ impl EntityType {
                                     conditions: None,
                                 },
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                             ]),
@@ -9166,7 +9627,14 @@ impl EntityType {
                                     conditions: None,
                                 },
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                             ]),
@@ -9190,7 +9658,14 @@ impl EntityType {
                                     conditions: None,
                                 },
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                             ]),
@@ -9214,7 +9689,14 @@ impl EntityType {
                                     conditions: None,
                                 },
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                             ]),
@@ -9238,7 +9720,14 @@ impl EntityType {
                                     conditions: None,
                                 },
                                 LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease,
+                                    content: LootFunctionTypes::EnchantedCountIncrease {
+                                        enchantment: "minecraft:looting",
+                                        count: LootFunctionNumberProvider::Uniform {
+                                            min: 0f32,
+                                            max: 1f32,
+                                        },
+                                        limit: None,
+                                    },
                                     conditions: None,
                                 },
                             ]),
@@ -9274,7 +9763,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -9416,7 +9912,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -9446,7 +9949,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -9630,7 +10140,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -9716,7 +10233,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -9749,7 +10273,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -9908,7 +10439,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -9993,7 +10531,14 @@ impl EntityType {
                             conditions: None,
                         },
                         LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease,
+                            content: LootFunctionTypes::EnchantedCountIncrease {
+                                enchantment: "minecraft:looting",
+                                count: LootFunctionNumberProvider::Uniform {
+                                    min: 0f32,
+                                    max: 1f32,
+                                },
+                                limit: None,
+                            },
                             conditions: None,
                         },
                     ]),
@@ -10079,7 +10624,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -10219,7 +10771,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
@@ -10249,7 +10808,14 @@ impl EntityType {
                                 conditions: None,
                             },
                             LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease,
+                                content: LootFunctionTypes::EnchantedCountIncrease {
+                                    enchantment: "minecraft:looting",
+                                    count: LootFunctionNumberProvider::Uniform {
+                                        min: 0f32,
+                                        max: 1f32,
+                                    },
+                                    limit: None,
+                                },
                                 conditions: None,
                             },
                         ]),
