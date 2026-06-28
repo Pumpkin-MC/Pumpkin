@@ -4,6 +4,16 @@ use crate::bedrock::{MTU, RAKNET_SPLIT, RakReliability};
 use crate::codec::u24;
 use crate::serial::{PacketRead, PacketWrite};
 
+/// Maximum number of fragments a single split message may declare.
+///
+/// `split_size` is attacker-controlled and the receiver pre-allocates a
+/// `Vec<Option<Frame>>` of this length before validating any fragment index
+/// (see `handle_frame`). Split fragments carry at most
+/// `SPLIT_FRAME_MAX_CONTENT` (~1346) bytes each, so 1024 fragments already
+/// allow a ~1.3 MB reassembled message — far above any legitimate inbound
+/// Bedrock packet — while bounding the pre-allocation to a few tens of KB.
+const MAX_FRAGMENTS: u32 = 1024;
+
 pub struct FrameSet {
     pub sequence: u24,
     pub frames: Vec<Frame>,
@@ -106,6 +116,9 @@ impl Frame {
 
             if split {
                 frame.split_size = u32::read_be(reader)?;
+                if frame.split_size == 0 || frame.split_size > MAX_FRAGMENTS {
+                    return Err(Error::other("Frame split size out of bounds"));
+                }
                 frame.split_id = u16::read_be(reader)?;
                 frame.split_index = u32::read_be(reader)?;
             }

@@ -1,6 +1,11 @@
 use std::io::{Error, ErrorKind, Read, Write};
 
 const MAX_ACK_RECORDS: u16 = 4096;
+/// Upper bound on the total number of sequence numbers a single ACK/NACK
+/// packet may expand to. Range records (`start..=end`) cover 24-bit values, so
+/// without this cap a handful of records could expand to hundreds of millions
+/// of entries and exhaust memory.
+const MAX_ACK_SEQUENCES: usize = 4096;
 
 use crate::{
     codec::u24,
@@ -41,14 +46,26 @@ impl Acknowledge {
         let mut sequences = Vec::with_capacity(size as usize);
         for _ in 0..size {
             let single = bool::read(reader)?;
-            if single {
-                sequences.push(u24::read(reader)?.0);
+            let (start, end) = if single {
+                let seq = u24::read(reader)?.0;
+                (seq, seq)
             } else {
-                let start = u24::read(reader)?.0;
-                let end = u24::read(reader)?.0;
-                for i in start..=end {
-                    sequences.push(i);
-                }
+                (u24::read(reader)?.0, u24::read(reader)?.0)
+            };
+
+            // Bound the total expanded sequences before growing the vector so a
+            // record (or a few range records) cannot blow up into hundreds of
+            // millions of entries. `end < start` yields an empty range below.
+            let span = (end.saturating_sub(start) as usize).saturating_add(1);
+            if sequences.len().saturating_add(span) > MAX_ACK_SEQUENCES {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Acknowledge packet expands to too many sequences.",
+                ));
+            }
+
+            for i in start..=end {
+                sequences.push(i);
             }
         }
         Ok(Self { sequences })
