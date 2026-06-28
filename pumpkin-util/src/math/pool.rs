@@ -15,22 +15,28 @@ impl Pool {
     ///
     /// # Returns
     /// An `Option<E>` representing the selected element, or `None` if the distribution is empty.
-    pub fn get<E: Clone>(distribution: &[Weighted<E>], random: &mut RandomGenerator) -> Option<E> {
+    pub fn get<'a, E>(
+        distribution: &'a [Weighted<E>],
+        random: &mut RandomGenerator,
+    ) -> Option<&'a E> {
         let mut total_weight = 0;
         for dist in distribution {
             total_weight += dist.weight;
         }
+
         let mut index = random.next_bounded_i32(total_weight);
+
         if total_weight < 64 {
             return Some(FlattenedContent::get(index, distribution, total_weight));
         }
+
         // WrappedContent
         for dist in distribution {
             index -= dist.weight;
             if index >= 0 {
                 continue;
             }
-            return Some(dist.data.clone());
+            return Some(&dist.data);
         }
         None
     }
@@ -58,16 +64,17 @@ impl FlattenedContent {
     ///
     /// # Returns
     /// The element corresponding to the given index.
-    pub fn get<E: Clone>(index: i32, entries: &[Weighted<E>], total_weight: i32) -> E {
-        let mut final_entries = Vec::with_capacity(total_weight as usize);
+    pub fn get<E>(index: i32, entries: &[Weighted<E>], _total_weight: i32) -> &E {
         let mut cur_index = 0;
+
         for entry in entries {
             let weight = entry.weight;
-            for i in cur_index..cur_index + weight {
-                final_entries.insert(i as usize, entry.data.clone());
+            if index >= cur_index && index < cur_index + weight {
+                return &entry.data;
             }
             cur_index += weight;
         }
-        final_entries[index as usize].clone()
+
+        &entries[0].data
     }
 }

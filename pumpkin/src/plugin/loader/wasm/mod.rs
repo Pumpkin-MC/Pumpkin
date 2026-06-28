@@ -47,10 +47,7 @@ impl PluginLoader for WasmPluginLoader {
     }
 
     fn can_load(&self, path: &Path) -> bool {
-        let ext = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default();
+        let ext = path.extension().unwrap_or_default();
 
         ext.eq_ignore_ascii_case("wasm")
     }

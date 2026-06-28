@@ -38,7 +38,8 @@ pub struct MaxDistance {
 }
 
 impl MaxDistance {
-    pub fn new(horizontal: i32) -> Self {
+    #[must_use]
+    pub const fn new(horizontal: i32) -> Self {
         Self {
             horizontal,
             vertical: 384, // Default Y_SIZE (min_y to max_y)
@@ -54,7 +55,8 @@ pub const MAX_DEPTH: i32 = 20;
 pub struct PoolAliasLookup;
 
 impl PoolAliasLookup {
-    pub fn lookup<'a>(&self, id: &'a str) -> &'a str {
+    #[must_use]
+    pub const fn lookup<'a>(&self, id: &'a str) -> &'a str {
         // In a complete implementation, this would look up the alias in the context/registry.
         // Returning the ID directly acts as a fallback/default behavior.
         id
@@ -121,8 +123,8 @@ impl JigsawPlacement {
             adjusted_position.0.z + rotated_size.z - 1,
         );
 
-        let center_x = (box_.max.x + box_.min.x) / 2;
-        let center_z = (box_.max.z + box_.min.z) / 2;
+        let center_x = i32::midpoint(box_.max.x, box_.min.x);
+        let center_z = i32::midpoint(box_.max.z, box_.min.z);
 
         let bottom_y = if project_start_to_heightmap {
             if let Some(sampler) = &mut context.height_sampler {
@@ -227,7 +229,7 @@ impl JigsawPlacement {
                 let source_projection = piece_projections[source_piece_idx];
                 let source_rigid = source_projection == JigsawProjection::Rigid;
 
-                'jigsaw_loop: for source_jigsaw in source_jigsaws.iter() {
+                'jigsaw_loop: for source_jigsaw in &source_jigsaws {
                     let raw_pool_id = &source_jigsaw.pool;
                     if raw_pool_id == "minecraft:empty" || raw_pool_id.is_empty() {
                         continue;
@@ -544,9 +546,8 @@ impl JigsawPlacement {
 
 // Helper to determine the max Y height of a pool for the expansion hack
 fn get_pool_max_y_size(pool_id: &str) -> i32 {
-    let pool = match TemplatePool::discover(pool_id) {
-        Some(p) => p,
-        None => return 0,
+    let Some(pool) = TemplatePool::discover(pool_id) else {
+        return 0;
     };
 
     let mut max_y = 0;
@@ -561,7 +562,7 @@ fn get_pool_max_y_size(pool_id: &str) -> i32 {
     max_y
 }
 
-fn is_box_inside(outer: &BlockBox, inner: &BlockBox) -> bool {
+const fn is_box_inside(outer: &BlockBox, inner: &BlockBox) -> bool {
     inner.min.x >= outer.min.x
         && inner.max.x <= outer.max.x
         && inner.min.y >= outer.min.y
@@ -570,7 +571,7 @@ fn is_box_inside(outer: &BlockBox, inner: &BlockBox) -> bool {
         && inner.max.z <= outer.max.z
 }
 
-fn intersects_exclusive(a: &BlockBox, b: &BlockBox) -> bool {
+const fn intersects_exclusive(a: &BlockBox, b: &BlockBox) -> bool {
     // Strictly greater/less than checks perfectly emulate Vanilla's AABB deflate(0.25)
     // by completely ignoring touching boundaries where coords are equal.
     a.max.x > b.min.x
@@ -649,7 +650,7 @@ fn can_attach(source: &JigsawBlock, target: &JigsawBlock, target_rotation: Rotat
     true
 }
 
-fn rotate_direction(
+const fn rotate_direction(
     dir: pumpkin_util::BlockDirection,
     rotation: Rotation,
 ) -> pumpkin_util::BlockDirection {

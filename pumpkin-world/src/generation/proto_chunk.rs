@@ -348,7 +348,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
+    pub const fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
             HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
             HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
@@ -395,7 +395,7 @@ impl ProtoChunk {
     }
 
     #[inline]
-    fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
+    const fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
         self.height() as usize * CHUNK_DIM as usize * x as usize
             + CHUNK_DIM as usize * y as usize
             + z as usize
@@ -403,7 +403,7 @@ impl ProtoChunk {
 
     #[inline]
     #[must_use]
-    pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
+    pub const fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         let biome_height = self.height() as usize >> 2;
         biome_height * biome_coords::from_block(CHUNK_DIM as i32) as usize * x as usize
             + biome_coords::from_block(CHUNK_DIM as i32) as usize * y as usize

@@ -34,17 +34,17 @@ impl FindTopSurface {
     }
 
     #[must_use]
-    pub fn density_index(&self) -> usize {
+    pub const fn density_index(&self) -> usize {
         self.density_index
     }
 
     #[must_use]
-    pub fn upper_bound_index(&self) -> usize {
+    pub const fn upper_bound_index(&self) -> usize {
         self.upper_bound_index
     }
 
     #[must_use]
-    pub fn cell_height(&self) -> i32 {
+    pub const fn cell_height(&self) -> i32 {
         self.data.cell_height
     }
 }

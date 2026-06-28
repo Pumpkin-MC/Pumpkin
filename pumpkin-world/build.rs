@@ -21,11 +21,10 @@ fn main() {
 
         for (pool_id, elements) in pools {
             pool_code.push_str(&format!(
-                "        \"minecraft:{}\" | \"{}\" => Some(&[\n",
-                pool_id, pool_id
+                "        \"minecraft:{pool_id}\" | \"{pool_id}\" => Some(&[\n"
             ));
             for element in elements {
-                pool_code.push_str(&format!("            \"{}\",\n", element));
+                pool_code.push_str(&format!("            \"{element}\",\n"));
             }
             pool_code.push_str("        ]),\n");
         }
@@ -37,7 +36,7 @@ fn main() {
     pool_code.push_str("        _ => None,\n");
     pool_code.push_str("    }\n}\n");
 
-    fs::write(&dest_path, format!("{}\n{}", code, pool_code)).unwrap();
+    fs::write(&dest_path, format!("{code}\n{pool_code}")).unwrap();
     println!("cargo:rerun-if-changed=assets/structures");
 }
 
@@ -56,7 +55,7 @@ fn process_dir(
             let new_prefix = if prefix.is_empty() {
                 name
             } else {
-                format!("{}/{}", prefix, name)
+                format!("{prefix}/{name}")
             };
             process_dir(&path, &new_prefix, code, pools);
         } else if name.ends_with(".nbt") {
