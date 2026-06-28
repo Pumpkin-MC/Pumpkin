@@ -154,7 +154,7 @@ impl BreathManager {
 
         player.get_entity().send_meta_data(&[Metadata::new(
             TrackedData::AIR_SUPPLY_ID,
-            MetaDataType::INTEGER,
+            MetaDataType::INT,
             VarInt(air),
         )]);
     }
