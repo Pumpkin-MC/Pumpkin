@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::Arc,
     sync::{LazyLock, Mutex},
@@ -37,10 +36,12 @@ pub fn translation_engine() -> &'static TranslationEngine {
 }
 
 /// Resolves a translation using the global engine.
+///
+/// Key normalisation (lowercasing) is handled inside the engine,
+/// so keys of any casing are accepted here.
 #[must_use]
 pub fn resolve_translation(key: &str, locale: Locale) -> Arc<ResolvedTranslation> {
-    let key = normalize_translation_key(key);
-    translation_engine().resolve(locale as usize, key.as_ref())
+    translation_engine().resolve(locale as usize, key)
 }
 
 /// Adds or overrides a single translation entry.
@@ -146,14 +147,6 @@ pub fn format_translation(key: &str, locale: Locale, args: &[String]) -> String 
     let mut output = String::with_capacity(resolved.as_str().len());
     resolved.write_to(args, &mut output);
     output
-}
-
-pub(crate) fn normalize_translation_key(key: &str) -> Cow<'_, str> {
-    if key.bytes().any(|byte| byte.is_ascii_uppercase()) {
-        Cow::Owned(key.to_ascii_lowercase())
-    } else {
-        Cow::Borrowed(key)
-    }
 }
 
 fn namespaced_key(namespace: &str, key: &str) -> String {

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::hash::BuildHasherDefault;
 use std::sync::Arc;
 use std::{collections::HashMap, fmt::Write};
@@ -122,10 +123,12 @@ struct FstLocaleStore {
 impl FstLocaleStore {
     /// Build an [`FstLocaleStore`] from a flat `key → translation` map.
     fn build(data: &HashMap<String, String>) -> Self {
-        // 1. Collect and sort keys for deterministic FST construction.
-        let mut sorted: Vec<(&str, &str)> =
-            data.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-        sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        // 1. Lowercase keys for case-insensitive lookup, then sort.
+        let mut sorted: Vec<(String, &str)> = data
+            .iter()
+            .map(|(k, v)| (k.to_ascii_lowercase(), v.as_str()))
+            .collect();
+        sorted.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let mut entries: Vec<ResolvedTranslation> = Vec::with_capacity(sorted.len());
 
@@ -224,7 +227,8 @@ impl TranslationEngine {
     /// * `locale_idx` — Index of the locale (use `locale as usize`).
     /// * `key` — The fully‑qualified translation key (`"namespace:entry"`).
     pub fn resolve(&self, locale_idx: usize, key: &str) -> Arc<ResolvedTranslation> {
-        let cache_key = make_cache_key(locale_idx, key);
+        let key = normalize_key(key);
+        let cache_key = make_cache_key(locale_idx, key.as_ref());
 
         // Fast path: cache hit (no lock contention).
         if let Some(entry) = self.cache.get(&cache_key) {
@@ -234,12 +238,15 @@ impl TranslationEngine {
         let stores = self.stores.load();
 
         // Tier 1 – requested locale (silent)
-        if let Some(entry) = self.lookup_override(locale_idx, key) {
+        if let Some(entry) = self.lookup_override(locale_idx, key.as_ref()) {
             self.cache.insert(cache_key, entry.clone());
             return entry;
         }
 
-        if let Some(entry) = stores.get(locale_idx).and_then(|store| store.lookup(key)) {
+        if let Some(entry) = stores
+            .get(locale_idx)
+            .and_then(|store| store.lookup(key.as_ref()))
+        {
             let resolved = Arc::new(entry.clone());
             self.cache.insert(cache_key, resolved.clone());
             return resolved;
@@ -247,23 +254,25 @@ impl TranslationEngine {
 
         // Tier 2 – EnUs fallback
         if locale_idx != crate::locale::Locale::EnUs as usize {
-            if let Some(entry) = self.lookup_override(crate::locale::Locale::EnUs as usize, key) {
+            if let Some(entry) =
+                self.lookup_override(crate::locale::Locale::EnUs as usize, key.as_ref())
+            {
                 #[cfg(debug_assertions)]
-                Self::log_english_fallback(locale_idx, key);
+                Self::log_english_fallback(locale_idx, key.as_ref());
                 #[cfg(not(debug_assertions))]
-                self.log_english_fallback(locale_idx, key);
+                self.log_english_fallback(locale_idx, key.as_ref());
                 self.cache.insert(cache_key, entry.clone());
                 return entry;
             }
 
             if let Some(entry) = stores
                 .get(crate::locale::Locale::EnUs as usize)
-                .and_then(|store| store.lookup(key))
+                .and_then(|store| store.lookup(key.as_ref()))
             {
                 #[cfg(debug_assertions)]
-                Self::log_english_fallback(locale_idx, key);
+                Self::log_english_fallback(locale_idx, key.as_ref());
                 #[cfg(not(debug_assertions))]
-                self.log_english_fallback(locale_idx, key);
+                self.log_english_fallback(locale_idx, key.as_ref());
                 let resolved = Arc::new(entry.clone());
                 self.cache.insert(cache_key, resolved.clone());
                 return resolved;
@@ -272,10 +281,10 @@ impl TranslationEngine {
 
         // Tier 3 – raw key
         #[cfg(debug_assertions)]
-        Self::log_missing_translation(locale_idx, key);
+        Self::log_missing_translation(locale_idx, key.as_ref());
         #[cfg(not(debug_assertions))]
-        self.log_missing_translation(locale_idx, key);
-        let resolved = Arc::new(ResolvedTranslation::Missing(Arc::from(key)));
+        self.log_missing_translation(locale_idx, key.as_ref());
+        let resolved = Arc::new(ResolvedTranslation::Missing(Arc::from(key.into_owned())));
         self.cache.insert(cache_key, resolved.clone());
         resolved
     }
@@ -288,7 +297,7 @@ impl TranslationEngine {
     pub fn add_translation(&self, locale_idx: usize, key: &str, translation: &str) {
         if let Some(store) = self.overrides.get(locale_idx) {
             store.insert(
-                key.to_owned(),
+                normalize_key(key).into_owned(),
                 Arc::new(ResolvedTranslation::from_template(translation)),
             );
             self.cache.clear();
@@ -306,7 +315,7 @@ impl TranslationEngine {
 
         for (key, translation) in entries {
             store.insert(
-                key,
+                key.to_ascii_lowercase(),
                 Arc::new(ResolvedTranslation::from_template(&translation)),
             );
         }
@@ -377,6 +386,22 @@ impl TranslationEngine {
                 "translation key not found in any locale – returning raw key"
             );
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Normalize key
+// ---------------------------------------------------------------------------
+
+/// Normalise une clef de traduction en minuscules pour une recherche
+/// insensible à la casse. Évite toute allocation si la clef est déjà
+/// entièrement en minuscules.
+#[inline]
+fn normalize_key(key: &str) -> Cow<'_, str> {
+    if key.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        Cow::Owned(key.to_ascii_lowercase())
+    } else {
+        Cow::Borrowed(key)
     }
 }
 
