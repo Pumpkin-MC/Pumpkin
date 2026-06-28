@@ -30,7 +30,7 @@ const DEFAULT_MIRROR: &str =
 pub struct DownloadedTranslations {
     /// `pumpkin:` namespace entries.
     pub pumpkin: HashMap<String, String>,
-    /// `minecraft:` namespace (Java Edition vanilla) entries.
+    /// `java_minecraft:` namespace (Java Edition vanilla) entries.
     pub java: HashMap<String, String>,
     /// `bedrock_minecraft:` namespace (Bedrock Edition vanilla) entries.
     pub bedrock: HashMap<String, String>,
@@ -145,7 +145,7 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 ///
 /// # Namespaces
 /// * `pumpkin:` — pumpkin server translations
-/// * `minecraft:` — vanilla Java Edition translations
+/// * `java_minecraft:` — vanilla Java Edition translations
 /// * `bedrock_minecraft:` — vanilla Bedrock Edition translations
 ///
 /// This function calls [`crate::store::add_translation_file`] for each
@@ -158,7 +158,7 @@ pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
 
     if !downloaded.java.is_empty() {
         let json = serde_json::to_string(&downloaded.java).unwrap();
-        crate::store::add_translation_file("minecraft", &json, locale);
+        crate::store::add_translation_file("java_minecraft", &json, locale);
     }
 
     if !downloaded.bedrock.is_empty() {

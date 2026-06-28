@@ -76,7 +76,7 @@ fn main() {
     code.push_str("        }\n");
     code.push_str("    }\n\n");
 
-    // Emit vanilla en_us_java.json into EnUs locale with "minecraft:" prefix
+    // Emit vanilla en_us_java.json into EnUs locale with "java_minecraft:" prefix
     code.push_str("    // Vanilla Java en_us (embedded)\n");
     code.push_str("    {\n");
     code.push_str(
@@ -88,7 +88,7 @@ fn main() {
     code.push_str("        ).expect(\"Could not parse en_us_java.json\");\n");
     code.push_str("        for (key, value) in vanilla {\n");
     code.push_str(
-        "            array[crate::Locale::EnUs as usize].insert(format!(\"minecraft:{key}\"), value);\n",
+        "            array[crate::Locale::EnUs as usize].insert(format!(\"java_minecraft:{key}\"), value);\n",
     );
     code.push_str("        }\n");
     code.push_str("    }\n\n");
