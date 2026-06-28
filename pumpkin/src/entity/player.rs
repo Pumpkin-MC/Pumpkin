@@ -1933,7 +1933,7 @@ impl Player {
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             self.client.send_chunks(&chunk_of_chunks).await;
 
-            if let ClientPlatform::Bedrock(bedrock_client) = &self.client
+            if let ClientPlatform::Bedrock(bedrock_client) = &*self.client
                 && !self.bedrock_spawned.load(Ordering::Relaxed)
                 && total_sent_chunks > 4
             {
