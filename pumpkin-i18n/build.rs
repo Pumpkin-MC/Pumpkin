@@ -7,20 +7,45 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let translations_dir = Path::new(&manifest_dir).join("../assets/translations/pumpkin");
+    let pumpkin_dir = Path::new(&manifest_dir).join("../assets/translations/pumpkin");
+    let vanilla_dir = Path::new(&manifest_dir).join("../assets/translations/vanilla");
 
-    // Collect all .json translation files
-    let mut files: Vec<String> = Vec::new();
-    for entry in fs::read_dir(&translations_dir).unwrap() {
+    // Collect all .json pumpkin translation files
+    let mut pumpkin_files: Vec<String> = Vec::new();
+    for entry in fs::read_dir(&pumpkin_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "json") {
-            files.push(path.file_name().unwrap().to_str().unwrap().to_string());
+            pumpkin_files.push(path.file_name().unwrap().to_str().unwrap().to_string());
+        }
+    }
+
+    // Collect all *_java.json vanilla translation files
+    let mut vanilla_files: Vec<String> = Vec::new();
+    for entry in fs::read_dir(&vanilla_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        if name.ends_with("_java.json") {
+            vanilla_files.push(name.to_string());
+        }
+    }
+
+    // Collect all *_bedrock.lang vanilla translation files
+    let mut bedrock_files: Vec<String> = Vec::new();
+    for entry in fs::read_dir(&vanilla_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        if name.ends_with("_bedrock.lang") {
+            bedrock_files.push(name.to_string());
         }
     }
 
     // Sort for deterministic output
-    files.sort();
+    pumpkin_files.sort();
+    vanilla_files.sort();
+    bedrock_files.sort();
 
     // Generate the Rust source file
     let dest_path = Path::new(&out_dir).join("generated_store.rs");
@@ -36,25 +61,59 @@ fn main() {
         "    let mut array: [std::collections::HashMap<String, String>; crate::Locale::COUNT] = std::array::from_fn(|_| std::collections::HashMap::new());\n\n",
     );
 
-    // Vanilla en_us_java.json with "minecraft:" prefix
-    code.push_str("    // Vanilla en_us (minecraft namespace)\n");
-    code.push_str("    {\n");
-    code.push_str(
-        "        let vanilla: std::collections::HashMap<String, String> = serde_json::from_str(\n",
-    );
-    code.push_str(
-        "            include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../assets/translations/vanilla/en_us_java.json\"))\n",
-    );
-    code.push_str("        ).expect(\"Could not parse en_us_java.json\");\n");
-    code.push_str("        for (key, value) in vanilla {\n");
-    code.push_str(
-        "            array[crate::Locale::EnUs as usize].insert(format!(\"minecraft:{key}\"), value);\n",
-    );
-    code.push_str("        }\n");
-    code.push_str("    }\n\n");
+    // Vanilla *_java.json files with "minecraft:" prefix
+    for file in &vanilla_files {
+        // Strip "_java.json" suffix → e.g. "zh_cn_java.json" → "zh_cn"
+        let locale_stem = file.strip_suffix("_java.json").unwrap();
+        let variant = filename_to_variant(locale_stem);
+
+        let _ = writeln!(code, "    // Vanilla {locale_stem} (minecraft namespace)");
+        code.push_str("    {\n");
+        code.push_str(
+            "        let vanilla: std::collections::HashMap<String, String> = serde_json::from_str(\n",
+        );
+        let _ = writeln!(
+            code,
+            "            include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../assets/translations/vanilla/{file}\"))"
+        );
+        let _ = writeln!(code, "        ).expect(\"Could not parse {file}\");");
+        code.push_str("        for (key, value) in vanilla {\n");
+        let _ = writeln!(
+            code,
+            "            array[crate::Locale::{variant} as usize].insert(format!(\"minecraft:{{key}}\"), value);"
+        );
+        code.push_str("        }\n");
+        code.push_str("    }\n\n");
+    }
+
+    // Bedrock *_bedrock.lang files with "minecraft:" prefix (key=value lines)
+    for file in &bedrock_files {
+        // Strip "_bedrock.lang" suffix → e.g. "en_us_bedrock.lang" → "en_us"
+        let locale_stem = file.strip_suffix("_bedrock.lang").unwrap();
+        let variant = filename_to_variant(locale_stem);
+
+        let _ = writeln!(code, "    // Bedrock {locale_stem} (minecraft namespace)");
+        code.push_str("    {\n");
+        code.push_str("        let bedrock: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../assets/translations/vanilla/");
+        code.push_str(file);
+        code.push_str("\"));\n");
+        code.push_str("        for line in bedrock.lines() {\n");
+        code.push_str("            let trimmed = line.trim();\n");
+        code.push_str("            if trimmed.is_empty() {\n");
+        code.push_str("                continue;\n");
+        code.push_str("            }\n");
+        code.push_str("            if let Some((key, value)) = trimmed.split_once('=') {\n");
+        let _ = writeln!(
+            code,
+            "                array[crate::Locale::{variant} as usize].insert(format!(\"minecraft:{{}}\", key.trim().to_ascii_lowercase()), value.trim().to_string());"
+        );
+        code.push_str("            }\n");
+        code.push_str("        }\n");
+        code.push_str("    }\n\n");
+    }
 
     // Pumpkin translation files with "pumpkin:" prefix
-    for file in &files {
+    for file in &pumpkin_files {
         let stem = file.strip_suffix(".json").unwrap();
         let variant = filename_to_variant(stem);
 
@@ -84,7 +143,7 @@ fn main() {
 
     // Rebuild tracking
     println!("cargo::rerun-if-changed=../assets/translations/pumpkin/");
-    println!("cargo::rerun-if-changed=../assets/translations/vanilla/en_us_java.json");
+    println!("cargo::rerun-if-changed=../assets/translations/vanilla/");
 }
 
 /// Converts a lowercase underscore-delimited filename stem to a Locale variant name.

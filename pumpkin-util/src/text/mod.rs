@@ -918,7 +918,11 @@ impl TextComponent {
     where
         F: Fn(usize, usize) -> color::RGBColor,
     {
-        let raw_text = self.0.clone().get_text(server_global_locale());
+        let locale = match &*self.0.content {
+            TextContent::Custom { locale, .. } => *locale,
+            _ => server_global_locale(),
+        };
+        let raw_text = self.0.clone().get_text(locale);
         let chars: Vec<char> = raw_text.chars().collect();
         let len = chars.len();
 
