@@ -856,7 +856,9 @@ dependencies = [
  "dashmap",
  "fst",
  "serde_json",
+ "sha2 0.11.0",
  "tracing",
+ "ureq",
  "xxhash-rust",
 ]
 

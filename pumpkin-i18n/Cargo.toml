@@ -10,7 +10,9 @@ arc-swap.workspace = true
 dashmap.workspace = true
 fst.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tracing.workspace = true
+ureq.workspace = true
 xxhash-rust.workspace = true
 
 [lints]

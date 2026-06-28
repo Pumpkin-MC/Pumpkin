@@ -1,5 +1,8 @@
 use std::{borrow::Cow, str::FromStr};
 
+// Include auto-generated locale codes array from build.rs
+include!(concat!(env!("OUT_DIR"), "/generated_locale_codes.rs"));
+
 /// Supported locales for translations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Locale {
@@ -135,6 +138,12 @@ pub enum Locale {
 
 impl Locale {
     pub const COUNT: usize = Self::ZlmArab as usize + 1;
+
+    /// Returns the lowercase underscore-separated locale code (e.g. `"en_us"`, `"zh_cn"`).
+    #[must_use]
+    pub fn to_code(self) -> &'static str {
+        locale_code(self as usize)
+    }
 }
 
 impl FromStr for Locale {
@@ -328,5 +337,30 @@ mod tests {
         assert_eq!(Locale::from_str("EnUs"), Ok(Locale::EnUs));
         assert_eq!(Locale::from_str("ZH_CN"), Ok(Locale::ZhCn));
         assert_eq!(Locale::from_str("zlm-Arab"), Ok(Locale::ZlmArab));
+    }
+
+    #[test]
+    fn to_code_returns_lowercase_underscore() {
+        assert_eq!(Locale::EnUs.to_code(), "en_us");
+        assert_eq!(Locale::ZhCn.to_code(), "zh_cn");
+        assert_eq!(Locale::ZlmArab.to_code(), "zlm_arab");
+        assert_eq!(Locale::Bar.to_code(), "bar");
+        assert_eq!(Locale::BaRu.to_code(), "ba_ru");
+        assert_eq!(Locale::Enp.to_code(), "enp");
+        assert_eq!(Locale::DeDe.to_code(), "de_de");
+    }
+
+    #[test]
+    fn to_code_round_trips_with_from_str() {
+        // Every Locale variant's code should parse back to the same variant.
+        for variant in 0..Locale::COUNT {
+            let locale: Locale = unsafe { std::mem::transmute(variant as u8) };
+            let code = locale.to_code();
+            let parsed = Locale::from_str(code).unwrap();
+            assert_eq!(
+                parsed, locale,
+                "round-trip failed for variant {variant}: code={code:?}"
+            );
+        }
     }
 }

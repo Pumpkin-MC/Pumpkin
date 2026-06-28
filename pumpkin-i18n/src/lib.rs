@@ -3,6 +3,7 @@
 /// - Add support for translations on commands descriptions
 /// - Integrate custom translations with the plugins API
 pub mod client;
+pub mod download;
 pub mod engine;
 pub mod locale;
 pub mod server;
@@ -13,6 +14,7 @@ pub use client::{
     locale_to_log_string, player_locale, remove_player_locale, resolve_client_locale,
     set_player_locale, try_player_locale,
 };
+pub use download::{DownloadConfig, DownloadedTranslations, download_locale, load_downloaded};
 pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
 pub use locale::Locale;
 pub use server::{

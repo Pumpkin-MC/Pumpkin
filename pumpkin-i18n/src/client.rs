@@ -100,14 +100,5 @@ pub fn resolve_client_locale(player_locale: &str, config_value: &str) -> Locale 
 /// A string like `"en_us"`, `"zh_cn"`, etc.
 #[must_use]
 pub fn locale_to_log_string(locale: Locale) -> String {
-    let raw = format!("{locale:?}");
-    // Insert underscores before uppercase letters, then lowercase
-    let mut output = String::with_capacity(raw.len() + 2);
-    for (idx, c) in raw.chars().enumerate() {
-        if idx > 0 && c.is_uppercase() {
-            output.push('_');
-        }
-        output.push(c.to_ascii_lowercase());
-    }
-    output
+    locale.to_code().to_owned()
 }

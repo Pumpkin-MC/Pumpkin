@@ -27,7 +27,10 @@ use pumpkin::{
 use pumpkin_util::translation::{localized_log, localized_log_format, localized_text};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
-use pumpkin_i18n::{self, locale_to_log_string, resolve_server_locale, set_server_global_locale};
+use pumpkin_i18n::{
+    self, DownloadConfig, download_locale, load_downloaded, locale_to_log_string,
+    resolve_server_locale, set_server_global_locale,
+};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -78,6 +81,29 @@ async fn main() {
             )],
         )
     );
+
+    // Download translations for the resolved server locale.
+    // Runs on a blocking thread to avoid stalling the tokio runtime.
+    let locale_config = &config.advanced.locale;
+    let download_config = DownloadConfig {
+        mirror_url: locale_config.mirror_url.clone(),
+        timeout_ms: locale_config.timeout,
+        skip_checksum: locale_config.skip_checksum,
+    };
+    let downloaded = tokio::task::spawn_blocking(move || {
+        download_locale(&download_config, server_global_locale)
+    })
+    .await
+    .unwrap_or_default();
+
+    if downloaded.has_any() {
+        load_downloaded(&downloaded, server_global_locale);
+    } else if server_global_locale != pumpkin_i18n::Locale::EnUs {
+        warn!(
+            "No translations downloaded for {} — using embedded English fallback",
+            locale_to_log_string(server_global_locale)
+        );
+    }
 
     info!(
         "{}",
