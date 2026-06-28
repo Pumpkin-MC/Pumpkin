@@ -8,7 +8,20 @@ use super::PlayerEvent;
 
 /// An event that occurs when a player gets teleported to another world.
 ///
-/// This event contains information about the player changing worlds.
+/// `new_world` and the position/yaw/pitch fields are mutable; when not
+/// cancelled the modified values are applied as-is to the transfer and the
+/// following [`PlayerRespawnEvent`](super::player_respawn::PlayerRespawnEvent).
+/// Cancelling drops the whole event: the world stays unchanged and any edits
+/// are dropped, with the respawn using the values resolved before the event
+/// fired. To keep the player in the current world at a chosen position, don't
+/// cancel — set `new_world` to `previous_world` (matching UUID) and override
+/// the position/yaw/pitch fields; the transfer is skipped but those values
+/// take effect. When redirecting to a different world, set position/yaw/pitch
+/// valid for it.
+///
+/// On a cross-dimension respawn this fires before the non-cancellable
+/// [`PlayerRespawnEvent`](super::player_respawn::PlayerRespawnEvent), which
+/// then observes the resolved world.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerChangeWorldEvent {
