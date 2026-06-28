@@ -31,7 +31,7 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             )
         });
 
-        let packet = match &self.player.client {
+        let packet = match self.player.client.as_ref() {
             ClientPlatform::Java(client) => {
                 let version = client.version.load();
                 generated_packets::deserialize_java_serverbound_packet(
@@ -86,7 +86,7 @@ impl ToFromWasmEvent for PacketSentEvent {
             )
         });
 
-        let packet = match &self.player.client {
+        let packet = match self.player.client.as_ref() {
             ClientPlatform::Java(_) => {
                 generated_packets::clientbound_java_any_to_wit(self.packet.as_ref())
                     .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java)

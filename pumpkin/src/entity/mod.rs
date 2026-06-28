@@ -5,7 +5,7 @@ use crate::{
     world::{
         World,
         chunker::is_within_view_distance,
-        portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
+        portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
 use arc_swap::ArcSwap;
@@ -775,7 +775,7 @@ pub struct Entity {
 
     pub portal_cooldown: AtomicU32,
 
-    pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
+    pub portal_manager: Mutex<Option<Mutex<PortalProcessor>>>,
     /// Custom name for the entity
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
@@ -2121,100 +2121,46 @@ impl Entity {
         let mut manager_guard = self.portal_manager.lock().await;
         let mut should_remove = false;
         if let Some(pmanager_mutex) = manager_guard.as_ref() {
-            let mut portal_manager = pmanager_mutex.lock().await;
-            if portal_manager.tick() {
+            let mut portal_processor = pmanager_mutex.lock().await;
+            if portal_processor.process_portal_teleportation(
+                &self.world.load(),
+                caller.as_ref(),
+                true,
+            ) {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
-                let pos = self.pos.load();
-                let current_yaw = self.yaw.load();
-                let dimensions = self.entity_dimension.load();
-                let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
-                let scale_factor_current = self.world.load().dimension.coordinate_scale;
 
-                let scale_factor = scale_factor_current / scale_factor_new;
-                let target_pos =
-                    BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
-
-                let dest_world = portal_manager.portal_world.clone();
-                let source_portal = portal_manager.source_portal.clone();
-                let source_axis = source_portal.as_ref().map(|p| p.axis);
-                drop(portal_manager);
-
-                let is_end_portal = dest_world.dimension == Dimension::THE_END
-                    || self.world.load().dimension == Dimension::THE_END;
-
-                let (teleport_pos, new_yaw) = if is_end_portal {
-                    if dest_world.dimension == Dimension::THE_END {
-                        // Entering the End: spawn on the obsidian platform at (100, 50, 0)
-                        (Vector3::new(100.5f64, 50.0f64, 0.5f64), None)
-                    } else {
-                        // Leaving the End through the exit portal: return to overworld spawn
-                        let info = dest_world.level_info.load();
-                        (
-                            Vector3::new(
-                                f64::from(info.spawn_x) + 0.5,
-                                f64::from(info.spawn_y),
-                                f64::from(info.spawn_z) + 0.5,
-                            ),
-                            None,
-                        )
-                    }
-                } else if let Some(dest_result) =
-                    NetherPortal::search_for_portal(&dest_world, target_pos).await
-                {
-                    let base_pos = source_portal.as_ref().map_or_else(
-                        || dest_result.get_teleport_position(),
-                        |source| {
-                            let source_result = PortalSearchResult {
-                                lower_corner: source.lower_corner,
-                                axis: source.axis,
-                                width: source.width,
-                                height: source.height,
-                            };
-                            let relative_pos = source_result.entity_pos_in_portal(pos, &dimensions);
-                            dest_result.calculate_exit_position(relative_pos, &dimensions)
-                        },
-                    );
-                    let final_pos =
-                        dest_result.find_open_position(&dest_world, base_pos, &dimensions);
-                    let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else if let Some((build_pos, axis, is_fallback)) =
-                    NetherPortal::find_safe_location(
-                        &dest_world,
-                        target_pos,
-                        pumpkin_data::block_properties::HorizontalAxis::X,
+                let transition = portal_processor
+                    .portal_type
+                    .get_portal_destination(
+                        &self.world.load(),
+                        portal_processor.destination_world.clone(),
+                        caller,
+                        portal_processor.entry_position,
+                        portal_processor.source_portal.clone(),
                     )
-                    .await
-                {
-                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
+                    .await;
+
+                drop(portal_processor);
+
+                if let Some(transition) = transition {
+                    let dest_world = transition.new_world.clone();
+                    let yaw = transition.yaw;
+                    let pitch = transition.pitch;
+                    let teleport_pos = transition.position;
+
+                    // Teleport the main entity
+                    caller
+                        .clone()
+                        .teleport(teleport_pos, yaw, pitch, dest_world.clone())
                         .await;
-                    let new_portal = PortalSearchResult {
-                        lower_corner: build_pos,
-                        axis,
-                        width: 2,
-                        height: 3,
-                    };
-                    let center_pos = new_portal.get_teleport_position();
-                    let final_pos =
-                        new_portal.find_open_position(&dest_world, center_pos, &dimensions);
-                    let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else {
-                    (target_pos.0.to_f64(), None)
-                };
 
-                // Teleport the main entity
-                caller
-                    .clone()
-                    .teleport(teleport_pos, new_yaw, None, dest_world.clone())
-                    .await;
-
-                // Teleport all passengers recursively along with the vehicle
-                let yaw_delta = new_yaw.map(|y| y - current_yaw);
-                Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world)
-                    .await;
-            } else if portal_manager.ticks_in_portal == 0 {
+                    // Teleport all passengers recursively along with the vehicle
+                    let yaw_delta = yaw.map(|y| y - self.yaw.load());
+                    Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world)
+                        .await;
+                }
+            } else if portal_processor.portal_time == 0 {
                 should_remove = true;
             }
         }
@@ -2262,7 +2208,12 @@ impl Entity {
         })
     }
 
-    pub async fn try_use_portal(&self, portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
+    pub async fn try_use_portal(
+        &self,
+        _portal_delay: u32,
+        portal_world: Arc<World>,
+        pos: BlockPos,
+    ) {
         // Passengers don't teleport independently - they wait for their vehicle
         if self.has_vehicle().await {
             return;
@@ -2295,7 +2246,15 @@ impl Entity {
         let mut manager = self.portal_manager.lock().await;
         let world = self.world.load();
         if manager.is_none() {
-            let mut new_manager = PortalManager::new(portal_delay, portal_world, pos);
+            let portal_type = if portal_world.dimension == Dimension::THE_END
+                || self.world.load().dimension == Dimension::THE_END
+            {
+                PortalType::End
+            } else {
+                PortalType::Nether
+            };
+
+            let mut new_manager = PortalProcessor::new(portal_type, pos, portal_world);
 
             if let Some(portal) = NetherPortal::get_on_axis(
                 &world,
@@ -2326,8 +2285,8 @@ impl Entity {
             *manager = Some(Mutex::new(new_manager));
         } else if let Some(manager) = manager.as_ref() {
             let mut manager = manager.lock().await;
-            manager.pos = pos;
-            manager.in_portal = true;
+            manager.entry_position = pos;
+            manager.inside_portal_this_tick = true;
         }
     }
 
@@ -2712,7 +2671,7 @@ impl Entity {
             let world = self.world.load();
             let chunk_pos = self.chunk_pos.load();
             for player in world.players.load().iter() {
-                if let ClientPlatform::Bedrock(client) = &player.client {
+                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
                     let center = player.get_entity().chunk_pos.load();
                     let view_distance =
                         crate::world::chunker::get_view_distance(player).get() as i32;
@@ -2755,7 +2714,7 @@ impl Entity {
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
         for player in world.players.load().iter() {
-            if let ClientPlatform::Java(client) = &player.client {
+            if let ClientPlatform::Java(client) = player.client.as_ref() {
                 // Apply Chebyshev distance check
                 let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;

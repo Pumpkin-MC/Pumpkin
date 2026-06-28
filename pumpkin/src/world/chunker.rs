@@ -49,7 +49,7 @@ pub async fn update_position(player: &Arc<Player>) {
         return;
     }
 
-    match &player.client {
+    match player.client.as_ref() {
         ClientPlatform::Java(java_client) => {
             java_client
                 .send_packet_now(&CCenterChunk {
@@ -93,7 +93,7 @@ pub async fn update_position(player: &Arc<Player>) {
 
     player.watched_section.store(new_cylindrical);
 
-    if let ClientPlatform::Java(_) = &player.client {
+    if let ClientPlatform::Java(_) = player.client.as_ref() {
         for chunk in &unloading_chunks {
             player
                 .client

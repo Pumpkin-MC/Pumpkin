@@ -412,7 +412,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: ClientPlatform,
+    pub client: Arc<ClientPlatform>,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's `EnderChest` inventory.
@@ -572,7 +572,7 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub async fn new(
-        client: ClientPlatform,
+        client: Arc<ClientPlatform>,
         gameprofile: GameProfile,
         config: PlayerConfig,
         world: Arc<World>,
@@ -1730,7 +1730,7 @@ impl Player {
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(client) => match mode {
                 TitleMode::Title => client.enqueue_packet(&CTitleText::new(text)).await,
                 TitleMode::SubTitle => client.enqueue_packet(&CSubtitle::new(text)).await,
@@ -1758,7 +1758,7 @@ impl Player {
     }
 
     pub async fn send_title_animation(&self, fade_in: i32, stay: i32, fade_out: i32) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(client) => {
                 client
                     .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
@@ -1916,11 +1916,10 @@ impl Player {
                 *xp -= 1;
             }
         }
-
         let (chunk_of_chunks, total_sent_chunks) = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            let chunks = if let ClientPlatform::Java(_) = self.client {
+            let chunks = if let ClientPlatform::Java(_) = self.client.as_ref() {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
                 chunk_manager
@@ -1931,7 +1930,6 @@ impl Player {
             };
             (chunks, chunk_manager.sent_chunks_count())
         };
-
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             self.client.send_chunks(&chunk_of_chunks).await;
 
@@ -1945,7 +1943,6 @@ impl Player {
                 self.bedrock_spawned.store(true, Ordering::Relaxed);
             }
         }
-
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
         self.living_entity
             .entity
@@ -1979,7 +1976,6 @@ impl Player {
                 .await;
             }
         }
-
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         let caller: Arc<dyn EntityBase> = self.clone();
@@ -1997,7 +1993,6 @@ impl Player {
 
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
-
         // Idle timeout handling
         let now = Instant::now();
         let idle_timeout_minutes = server.player_idle_timeout.load(Ordering::Relaxed);
@@ -2142,7 +2137,7 @@ impl Player {
 
     /// Updates the current abilities the player has.
     pub async fn send_abilities_update(&self) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let mut b = 0;
                 let abilities = &self.abilities.lock().await;
@@ -2245,7 +2240,7 @@ impl Player {
     }
 
     pub async fn send_stats(&self) {
-        if let ClientPlatform::Java(java) = &self.client {
+        if let ClientPlatform::Java(java) = self.client.as_ref() {
             let stats_guard = self.stats.lock().await;
             let packet_stats: Vec<Statistic> = stats_guard
                 .stats
@@ -2395,7 +2390,7 @@ impl Player {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update();
 
-        if let ClientPlatform::Bedrock(_) = &self.client {
+        if let ClientPlatform::Bedrock(_) = self.client.as_ref() {
             client_suggestions::send_bedrock_commands_packet(self, server, command_dispatcher)
                 .await;
         } else {
@@ -2406,7 +2401,7 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java_client) => {
                 java_client
                     .enqueue_packet(&CUpdateTime::new(
@@ -2625,7 +2620,7 @@ impl Player {
             return;
         }
 
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(client) => {
                 client
                     .enqueue_packet(&CSetHealth::new(
@@ -2899,7 +2894,7 @@ impl Player {
                         }],
                     ));
 
-                match &self.client {
+                match self.client.as_ref() {
                     crate::net::ClientPlatform::Java(client) => {
                         client
                             .enqueue_packet(&CGameEvent::new(
@@ -3022,7 +3017,7 @@ impl Player {
 
     /// Sends a custom payload packet to this player (Java edition only).
     pub async fn send_custom_payload(&self, channel: &str, data: &[u8]) {
-        if let ClientPlatform::Java(java) = &self.client {
+        if let ClientPlatform::Java(java) = self.client.as_ref() {
             java.enqueue_packet(&CCustomPayload::new(channel, data))
                 .await;
         }
@@ -3123,7 +3118,7 @@ impl Player {
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         let locale = self.locale();
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(client) => {
                 let text = text.clone().to_translated_with_locale(locale);
                 client

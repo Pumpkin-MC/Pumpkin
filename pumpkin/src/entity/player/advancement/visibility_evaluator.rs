@@ -20,7 +20,7 @@ fn evaluate_visibility_rule(advancement: &'static Advancement, is_done: bool) ->
 
 fn evaluate_visibility_for_unfinished_node(ascendants: &[VisibilityRule]) -> bool {
     let start = ascendants.len().saturating_sub(VISIBILITY_DEPTH);
-    for visibility in &ascendants[start..] {
+    for visibility in ascendants[start..].iter().rev() {
         if *visibility == VisibilityRule::Show {
             return true;
         }
@@ -38,6 +38,7 @@ pub fn evaluate_visibility_with_rules(
     is_done_test: &mut impl FnMut(&mut PlayerAdvancement, &AdvancementNode) -> bool,
     output: &mut impl FnMut(&mut PlayerAdvancement, &AdvancementNode, bool),
 ) -> bool {
+    let tree = &ADVANCEMENT_TREE.nodes_vector;
     let is_self_done = is_done_test(player_advancement, node);
     let descendant_visibility = evaluate_visibility_rule(node.value, is_self_done);
     let mut is_self_or_descendant_done = is_self_done;
@@ -45,7 +46,7 @@ pub fn evaluate_visibility_with_rules(
 
     for child in &node.children {
         is_self_or_descendant_done |= evaluate_visibility_with_rules(
-            &ADVANCEMENT_TREE.nodes_vector[*child],
+            &tree[*child],
             player_advancement,
             ascendants,
             is_done_test,

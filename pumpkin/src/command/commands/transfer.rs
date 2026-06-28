@@ -73,7 +73,7 @@ impl CommandExecutor for TargetSelfExecutor {
                     )
                 );
 
-                match &player.client {
+                match player.client.as_ref() {
                     ClientPlatform::Java(client) => {
                         client
                             .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))
@@ -137,7 +137,7 @@ impl CommandExecutor for TargetPlayerExecutor {
             }
 
             for p in players {
-                match &p.client {
+                match p.client.as_ref() {
                     ClientPlatform::Java(client) => {
                         client
                             .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))

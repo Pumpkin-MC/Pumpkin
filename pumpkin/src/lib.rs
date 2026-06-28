@@ -235,7 +235,6 @@ impl PumpkinServer {
     pub fn log_info(&self, message: &str) {
         tracing::info!(target: "plugin", "{}", message);
     }
-    #[allow(clippy::too_many_lines)]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
@@ -539,7 +538,7 @@ impl PumpkinServer {
                                     let player_locale_str = config.locale.clone();
                                     let client_locale_config = server_clone.advanced_config.locale.client_java_edition.clone();
                                     if let Some((player, world)) = server_clone
-                                    .add_player(ClientPlatform::Java(java_client), profile, Some(config))
+                                    .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                           .await
                                 {
                                     // Register the player's locale in the i18n cache
@@ -566,7 +565,7 @@ impl PumpkinServer {
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
-                                    if let ClientPlatform::Java(client) = &player.client {
+                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         *client.player.lock().await = Some(player.clone());
                                         client.progress_player_packets(&player, &server_clone).await;
 
@@ -680,7 +679,7 @@ impl PumpkinServer {
                                                 let player_locale_str = config.locale.clone();
                                                 let client_locale_config = server_clone.advanced_config.locale.client_bedrock_edition.clone();
                                                 if let Some((player, _world)) = server_clone
-                                                    .add_player(ClientPlatform::Bedrock(client_clone.clone()), profile, Some(config))
+                                                    .add_player(Arc::new(ClientPlatform::Bedrock(client_clone.clone())), profile, Some(config))
                                                     .await
                                                 {
                                                     // Register the player's locale in the i18n cache

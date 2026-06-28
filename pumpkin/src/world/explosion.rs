@@ -272,6 +272,8 @@ impl Explosion {
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
+                let is_raining = world.is_raining().await;
+                let is_thundering = world.is_thundering().await;
                 let params = LootContextParameters {
                     block_state: Some(state),
                     explosion_radius: Some(self.power),
@@ -281,6 +283,8 @@ impl Explosion {
                         pos.0.z as f64,
                     )),
                     world_time: world.level_info.load().day_time as u64,
+                    is_raining: Some(is_raining),
+                    is_thundering: Some(is_thundering),
                     ..Default::default()
                 };
                 drop_loot(world, block, pos, false, params).await;

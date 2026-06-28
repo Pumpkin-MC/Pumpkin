@@ -475,8 +475,8 @@ impl Advancement {
             true,
             false,
             true,
-            0f32,
-            0f32,
+            1f32,
+            5.75f32,
         )),
         reward: &AdvancementReward {
             experience: 0i32,

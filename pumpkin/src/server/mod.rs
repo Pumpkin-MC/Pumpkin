@@ -501,7 +501,7 @@ impl Server {
     #[allow(clippy::too_many_lines)]
     pub async fn add_player(
         &self,
-        client: ClientPlatform,
+        client: Arc<ClientPlatform>,
         profile: GameProfile,
         config: Option<PlayerConfig>,
     ) -> Option<(Arc<Player>, Arc<World>)> {
