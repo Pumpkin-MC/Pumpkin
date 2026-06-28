@@ -2876,6 +2876,7 @@ dependencies = [
  "rustc-hash",
  "ruzstd",
  "serde",
+ "serde_json",
  "serde_json5",
  "sha2 0.11.0",
  "slotmap",

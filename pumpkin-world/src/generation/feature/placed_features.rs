@@ -49,6 +49,30 @@ pub enum Feature {
 }
 
 impl PlacedFeature {
+    pub fn generate_in_proto_chunk(
+        &self,
+        chunk: &mut crate::ProtoChunk,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> bool {
+        let feature = match &self.feature {
+            Feature::Named(name) => CONFIGURED_FEATURES
+                .get(name)
+                .expect("Name: {name:?} not found"),
+            Feature::Inlined(feature) => feature,
+        };
+        match feature {
+            ConfiguredFeature::SculkPatch(feature) => {
+                feature.generate_in_proto_chunk(chunk, random, pos)
+            }
+            _ => {
+                tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
+                false
+            }
+        }
+    }
+
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
