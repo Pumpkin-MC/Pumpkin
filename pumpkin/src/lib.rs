@@ -319,21 +319,13 @@ impl PumpkinServer {
             .plugin_manager
             .set_server(self.server.clone())
             .await;
-        let duration = match self.server.plugin_manager.load_plugins().await {
+        match self.server.plugin_manager.load_plugins().await {
             Ok(duration) => duration,
             Err(err) => {
                 error!("{err}");
                 std::time::Duration::ZERO
             }
-        };
-
-        let _ = self
-            .server
-            .plugin_manager
-            .fire(ServerLoadEvent::new(LoadType::Startup))
-            .await;
-
-        duration
+        }
     }
 
     pub async fn unload_plugins(&self) {
@@ -363,6 +355,12 @@ impl PumpkinServer {
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
+
+        let _ = self
+            .server
+            .plugin_manager
+            .fire(ServerLoadEvent::new(LoadType::Startup))
+            .await;
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
