@@ -194,13 +194,9 @@ impl TranslationEngine {
     /// Build the engine from an array of per‑locale translation maps.
     ///
     /// `data[locale_idx]` is the flat key‑value map for that locale.
+    #[must_use]
     pub fn build(data: &[HashMap<String, String>]) -> Self {
-        let stores: Box<[FstLocaleStore]> = data
-            .iter()
-            .map(FstLocaleStore::build)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
+        let stores = build_stores(data);
         Self {
             stores: ArcSwap::from_pointee(stores),
             overrides: build_override_maps(data.len()),
@@ -318,12 +314,7 @@ impl TranslationEngine {
     /// Builds new [`FstLocaleStore`]s and swaps them in without blocking
     /// concurrent readers (wait‑free).
     pub fn reload(&self, data: &[HashMap<String, String>]) {
-        let stores: Box<[FstLocaleStore]> = data
-            .iter()
-            .map(FstLocaleStore::build)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
+        let stores = build_stores(data);
         self.stores.store(Arc::new(stores));
         for overrides in &self.overrides {
             overrides.clear();
@@ -394,6 +385,13 @@ fn make_cache_key(locale_idx: usize, key: &str) -> String {
     let mut buf = String::with_capacity(4 + key.len() + 1);
     let _ = write!(buf, "{locale_idx}:{key}");
     buf
+}
+
+fn build_stores(data: &[HashMap<String, String>]) -> Box<[FstLocaleStore]> {
+    data.iter()
+        .map(FstLocaleStore::build)
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
 }
 
 fn build_override_maps(len: usize) -> Box<[ResolvedMap]> {

@@ -4,22 +4,24 @@ use crate::text::TextComponent;
 
 const PUMPKIN_TRANSLATION_NAMESPACE: &str = "pumpkin";
 
-#[must_use]
-pub fn localized_log(key: &str) -> String {
+/// Builds a fully-qualified translation key: `"pumpkin:{key}"`.
+#[inline]
+fn namespaced_key(key: &str) -> String {
     let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
     namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
     namespaced.push(':');
     namespaced.push_str(key);
-    get_translation(&namespaced, server_global_locale())
+    namespaced
+}
+
+#[must_use]
+pub fn localized_log(key: &str) -> String {
+    get_translation(&namespaced_key(key), server_global_locale())
 }
 
 #[must_use]
 pub fn localized_log_format(key: &str, args: &[String]) -> String {
-    let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
-    namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    format_translation(&namespaced, server_global_locale(), args)
+    format_translation(&namespaced_key(key), server_global_locale(), args)
 }
 
 #[must_use]

@@ -226,48 +226,8 @@ pub fn save_downloaded_translations(
         return;
     }
 
-    // Save pumpkin translations
-    if !downloaded.pumpkin.is_empty() {
-        let path = dir.join("pumpkin.json");
-        match serde_json::to_string_pretty(&downloaded.pumpkin) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(&path, &json) {
-                    warn!("Failed to save pumpkin translations to {:?}: {e}", path);
-                } else {
-                    debug!(
-                        "Saved pumpkin translations to {:?} ({} entries)",
-                        path,
-                        downloaded.pumpkin.len()
-                    );
-                }
-            }
-            Err(e) => {
-                warn!("Failed to serialize pumpkin translations: {e}");
-            }
-        }
-    }
-
-    // Save Java Edition vanilla translations
-    if !downloaded.java.is_empty() {
-        let path = dir.join("java_minecraft.json");
-        match serde_json::to_string_pretty(&downloaded.java) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(&path, &json) {
-                    warn!("Failed to save java translations to {:?}: {e}", path);
-                } else {
-                    debug!(
-                        "Saved java translations to {:?} ({} entries)",
-                        path,
-                        downloaded.java.len()
-                    );
-                }
-            }
-            Err(e) => {
-                warn!("Failed to serialize java translations: {e}");
-            }
-        }
-    }
-
+    save_namespace_if_present(&dir, "pumpkin", &downloaded.pumpkin);
+    save_namespace_if_present(&dir, "java_minecraft", &downloaded.java);
     // Bedrock Edition: compile-time embedded en_us only, not saved to disk.
 
     if downloaded.has_any() {
@@ -276,6 +236,30 @@ pub fn save_downloaded_translations(
             locale.to_code(),
             dir
         );
+    }
+}
+
+/// Write a single namespace's translation data to `{dir}/{file_name}.json`.
+fn save_namespace_if_present(dir: &Path, file_name: &str, data: &HashMap<String, String>) {
+    if data.is_empty() {
+        return;
+    }
+    let path = dir.join(format!("{file_name}.json"));
+    match serde_json::to_string_pretty(data) {
+        Ok(json) => {
+            if let Err(e) = std::fs::write(&path, &json) {
+                warn!("Failed to save {file_name} translations to {:?}: {e}", path);
+            } else {
+                debug!(
+                    "Saved {file_name} translations to {:?} ({} entries)",
+                    path,
+                    data.len()
+                );
+            }
+        }
+        Err(e) => {
+            warn!("Failed to serialize {file_name} translations: {e}");
+        }
     }
 }
 
@@ -292,6 +276,7 @@ pub fn save_downloaded_translations(
 /// {cache_root}/en_us/pumpkin.json
 /// {cache_root}/en_us/java_minecraft.json
 /// ```
+#[must_use]
 pub fn load_cached_translations(
     locale: Locale,
     cache_root: &Path,
@@ -305,63 +290,8 @@ pub fn load_cached_translations(
     let mut result = DownloadedTranslations::default();
     let mut found_any = false;
 
-    // Load pumpkin translations
-    let pumpkin_path = dir.join("pumpkin.json");
-    if pumpkin_path.exists() {
-        match std::fs::read_to_string(&pumpkin_path) {
-            Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
-                Ok(map) if !map.is_empty() => {
-                    debug!(
-                        "Loaded cached pumpkin translations from {:?} ({} entries)",
-                        pumpkin_path,
-                        map.len()
-                    );
-                    result.pumpkin = map;
-                    found_any = true;
-                }
-                Ok(_) => {
-                    warn!(
-                        "Cached pumpkin translation file is empty: {:?}",
-                        pumpkin_path
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to parse cached pumpkin translations: {e}");
-                }
-            },
-            Err(e) => {
-                warn!("Failed to read cached pumpkin translations: {e}");
-            }
-        }
-    }
-
-    // Load Java Edition vanilla translations
-    let java_path = dir.join("java_minecraft.json");
-    if java_path.exists() {
-        match std::fs::read_to_string(&java_path) {
-            Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
-                Ok(map) if !map.is_empty() => {
-                    debug!(
-                        "Loaded cached java translations from {:?} ({} entries)",
-                        java_path,
-                        map.len()
-                    );
-                    result.java = map;
-                    found_any = true;
-                }
-                Ok(_) => {
-                    warn!("Cached java translation file is empty: {:?}", java_path);
-                }
-                Err(e) => {
-                    warn!("Failed to parse cached java translations: {e}");
-                }
-            },
-            Err(e) => {
-                warn!("Failed to read cached java translations: {e}");
-            }
-        }
-    }
-
+    found_any |= load_namespace_from_cache(&dir, "pumpkin", &mut result.pumpkin);
+    found_any |= load_namespace_from_cache(&dir, "java_minecraft", &mut result.java);
     // Bedrock Edition: compile-time embedded en_us only, not loaded from cache.
 
     found_any.then(|| {
@@ -372,6 +302,44 @@ pub fn load_cached_translations(
         );
         result
     })
+}
+
+/// Try to load a single namespace's JSON file from the cache directory.
+/// Returns `true` if valid data was loaded.
+fn load_namespace_from_cache(
+    dir: &Path,
+    file_name: &str,
+    dest: &mut HashMap<String, String>,
+) -> bool {
+    let path = dir.join(format!("{file_name}.json"));
+    if !path.exists() {
+        return false;
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
+            Ok(map) if !map.is_empty() => {
+                debug!(
+                    "Loaded cached {file_name} translations from {:?} ({} entries)",
+                    path,
+                    map.len()
+                );
+                *dest = map;
+                true
+            }
+            Ok(_) => {
+                warn!("Cached {file_name} translation file is empty: {:?}", path);
+                false
+            }
+            Err(e) => {
+                warn!("Failed to parse cached {file_name} translations: {e}");
+                false
+            }
+        },
+        Err(e) => {
+            warn!("Failed to read cached {file_name} translations: {e}");
+            false
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
