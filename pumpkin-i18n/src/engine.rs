@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt::Write};
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use fst::{Map, MapBuilder};
-use tracing::{error, warn};
+use tracing::{debug, error};
 use xxhash_rust::xxh64::Xxh64;
 
 use crate::token::{self, Token, TokenStream};
@@ -257,9 +257,6 @@ impl TranslationEngine {
             if let Some(entry) =
                 self.lookup_override(crate::locale::Locale::EnUs as usize, key.as_ref())
             {
-                #[cfg(debug_assertions)]
-                Self::log_english_fallback(locale_idx, key.as_ref());
-                #[cfg(not(debug_assertions))]
                 self.log_english_fallback(locale_idx, key.as_ref());
                 self.cache.insert(cache_key, entry.clone());
                 return entry;
@@ -269,9 +266,6 @@ impl TranslationEngine {
                 .get(crate::locale::Locale::EnUs as usize)
                 .and_then(|store| store.lookup(key.as_ref()))
             {
-                #[cfg(debug_assertions)]
-                Self::log_english_fallback(locale_idx, key.as_ref());
-                #[cfg(not(debug_assertions))]
                 self.log_english_fallback(locale_idx, key.as_ref());
                 let resolved = Arc::new(entry.clone());
                 self.cache.insert(cache_key, resolved.clone());
@@ -280,9 +274,6 @@ impl TranslationEngine {
         }
 
         // Tier 3 – raw key
-        #[cfg(debug_assertions)]
-        Self::log_missing_translation(locale_idx, key.as_ref());
-        #[cfg(not(debug_assertions))]
         self.log_missing_translation(locale_idx, key.as_ref());
         let resolved = Arc::new(ResolvedTranslation::Missing(Arc::from(key.into_owned())));
         self.cache.insert(cache_key, resolved.clone());
@@ -352,40 +343,28 @@ impl TranslationEngine {
             .map(|entry| entry.value().clone())
     }
 
-    #[cfg(debug_assertions)]
-    fn log_english_fallback(locale_idx: usize, key: &str) {
-        warn!(
-            locale_idx,
-            key, "translation key not found in requested locale – falling back to English"
-        );
-    }
-
-    #[cfg(not(debug_assertions))]
+    #[allow(clippy::unused_self)] // `self` unused in debug builds (no log limiter)
     fn log_english_fallback(&self, _locale_idx: usize, key: &str) {
-        if self.fallback_log_once.insert(key.to_owned(), ()).is_none() {
-            warn!(
-                key,
-                "translation key not found in requested locale – falling back to English"
-            );
+        #[cfg(not(debug_assertions))]
+        if self.fallback_log_once.insert(key.to_owned(), ()).is_some() {
+            return;
         }
-    }
-
-    #[cfg(debug_assertions)]
-    fn log_missing_translation(locale_idx: usize, key: &str) {
-        error!(
-            locale_idx,
-            key, "translation key not found in any locale – returning raw key"
+        debug!(
+            key,
+            "translation key not found in requested locale – falling back to English"
         );
     }
 
-    #[cfg(not(debug_assertions))]
+    #[allow(clippy::unused_self)] // `self` unused in debug builds (no log limiter)
     fn log_missing_translation(&self, _locale_idx: usize, key: &str) {
-        if self.missing_log_once.insert(key.to_owned(), ()).is_none() {
-            error!(
-                key,
-                "translation key not found in any locale – returning raw key"
-            );
+        #[cfg(not(debug_assertions))]
+        if self.missing_log_once.insert(key.to_owned(), ()).is_some() {
+            return;
         }
+        error!(
+            key,
+            "translation key not found in any locale – returning raw key"
+        );
     }
 }
 
