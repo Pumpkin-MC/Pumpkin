@@ -106,17 +106,21 @@ async fn main() {
     let loader_cache_root = cache_root.clone();
 
     let downloaded = tokio::task::spawn_blocking(move || {
-        // 1. Try disk cache
-        if let Some(cached) = load_cached_translations(server_global_locale, &cache_root)
-            && cached.has_any()
-        {
-            return cached;
+        // 1. Try disk cache — only accept if ALL three namespaces are present.
+        //    Partial caches (e.g. only java_minecraft.json) are skipped so the
+        //    missing namespaces can be fetched from the mirror.
+        if let Some(cached) = load_cached_translations(server_global_locale, &cache_root) {
+            let complete =
+                !cached.pumpkin.is_empty() && !cached.java.is_empty() && !cached.bedrock.is_empty();
+            if complete {
+                return cached;
+            }
         }
 
         // 2. Download from remote mirror
         let downloaded = download_locale(&download_config, server_global_locale);
 
-        // 3. Save to disk for future runs
+        // 3. Save to disk for future runs (only non-empty namespaces are written)
         if downloaded.has_any() {
             save_downloaded_translations(&downloaded, server_global_locale, &cache_root);
         }
