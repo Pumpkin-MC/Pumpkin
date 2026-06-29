@@ -1,4 +1,4 @@
-use pumpkin_i18n::set_player_locale;
+use pumpkin_i18n::{ensure_locale_translations, set_player_locale};
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
@@ -1623,11 +1623,17 @@ impl JavaClient {
 
                 // Sync locale to the i18n cache in case the player changed their language
                 if let Some(server) = player.world().server.upgrade() {
-                    set_player_locale(
+                    let resolved_locale = set_player_locale(
                         &player.gameprofile.id.to_string(),
                         &player_locale,
                         &server.advanced_config.locale.client_java_edition,
                     );
+                    // Trigger background download if the player's locale changed
+                    if resolved_locale != pumpkin_i18n::Locale::EnUs {
+                        tokio::task::spawn_blocking(move || {
+                            ensure_locale_translations(resolved_locale);
+                        });
+                    }
                 }
 
                 (update_settings, update_watched, main_hand_changed)

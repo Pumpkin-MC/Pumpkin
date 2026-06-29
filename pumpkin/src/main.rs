@@ -28,8 +28,8 @@ use pumpkin_util::translation::{localized_log, localized_log_format, localized_t
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_i18n::{
-    self, DownloadConfig, download_locale, load_cached_translations, load_downloaded,
-    locale_to_log_string, resolve_server_locale, save_downloaded_translations,
+    self, DownloadConfig, download_locale, init_translation_loader, load_cached_translations,
+    load_downloaded, locale_to_log_string, resolve_server_locale, save_downloaded_translations,
     set_server_global_locale,
 };
 use pumpkin_util::text::{
@@ -100,6 +100,11 @@ async fn main() {
         } else {
             exec_dir.join(&locale_config.translation_cache_dir)
         };
+
+    // Clone before moving into spawn_blocking — needed for init_translation_loader
+    let loader_config = download_config.clone();
+    let loader_cache_root = cache_root.clone();
+
     let downloaded = tokio::task::spawn_blocking(move || {
         // 1. Try disk cache
         if let Some(cached) = load_cached_translations(server_global_locale, &cache_root)
@@ -129,6 +134,10 @@ async fn main() {
             locale_to_log_string(server_global_locale)
         );
     }
+
+    // Initialise the background translation loader for on-demand player
+    // locale downloads. Must be called before any player joins.
+    init_translation_loader(loader_config, loader_cache_root);
 
     info!(
         "{}",

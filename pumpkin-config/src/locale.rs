@@ -24,7 +24,7 @@ pub struct LocaleConfig {
     ///
     /// When any download exceeds this timeout, the server falls back
     /// to compile-time embedded English translations.
-    /// Default: `1000` (1 s).
+    /// Default: `10000` (10 s).
     pub timeout: u64,
     /// Skip SHA256 checksum verification for downloaded translation files.
     ///
@@ -60,7 +60,7 @@ impl Default for LocaleConfig {
     fn default() -> Self {
         Self {
             mirror_url: String::new(),
-            timeout: 1000,
+            timeout: 10000,
             skip_checksum: false,
             translation_cache_dir: "data/translation".to_string(),
             server_global: "auto".to_string(),

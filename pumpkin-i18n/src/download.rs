@@ -2,9 +2,15 @@
 //!
 //! Downloads translation files from a remote mirror at server startup.
 //! Falls back to compile-time embedded English translations on any failure.
+//!
+//! # Background loading
+//! Per-player locale translations are loaded asynchronously via
+//! [`ensure_locale_translations`] so that players can join immediately
+//! while their language files download in the background.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::Duration;
 
 use std::fmt::Write;
@@ -60,7 +66,7 @@ impl Default for DownloadConfig {
     fn default() -> Self {
         Self {
             mirror_url: String::new(),
-            timeout_ms: 1000,
+            timeout_ms: 10000,
             skip_checksum: false,
         }
     }
@@ -408,6 +414,91 @@ pub fn load_cached_translations(
 }
 
 // ---------------------------------------------------------------------------
+// Background locale loader
+// ---------------------------------------------------------------------------
+
+/// Stores the download configuration and cache root for background locale loading.
+/// Initialised once during server startup via [`init_translation_loader`].
+static LOADER_STATE: OnceLock<(DownloadConfig, PathBuf)> = OnceLock::new();
+
+/// Tracks locales that have already been loaded or are currently being loaded.
+/// Prevents duplicate downloads for the same locale.
+static LOADED_LOCALES: LazyLock<Mutex<HashSet<Locale>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// Initialise the translation loader with download configuration and cache root.
+///
+/// Must be called once during server startup, before any background locale
+/// loading is triggered. The config is used by [`ensure_locale_translations`]
+/// to download missing translations on demand.
+pub fn init_translation_loader(config: DownloadConfig, cache_root: PathBuf) {
+    let _ = LOADER_STATE.set((config, cache_root));
+}
+
+/// Ensure translations are loaded for the given locale.
+///
+/// # Behaviour
+/// 1. **`EnUs`** — no-op (embedded at compile time).
+/// 2. **Already loaded** — no-op (deduplicated via internal tracking set).
+/// 3. **On disk** — loads from the cache directory and injects into the engine.
+/// 4. **Missing** — downloads from the configured mirror, saves to disk,
+///    and injects into the engine.
+///
+/// # Thread safety
+/// Safe to call from multiple threads. The tracking set ensures the same
+/// locale is only processed once, even under concurrent calls.
+///
+/// # Failure handling
+/// Errors during download or disk I/O are logged at [`warn!`] level.
+/// The function never panics; callers can treat it as fire-and-forget.
+pub fn ensure_locale_translations(locale: Locale) {
+    // English is embedded at compile time — nothing to load
+    if locale == Locale::EnUs {
+        return;
+    }
+
+    // Check if already loaded or being loaded
+    {
+        let mut loaded = LOADED_LOCALES.lock().unwrap();
+        if !loaded.insert(locale) {
+            return; // Already handled
+        }
+    }
+
+    let Some((config, cache_root)) = LOADER_STATE.get() else {
+        warn!(
+            "Translation loader not initialised — cannot load translations for {}",
+            locale.to_code()
+        );
+        return;
+    };
+
+    // 1. Try disk cache first
+    if let Some(cached) = load_cached_translations(locale, cache_root) {
+        load_downloaded(&cached, locale);
+        return;
+    }
+
+    // 2. Download from remote mirror
+    let downloaded = download_locale(config, locale);
+
+    // 3. Save to disk for future runs
+    if downloaded.has_any() {
+        save_downloaded_translations(&downloaded, locale, cache_root);
+    }
+
+    // 4. Inject into the global engine
+    if downloaded.has_any() {
+        load_downloaded(&downloaded, locale);
+    } else {
+        warn!(
+            "No translations available for {} — using English fallback",
+            locale.to_code()
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SHA256 checksum verification
 // ---------------------------------------------------------------------------
 
@@ -570,7 +661,7 @@ mod tests {
     fn download_config_defaults() {
         let config = DownloadConfig::default();
         assert!(config.mirror_url.is_empty());
-        assert_eq!(config.timeout_ms, 1000);
+        assert_eq!(config.timeout_ms, 10000);
     }
 
     #[test]

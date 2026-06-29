@@ -11,7 +11,9 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
-use pumpkin_i18n::{locale_to_log_string, remove_player_locale, set_player_locale};
+use pumpkin_i18n::{
+    ensure_locale_translations, locale_to_log_string, remove_player_locale, set_player_locale,
+};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -563,6 +565,15 @@ impl PumpkinServer {
                                         )
                                     );
 
+                                    // Trigger background translation download for this
+                                    // player's locale. The player joins immediately with
+                                    // English fallback; translations load asynchronously.
+                                    if resolved_locale != pumpkin_i18n::Locale::EnUs {
+                                        tokio::task::spawn_blocking(move || {
+                                            ensure_locale_translations(resolved_locale);
+                                        });
+                                    }
+
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
@@ -702,6 +713,14 @@ impl PumpkinServer {
                                                             ],
                                                         )
                                                     );
+
+                                                    // Trigger background translation download for
+                                                    // this player's locale.
+                                                    if resolved_locale != pumpkin_i18n::Locale::EnUs {
+                                                        tokio::task::spawn_blocking(move || {
+                                                            ensure_locale_translations(resolved_locale);
+                                                        });
+                                                    }
 
                                                     *client_clone.player.lock().await = Some(player.clone());
 
