@@ -1,7 +1,6 @@
 use super::flowing_trait::FlowingFluid;
 use crate::{
-    block::blocks::fire::fire::FireBlock,
-    block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
+    block::{BlockFuture, FluidMetadata, blocks::fire::fire::FireBlock, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
@@ -22,7 +21,7 @@ use std::sync::atomic::Ordering;
 
 pub struct FlowingLava;
 
-impl BlockMetadata for FlowingLava {
+impl FluidMetadata for FlowingLava {
     fn ids() -> Box<[u16]> {
         [Fluid::FLOWING_LAVA.id].into()
     }
@@ -239,8 +238,11 @@ impl FluidBehaviour for FlowingLava {
                             Self::ignite_fire_if_possible(world, &test_pos).await;
                             return;
                         }
-                    } else if blocks_movement(block_state, Block::from_state_id(block_state.id).id)
-                    {
+                    } else if blocks_movement(
+                        block_state,
+                        Block::get_block_id_from_state_id(block_state.id)
+                            .expect("invalid blockstate"),
+                    ) {
                         return;
                     }
                 }

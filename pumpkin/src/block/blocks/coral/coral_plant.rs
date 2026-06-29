@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection,
+    BlockDirection, BlockId,
     block_properties::{BlockProperties, MangroveRootsLikeProperties},
     tag,
 };
@@ -12,13 +12,13 @@ use crate::block::{
 };
 pub struct CoralPlantBlock;
 impl BlockMetadata for CoralPlantBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         let alive_plants = tag::Block::MINECRAFT_CORAL_PLANTS.1;
         let mut plants = Vec::new();
         for alive_plant_id in alive_plants {
-            let clone = *alive_plant_id;
-            plants.push(clone);
-            plants.push(get_dead_type(Block::from_id(clone)).id);
+            let block_id = BlockId::new_or_air(*alive_plant_id);
+            plants.push(block_id);
+            plants.push(get_dead_type(block_id).unwrap_or_default());
         }
         plants.into()
     }
@@ -47,7 +47,7 @@ impl BlockBehaviour for CoralPlantBlock {
                 let dead_block_state_id = {
                     let props =
                         CoralPlantLikeProperties::from_state_id(current_state.id, args.block);
-                    props.to_state_id(&get_dead_type(args.block))
+                    props.to_state_id(get_dead_type(args.block.id).unwrap_or_default().to_block())
                 };
                 args.world
                     .set_block_state(args.position, dead_block_state_id, BlockFlags::empty())
@@ -78,16 +78,13 @@ impl BlockBehaviour for CoralPlantBlock {
         })
     }
 }
-fn get_dead_type(block: &Block) -> Block {
-    if block == &Block::BRAIN_CORAL {
-        Block::DEAD_BRAIN_CORAL
-    } else if block == &Block::BUBBLE_CORAL {
-        Block::DEAD_BUBBLE_CORAL
-    } else if block == &Block::FIRE_CORAL {
-        Block::DEAD_FIRE_CORAL
-    } else if block == &Block::HORN_CORAL {
-        Block::DEAD_HORN_CORAL
-    } else {
-        Block::DEAD_TUBE_CORAL
+const fn get_dead_type(id: BlockId) -> Option<BlockId> {
+    match id {
+        BlockId::BRAIN_CORAL => Some(BlockId::DEAD_BRAIN_CORAL),
+        BlockId::BUBBLE_CORAL => Some(BlockId::DEAD_BUBBLE_CORAL),
+        BlockId::FIRE_CORAL => Some(BlockId::DEAD_FIRE_CORAL),
+        BlockId::HORN_CORAL => Some(BlockId::DEAD_HORN_CORAL),
+        BlockId::TUBE_CORAL => Some(BlockId::DEAD_TUBE_CORAL),
+        _ => None,
     }
 }

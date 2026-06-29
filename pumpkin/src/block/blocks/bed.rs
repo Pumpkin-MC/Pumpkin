@@ -147,7 +147,9 @@ impl BlockBehaviour for BedBlock {
             };
 
             let neighbor_block_id = args.world.get_block_state_id(&other_half_pos);
-            if neighbor_block_id != args.block.id {
+            if Block::get_block_id_from_state_id(neighbor_block_id).unwrap_or_default()
+                != args.block.id
+            {
                 args.world.update_neighbors(&other_half_pos, None).await;
                 return;
             }

@@ -477,7 +477,7 @@ impl World {
                     event.pos,
                     event.r#type,
                     event.data,
-                    VarInt(i32::from(block.id)),
+                    VarInt(block.id.as_u16() as i32),
                 ),
             );
         }
@@ -1370,7 +1370,8 @@ impl World {
 
                 if neighbor_height == 0.0 {
                     let block_state_id = self.get_block_state_id(&pos);
-                    let block = Block::get_raw_id_from_state_id(block_state_id);
+                    let block = Block::get_block_id_from_state_id(block_state_id)
+                        .expect("invalid blockstate");
                     let block_state = BlockState::from_id(block_state_id);
 
                     let blocks_movement = blocks_movement(block_state, block);

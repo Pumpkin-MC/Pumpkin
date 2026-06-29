@@ -1,8 +1,8 @@
 use crate::block::{BlockFuture, BlockIsReplacing};
 use crate::entity::EntityBase;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
+use pumpkin_data::{BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
@@ -17,14 +17,14 @@ use crate::block::{
 pub struct TorchBlock;
 
 impl BlockMetadata for TorchBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::TORCH.id,
-            Block::SOUL_TORCH.id,
-            Block::WALL_TORCH.id,
-            Block::SOUL_WALL_TORCH.id,
-            Block::COPPER_TORCH.id,
-            Block::COPPER_WALL_TORCH.id,
+            BlockId::TORCH,
+            BlockId::SOUL_TORCH,
+            BlockId::WALL_TORCH,
+            BlockId::SOUL_WALL_TORCH,
+            BlockId::COPPER_TORCH,
+            BlockId::COPPER_WALL_TORCH,
         ]
         .into()
     }

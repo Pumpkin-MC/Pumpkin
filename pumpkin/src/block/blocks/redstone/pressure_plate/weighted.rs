@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, block_properties::BlockProperties};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
@@ -19,12 +19,12 @@ pub struct WeightedPressurePlateBlock;
 type PressurePlateProps = pumpkin_data::block_properties::LightWeightedPressurePlateLikeProperties;
 
 impl BlockMetadata for WeightedPressurePlateBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         // light = Gold
         // heavy = Iron
         [
-            Block::LIGHT_WEIGHTED_PRESSURE_PLATE.id,
-            Block::HEAVY_WEIGHTED_PRESSURE_PLATE.id,
+            BlockId::LIGHT_WEIGHTED_PRESSURE_PLATE,
+            BlockId::HEAVY_WEIGHTED_PRESSURE_PLATE,
         ]
         .into()
     }

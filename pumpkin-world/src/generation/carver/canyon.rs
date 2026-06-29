@@ -3,6 +3,7 @@ use super::cave::get_height;
 use crate::ProtoChunk;
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
+use pumpkin_data::{Block, BlockId};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use std::f32::consts::PI;
@@ -283,15 +284,15 @@ impl CanyonCarver {
     fn carve_block(chunk: &mut ProtoChunk, config: &CarverConfig, x: i32, y: i32, z: i32) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
-        let block = pumpkin_data::Block::from_state_id(state_id);
+        let block = Block::from_state_id(state_id);
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
+        if block.id == BlockId::WATER || block.id == BlockId::LAVA {
             return false;
         }
 
-        if config.replaceable.1.contains(&block.id) {
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
+        if block.id.has_tag(config.replaceable) {
+            let air = BlockState::from_id(Block::AIR.default_state.id);
+            let lava = BlockState::from_id(Block::LAVA.default_state.id);
 
             let lava_y = config
                 .lava_level

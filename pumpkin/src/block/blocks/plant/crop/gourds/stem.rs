@@ -4,7 +4,7 @@ use crate::block::{
     blocks::plant::{PlantBlockBase, crop::get_available_moisture},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockId,
     block_properties::{
         BlockProperties, HorizontalFacing, WallTorchLikeProperties, WheatLikeProperties,
     },
@@ -26,8 +26,8 @@ type AttachedStemProperties = WallTorchLikeProperties;
 pub struct StemBlock;
 
 impl BlockMetadata for StemBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::PUMPKIN_STEM.id, Block::MELON_STEM.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::PUMPKIN_STEM, BlockId::MELON_STEM].into()
     }
 }
 

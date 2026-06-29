@@ -1,5 +1,5 @@
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{BlockId, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
@@ -11,8 +11,8 @@ use crate::block::{
 pub struct MushroomPlantBlock;
 
 impl BlockMetadata for MushroomPlantBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::BROWN_MUSHROOM.id, Block::RED_MUSHROOM.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::BROWN_MUSHROOM, BlockId::RED_MUSHROOM].into()
     }
 }
 

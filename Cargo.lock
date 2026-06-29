@@ -2768,6 +2768,7 @@ dependencies = [
 name = "pumpkin-macros"
 version = "0.1.0-dev+26.2"
 dependencies = [
+ "heck",
  "proc-macro-error2",
  "pumpkin-data",
  "quote",

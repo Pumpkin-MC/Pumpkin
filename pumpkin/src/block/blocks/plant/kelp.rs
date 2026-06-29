@@ -5,15 +5,15 @@ use crate::block::{
 };
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockId, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 pub struct KelpBlock;
 
 impl BlockMetadata for KelpBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::KELP.id, Block::KELP_PLANT.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::KELP, BlockId::KELP_PLANT].into()
     }
 }
 

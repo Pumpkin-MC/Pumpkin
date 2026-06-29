@@ -2198,7 +2198,7 @@ impl JavaClient {
             'cancelled: {
                 self.enqueue_packet(&CBlockUpdate::new(
                     position,
-                    VarInt(block.id as i32),
+                    VarInt(block.id.as_u16() as i32),
                 ))
                 .await;
                 return Ok(());

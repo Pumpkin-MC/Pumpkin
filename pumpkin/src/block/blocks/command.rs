@@ -13,6 +13,7 @@ use crate::{
     server::Server,
     world::World,
 };
+use pumpkin_data::BlockId;
 use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -210,11 +211,11 @@ impl CommandBlock {
 }
 
 impl BlockMetadata for CommandBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::COMMAND_BLOCK.id,
-            Block::CHAIN_COMMAND_BLOCK.id,
-            Block::REPEATING_COMMAND_BLOCK.id,
+            BlockId::COMMAND_BLOCK,
+            BlockId::CHAIN_COMMAND_BLOCK,
+            BlockId::REPEATING_COMMAND_BLOCK,
         ]
         .into()
     }

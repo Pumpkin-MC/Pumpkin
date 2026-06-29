@@ -1,5 +1,5 @@
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockId, tag};
 use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::plant::PlantBlockBase;
@@ -16,8 +16,8 @@ type FlowerbedProperties = pumpkin_data::block_properties::PinkPetalsLikePropert
 pub struct FlowerbedBlock;
 
 impl BlockMetadata for FlowerbedBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::PINK_PETALS.id, Block::WILDFLOWERS.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::PINK_PETALS, BlockId::WILDFLOWERS].into()
     }
 }
 

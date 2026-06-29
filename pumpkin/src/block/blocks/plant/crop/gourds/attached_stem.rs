@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block,
+    Block, BlockId,
     block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
     tag::{self, Taggable},
 };
@@ -17,12 +17,8 @@ type StemProperties = WheatLikeProperties;
 pub struct AttachedStemBlock;
 
 impl BlockMetadata for AttachedStemBlock {
-    fn ids() -> Box<[u16]> {
-        [
-            Block::ATTACHED_PUMPKIN_STEM.id,
-            Block::ATTACHED_MELON_STEM.id,
-        ]
-        .into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::ATTACHED_PUMPKIN_STEM, BlockId::ATTACHED_MELON_STEM].into()
     }
 }
 

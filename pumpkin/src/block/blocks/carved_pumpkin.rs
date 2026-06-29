@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockId,
     block_properties::{BlockProperties, WallTorchLikeProperties},
     entity::EntityType,
     world::WorldEvent,
@@ -17,8 +17,8 @@ use crate::{
 pub struct CarvedPumpkinBlock;
 
 impl BlockMetadata for CarvedPumpkinBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::JACK_O_LANTERN.id, Block::CARVED_PUMPKIN.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::JACK_O_LANTERN, BlockId::CARVED_PUMPKIN].into()
     }
 }
 

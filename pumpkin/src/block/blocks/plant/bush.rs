@@ -1,4 +1,4 @@
-use pumpkin_data::Block;
+use pumpkin_data::BlockId;
 use pumpkin_world::BlockStateId;
 
 use crate::block::{
@@ -9,8 +9,8 @@ use crate::block::{
 pub struct BushBlock;
 
 impl BlockMetadata for BushBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::BUSH.id, Block::FIREFLY_BUSH.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::BUSH, BlockId::FIREFLY_BUSH].into()
     }
 }
 

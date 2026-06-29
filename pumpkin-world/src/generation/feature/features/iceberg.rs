@@ -1,6 +1,6 @@
 use std::f64::consts;
 
-use pumpkin_data::{Block, BlockState, block_properties::is_air};
+use pumpkin_data::{Block, BlockId, BlockState, block_properties::is_air};
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -493,9 +493,10 @@ impl IcebergFeature {
         (scale / 2.0f32).ceil() as i32
     }
 
-    fn is_iceberg_state(block_id: u16) -> bool {
-        block_id == Block::PACKED_ICE.id
-            || block_id == Block::SNOW_BLOCK.id
-            || block_id == Block::BLUE_ICE.id
+    fn is_iceberg_state(id: BlockId) -> bool {
+        matches!(
+            id,
+            BlockId::PACKED_ICE | BlockId::SNOW_BLOCK | BlockId::BLUE_ICE
+        )
     }
 }

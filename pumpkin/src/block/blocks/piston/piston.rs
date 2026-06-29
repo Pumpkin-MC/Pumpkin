@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::block::entities::{has_block_block_entity, piston::PistonBlockEntity};
 use crate::entity::EntityBase;
+use pumpkin_data::BlockId;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, FacingExt,
     block_properties::{
@@ -31,7 +32,7 @@ pub(crate) type PistonProps = pumpkin_data::block_properties::StickyPistonLikePr
 pub struct PistonBlock;
 
 impl BlockMetadata for PistonBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [Block::PISTON.id, Block::STICKY_PISTON.id].into()
     }
 }

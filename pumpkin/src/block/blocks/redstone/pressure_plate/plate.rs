@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockId, BlockState,
     block_properties::BlockProperties,
     tag::{self},
 };
@@ -23,11 +23,11 @@ pub struct PressurePlateBlock;
 type PressurePlateProps = pumpkin_data::block_properties::StonePressurePlateLikeProperties;
 
 impl BlockMetadata for PressurePlateBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         let mut combined = Vec::new();
         combined.extend_from_slice(tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES.1);
         combined.extend_from_slice(tag::Block::MINECRAFT_STONE_PRESSURE_PLATES.1);
-        combined.into_boxed_slice()
+        combined.iter().map(|v| BlockId::new_or_air(*v)).collect()
     }
 }
 

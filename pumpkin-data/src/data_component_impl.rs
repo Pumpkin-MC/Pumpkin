@@ -13,7 +13,7 @@ use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::{RegistryKey, Tag, Taggable};
-use crate::{AttributeModifierSlot, Block, Enchantment};
+use crate::{AttributeModifierSlot, Block, BlockId, Enchantment};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
@@ -984,7 +984,7 @@ impl IDSetContent for Block {
     }
 
     fn from_id(id: u16) -> Option<&'static Self> {
-        Some(Block::from_id(id))
+        BlockId::new(id).map(Self::from_id)
     }
 
     fn from_str(name: &str) -> Option<&'static Self> {

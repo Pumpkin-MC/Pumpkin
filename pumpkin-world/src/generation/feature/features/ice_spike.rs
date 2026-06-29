@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, block_properties::is_air, tag};
+use pumpkin_data::{Block, BlockId, block_properties::is_air, tag};
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -63,9 +63,9 @@ impl IceSpikeFeature {
                         let raw = GenerationCache::get_block_state(chunk, &place_pos);
                         let bid = raw.to_block_id();
                         if is_air(raw.0)
-                            || tag::Block::MINECRAFT_DIRT.1.contains(&bid)
-                            || bid == Block::SNOW_BLOCK.id
-                            || bid == Block::ICE.id
+                            || bid.has_tag(tag::Block::MINECRAFT_DIRT)
+                            || bid == BlockId::SNOW_BLOCK
+                            || bid == BlockId::ICE
                         {
                             chunk.set_block_state(&place_pos, Block::PACKED_ICE.default_state);
                         }
@@ -76,9 +76,9 @@ impl IceSpikeFeature {
                             let raw2 = GenerationCache::get_block_state(chunk, &neg_pos);
                             let bid2 = raw2.to_block_id();
                             if is_air(raw2.0)
-                                || tag::Block::MINECRAFT_DIRT.1.contains(&bid2)
-                                || bid2 == Block::SNOW_BLOCK.id
-                                || bid2 == Block::ICE.id
+                                || bid2.has_tag(tag::Block::MINECRAFT_DIRT)
+                                || bid2 == BlockId::SNOW_BLOCK
+                                || bid2 == BlockId::ICE
                             {
                                 chunk.set_block_state(&neg_pos, Block::PACKED_ICE.default_state);
                             }
@@ -105,10 +105,10 @@ impl IceSpikeFeature {
                     let raw = GenerationCache::get_block_state(chunk, &ice_block);
                     let bid = raw.to_block_id();
                     if !is_air(raw.0)
-                        && !tag::Block::MINECRAFT_DIRT.1.contains(&bid)
-                        && bid != Block::SNOW_BLOCK.id
-                        && bid != Block::ICE.id
-                        && bid != Block::PACKED_ICE.id
+                        && !bid.has_tag(tag::Block::MINECRAFT_DIRT)
+                        && bid != BlockId::SNOW_BLOCK
+                        && bid != BlockId::ICE
+                        && bid != BlockId::PACKED_ICE
                     {
                         break;
                     }

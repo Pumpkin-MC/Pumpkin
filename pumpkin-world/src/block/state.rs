@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState};
 
 use crate::BlockStateId;
 
@@ -23,7 +23,10 @@ impl RawBlockState {
 
     #[inline]
     #[must_use]
-    pub const fn to_block_id(&self) -> u16 {
-        Block::get_raw_id_from_state_id(self.0)
+    pub const fn to_block_id(&self) -> BlockId {
+        match Block::get_block_id_from_state_id(self.0) {
+            Some(id) => id,
+            None => BlockId::AIR,
+        }
     }
 }

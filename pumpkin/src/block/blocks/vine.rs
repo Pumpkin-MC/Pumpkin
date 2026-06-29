@@ -81,7 +81,7 @@ impl BlockBehaviour for VineBlock {
                 }
             }
             if new_directions.is_empty() {
-                return Block::AIR.id;
+                return Block::AIR.default_state.id;
             }
             let mut new_props = VineLikeProperties::default(args.block);
 

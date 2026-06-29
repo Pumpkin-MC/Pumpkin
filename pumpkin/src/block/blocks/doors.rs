@@ -219,8 +219,10 @@ impl BlockBehaviour for DoorBlock {
                 DoubleBlockHalf::Lower => args.position.up(),
             };
 
-            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos);
-            if neighbor_block_id != args.block.id {
+            let neighbor_state_id = args.world.get_block_state_id(&other_half_pos);
+            if let Some(neighbour_block_id) = Block::get_block_id_from_state_id(neighbor_state_id)
+                && neighbour_block_id != args.block.id
+            {
                 args.world.update_neighbors(&other_half_pos, None).await;
                 return; // Neighbor is already gone or is a different block
             }

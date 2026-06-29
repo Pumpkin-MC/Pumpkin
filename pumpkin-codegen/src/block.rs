@@ -388,8 +388,8 @@ impl ToTokens for BlockPropertyStruct {
 
                 #[inline]
                 #[allow(clippy::manual_range_patterns)]
-                fn handles_block_id(block_id: u16) -> bool where Self: Sized {
-                    matches!(block_id, #(#block_ids)|*)
+                fn handles_block_id(block_id: BlockId) -> bool where Self: Sized {
+                    matches!(block_id.as_u16(), #(#block_ids)|*)
                 }
 
                 fn to_state_id(&self, block: &Block) -> u16 {
@@ -426,14 +426,14 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-               fn to_props(&self) -> Vec<(&'static str, &'static str)> {
+                fn to_props(&self) -> Vec<(&'static str, &'static str)> {
                    vec![ #(#to_props_entries),* ]
                 }
 
                 #[allow(clippy::manual_range_patterns)]
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     #[cfg(debug_assertions)]
-                    if !matches!(block.id, #(#block_ids)|*) {
+                    if !matches!(block.id.as_u16(), #(#block_ids)|*) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
@@ -627,11 +627,21 @@ impl BlockState {
     }
 }
 
+#[derive(Deserialize, Copy, Clone)]
+pub struct BlockId(pub u16);
+
+impl ToTokens for BlockId {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let inner = self.0;
+        tokens.extend(quote! { BlockId::new(#inner).unwrap() });
+    }
+}
+
 /// Deserialized representation of a Minecraft block as stored in `blocks.json`.
 #[derive(Deserialize)]
 pub struct Block {
     /// Numeric block ID used in the protocol.
-    pub id: u16,
+    pub id: BlockId,
     /// Registry name without the `minecraft:` namespace prefix.
     pub name: String,
     /// Translation key for the block's display name.
@@ -665,7 +675,7 @@ pub struct Block {
 
 impl ToTokens for Block {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let id = LitInt::new(&self.id.to_string(), Span::call_site());
+        let id = self.id;
         let name = LitStr::new(&self.name, Span::call_site());
         //let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
@@ -841,6 +851,7 @@ pub fn build() -> TokenStream {
     let mut liquid_states = Vec::new();
 
     let mut constants_list = Vec::new();
+    let mut block_id_constants = Vec::new();
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
@@ -915,8 +926,9 @@ pub fn build() -> TokenStream {
 
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
-        let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
+        let id_lit = LitInt::new(&block.id.0.to_string(), Span::call_site());
         let item_id = block.item_id;
+        let block_id = block.id;
 
         // let mut block_with_descriptors = block.clone();
         // block_with_descriptors.property_descriptors = property_descriptors;
@@ -925,7 +937,11 @@ pub fn build() -> TokenStream {
             pub const #const_ident: Self = #block;
         });
 
-        type_from_raw_id_array.push((block.id, quote! { &Block::#const_ident }));
+        block_id_constants.push(quote! {
+            pub const #const_ident: Self = #block_id;
+        });
+
+        type_from_raw_id_array.push((block.id.0, quote! { &Block::#const_ident }));
 
         block_from_name_entries.push(quote! {
             #name_str => Block::#const_ident,
@@ -1016,7 +1032,7 @@ pub fn build() -> TokenStream {
             }
 
             block_state_to_bedrock.push((state.id, matched_be_id));
-            raw_id_from_state_id_array.push((state.id, id_lit.clone()));
+            raw_id_from_state_id_array.push((state.id, quote! { BlockId::#const_ident }));
             state_from_state_id_array.push((const_ident.clone(), i, state.id));
         }
 
@@ -1027,7 +1043,7 @@ pub fn build() -> TokenStream {
             property_collection_map
                 .entry(property_collection_vec)
                 .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
-                .add_block(block.name.clone(), block.id);
+                .add_block(block.name.clone(), block.id.0);
         }
 
         if existing_item_ids.insert(item_id) {
@@ -1122,7 +1138,7 @@ pub fn build() -> TokenStream {
         #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
-        use crate::{BlockState, Block, blocks::Flammable};
+        use crate::{BlockState, Block, BlockId, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
@@ -1149,7 +1165,7 @@ pub fn build() -> TokenStream {
         pub trait BlockProperties where Self: 'static {
             fn to_index(&self) -> u16;
             fn from_index(index: u16) -> Self where Self: Sized;
-            fn handles_block_id(block_id: u16) -> bool where Self: Sized;
+            fn handles_block_id(block_id: BlockId) -> bool where Self: Sized;
             fn to_state_id(&self, block: &Block) -> u16;
             fn from_state_id(state_id: u16, block: &Block) -> Self where Self: Sized;
             fn default(block: &Block) -> Self where Self: Sized;
@@ -1192,11 +1208,8 @@ pub fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub const fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
-            if block_state.is_solid() {
-                return block != Block::COBWEB.id && block != Block::BAMBOO_SAPLING.id;
-            }
-            false
+        pub const fn blocks_movement(block_state: &BlockState, id: BlockId) -> bool {
+            block_state.is_solid() && !matches!(id, BlockId::COBWEB | BlockId::BAMBOO_SAPLING)
         }
 
         impl BlockState {
@@ -1231,14 +1244,14 @@ pub fn build() -> TokenStream {
         }
 
         mod mappings {
-            use crate::{Block, BlockState};
+            use crate::{Block, BlockId, BlockState};
             use phf;
 
             pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
                 #(#block_from_name_entries)*
             };
 
-            pub(super) static RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
+            pub(super) static BLOCK_ID_FROM_STATE_ID: [BlockId; #max_state_id] = [
                 #raw_id_from_state_id
             ];
 
@@ -1269,34 +1282,32 @@ pub fn build() -> TokenStream {
                 mappings::BLOCK_FROM_NAME_MAP.get(key)
             }
 
-            #[doc = r" Get a block from a raw block id."]
+            /// Get a [`Block`] from a [`BlockId`]
             #[inline]
             #[must_use]
-            pub const fn from_id(id: u16) -> &'static Self {
-                if id as usize >= mappings::TYPE_FROM_RAW_ID.len() {
-                    &Self::AIR
-                } else {
-                    mappings::TYPE_FROM_RAW_ID[id as usize]
-                }
+            pub const fn from_id(id: BlockId) -> &'static Self {
+                unsafe { unchecked_index(&mappings::TYPE_FROM_RAW_ID, id.as_u16() as usize) }
             }
 
-            #[doc = r" Get a raw ID from an State ID."]
+            /// Get a [`BlockId`] from a state id
             #[inline]
             #[must_use]
-            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+            pub const fn get_block_id_from_state_id(state_id: u16) -> Option<BlockId> {
                 let index = state_id as usize;
-                if index >= mappings::RAW_ID_FROM_STATE_ID.len() {
-                    0
-                } else {
-                    unsafe { unchecked_index(&mappings::RAW_ID_FROM_STATE_ID, index) }
+                if index >= mappings::BLOCK_ID_FROM_STATE_ID.len() {
+                    return None;
                 }
+                Some(mappings::BLOCK_ID_FROM_STATE_ID[index])
             }
 
-            #[doc = r" Get a block from a state id."]
+            /// Get a [`Block`] from a state id
             #[inline]
             #[must_use]
             pub const fn from_state_id(id: u16) -> &'static Self {
-                Self::from_id(Self::get_raw_id_from_state_id(id))
+                Self::from_id(match Self::get_block_id_from_state_id(id) {
+                    Some(id) => id,
+                    None => BlockId::AIR,
+                })
             }
 
             #[doc = r" Try to parse a block from an item id."]
@@ -1312,7 +1323,7 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
-                Some(match self.id {
+                Some(match self.id.as_u16() {
                     #(#block_properties_from_state_and_block_id_arms)*
                     _ => return None,
                 })
@@ -1321,11 +1332,17 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
-                match self.id {
+                match self.id.as_u16() {
                     #(#block_properties_from_props_and_name_arms)*
                     _ => panic!("Invalid props")
                 }
             }
+        }
+
+        impl BlockId {
+            #(#block_id_constants)*
+
+            pub(crate) const BLOCK_COUNT: u16 = mappings::TYPE_FROM_RAW_ID.len() as u16;
         }
 
         #(#properties)*

@@ -1210,7 +1210,7 @@ fn value_to_root_placer(v: &Value) -> TokenStream {
                     above_root_placement: #above,
                     mangrove_root_placement: MangroveRootPlacement {
                         can_grow_through: #can_grow_through,
-                        muddy_roots_in: #muddy_roots_in,
+                        muddy_roots_in: const { #muddy_roots_in },
                         muddy_roots_provider: #muddy_roots_provider,
                         max_root_width: #max_root_width,
                         max_root_length: #max_root_length,
@@ -1241,7 +1241,7 @@ fn value_to_block_list(v: &Value) -> TokenStream {
             if let Some(s) = b.as_str() {
                 let name = s.strip_prefix("minecraft:").unwrap_or(s).to_uppercase();
                 let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-                blocks.push(quote! { pumpkin_data::Block::#ident.id });
+                blocks.push(quote! { pumpkin_data::BlockId::#ident.as_u16() });
             }
         }
     }

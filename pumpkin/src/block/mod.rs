@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
@@ -30,6 +30,10 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use tokio::sync::Mutex;
 
 pub trait BlockMetadata {
+    fn ids() -> Box<[BlockId]>;
+}
+
+pub trait FluidMetadata {
     fn ids() -> Box<[u16]>;
 }
 

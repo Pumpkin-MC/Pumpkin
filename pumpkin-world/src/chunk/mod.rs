@@ -174,13 +174,13 @@ impl TryFrom<usize> for ChunkHeightmapType {
 impl ChunkHeightmapType {
     #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
-        let block = Block::get_raw_id_from_state_id(block_state.id);
+        let block = Block::get_block_id_from_state_id(block_state.id).expect("invalid blockstate");
         match self {
             Self::WorldSurface => !block_state.is_air(),
             Self::MotionBlocking => blocks_movement(block_state, block) || block_state.is_liquid(),
             Self::MotionBlockingNoLeaves => {
                 (blocks_movement(block_state, block) || block_state.is_liquid())
-                    && !MINECRAFT_LEAVES.1.contains(&block)
+                    && !block.has_tag(MINECRAFT_LEAVES)
             }
         }
     }

@@ -129,7 +129,7 @@ use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BlockMetadata, GetInsideCollisionShapeArgs,
+    BlockBehaviour, BlockHitResult, BlockMetadata, FluidMetadata, GetInsideCollisionShapeArgs,
     OnEntityCollisionArgs, OnLandedUponArgs, UpdateEntityMovementAfterFallOnArgs,
     stop_vertical_movement_after_fall,
 };
@@ -141,7 +141,7 @@ use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -381,7 +381,7 @@ impl BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
+    blocks: FxHashMap<BlockId, Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
@@ -395,7 +395,7 @@ impl BlockRegistry {
         }
     }
 
-    pub fn register_fluid<T: FluidBehaviour + BlockMetadata + 'static>(&mut self, fluid: T) {
+    pub fn register_fluid<T: FluidBehaviour + FluidMetadata + 'static>(&mut self, fluid: T) {
         let ids = T::ids();
         let val = Arc::new(fluid);
         self.fluids.reserve(ids.len());
@@ -919,7 +919,7 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_block(&self, block: u16) -> Option<&Arc<dyn BlockBehaviour>> {
+    pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
         self.blocks.get(&block)
     }
 

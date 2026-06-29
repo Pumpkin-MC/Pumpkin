@@ -14,6 +14,7 @@ use crate::block::PlacedArgs;
 use crate::entity::EntityBase;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockId;
 use pumpkin_data::FacingExt;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
@@ -35,8 +36,8 @@ use super::get_redstone_power;
 pub struct RedstoneTorchBlock;
 
 impl BlockMetadata for RedstoneTorchBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::REDSTONE_TORCH.id, Block::REDSTONE_WALL_TORCH.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::REDSTONE_TORCH, BlockId::REDSTONE_WALL_TORCH].into()
     }
 }
 

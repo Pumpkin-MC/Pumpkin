@@ -9,6 +9,6 @@ pub struct TagMatchRuleTest {
 impl TagMatchRuleTest {
     #[must_use]
     pub fn test(&self, state: RawBlockState) -> bool {
-        self.tag.1.contains(&state.to_block_id())
+        state.to_block_id().has_tag(self.tag)
     }
 }

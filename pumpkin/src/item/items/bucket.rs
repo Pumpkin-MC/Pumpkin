@@ -328,7 +328,7 @@ impl ItemBehaviour for FilledBucketItem {
                 if Fluid::from_state_id(state_id).is_some() {
                     return false;
                 }
-                state_id != Block::AIR.id
+                state_id != Block::AIR.default_state.id
             };
 
             let Some((pos, direction)) = world.raycast(start_pos, end_pos, checker).await else {

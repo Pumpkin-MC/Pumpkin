@@ -59,7 +59,7 @@ impl BlockBehaviour for CandleBlock {
 
             match item.id {
                 id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)
-                    && item.id == args.block.id =>
+                    && item.id == args.block.item_id =>
                 {
                     let was_lit = properties.lit;
 

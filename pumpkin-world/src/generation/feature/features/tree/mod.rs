@@ -1,7 +1,7 @@
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
-use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::BlockState;
+use pumpkin_data::{BlockId, tag};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use root::RootPlacer;
 
@@ -68,19 +68,16 @@ impl TreeFeature {
         true
     }
 
-    pub fn can_replace_or_log(state: &BlockState, block: u16) -> bool {
-        Self::can_replace(state, block) || tag::Block::MINECRAFT_LOGS.1.contains(&block)
+    pub fn can_replace_or_log(state: &BlockState, id: BlockId) -> bool {
+        Self::can_replace(state, id) || id.has_tag(tag::Block::MINECRAFT_LOGS)
     }
 
-    pub fn is_air_or_leaves(state: &BlockState, block: u16) -> bool {
-        state.is_air() || tag::Block::MINECRAFT_LEAVES.1.contains(&block)
+    pub fn is_air_or_leaves(state: &BlockState, id: BlockId) -> bool {
+        state.is_air() || id.has_tag(tag::Block::MINECRAFT_LEAVES)
     }
 
-    pub fn can_replace(state: &BlockState, block: u16) -> bool {
-        state.is_air()
-            || tag::Block::MINECRAFT_REPLACEABLE_BY_TREES
-                .1
-                .contains(&block)
+    pub fn can_replace(state: &BlockState, id: BlockId) -> bool {
+        state.is_air() || id.has_tag(tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -158,7 +155,7 @@ impl TreeFeature {
                     let rstate = GenerationCache::get_block_state(chunk, &pos.0);
                     let block = rstate.to_block_id();
                     if Self::can_replace_or_log(rstate.to_state(), block)
-                        && (self.ignore_vines || block != Block::VINE)
+                        && (self.ignore_vines || block != BlockId::VINE)
                     {
                         continue;
                     }

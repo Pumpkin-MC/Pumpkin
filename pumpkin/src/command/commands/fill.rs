@@ -47,7 +47,7 @@ struct Executor(Mode);
 
 fn not_in_filter(filter: &BlockPredicate, old_block: &Block) -> bool {
     match filter {
-        BlockPredicate::Tag(tag) => !tag.contains(&old_block.id),
+        BlockPredicate::Tag(tag) => !tag.contains(&old_block.id.as_u16()),
         BlockPredicate::Block(block) => *block != old_block.id,
     }
 }

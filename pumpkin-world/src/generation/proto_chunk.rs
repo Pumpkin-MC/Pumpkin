@@ -445,7 +445,8 @@ impl ProtoChunk {
             let index = Self::local_position_to_height_map_index(local_x, local_z);
             let y = y as i16;
             self.maybe_update_surface_height_map(index, y);
-            let block = Block::get_raw_id_from_state_id(block_state.id);
+            let block =
+                Block::get_block_id_from_state_id(block_state.id).expect("invalid blockstate");
 
             let blocks_movement = blocks_movement(block_state, block);
             if blocks_movement {
@@ -453,7 +454,7 @@ impl ProtoChunk {
             }
             if blocks_movement || block_state.is_liquid() {
                 self.maybe_update_motion_blocking_height_map(index, y);
-                if !tag::Block::MINECRAFT_LEAVES.1.contains(&block) {
+                if !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
                     {
                         self.maybe_update_motion_blocking_no_leaves_height_map(index, y);
                     }

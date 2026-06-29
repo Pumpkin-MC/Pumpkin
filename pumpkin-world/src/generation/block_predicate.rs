@@ -108,7 +108,7 @@ pub struct MatchingBlockTagPredicate {
 impl MatchingBlockTagPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let state = self.offset.get_raw(chunk, pos);
-        self.tag.1.contains(&state.to_block_id())
+        state.to_block_id().has_tag(self.tag)
     }
 }
 

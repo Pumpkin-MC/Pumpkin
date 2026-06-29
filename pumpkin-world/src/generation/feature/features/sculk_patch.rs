@@ -1,5 +1,5 @@
-use pumpkin_data::Block;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
+use pumpkin_data::{Block, BlockId};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -107,17 +107,20 @@ impl SculkPatchFeature {
     }
 }
 
-fn is_sculk_behaviour(block_id: u16) -> bool {
-    block_id == Block::SCULK.id
-        || block_id == Block::SCULK_VEIN.id
-        || block_id == Block::SCULK_CATALYST.id
-        || block_id == Block::SCULK_SHRIEKER.id
-        || block_id == Block::SCULK_SENSOR.id
-        || block_id == Block::CALIBRATED_SCULK_SENSOR.id
+const fn is_sculk_behaviour(id: BlockId) -> bool {
+    matches!(
+        id,
+        BlockId::SCULK
+            | BlockId::SCULK_VEIN
+            | BlockId::SCULK_CATALYST
+            | BlockId::SCULK_SHRIEKER
+            | BlockId::SCULK_SENSOR
+            | BlockId::CALIBRATED_SCULK_SENSOR
+    )
 }
 
-fn is_sculk_replaceable(block_id: u16) -> bool {
-    MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN.1.contains(&block_id)
+fn is_sculk_replaceable(id: BlockId) -> bool {
+    id.has_tag(MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN)
 }
 
 struct Cursor {
@@ -169,7 +172,7 @@ impl SculkSpreader {
                 chunk.set_block_state(&target_pos.0, Block::SCULK.default_state);
                 cursor.pos = target_pos;
                 cursor.charge -= 1;
-            } else if target_block_id == Block::SCULK.id {
+            } else if target_block_id == BlockId::SCULK {
                 cursor.pos = target_pos;
                 cursor.charge -= 1;
             }
