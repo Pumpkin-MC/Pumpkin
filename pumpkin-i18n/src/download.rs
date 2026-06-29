@@ -157,6 +157,10 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 ///
 /// This function calls [`crate::store::add_translation_file`] for each
 /// namespace that has entries.
+///
+/// Emits a single consolidated log line summarising translation coverage.
+/// Empty namespaces in non‑English locales produce a [`warn!`]; otherwise
+/// the summary is logged at [`info!`] level.
 pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
     if !downloaded.pumpkin.is_empty() {
         let json = serde_json::to_string(&downloaded.pumpkin).unwrap();
@@ -176,13 +180,35 @@ pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
         }
     }
 
-    if downloaded.has_any() {
+    if !downloaded.has_any() {
+        return;
+    }
+
+    let code = locale.to_code();
+    let pumpkin_count = downloaded.pumpkin.len();
+    let java_count = downloaded.java.len();
+    let bedrock_count = downloaded.bedrock.len();
+
+    // For non‑English locales, flag any empty namespace that will silently
+    // fall back to English — users need to know this at a glance.
+    if locale != Locale::EnUs && (pumpkin_count == 0 || java_count == 0 || bedrock_count == 0) {
+        let mut missing = Vec::with_capacity(3);
+        if pumpkin_count == 0 {
+            missing.push("server messages");
+        }
+        if java_count == 0 {
+            missing.push("Java Edition vanilla strings");
+        }
+        if bedrock_count == 0 {
+            missing.push("Bedrock Edition vanilla strings");
+        }
+        warn!(
+            "Translation coverage for {code}: pumpkin={pumpkin_count}, java={java_count}, bedrock={bedrock_count} — {missing} will use English fallback",
+            missing = missing.join(", "),
+        );
+    } else {
         info!(
-            "Loaded downloaded translations for {} (pumpkin: {}, java: {}, bedrock: {})",
-            locale.to_code(),
-            downloaded.pumpkin.len(),
-            downloaded.java.len(),
-            downloaded.bedrock.len(),
+            "Loaded translations for {code} (pumpkin: {pumpkin_count}, java: {java_count}, bedrock: {bedrock_count})",
         );
     }
 }
