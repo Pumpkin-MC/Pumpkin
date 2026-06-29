@@ -431,8 +431,18 @@ static LOADED_LOCALES: LazyLock<Mutex<HashSet<Locale>>> =
 /// Must be called once during server startup, before any background locale
 /// loading is triggered. The config is used by [`ensure_locale_translations`]
 /// to download missing translations on demand.
+///
+/// # Panics
+/// Never panics. Subsequent calls log a warning and are ignored.
 pub fn init_translation_loader(config: DownloadConfig, cache_root: PathBuf) {
-    let _ = LOADER_STATE.set((config, cache_root));
+    match LOADER_STATE.set((config, cache_root)) {
+        Ok(()) => {}
+        Err(_) => {
+            warn!(
+                "init_translation_loader called more than once — ignoring duplicate initialisation"
+            );
+        }
+    }
 }
 
 /// Ensure translations are loaded for the given locale.
@@ -440,8 +450,10 @@ pub fn init_translation_loader(config: DownloadConfig, cache_root: PathBuf) {
 /// # Behaviour
 /// 1. **`EnUs`** — no-op (embedded at compile time).
 /// 2. **Already loaded** — no-op (deduplicated via internal tracking set).
-/// 3. **On disk** — loads from the cache directory and injects into the engine.
-/// 4. **Missing** — downloads from the configured mirror, saves to disk,
+/// 3. **Complete disk cache** — loads all three namespaces and returns.
+/// 4. **Partial disk cache** — loads what exists, then downloads the full
+///    set to fill gaps.
+/// 5. **No cache** — downloads from the configured mirror, saves to disk,
 ///    and injects into the engine.
 ///
 /// # Thread safety
@@ -474,28 +486,38 @@ pub fn ensure_locale_translations(locale: Locale) {
     };
 
     // 1. Try disk cache first
-    if let Some(cached) = load_cached_translations(locale, cache_root) {
+    let partial_cache = if let Some(cached) = load_cached_translations(locale, cache_root) {
+        let complete =
+            !cached.pumpkin.is_empty() && !cached.java.is_empty() && !cached.bedrock.is_empty();
+        if complete {
+            // All three namespaces present — no download needed
+            load_downloaded(&cached, locale);
+            return;
+        }
+        // Partial cache: load what we have now, then download the full set
         load_downloaded(&cached, locale);
-        return;
-    }
+        true
+    } else {
+        false
+    };
 
-    // 2. Download from remote mirror
+    // 2. Download full set from remote mirror
     let downloaded = download_locale(config, locale);
 
     // 3. Save to disk for future runs
     if downloaded.has_any() {
         save_downloaded_translations(&downloaded, locale, cache_root);
-    }
 
-    // 4. Inject into the global engine
-    if downloaded.has_any() {
+        // 4. Inject into the global engine (overwrites partial cache data)
         load_downloaded(&downloaded, locale);
-    } else {
+    } else if !partial_cache {
         warn!(
             "No translations available for {} — using English fallback",
             locale.to_code()
         );
     }
+    // If partial_cache is true and download failed, we already loaded
+    // the partial cache above. The missing namespaces will use EnUs fallback.
 }
 
 // ---------------------------------------------------------------------------
