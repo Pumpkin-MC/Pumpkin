@@ -8,21 +8,18 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::{BlockBehaviour, BlockMetadata};
+use crate::block::BlockBehaviour;
 use crate::world::World;
 
+#[pumpkin_block_from_tag("minecraft:fences")]
 pub struct FenceBlock;
-impl BlockMetadata for FenceBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::C_FENCES.1.into()
-    }
-}
 
 impl BlockBehaviour for FenceBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {

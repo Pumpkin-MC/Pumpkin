@@ -6,23 +6,19 @@ use pumpkin_data::{
     effect::StatusEffect,
     fluid::Fluid,
 };
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockIsReplacing, BlockMetadata,
-        GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
+        BlockBehaviour, BlockFuture, BlockIsReplacing, GetStateForNeighborUpdateArgs,
+        OnEntityCollisionArgs, OnPlaceArgs,
     },
     entity::EntityBase,
 };
 
+#[pumpkin_block_from_tag("minecraft:campfires")]
 pub struct CampfireBlock;
-
-impl BlockMetadata for CampfireBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::CAMPFIRE.id, Block::SOUL_CAMPFIRE.id].into()
-    }
-}
 
 impl BlockBehaviour for CampfireBlock {
     // TODO: cooking food on campfire (CampfireBlockEntity)

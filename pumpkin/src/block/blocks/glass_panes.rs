@@ -7,20 +7,17 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::{BlockBehaviour, BlockMetadata};
+use crate::block::BlockBehaviour;
 use crate::world::World;
 
+#[pumpkin_block_from_tag("c:glass_panes")]
 pub struct GlassPaneBlock;
-impl BlockMetadata for GlassPaneBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::C_GLASS_PANES.1.into()
-    }
-}
 
 impl BlockBehaviour for GlassPaneBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {

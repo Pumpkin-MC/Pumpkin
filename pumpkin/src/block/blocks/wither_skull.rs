@@ -1,21 +1,16 @@
 use pumpkin_data::{Block, BlockDirection, entity::EntityType, world::WorldEvent};
+use pumpkin_macros::pumpkin_block;
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs, PlacedArgs,
-        blocks::skull_block::SkullBlock,
+        BlockBehaviour, BlockFuture, OnPlaceArgs, PlacedArgs, blocks::skull_block::SkullBlock,
     },
     entity::{Entity, boss::wither::WitherEntity},
 };
 
+#[pumpkin_block("wither_skeleton_skull")]
 pub struct WitherSkeletonSkullBlock;
-
-impl BlockMetadata for WitherSkeletonSkullBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::WITHER_SKELETON_SKULL.id].into()
-    }
-}
 
 impl BlockBehaviour for WitherSkeletonSkullBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
