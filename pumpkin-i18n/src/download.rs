@@ -4,6 +4,7 @@
 //! Falls back to compile-time embedded English translations on any failure.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use std::fmt::Write;
@@ -178,6 +179,232 @@ pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
             downloaded.bedrock.len(),
         );
     }
+}
+
+/// Builds the translation cache directory path for a given locale.
+///
+/// Returns `{cache_root}/{locale_code}/`.
+fn translation_cache_dir(cache_root: &Path, locale: Locale) -> PathBuf {
+    cache_root.join(locale.to_code())
+}
+
+/// Saves downloaded translations to disk under `{cache_root}/{locale_code}/`.
+///
+/// Creates the directory structure if it doesn't exist.
+/// Each namespace is saved as a separate JSON file.
+///
+/// # File layout
+/// ```text
+/// {cache_root}/en_us/pumpkin.json
+/// {cache_root}/en_us/java_minecraft.json
+/// {cache_root}/en_us/bedrock_minecraft.json
+/// ```
+pub fn save_downloaded_translations(
+    downloaded: &DownloadedTranslations,
+    locale: Locale,
+    cache_root: &Path,
+) {
+    let dir = translation_cache_dir(cache_root, locale);
+
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        warn!(
+            "Failed to create translation cache directory {:?}: {e}",
+            dir
+        );
+        return;
+    }
+
+    // Save pumpkin translations
+    if !downloaded.pumpkin.is_empty() {
+        let path = dir.join("pumpkin.json");
+        match serde_json::to_string_pretty(&downloaded.pumpkin) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(&path, &json) {
+                    warn!("Failed to save pumpkin translations to {:?}: {e}", path);
+                } else {
+                    debug!(
+                        "Saved pumpkin translations to {:?} ({} entries)",
+                        path,
+                        downloaded.pumpkin.len()
+                    );
+                }
+            }
+            Err(e) => {
+                warn!("Failed to serialize pumpkin translations: {e}");
+            }
+        }
+    }
+
+    // Save Java Edition vanilla translations
+    if !downloaded.java.is_empty() {
+        let path = dir.join("java_minecraft.json");
+        match serde_json::to_string_pretty(&downloaded.java) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(&path, &json) {
+                    warn!("Failed to save java translations to {:?}: {e}", path);
+                } else {
+                    debug!(
+                        "Saved java translations to {:?} ({} entries)",
+                        path,
+                        downloaded.java.len()
+                    );
+                }
+            }
+            Err(e) => {
+                warn!("Failed to serialize java translations: {e}");
+            }
+        }
+    }
+
+    // Save Bedrock Edition vanilla translations
+    if !downloaded.bedrock.is_empty() {
+        let path = dir.join("bedrock_minecraft.json");
+        match serde_json::to_string_pretty(&downloaded.bedrock) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(&path, &json) {
+                    warn!("Failed to save bedrock translations to {:?}: {e}", path);
+                } else {
+                    debug!(
+                        "Saved bedrock translations to {:?} ({} entries)",
+                        path,
+                        downloaded.bedrock.len()
+                    );
+                }
+            }
+            Err(e) => {
+                warn!("Failed to serialize bedrock translations: {e}");
+            }
+        }
+    }
+
+    if downloaded.has_any() {
+        info!(
+            "Saved downloaded translations for {} to {:?}",
+            locale.to_code(),
+            dir
+        );
+    }
+}
+
+/// Attempts to load cached translations from disk.
+///
+/// Looks for translation files under `{cache_root}/{locale_code}/`.
+/// Returns `None` if the directory doesn't exist or no files are found.
+///
+/// # File layout (same as [`save_downloaded_translations`])
+/// ```text
+/// {cache_root}/en_us/pumpkin.json
+/// {cache_root}/en_us/java_minecraft.json
+/// {cache_root}/en_us/bedrock_minecraft.json
+/// ```
+pub fn load_cached_translations(
+    locale: Locale,
+    cache_root: &Path,
+) -> Option<DownloadedTranslations> {
+    let dir = translation_cache_dir(cache_root, locale);
+
+    if !dir.exists() {
+        return None;
+    }
+
+    let mut result = DownloadedTranslations::default();
+    let mut found_any = false;
+
+    // Load pumpkin translations
+    let pumpkin_path = dir.join("pumpkin.json");
+    if pumpkin_path.exists() {
+        match std::fs::read_to_string(&pumpkin_path) {
+            Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
+                Ok(map) if !map.is_empty() => {
+                    debug!(
+                        "Loaded cached pumpkin translations from {:?} ({} entries)",
+                        pumpkin_path,
+                        map.len()
+                    );
+                    result.pumpkin = map;
+                    found_any = true;
+                }
+                Ok(_) => {
+                    warn!(
+                        "Cached pumpkin translation file is empty: {:?}",
+                        pumpkin_path
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to parse cached pumpkin translations: {e}");
+                }
+            },
+            Err(e) => {
+                warn!("Failed to read cached pumpkin translations: {e}");
+            }
+        }
+    }
+
+    // Load Java Edition vanilla translations
+    let java_path = dir.join("java_minecraft.json");
+    if java_path.exists() {
+        match std::fs::read_to_string(&java_path) {
+            Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
+                Ok(map) if !map.is_empty() => {
+                    debug!(
+                        "Loaded cached java translations from {:?} ({} entries)",
+                        java_path,
+                        map.len()
+                    );
+                    result.java = map;
+                    found_any = true;
+                }
+                Ok(_) => {
+                    warn!("Cached java translation file is empty: {:?}", java_path);
+                }
+                Err(e) => {
+                    warn!("Failed to parse cached java translations: {e}");
+                }
+            },
+            Err(e) => {
+                warn!("Failed to read cached java translations: {e}");
+            }
+        }
+    }
+
+    // Load Bedrock Edition vanilla translations
+    let bedrock_path = dir.join("bedrock_minecraft.json");
+    if bedrock_path.exists() {
+        match std::fs::read_to_string(&bedrock_path) {
+            Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
+                Ok(map) if !map.is_empty() => {
+                    debug!(
+                        "Loaded cached bedrock translations from {:?} ({} entries)",
+                        bedrock_path,
+                        map.len()
+                    );
+                    result.bedrock = map;
+                    found_any = true;
+                }
+                Ok(_) => {
+                    warn!(
+                        "Cached bedrock translation file is empty: {:?}",
+                        bedrock_path
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to parse cached bedrock translations: {e}");
+                }
+            },
+            Err(e) => {
+                warn!("Failed to read cached bedrock translations: {e}");
+            }
+        }
+    }
+
+    found_any.then(|| {
+        info!(
+            "Loaded cached translations for {} from {:?}",
+            locale.to_code(),
+            dir
+        );
+        result
+    })
 }
 
 // ---------------------------------------------------------------------------

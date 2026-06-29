@@ -28,8 +28,9 @@ use pumpkin_util::translation::{localized_log, localized_log_format, localized_t
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_i18n::{
-    self, DownloadConfig, download_locale, load_downloaded, locale_to_log_string,
-    resolve_server_locale, set_server_global_locale,
+    self, DownloadConfig, download_locale, load_cached_translations, load_downloaded,
+    locale_to_log_string, resolve_server_locale, save_downloaded_translations,
+    set_server_global_locale,
 };
 use pumpkin_util::text::{
     TextComponent,
@@ -82,16 +83,40 @@ async fn main() {
         )
     );
 
-    // Download translations for the resolved server locale.
-    // Runs on a blocking thread to avoid stalling the tokio runtime.
+    // Try loading cached translations from disk first.
+    // If the cache is missing or incomplete, download from the mirror and
+    // save the result to disk for subsequent starts.
     let locale_config = &config.advanced.locale;
     let download_config = DownloadConfig {
         mirror_url: locale_config.mirror_url.clone(),
         timeout_ms: locale_config.timeout,
         skip_checksum: locale_config.skip_checksum,
     };
+    // Resolve cache root: absolute paths are used as-is;
+    // relative paths are resolved against the working directory.
+    let cache_root: std::path::PathBuf =
+        if std::path::Path::new(&locale_config.translation_cache_dir).is_absolute() {
+            std::path::PathBuf::from(&locale_config.translation_cache_dir)
+        } else {
+            exec_dir.join(&locale_config.translation_cache_dir)
+        };
     let downloaded = tokio::task::spawn_blocking(move || {
-        download_locale(&download_config, server_global_locale)
+        // 1. Try disk cache
+        if let Some(cached) = load_cached_translations(server_global_locale, &cache_root)
+            && cached.has_any()
+        {
+            return cached;
+        }
+
+        // 2. Download from remote mirror
+        let downloaded = download_locale(&download_config, server_global_locale);
+
+        // 3. Save to disk for future runs
+        if downloaded.has_any() {
+            save_downloaded_translations(&downloaded, server_global_locale, &cache_root);
+        }
+
+        downloaded
     })
     .await
     .unwrap_or_default();

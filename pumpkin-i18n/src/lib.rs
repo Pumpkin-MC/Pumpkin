@@ -14,7 +14,10 @@ pub use client::{
     locale_to_log_string, player_locale, remove_player_locale, resolve_client_locale,
     set_player_locale, try_player_locale,
 };
-pub use download::{DownloadConfig, DownloadedTranslations, download_locale, load_downloaded};
+pub use download::{
+    DownloadConfig, DownloadedTranslations, download_locale, load_cached_translations,
+    load_downloaded, save_downloaded_translations,
+};
 pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
 pub use locale::Locale;
 pub use server::{

@@ -32,6 +32,12 @@ pub struct LocaleConfig {
     /// Useful when the mirror does not host `.sha256` files.
     /// Default: `false`.
     pub skip_checksum: bool,
+    /// Directory where downloaded translation files are cached on disk.
+    ///
+    /// If empty or relative, it is resolved against the server's working
+    /// directory. An absolute path is used as-is.
+    /// Default: `"data/translation"`.
+    pub translation_cache_dir: String,
     /// Language used for server logs and console/backend command output.
     ///
     /// `"auto"` detects the system locale from environment variables or the
@@ -56,6 +62,7 @@ impl Default for LocaleConfig {
             mirror_url: String::new(),
             timeout: 1000,
             skip_checksum: false,
+            translation_cache_dir: "data/translation".to_string(),
             server_global: "auto".to_string(),
             client_java_edition: "auto".to_string(),
             client_bedrock_edition: "auto".to_string(),
