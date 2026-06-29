@@ -565,7 +565,7 @@ impl EnderDragonEntity {
                 .load()
                 .intersects(&dragon_bbox)
             {
-                let player_pos = player.living_entity.entity.pos.load();
+                let player_pos = player.get_entity().pos.load();
                 let xd = player_pos.x - xm;
                 let zd = player_pos.z - zm;
                 let dd = (xd * xd + zd * zd).max(0.1);
@@ -574,7 +574,7 @@ impl EnderDragonEntity {
                     .living_entity
                     .entity
                     .apply_knockback(4.0, xd / dd, zd / dd);
-                player.living_entity.entity.send_velocity();
+                player.get_entity().send_velocity();
 
                 if !self.phase.lock().await.is_sitting() {
                     player.damage(self, 5.0, DamageType::MOB_ATTACK).await;

@@ -90,6 +90,13 @@ impl BlockBehaviour for FurnaceBlock {
                 && let Some(property_delegate) = block_entity.clone().to_property_delegate()
                 && let Some(experience_container) = block_entity.to_experience_container()
             {
+                args.player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::InteractWithFurnace as i32,
+                        1,
+                    )
+                    .await;
                 let furnace_screen_factory =
                     FurnaceScreenFactory::new(inventory, property_delegate, experience_container);
                 args.player

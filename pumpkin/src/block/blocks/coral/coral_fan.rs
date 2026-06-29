@@ -9,7 +9,8 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection, FacingExt, HorizontalFacingExt,
     block_properties::{
-        BlockProperties, Facing, LadderLikeProperties, MangroveRootsLikeProperties,
+        BlockProperties, Facing, HorizontalFacing, LadderLikeProperties,
+        MangroveRootsLikeProperties,
     },
     tag::{self, Taggable},
 };
@@ -18,7 +19,9 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
+
 pub struct CoralFanBlock;
+
 impl BlockMetadata for CoralFanBlock {
     fn ids() -> Box<[u16]> {
         let alive_wall_fans = tag::Block::MINECRAFT_WALL_CORALS.1;
@@ -81,18 +84,18 @@ impl BlockBehaviour for CoralFanBlock {
             for dir in directions {
                 if dir != Facing::Up
                     && dir != Facing::Down
-                    && can_place_at(args.world, args.position, dir.to_block_direction())
+                    && can_place_at(
+                        args.world,
+                        args.position,
+                        dir.to_horizontal_facing().unwrap(),
+                    )
                 {
                     let Some(wall_block) = get_corresponding_wall_fan_type(args.block) else {
                         return 0;
                     };
                     let mut coral_wall_fan_props = CoralWallFanLikeProperties::default(&wall_block);
                     coral_wall_fan_props.waterlogged = args.replacing.water_source();
-                    coral_wall_fan_props.facing = dir
-                        .opposite()
-                        .to_block_direction()
-                        .to_horizontal_facing()
-                        .unwrap();
+                    coral_wall_fan_props.facing = dir.opposite().to_horizontal_facing().unwrap();
                     return coral_wall_fan_props.to_state_id(&wall_block);
                 }
             }
@@ -104,6 +107,7 @@ impl BlockBehaviour for CoralFanBlock {
             0
         })
     }
+
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !scan_for_water(args.world, args.position).await {
@@ -111,24 +115,32 @@ impl BlockBehaviour for CoralFanBlock {
             }
         })
     }
+
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
                 let current_state = args.world.get_block_state(args.position);
+
+                // VANILLA FIX: Explicitly set waterlogged to false when dying
                 let dead_block_state_id = if is_wall_fan(args.block) {
-                    let props =
+                    let mut props =
                         CoralWallFanLikeProperties::from_state_id(current_state.id, args.block);
+                    props.waterlogged = false;
                     props.to_state_id(&get_dead_type(args.block))
                 } else {
-                    let props = CoralFanLikeProperties::from_state_id(current_state.id, args.block);
+                    let mut props =
+                        CoralFanLikeProperties::from_state_id(current_state.id, args.block);
+                    props.waterlogged = false;
                     props.to_state_id(&get_dead_type(args.block))
                 };
+
                 args.world
                     .set_block_state(args.position, dead_block_state_id, BlockFlags::empty())
                     .await;
             }
         })
     }
+
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> bool {
         let support_block = args.block_accessor.get_block_state(&args.position.down());
         if support_block.is_center_solid(BlockDirection::Up) && !is_wall_fan(args.block) {
@@ -150,11 +162,7 @@ impl BlockBehaviour for CoralFanBlock {
             if is_wall_fan(args.block) {
                 let props = CoralWallFanLikeProperties::from_state_id(args.state_id, args.block);
                 if props.facing.to_block_direction().opposite() == args.direction
-                    && !can_place_at(
-                        args.world,
-                        args.position,
-                        props.facing.to_block_direction().opposite(),
-                    )
+                    && !can_place_at(args.world, args.position, props.facing.opposite())
                 {
                     return 0;
                 }
@@ -164,15 +172,18 @@ impl BlockBehaviour for CoralFanBlock {
                     return 0;
                 }
             }
+
             args.state_id
         })
     }
 }
+
 fn get_default_coral_fan_state_id(block: &Block, waterlogged: bool) -> BlockStateId {
     let mut props = CoralFanLikeProperties::default(block);
     props.waterlogged = waterlogged;
     props.to_state_id(block)
 }
+
 fn is_wall_fan(block: &Block) -> bool {
     block.has_tag(&tag::Block::MINECRAFT_WALL_CORALS)
         || block == &Block::DEAD_BRAIN_CORAL_WALL_FAN
@@ -181,6 +192,7 @@ fn is_wall_fan(block: &Block) -> bool {
         || block == &Block::DEAD_HORN_CORAL_WALL_FAN
         || block == &Block::DEAD_TUBE_CORAL_WALL_FAN
 }
+
 fn get_dead_type(block: &Block) -> Block {
     if block == &Block::BRAIN_CORAL_FAN {
         Block::DEAD_BRAIN_CORAL_FAN
@@ -204,6 +216,7 @@ fn get_dead_type(block: &Block) -> Block {
         Block::DEAD_TUBE_CORAL_WALL_FAN
     }
 }
+
 fn get_corresponding_wall_fan_type(block: &Block) -> Option<Block> {
     if block == &Block::TUBE_CORAL_FAN {
         Some(Block::TUBE_CORAL_WALL_FAN)
@@ -229,8 +242,9 @@ fn get_corresponding_wall_fan_type(block: &Block) -> Option<Block> {
         None
     }
 }
-fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: BlockDirection) -> bool {
+
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: HorizontalFacing) -> bool {
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
-        .is_side_solid(facing.opposite())
+        .is_side_solid(facing.opposite().to_block_direction())
 }

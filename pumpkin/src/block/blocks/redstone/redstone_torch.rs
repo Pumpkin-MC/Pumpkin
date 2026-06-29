@@ -79,11 +79,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
                     && can_place_at(world, location, dir.to_block_direction())
                 {
                     let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
-                    torch_props.facing = dir
-                        .opposite()
-                        .to_block_direction()
-                        .to_horizontal_facing()
-                        .unwrap();
+                    torch_props.facing = dir.opposite().to_horizontal_facing().unwrap();
                     return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
                 }
             }
@@ -103,7 +99,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
             return true;
         }
         for dir in BlockDirection::horizontal() {
-            if can_place_at(args.block_accessor, args.position, dir) {
+            if can_place_at(args.block_accessor, args.position, dir.to_block_direction()) {
                 return true;
             }
         }

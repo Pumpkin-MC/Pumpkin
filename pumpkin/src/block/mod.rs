@@ -10,7 +10,6 @@ use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 pub mod blocks;
 pub mod entities;
@@ -22,6 +21,7 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -46,7 +46,7 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
     let base_entity = entity.get_entity();
     let mut velocity = base_entity.velocity.load();
 
-    if base_entity.sneaking.load(Ordering::Relaxed) {
+    if base_entity.is_sneaking() {
         velocity.y = 0.0;
     } else if velocity.y < 0.0 {
         let entity_factor = if entity.get_living_entity().is_some() {
@@ -210,6 +210,14 @@ pub trait BlockBehaviour: Send + Sync {
         _args: GetInsideCollisionShapeArgs<'a>,
     ) -> BlockFuture<'a, BoundingBox> {
         Box::pin(async move { BoundingBox::full_block() })
+    }
+
+    fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+        block.mirror(state_id, mirror)
+    }
+
+    fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+        block.rotate(state_id, rotation)
     }
 }
 

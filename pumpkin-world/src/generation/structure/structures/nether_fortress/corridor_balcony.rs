@@ -13,7 +13,7 @@ use crate::{
     generation::structure::{
         piece::StructurePieceType,
         structures::{
-            StructurePiece, StructurePieceBase, StructurePiecesCollector,
+            StructurePiece, StructurePieceBase, StructurePiecesCollector, WorldPortalExt,
             nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
         },
     },
@@ -50,6 +50,9 @@ impl CorridorBalconyPiece {
 }
 
 impl StructurePieceBase for CorridorBalconyPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -107,6 +110,7 @@ impl StructurePieceBase for CorridorBalconyPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fs};
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `TrackedId::get`.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
 /// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking constants.
 pub(crate) fn build() -> TokenStream {
@@ -19,6 +19,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_9, "1_21_9_tracked_data.json"),
         (JavaMinecraftVersion::V_1_21_11, "1_21_11_tracked_data.json"),
         (JavaMinecraftVersion::V_26_1, "26_1_tracked_data.json"),
+        (JavaMinecraftVersion::V_26_2, "26_2_tracked_data.json"),
     ];
 
     let mut versions = BTreeMap::new();

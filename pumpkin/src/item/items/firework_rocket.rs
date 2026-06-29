@@ -1,6 +1,5 @@
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use crate::entity::player::Player;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
@@ -56,7 +55,7 @@ impl ItemBehaviour for FireworkRocketItem {
         player: &'a Player,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {
-            if player.get_entity().fall_flying.load(Ordering::Relaxed) {
+            if player.get_entity().is_fall_flying() {
                 let world = player.world();
                 let entity = Entity::new(
                     world.clone(),

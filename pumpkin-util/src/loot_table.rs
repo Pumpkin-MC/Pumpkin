@@ -68,11 +68,16 @@ pub struct LootTableEntry {
 }
 
 #[derive(Clone, Debug)]
+pub struct DynamicEntry {
+    pub name: &'static str,
+}
+
+#[derive(Clone, Debug)]
 pub enum LootPoolEntryTypes {
     Empty,
     Item(ItemEntry),
     LootTable(LootTableEntry),
-    Dynamic,
+    Dynamic(DynamicEntry),
     Tag(TagEntry),
     Alternatives(AlternativeEntry),
     Sequence(SequenceEntry),
@@ -173,11 +178,15 @@ pub enum LootFunctionTypes {
         add: bool,
     },
     /// Increases the count of items based on the item's enchantments.
-    EnchantedCountIncrease,
+    EnchantedCountIncrease {
+        enchantment: &'static str,
+        count: LootFunctionNumberProvider,
+        limit: Option<f32>,
+    },
     /// Smelts the item as if it passed through a furnace.
     FurnaceSmelt,
     /// Sets the potion type for potion items.
-    SetPotion,
+    SetPotion { id: &'static str },
     /// Sets the amplifier for ominous bottles.
     SetOminousBottleAmplifier,
     /// Limits the count of items to a minimum and/or maximum value.

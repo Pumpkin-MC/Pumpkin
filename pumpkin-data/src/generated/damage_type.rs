@@ -367,13 +367,21 @@ impl DamageType {
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 41,
     };
+    pub const SULFUR_CUBE_HOT: DamageType = DamageType {
+        death_message_type: DeathMessageType::Default,
+        exhaustion: 0.1f32,
+        effects: Some(DamageEffects::Burning),
+        message_id: "sulfurCubeHot",
+        scaling: DamageScaling::WhenCausedByLivingNonPlayer,
+        id: 42,
+    };
     pub const SWEET_BERRY_BUSH: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Poking),
         message_id: "sweetBerryBush",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 42,
+        id: 43,
     };
     pub const THORNS: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -381,7 +389,7 @@ impl DamageType {
         effects: Some(DamageEffects::Thorns),
         message_id: "thorns",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 43,
+        id: 44,
     };
     pub const THROWN: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -389,7 +397,7 @@ impl DamageType {
         effects: None,
         message_id: "thrown",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 44,
+        id: 45,
     };
     pub const TRIDENT: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -397,7 +405,7 @@ impl DamageType {
         effects: None,
         message_id: "trident",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 45,
+        id: 46,
     };
     pub const UNATTRIBUTED_FIREBALL: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -405,7 +413,7 @@ impl DamageType {
         effects: Some(DamageEffects::Burning),
         message_id: "onFire",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 46,
+        id: 47,
     };
     pub const WIND_CHARGE: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -413,7 +421,7 @@ impl DamageType {
         effects: None,
         message_id: "mob",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 47,
+        id: 48,
     };
     pub const WITHER: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -421,7 +429,7 @@ impl DamageType {
         effects: None,
         message_id: "wither",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 48,
+        id: 49,
     };
     pub const WITHER_SKULL: DamageType = DamageType {
         death_message_type: DeathMessageType::Default,
@@ -429,7 +437,7 @@ impl DamageType {
         effects: None,
         message_id: "witherSkull",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
-        id: 49,
+        id: 50,
     };
     #[doc = r" Try to parse a damage type from a resource location string."]
     pub fn from_name(name: &str) -> Option<Self> {
@@ -476,6 +484,7 @@ impl DamageType {
             "stalagmite" => Some(Self::STALAGMITE),
             "starve" => Some(Self::STARVE),
             "sting" => Some(Self::STING),
+            "sulfur_cube_hot" => Some(Self::SULFUR_CUBE_HOT),
             "sweet_berry_bush" => Some(Self::SWEET_BERRY_BUSH),
             "thorns" => Some(Self::THORNS),
             "thrown" => Some(Self::THROWN),

@@ -4,6 +4,7 @@ use crate::block::{
     BlockFuture, EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
     OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
 };
+use crate::entity::EntityBase;
 use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, ObserverLikeProperties},
@@ -21,7 +22,7 @@ impl BlockBehaviour for ObserverBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = ObserverLikeProperties::default(args.block);
-            props.facing = args.player.living_entity.entity.get_facing();
+            props.facing = args.player.get_entity().get_facing();
             props.to_state_id(args.block)
         })
     }

@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use pumpkin_data::{Mirror, Rotation};
 use pumpkin_util::{
     math::{block_box::BlockBox, vector3::Vector3},
     random::RandomGenerator,
@@ -17,9 +18,10 @@ use crate::{
         piece::StructurePieceType,
         structures::{StructurePiece, StructurePieceBase},
     },
+    world::WorldPortalExt,
 };
 
-use super::{BlockMirror, BlockRotation, BlockStateResolver, StructureTemplate};
+use super::{BlockStateResolver, StructureTemplate};
 
 /// A structure piece that places blocks from an NBT template.
 ///
@@ -36,10 +38,10 @@ pub struct TemplatePiece {
     pub template: Arc<StructureTemplate>,
 
     /// Rotation to apply when placing.
-    pub rotation: BlockRotation,
+    pub rotation: Rotation,
 
     /// Mirror to apply when placing.
-    pub mirror: BlockMirror,
+    pub mirror: Mirror,
 }
 
 impl TemplatePiece {
@@ -50,8 +52,8 @@ impl TemplatePiece {
     #[must_use]
     pub fn new(
         template: Arc<StructureTemplate>,
-        rotation: BlockRotation,
-        mirror: BlockMirror,
+        rotation: Rotation,
+        mirror: Mirror,
         origin: Vector3<i32>,
         piece_type: StructurePieceType,
     ) -> Self {
@@ -79,8 +81,8 @@ impl TemplatePiece {
     #[must_use]
     pub fn with_chain_length(
         template: Arc<StructureTemplate>,
-        rotation: BlockRotation,
-        mirror: BlockMirror,
+        rotation: Rotation,
+        mirror: Mirror,
         origin: Vector3<i32>,
         piece_type: StructurePieceType,
         chain_length: u32,
@@ -118,7 +120,7 @@ impl TemplatePiece {
     }
 
     /// Places all blocks from the template into the chunk.
-    fn place_blocks(&self, chunk: &mut ProtoChunk) {
+    fn place_blocks(&self, chunk: &mut ProtoChunk, chunk_box: &BlockBox) {
         let box_limit = self.piece.bounding_box;
 
         for block in &self.template.blocks {
@@ -142,8 +144,8 @@ impl TemplatePiece {
             // Transform position to world coordinates
             let world_pos = self.transform_pos(block.pos);
 
-            // Check bounds
-            if !box_limit.contains_pos(&world_pos) {
+            // Check bounds against both the piece bounding box and the current chunk box
+            if !box_limit.contains_pos(&world_pos) || !chunk_box.contains_pos(&world_pos) {
                 continue;
             }
 
@@ -158,14 +160,18 @@ impl TemplatePiece {
 }
 
 impl StructurePieceBase for TemplatePiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
-        _chunk_box: &BlockBox,
+        chunk_box: &BlockBox,
     ) {
-        self.place_blocks(chunk);
+        self.place_blocks(chunk, chunk_box);
 
         // TODO: Spawn entities from template
         // This would involve iterating over self.template.entities

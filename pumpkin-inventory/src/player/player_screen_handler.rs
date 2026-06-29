@@ -245,7 +245,9 @@ impl ScreenHandler for PlayerScreenHandler {
                     return ItemStack::EMPTY.clone();
                 }
 
-                slot.on_take_item(player, &stack).await;
+                let mut taken_stack = stack_prev.clone();
+                taken_stack.set_count(stack_prev.item_count - stack.item_count);
+                slot.on_take_item(player, &taken_stack).await;
 
                 if slot_index == 0 {
                     // From crafting result slot (0)

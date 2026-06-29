@@ -284,10 +284,69 @@ impl TextComponentBase {
     ///
     /// # Returns
     /// A new component with all translations resolved.
+    fn translate_hover_event(style: &mut Style) {
+        if let Some(ref hover) = style.hover_event {
+            style.hover_event = match hover {
+                HoverEvent::ShowText { value } => {
+                    let mut hover_components = vec![];
+                    for hover_component in value {
+                        hover_components.push(hover_component.to_owned().to_translated());
+                    }
+                    Some(HoverEvent::ShowText {
+                        value: hover_components,
+                    })
+                }
+                HoverEvent::ShowEntity { name, id, uuid } => name.as_ref().map_or_else(
+                    || {
+                        Some(HoverEvent::ShowEntity {
+                            name: None,
+                            id: id.clone(),
+                            uuid: uuid.clone(),
+                        })
+                    },
+                    |name| {
+                        Some(HoverEvent::ShowEntity {
+                            name: Some(name.iter().map(|x| x.to_owned().to_translated()).collect()),
+                            id: id.clone(),
+                            uuid: uuid.clone(),
+                        })
+                    },
+                ),
+                HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem {
+                    id: id.clone(),
+                    count: count.to_owned(),
+                }),
+            };
+        }
+    }
+
+    /// Converts this component by resolving all translations.
+    ///
+    /// # Returns
+    /// A new component with all translations resolved.
     #[must_use]
     pub fn to_translated(self) -> Self {
         // NOTE: Divide the translation into slices and inserts the substitutions.
         let component = match *self.content {
+            TextContent::Translate {
+                translate,
+                bedrock_translate,
+                with,
+            } => {
+                let mut translated_with = vec![];
+                for w in with {
+                    translated_with.push(w.to_translated());
+                }
+                Self {
+                    content: Box::new(TextContent::Translate {
+                        translate,
+                        bedrock_translate,
+                        with: translated_with,
+                    }),
+                    style: self.style,
+                    extra: self.extra,
+                }
+            }
             TextContent::Custom { key, with, locale } => {
                 let translation = get_translation(&key, locale);
                 let mut translation_parent = translation.clone();
@@ -335,52 +394,16 @@ impl TextComponentBase {
             _ => self, // If not a translation, return as is
         };
         // Ensure that the extra components are translated
-        let mut extra = vec![];
-        for extra_component in component.extra {
-            let translated = extra_component.to_translated();
-            extra.push(translated);
-        }
+        let extra = component
+            .extra
+            .into_iter()
+            .map(Self::to_translated)
+            .collect();
+
         // If the hover event is present, it will also be translated
-        let style = match component.style.hover_event {
-            None => component.style,
-            Some(ref hover) => {
-                let mut style = component.style.clone();
-                style.hover_event = match hover {
-                    HoverEvent::ShowText { value } => {
-                        let mut hover_components = vec![];
-                        for hover_component in value {
-                            hover_components.push(hover_component.to_owned().to_translated());
-                        }
-                        Some(HoverEvent::ShowText {
-                            value: hover_components,
-                        })
-                    }
-                    HoverEvent::ShowEntity { name, id, uuid } => name.as_ref().map_or_else(
-                        || {
-                            Some(HoverEvent::ShowEntity {
-                                name: None,
-                                id: id.clone(),
-                                uuid: uuid.clone(),
-                            })
-                        },
-                        |name| {
-                            Some(HoverEvent::ShowEntity {
-                                name: Some(
-                                    name.iter().map(|x| x.to_owned().to_translated()).collect(),
-                                ),
-                                id: id.clone(),
-                                uuid: uuid.clone(),
-                            })
-                        },
-                    ),
-                    HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem {
-                        id: id.clone(),
-                        count: count.to_owned(),
-                    }),
-                };
-                style
-            }
-        };
+        let mut style = component.style;
+        Self::translate_hover_event(&mut style);
+
         Self {
             content: component.content,
             style,

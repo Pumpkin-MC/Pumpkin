@@ -111,8 +111,8 @@ impl ChunkNoiseFunctionComponent<'_> {
                     let b = stack[x.input2_index].display_test(stack);
                     format!("Binary({}, {})", a, b)
                 }
-                DependentProtoNoiseFunctionComponent::WeirdScaled(x) => {
-                    format!("WeirdScaled(todo)")
+                DependentProtoNoiseFunctionComponent::IntervalSelect(x) => {
+                    format!("IntervalSelect(todo)")
                 }
                 DependentProtoNoiseFunctionComponent::Clamp(x) => {
                     format!("Clamp(todo)")
@@ -348,6 +348,17 @@ impl<'a> ChunkNoiseRouter<'a> {
                 }
                 ProtoNoiseFunctionComponent::PassThrough(pass_through) => {
                     ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
+                }
+                ProtoNoiseFunctionComponent::Beardifier(_) => {
+                    ChunkNoiseFunctionComponent::Chunk(
+                        ChunkSpecificNoiseFunctionComponent::Beardifier(
+                            crate::generation::noise::router::density_function::beardifier::Beardifier::new(
+                                build_options.beardifier_structures.clone(),
+                                build_options.beardifier_junctions.clone(),
+                                build_options.affected_box,
+                            ),
+                        ),
+                    )
                 }
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
                     let min_value = component_stack[wrapper.input_index].min();

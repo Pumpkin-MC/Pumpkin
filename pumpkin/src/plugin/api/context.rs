@@ -213,7 +213,7 @@ impl Context {
     /// - `player`: The player for which the commands will be reloaded.
     pub async fn reload_commands_for(&self, player: &Arc<Player>) {
         let command_dispatcher = self.server.command_dispatcher.read().await;
-        if let ClientPlatform::Bedrock(_) = &player.client {
+        if let ClientPlatform::Bedrock(_) = player.client.as_ref() {
             client_suggestions::send_bedrock_commands_packet(
                 player,
                 &self.server,

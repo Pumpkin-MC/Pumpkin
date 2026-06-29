@@ -159,6 +159,24 @@ impl Block {
     pub const fn is_air(&self) -> bool {
         self.default_state.is_air()
     }
+
+    #[must_use]
+    pub const fn mirror(
+        &self,
+        state_id: u16,
+        _mirror: crate::block_rotation::Mirror,
+    ) -> &'static BlockState {
+        BlockState::from_id(state_id)
+    }
+
+    #[must_use]
+    pub const fn rotate(
+        &self,
+        state_id: u16,
+        _rotation: crate::block_rotation::Rotation,
+    ) -> &'static BlockState {
+        BlockState::from_id(state_id)
+    }
 }
 
 #[derive(Clone, Debug)]

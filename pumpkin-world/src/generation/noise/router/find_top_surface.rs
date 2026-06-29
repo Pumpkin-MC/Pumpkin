@@ -32,6 +32,21 @@ impl FindTopSurface {
             data,
         }
     }
+
+    #[must_use]
+    pub const fn density_index(&self) -> usize {
+        self.density_index
+    }
+
+    #[must_use]
+    pub const fn upper_bound_index(&self) -> usize {
+        self.upper_bound_index
+    }
+
+    #[must_use]
+    pub const fn cell_height(&self) -> i32 {
+        self.data.cell_height
+    }
 }
 
 impl NoiseFunctionComponentRange for FindTopSurface {
@@ -58,6 +73,15 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
             pos,
             sample_options,
         );
+
+        let density = ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut component_stack[..=self.density_index],
+            &Vector3::new(pos.x, upper.floor() as i32, pos.z),
+            sample_options,
+        );
+        if density > 0.0 {
+            return upper;
+        }
 
         let cell_height = self.data.cell_height;
         let lower_bound = self.data.lower_bound;

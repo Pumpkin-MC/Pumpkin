@@ -34,7 +34,7 @@ impl ArgumentType for UuidArgumentType {
         )
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Uuid
     }
 

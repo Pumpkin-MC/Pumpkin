@@ -33,7 +33,7 @@ pub fn is_within_view_distance(
 }
 
 pub async fn update_position(player: &Arc<Player>) {
-    let entity = &player.living_entity.entity;
+    let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
 
@@ -49,7 +49,7 @@ pub async fn update_position(player: &Arc<Player>) {
         return;
     }
 
-    match &player.client {
+    match player.client.as_ref() {
         ClientPlatform::Java(java_client) => {
             java_client
                 .send_packet_now(&CCenterChunk {
@@ -93,7 +93,7 @@ pub async fn update_position(player: &Arc<Player>) {
 
     player.watched_section.store(new_cylindrical);
 
-    if let ClientPlatform::Java(_) = &player.client {
+    if let ClientPlatform::Java(_) = player.client.as_ref() {
         for chunk in &unloading_chunks {
             player
                 .client

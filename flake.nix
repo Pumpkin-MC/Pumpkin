@@ -13,6 +13,8 @@
       url = "github:nix-community/naersk";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    self.submodules = true;
   };
 
   outputs =
@@ -53,11 +55,14 @@
                 ./assets
                 ./pumpkin
                 ./pumpkin-api-macros
+                ./pumpkin-codecs
                 ./pumpkin-config
                 ./pumpkin-data
                 ./pumpkin-inventory
                 ./pumpkin-macros
                 ./pumpkin-nbt
+                ./pumpkin-plugin-api
+                ./pumpkin-plugin-wit
                 ./pumpkin-protocol
                 ./pumpkin-util
                 ./pumpkin-world

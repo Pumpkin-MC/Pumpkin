@@ -2,19 +2,20 @@ use std::sync::{Arc, Mutex};
 
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
+use pumpkin_data::{Mirror, Rotation};
 use pumpkin_util::HeightMap;
 use pumpkin_util::{
     BlockDirection,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
 };
-use tracing::debug;
+use tracing::trace;
 
 use crate::generation::structure::structures::stronghold::StrongholdPieceType;
+pub use crate::world::WorldPortalExt;
 use crate::{
     ProtoChunk,
     generation::{
-        height_limit::HeightLimitView,
         positions::chunk_pos::{start_block_x, start_block_z},
         structure::piece::StructurePieceType,
     },
@@ -23,6 +24,8 @@ use crate::{
 pub mod buried_treasure;
 pub mod desert_pyramid;
 pub mod igloo;
+pub mod jigsaw;
+pub mod jigsaw_placement;
 pub mod jungle_temple;
 pub mod nether_fortress;
 pub mod nether_fossil;
@@ -39,6 +42,8 @@ pub trait StructurePieceBase: Send + Sync {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece;
 
+    fn as_any(&self) -> &dyn std::any::Any;
+
     fn bounding_box(&self) -> BlockBox {
         self.get_structure_piece().bounding_box
     }
@@ -51,6 +56,7 @@ pub trait StructurePieceBase: Send + Sync {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         seed: i64,
         _chunk_box: &BlockBox,
@@ -92,6 +98,8 @@ pub struct StructurePiece {
     pub r#type: StructurePieceType,
     pub bounding_box: BlockBox,
     pub facing: Option<BlockDirection>,
+    pub mirror: Mirror,
+    pub rotation: Rotation,
     pub chain_length: u32,
 }
 
@@ -106,12 +114,32 @@ impl StructurePiece {
             r#type,
             bounding_box,
             facing: None,
+            mirror: Mirror::None,
+            rotation: Rotation::None,
             chain_length,
         }
     }
 
     pub const fn set_facing(&mut self, facing: Option<BlockDirection>) {
         self.facing = facing;
+        match facing {
+            Some(BlockDirection::South) => {
+                self.mirror = Mirror::LeftRight;
+                self.rotation = Rotation::None;
+            }
+            Some(BlockDirection::West) => {
+                self.mirror = Mirror::LeftRight;
+                self.rotation = Rotation::Clockwise90;
+            }
+            Some(BlockDirection::East) => {
+                self.mirror = Mirror::None;
+                self.rotation = Rotation::Clockwise90;
+            }
+            _ => {
+                self.mirror = Mirror::None;
+                self.rotation = Rotation::None;
+            }
+        }
     }
 
     const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
@@ -144,6 +172,30 @@ impl StructurePiece {
             Some(BlockDirection::South) => self.bounding_box.min.z + z,
             Some(BlockDirection::West | BlockDirection::East) => self.bounding_box.min.z + x,
             _ => z,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn place_block(
+        &self,
+        chunk: &mut ProtoChunk,
+        block_registry: &dyn WorldPortalExt,
+        mut block_state: &'static BlockState,
+        x: i32,
+        y: i32,
+        z: i32,
+        chunk_box: &BlockBox,
+    ) {
+        let pos = self.offset_pos(x, y, z);
+        if chunk_box.contains(pos.x, pos.y, pos.z) {
+            let block = Block::from_state_id(block_state.id);
+            if self.mirror != Mirror::None {
+                block_state = block_registry.mirror(block, block_state.id, self.mirror);
+            }
+            if self.rotation != Rotation::None {
+                block_state = block_registry.rotate(block, block_state.id, self.rotation);
+            }
+            chunk.set_block_state(pos.x, pos.y, pos.z, block_state);
         }
     }
 
@@ -359,7 +411,7 @@ impl StructurePiece {
         let block_pos = self.offset_pos(x, y, z);
 
         if !box_limit.contains_pos(&block_pos) {
-            debug!("Structure out of bounds");
+            trace!("Structure out of bounds");
             return Block::AIR.default_state;
         }
 
@@ -379,7 +431,7 @@ impl StructurePiece {
 
         // Bounds and logic checks
         if !box_limit.contains_pos(&block_pos) {
-            debug!("Structure out of bounds");
+            trace!("Structure out of bounds");
             return;
         }
 
@@ -447,9 +499,14 @@ impl StructurePiece {
 }
 
 impl StructurePieceBase for StructurePiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn place(
         &mut self,
         _chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         _chunk_box: &BlockBox,
@@ -507,6 +564,7 @@ impl StructurePiecesCollector {
     pub fn generate_in_chunk(
         &mut self,
         chunk: &mut ProtoChunk,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         seed: i64,
     ) {
@@ -514,16 +572,16 @@ impl StructurePiecesCollector {
         let chunk_z = start_block_z(chunk.z);
         let chunk_box = BlockBox::new(
             chunk_x,
-            chunk.bottom_y() as i32 + 1,
+            chunk.bottom_y() as i32,
             chunk_z,
             chunk_x + 15,
-            chunk.bottom_y() as i32 + chunk.top_y() as i32 - 1,
+            chunk.bottom_y() as i32 + chunk.height() as i32 - 1,
             chunk_z + 15,
         );
 
         for piece in &mut self.pieces {
             if piece.bounding_box().intersects(&chunk_box) {
-                piece.place(chunk, random, seed, &chunk_box);
+                piece.place(chunk, block_registry, random, seed, &chunk_box);
             }
         }
     }
@@ -598,17 +656,31 @@ impl StructurePosition {
 pub trait StructureGenerator {
     fn get_structure_position(
         &self,
-        context: StructureGeneratorContext,
+        context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition>;
 }
 
-pub struct StructureGeneratorContext {
+pub trait HeightSampler {
+    fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32;
+}
+
+impl HeightSampler
+    for crate::generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler<'_>
+{
+    fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32 {
+        self.estimate_height(block_x, block_z)
+    }
+}
+
+pub struct StructureGeneratorContext<'a> {
     pub seed: i64,
     pub chunk_x: i32,
     pub chunk_z: i32,
     pub random: RandomGenerator,
     pub sea_level: i32,
     pub min_y: i32,
+    pub height_sampler: Option<&'a mut dyn HeightSampler>,
+    pub structure_key: Option<pumpkin_data::structures::StructureKeys>,
 }
 
 #[must_use]

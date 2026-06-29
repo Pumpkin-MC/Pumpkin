@@ -11,7 +11,7 @@ use crate::command::{
 use std::any::Any;
 use std::pin::Pin;
 
-pub type JavaClientArgumentType<'a> = pumpkin_protocol::java::client::play::ArgumentType<'a>;
+pub type JavaClientArgumentType = pumpkin_protocol::java::client::play::ArgumentType;
 pub type ParseWithSourceAnyResult<'a> = Pin<
     Box<dyn Future<Output = Result<Box<dyn Any + Send + Sync>, CommandSyntaxError>> + Send + 'a>,
 >;
@@ -52,7 +52,7 @@ pub trait ArgumentType: Send + Sync {
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_>;
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType;
 
     /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
     /// is returned.
@@ -110,7 +110,7 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_>;
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType;
 
     /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
     /// is returned.
@@ -167,7 +167,7 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
         self.list_suggestions(context, builder)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         self.client_side_parser()
     }
 

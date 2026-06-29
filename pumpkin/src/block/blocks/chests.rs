@@ -129,6 +129,13 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
 }
 
 async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
+    args.player
+        .increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::OpenChest as i32,
+            1,
+        )
+        .await;
     let state = args.world.get_block_state_id(args.position);
     let first_chest = args.world.get_block_entity(args.position);
 

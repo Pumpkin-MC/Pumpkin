@@ -35,6 +35,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
+    statistic::StatisticCategory,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::OptionalItemStackHash,
@@ -120,6 +121,7 @@ pub type PlayerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 ///
 /// Implementors are typically player entities that can open containers.
 pub trait InventoryPlayer: Send + Sync {
+    fn as_any(&self) -> &dyn std::any::Any;
     /// Drops an item into the world.
     ///
     /// # Arguments
@@ -187,6 +189,14 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Awards experience points to the player (used for furnace smelting, etc.)
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
+
+    /// Increments a statistic for the player.
+    fn increment_stat(
+        &self,
+        category: StatisticCategory,
+        stat_id: i32,
+        amount: i32,
+    ) -> PlayerFuture<'_, ()>;
 }
 
 /// Gives a stack to the player or drops it if inventory is full.
@@ -1049,6 +1059,56 @@ pub trait ScreenHandler: Send + Sync {
 
                     let slot_stack = slot.get_cloned_stack().await;
                     let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
+
+                    if click_type == MouseClick::Right {
+                        let mut intercepted = false;
+
+                        if !cursor_stack.is_empty() {
+                            let stack_guard = slot.get_stack().await;
+                            let mut inner_slot_stack = stack_guard.lock().await;
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && bundle.try_insert(&mut cursor_stack) {
+                                    intercepted = true;
+                                }
+                        }
+
+                        if !intercepted && !slot_stack.is_empty()
+                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                                let stack_guard = slot.get_stack().await;
+                                let mut inner_slot_stack = stack_guard.lock().await;
+                                if bundle.try_insert(&mut inner_slot_stack) {
+                                    if inner_slot_stack.item_count == 0 {
+                                        *inner_slot_stack = ItemStack::EMPTY.clone();
+                                    }
+                                    intercepted = true;
+                                }
+                            }
+
+                        if !intercepted && cursor_stack.is_empty() {
+                            let stack_guard = slot.get_stack().await;
+                            let mut inner_slot_stack = stack_guard.lock().await;
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && let Some(extracted) = bundle.try_extract() {
+                                    *cursor_stack = extracted;
+                                    intercepted = true;
+                                }
+                        }
+
+                        if !intercepted && slot_stack.is_empty()
+                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && let Some(extracted) = bundle.try_extract() {
+                                    slot.set_stack(extracted).await;
+                                    intercepted = true;
+                                }
+
+                        if intercepted {
+                            if cursor_stack.item_count == 0 {
+                                *cursor_stack = ItemStack::EMPTY.clone();
+                            }
+                            slot.mark_dirty().await;
+                            return;
+                        }
+                    }
 
                     let equipment_slot = cursor_stack
                         .get_data_component::<EquippableImpl>()

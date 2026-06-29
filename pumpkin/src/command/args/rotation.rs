@@ -35,7 +35,7 @@ fn parse_rotation_component(s: &str) -> Option<(f32, bool)> {
 pub struct RotationArgumentConsumer;
 
 impl GetClientSideArgParser for RotationArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Rotation
     }
 

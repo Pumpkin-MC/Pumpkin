@@ -1,6 +1,8 @@
 use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
+use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
+use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -68,10 +70,12 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pub target: tokio::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: std::sync::Mutex<LookControl>,
+    pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
+    pub breeder: AtomicCell<Option<Uuid>>,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -89,9 +93,7 @@ const NIGHT_START: i64 = 12542;
 const NIGHT_END: i64 = 23459;
 
 impl MobEntity {
-    #[expect(dead_code)]
     const AI_DISABLED_FLAG: u8 = 1;
-    #[expect(dead_code)]
     const LEFT_HANDED_FLAG: u8 = 2;
     const ATTACKING_FLAG: u8 = 4;
 
@@ -104,10 +106,12 @@ impl MobEntity {
             navigator: std::sync::Mutex::new(Navigator::default()),
             target: tokio::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
+            move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
+            breeder: AtomicCell::new(None),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -133,6 +137,26 @@ impl MobEntity {
         self.set_mob_flag(Self::ATTACKING_FLAG, attacking);
     }
 
+    pub fn is_attacking(&self) -> bool {
+        (self.mob_flags.load(Relaxed) & Self::ATTACKING_FLAG) != 0
+    }
+
+    pub fn set_left_handed(&self, left_handed: bool) {
+        self.set_mob_flag(Self::LEFT_HANDED_FLAG, left_handed);
+    }
+
+    pub fn is_left_handed(&self) -> bool {
+        (self.mob_flags.load(Relaxed) & Self::LEFT_HANDED_FLAG) != 0
+    }
+
+    pub fn set_no_ai(&self, no_ai: bool) {
+        self.set_mob_flag(Self::AI_DISABLED_FLAG, no_ai);
+    }
+
+    pub fn is_no_ai(&self) -> bool {
+        (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
+    }
+
     fn set_mob_flag(&self, flag: u8, value: bool) {
         let old_b = self.mob_flags.load(Ordering::Relaxed);
 
@@ -153,8 +177,9 @@ impl MobEntity {
         self.love_ticks.load(Relaxed) > 0
     }
 
-    pub fn set_love_ticks(&self, ticks: i32) {
+    pub fn set_love_ticks(&self, ticks: i32, breeder: Option<Uuid>) {
         self.love_ticks.store(ticks, Relaxed);
+        self.breeder.store(breeder);
     }
 
     pub fn reset_love_ticks(&self) {
@@ -175,22 +200,19 @@ impl MobEntity {
 
         let target_hitbox = target.get_entity().bounding_box.load();
 
-        let attack_box_max = self.get_attack_box(max_range).await;
-
-        let intersects_max = attack_box_max.intersects(&target_hitbox);
-
-        if !intersects_max {
+        if !self
+            .get_attack_box(max_range)
+            .await
+            .intersects(&target_hitbox)
+        {
             return false;
         }
 
-        if min_range > 0.0 {
-            let attack_box_min = self.get_attack_box(min_range).await;
-            if attack_box_min.intersects(&target_hitbox) {
-                return false;
-            }
-        }
-
-        true
+        min_range <= 0.0
+            || !self
+                .get_attack_box(min_range)
+                .await
+                .intersects(&target_hitbox)
     }
 
     pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
@@ -202,7 +224,7 @@ impl MobEntity {
         let dimension = &world.dimension;
         let block_light_limit = dimension.monster_spawn_block_light_limit;
 
-        let block_light = world.get_block_light_level(pos).unwrap();
+        let block_light = world.get_block_light_level(pos).unwrap_or(0);
         if block_light_limit < 15 && block_light > block_light_limit {
             return false;
         }
@@ -375,6 +397,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    fn get_job_site(&self) -> Option<BlockPos> {
+        None
+    }
+
+    fn get_home(&self) -> Option<BlockPos> {
+        None
+    }
+
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
@@ -440,6 +470,10 @@ pub trait Mob: EntityBase + Send + Sync {
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
+    }
+
+    fn mob_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
     }
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
@@ -514,10 +548,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 *mob_entity.navigator.lock().unwrap() = navigator;
             };
 
-            // Look Control is synchronous, so we can just use a normal block
+            // Controllers are synchronous, so we can just use normal blocks
             {
                 let mut look_control = mob_entity.look_control.lock().unwrap();
                 look_control.tick(self);
+            };
+
+            {
+                let mut move_control = mob_entity.move_control.lock().unwrap();
+                move_control.tick(self);
             };
 
             mob_entity.living_entity.tick(caller, server).await;
@@ -533,21 +572,29 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
             let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
 
+            let chunk_pos = entity.chunk_pos.load();
             if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
                 let world = entity.world.load();
-                world.broadcast_packet_all(&CUpdateEntityRot::new(
-                    entity.entity_id.into(),
-                    yaw,
-                    pitch,
-                    entity.on_ground.load(Relaxed),
-                ));
+                world.broadcast_to_chunk(
+                    chunk_pos,
+                    &CUpdateEntityRot::new(
+                        entity.entity_id.into(),
+                        yaw,
+                        pitch,
+                        entity.on_ground.load(Relaxed),
+                    ),
+                );
                 mob_entity.last_sent_yaw.store(yaw, Relaxed);
                 mob_entity.last_sent_pitch.store(pitch, Relaxed);
             }
 
             if head_yaw.abs_diff(last_head_yaw) >= 1 {
                 let world = entity.world.load();
-                world.broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw));
+
+                world.broadcast_to_chunk(
+                    chunk_pos,
+                    &CHeadRot::new(entity.entity_id.into(), head_yaw),
+                );
                 mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
             }
         })
@@ -597,6 +644,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move { self.mob_interact(player, item_stack).await })
     }
 
+    fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { self.mob_player_collision(player).await })
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.get_mob_entity().living_entity.entity
     }
@@ -630,6 +681,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_panicking(&self) -> bool {
         self.get_path_aware_entity()
             .is_some_and(PathAwareEntity::is_panicking)
+    }
+
+    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        <T as Mob>::get_job_site(self)
+    }
+
+    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        <T as Mob>::get_home(self)
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {

@@ -58,6 +58,14 @@ impl BlockBehaviour for BeaconBlock {
                 return BlockActionResult::Fail;
             };
 
+            args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::InteractWithBeacon as i32,
+                    1,
+                )
+                .await;
+
             // Open the screen using the factory
             args.player
                 .open_handled_screen(&BeaconScreenFactory(inventory), Some(*args.position))

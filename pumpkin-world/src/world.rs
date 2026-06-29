@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use crate::{BlockStateId, generation::proto_chunk::GenerationCache};
 use bitflags::bitflags;
-use pumpkin_data::{Block, BlockState, chunk::Biome};
+use pumpkin_data::{Block, BlockState, Mirror, Rotation, chunk::Biome};
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 
@@ -63,6 +63,10 @@ pub trait WorldPortalExt: Send + Sync {
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
     ) -> bool;
+
+    fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState;
+
+    fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState;
 
     fn spawn_mobs_for_chunk_generation(
         &self,

@@ -1,4 +1,5 @@
 use super::EnderDragonPhase;
+use crate::entity::EntityBase;
 use crate::entity::boss::ender_dragon::{EnderDragonEntity, NODE_Y, Vector3Ext};
 use futures::future::BoxFuture;
 use pumpkin_util::math::vector3::Vector3;
@@ -22,7 +23,7 @@ impl super::Phase for ChargingPhase {
             let target_pos = if let Some(id) = target_id
                 && let Some(player) = world.players.load().iter().find(|p| p.gameprofile.id == id)
             {
-                player.living_entity.entity.pos.load()
+                player.get_entity().pos.load()
             } else {
                 let origin = {
                     let guard = dragon.fight_origin.lock().await;

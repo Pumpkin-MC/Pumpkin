@@ -12,7 +12,7 @@ use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
-use tracing::debug;
+use tracing::{debug, trace};
 use uuid::Uuid;
 
 use crate::{
@@ -291,6 +291,9 @@ impl ChunkEntityData {
         }
         let mut map = FxHashMap::default();
         for entity_nbt in chunk_entity_data.entities {
+            if entity_nbt.is_empty() {
+                continue;
+            }
             let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
                 if uuid.len() != 4 {
                     debug!(
@@ -309,7 +312,7 @@ impl ChunkEntityData {
                         | (uuid[3] as u128),
                 )
             } else {
-                debug!(
+                trace!(
                     "Entity in chunk {},{} is missing UUID: {:?}",
                     position.x, position.y, entity_nbt
                 );

@@ -89,6 +89,13 @@ impl BlockBehaviour for ShulkerBoxBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::OpenShulkerBox as i32,
+                        1,
+                    )
+                    .await;
+                args.player
                     .open_handled_screen(&ShulkerBoxScreenFactory(inventory), Some(*args.position))
                     .await;
             }

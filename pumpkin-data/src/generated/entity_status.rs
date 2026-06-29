@@ -54,6 +54,7 @@ pub enum EntityStatus {
     TamingSucceeded = 7,
     Teleport = 46,
     TendrilsShiver = 61,
+    TntPrime = 70,
     TrustingFailed = 40,
     TrustingSucceeded = 41,
     UseItemComplete = 9,

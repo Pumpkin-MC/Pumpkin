@@ -13,6 +13,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{RECIPES_STONECUTTING, StonecutterRecipe};
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_protocol::java::server::play::SlotActionType;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::inventory::SimpleInventory;
@@ -201,10 +202,17 @@ impl Slot for StonecutterOutputSlot {
 
     fn on_take_item<'a>(
         &'a self,
-        _player: &'a dyn InventoryPlayer,
-        _stack: &'a ItemStack,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
+            player
+                .increment_stat(
+                    StatisticCategory::Crafted,
+                    stack.item.id as i32,
+                    stack.item_count as i32,
+                )
+                .await;
             let input_stack = self.input_inventory.get_stack(0).await;
             let mut input_lock = input_stack.lock().await;
             if !input_lock.is_empty() {

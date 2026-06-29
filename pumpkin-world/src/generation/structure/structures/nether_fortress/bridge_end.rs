@@ -14,6 +14,7 @@ use crate::{
             nether_fortress::{NetherFortressPiece, PieceWeight},
         },
     },
+    world::WorldPortalExt,
 };
 
 /// Dead-end / terminator piece for the exterior bridge (5 × 10 × 8).
@@ -53,6 +54,9 @@ impl BridgeEndPiece {
 }
 
 impl StructurePieceBase for BridgeEndPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -76,6 +80,7 @@ impl StructurePieceBase for BridgeEndPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

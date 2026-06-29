@@ -20,6 +20,7 @@ use crate::{
             template::{BlockRotation, StructureTemplate, get_template, place_template},
         },
     },
+    world::WorldPortalExt,
 };
 
 const TEMPLATE_NAMES: [&str; 14] = [
@@ -50,7 +51,7 @@ pub struct NetherFossilGenerator;
 impl StructureGenerator for NetherFossilGenerator {
     fn get_structure_position(
         &self,
-        mut context: StructureGeneratorContext,
+        mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         // Vanilla random call order:
         // 1. nextInt(16) for X offset within chunk
@@ -155,9 +156,13 @@ impl NetherFossilPiece {
 }
 
 impl StructurePieceBase for NetherFossilPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         seed: i64,
         _chunk_box: &BlockBox,
@@ -176,11 +181,20 @@ impl StructurePieceBase for NetherFossilPiece {
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
 
         // Vanilla uses IGNORE_AIR_AND_STRUCTURE_BLOCKS processor
-        place_template(chunk, &self.template, origin, (0, 0), self.rotation, true);
+        place_template(
+            chunk,
+            &self.template,
+            origin,
+            (0, 0),
+            self.rotation,
+            true,
+            &[],
+            Some(_chunk_box),
+        );
 
         // Vanilla: 50% chance to place a dried ghast block at the fossil base.
         // Uses a deterministic random seeded from world seed + bounding box center.
-        self.try_place_dried_ghast(chunk, seed);
+        self.try_place_dried_ghast(chunk, _block_registry, seed);
     }
 
     fn get_structure_piece(&self) -> &StructurePiece {
@@ -193,7 +207,12 @@ impl StructurePieceBase for NetherFossilPiece {
 }
 
 impl NetherFossilPiece {
-    fn try_place_dried_ghast(&self, chunk: &mut ProtoChunk, seed: i64) {
+    fn try_place_dried_ghast(
+        &self,
+        chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
+        seed: i64,
+    ) {
         use pumpkin_util::random::xoroshiro128::Xoroshiro;
 
         let bbox = self.shiftable_structure_piece.piece.bounding_box;

@@ -7,7 +7,7 @@ use std::fs;
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version whose registry data is used as the fallback for unknown versions.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
@@ -47,6 +47,7 @@ pub(crate) fn build() -> TokenStream {
             "1_21_11_synced_registries.json",
         ),
         (JavaMinecraftVersion::V_26_1, "26_1_synced_registries.json"),
+        (JavaMinecraftVersion::V_26_2, "26_2_synced_registries.json"),
     ];
 
     let process_version = |path: &str| -> TokenStream {

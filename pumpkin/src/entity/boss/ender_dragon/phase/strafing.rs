@@ -1,4 +1,5 @@
 use super::EnderDragonPhase;
+use crate::entity::EntityBase;
 use crate::entity::{
     Entity,
     area_effect_cloud::AreaEffectCloudEntity,
@@ -46,7 +47,7 @@ impl super::Phase for StrafingPhase {
                 return;
             };
 
-            let player_pos = player.living_entity.entity.pos.load();
+            let player_pos = player.get_entity().pos.load();
             let mut path = dragon.path.lock().await;
             let mut target_location = dragon.target_location.lock().await;
 

@@ -86,13 +86,18 @@ impl BlockBehaviour for EnderChestBlock {
                 let inventory = args.player.ender_chest_inventory();
                 inventory.set_tracker(block_entity.get_tracker()).await;
                 args.player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
+                        1,
+                    )
+                    .await;
+                args.player
                     .open_handled_screen(
                         &EnderChestScreenFactory(inventory.clone()),
                         Some(*args.position),
                     )
                     .await;
-
-                // TODO: player.incrementStat(Stats.OPEN_ENDERCHEST);
                 // TODO: PiglinBrain.onGuardedBlockInteracted(serverWorld, player, true);
             }
 

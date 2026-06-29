@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use pumpkin_data::{
     Block, BlockDirection, HorizontalFacingExt,
     block_properties::{AttachFace, HorizontalFacing},
@@ -25,7 +26,7 @@ pub trait WallMountedBlock: Send + Sync {
         };
 
         let facing = if direction == BlockDirection::Up || direction == BlockDirection::Down {
-            player.living_entity.entity.get_horizontal_facing()
+            player.get_entity().get_horizontal_facing()
         } else {
             direction.opposite().to_cardinal_direction()
         };

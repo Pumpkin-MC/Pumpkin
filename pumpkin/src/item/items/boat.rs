@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -134,7 +135,7 @@ impl ItemBehaviour for BoatItem {
             let (yaw, pitch) = player.rotation();
             let rotation_vec =
                 Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)).multiply(5.0, 5.0, 5.0);
-            let player_entity = player.living_entity.entity.bounding_box.load();
+            let player_entity = player.get_entity().bounding_box.load();
             let search_box = player_entity.stretch(rotation_vec).expand_all(1.0);
 
             let entities = world.get_entities_at_box(&search_box);

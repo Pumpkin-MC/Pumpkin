@@ -19,6 +19,13 @@ impl BlockBehaviour for CraftingTableBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::InteractWithCraftingTable as i32,
+                    1,
+                )
+                .await;
+            args.player
                 .open_handled_screen(
                     &CraftingTableScreenFactory(args.server.recipe_manager.clone()),
                     Some(*args.position),

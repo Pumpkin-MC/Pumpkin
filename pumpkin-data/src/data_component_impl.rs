@@ -3,10 +3,11 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlocksAttacks, ChargedProjectiles, Consumable, CustomData, CustomName,
-    Damage, DamageResistant, DeathProtection, Enchantable, Enchantments, Equippable,
-    FireworkExplosion, Fireworks, Food, ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage,
-    MaxStackSize, PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
+    AttributeModifiers, BlockEntityData, BlockState, BlocksAttacks, BundleContents,
+    ChargedProjectiles, Consumable, Container, CustomData, CustomName, Damage, DamageResistant,
+    DeathProtection, Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
+    ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage, MaxStackSize, OminousBottleAmplifier,
+    PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -28,6 +29,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::{
+    collections::HashMap,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
@@ -61,6 +63,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
+        CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
@@ -70,6 +73,19 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::ChargedProjectiles => {
             Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
         }
+        DataComponent::BlockEntityData => Some(BlockEntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::BundleContents => Some(BundleContentsImpl::read_data(data)?.to_dyn()),
+        DataComponent::Container => Some(ContainerImpl::read_data(data)?.to_dyn()),
+        DataComponent::WrittenBookContent => {
+            Some(WrittenBookContentImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::WritableBookContent => {
+            Some(WritableBookContentImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::OminousBottleAmplifier => {
+            Some(OminousBottleAmplifierImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::BlockState => Some(BlockStateImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -193,16 +209,22 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent
-    pub name: String,
+    pub name: TextComponent,
+}
+impl CustomNameImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|name| Self {
+            name: TextComponent::text(name.to_string()),
+        })
+    }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().into())
+        NbtTag::String(self.name.clone().get_text().into())
     }
 
     fn get_hash(&self) -> i32 {
-        get_str_hash(self.name.as_str()) as i32
+        get_str_hash(self.name.clone().get_text().as_str()) as i32
     }
 
     default_impl!(CustomName);
@@ -1559,8 +1581,79 @@ impl DataComponentImpl for ChargedProjectilesImpl {
     default_impl!(ChargedProjectiles);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BundleContentsImpl;
+#[derive(Clone)]
+pub struct BundleContentsImpl {
+    pub items: Vec<crate::item_stack::ItemStack>,
+}
+impl PartialEq for BundleContentsImpl {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+impl Eq for BundleContentsImpl {}
+impl std::fmt::Debug for BundleContentsImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BundleContentsImpl")
+    }
+}
+impl BundleContentsImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut items = Vec::new();
+        if let NbtTag::List(l) = tag {
+            for item_tag in l {
+                if let NbtTag::Compound(c) = item_tag
+                    && let Some(stack) = crate::item_stack::ItemStack::read_item_stack(c)
+                {
+                    items.push(stack);
+                }
+            }
+        }
+        Some(Self { items })
+    }
+
+    pub fn get_weight(&self) -> u32 {
+        self.items
+            .iter()
+            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
+            .sum()
+    }
+
+    pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
+        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
+            return false; // Can't put bundles in bundles
+        }
+        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
+        let mut inserted_anything = false;
+
+        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
+            if let Some(top) = self.items.first_mut()
+                && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
+                && top.item_count < top.get_max_stack_size()
+            {
+                top.item_count += 1;
+                stack.item_count -= 1;
+                inserted_anything = true;
+                continue;
+            }
+            self.items.insert(0, stack.copy_with_count(1));
+            stack.item_count -= 1;
+            inserted_anything = true;
+        }
+
+        inserted_anything
+    }
+
+    pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
+        if self.items.is_empty() {
+            None
+        } else {
+            Some(self.items.remove(0))
+        }
+    }
+}
+impl DataComponentImpl for BundleContentsImpl {
+    default_impl!(BundleContents);
+}
 /// Status effect instance for potion contents
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct StatusEffectInstance {
@@ -1898,9 +1991,53 @@ pub struct PotionDurationScaleImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SuspiciousStewEffectsImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WritableBookContentImpl;
+pub struct WritableBookContentImpl {
+    pub pages: Vec<String>,
+}
+
+impl WritableBookContentImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut pages = Vec::new();
+        if let NbtTag::Compound(c) = tag
+            && let Some(NbtTag::List(l)) = c.get("pages")
+        {
+            for _ in l {
+                pages.push(String::new());
+            }
+        }
+        Some(Self { pages })
+    }
+}
+
+use crate::data_component::DataComponent::{WritableBookContent, WrittenBookContent};
+
+impl DataComponentImpl for WritableBookContentImpl {
+    default_impl!(WritableBookContent);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WrittenBookContentImpl;
+pub struct WrittenBookContentImpl {
+    pub pages: Vec<String>,
+}
+
+impl WrittenBookContentImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut pages = Vec::new();
+        if let NbtTag::Compound(c) = tag
+            && let Some(NbtTag::List(l)) = c.get("pages")
+        {
+            for _ in l {
+                pages.push(String::new());
+            }
+        }
+        Some(Self { pages })
+    }
+}
+
+impl DataComponentImpl for WrittenBookContentImpl {
+    default_impl!(WrittenBookContent);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TrimImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -1909,14 +2046,44 @@ pub struct DebugStickStateImpl;
 pub struct EntityDataImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BucketEntityDataImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockEntityDataImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockEntityDataImpl {
+    pub nbt: pumpkin_nbt::compound::NbtCompound,
+}
+impl BlockEntityDataImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        if let NbtTag::Compound(c) = tag {
+            Some(Self { nbt: c.clone() })
+        } else {
+            None
+        }
+    }
+}
+impl DataComponentImpl for BlockEntityDataImpl {
+    default_impl!(BlockEntityData);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstrumentImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesTrimMaterialImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct OminousBottleAmplifierImpl;
+pub struct OminousBottleAmplifierImpl {
+    pub amplifier: i32,
+}
+impl OminousBottleAmplifierImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|amplifier| Self { amplifier })
+    }
+}
+impl DataComponentImpl for OminousBottleAmplifierImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.amplifier)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.amplifier) as i32
+    }
+    default_impl!(OminousBottleAmplifier);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
@@ -2129,10 +2296,94 @@ pub struct BannerPatternsImpl;
 pub struct BaseColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotDecorationsImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ContainerImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockStateImpl;
+#[derive(Clone)]
+pub struct ContainerImpl {
+    pub items: Vec<(u8, crate::item_stack::ItemStack)>,
+}
+impl PartialEq for ContainerImpl {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+impl Eq for ContainerImpl {}
+impl std::fmt::Debug for ContainerImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ContainerImpl")
+    }
+}
+impl ContainerImpl {
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let mut items = Vec::new();
+        if let NbtTag::List(l) = tag {
+            for item_tag in l {
+                if let NbtTag::Compound(c) = item_tag
+                    && let Some(slot) = c.get_int("slot")
+                    && let Some(item_compound) = c.get_compound("item")
+                    && let Some(stack) =
+                        crate::item_stack::ItemStack::read_item_stack(item_compound)
+                {
+                    items.push((slot as u8, stack));
+                }
+            }
+        }
+        Some(Self { items })
+    }
+}
+impl DataComponentImpl for ContainerImpl {
+    default_impl!(Container);
+}
+#[derive(Clone, Debug)]
+pub struct BlockStateImpl {
+    pub properties: HashMap<String, String>,
+}
+impl PartialEq for BlockStateImpl {
+    fn eq(&self, other: &Self) -> bool {
+        self.properties == other.properties
+    }
+}
+impl Eq for BlockStateImpl {}
+impl std::hash::Hash for BlockStateImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut keys: Vec<&String> = self.properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            key.hash(state);
+            self.properties.get(key).hash(state);
+        }
+    }
+}
+impl BlockStateImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let mut properties = HashMap::new();
+        for (key, val) in compound.child_tags.iter() {
+            if let Some(s) = val.extract_string() {
+                properties.insert(key.to_string(), s.to_string());
+            }
+        }
+        Some(Self { properties })
+    }
+}
+impl DataComponentImpl for BlockStateImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        for (k, v) in &self.properties {
+            compound.put_string(k, v.clone());
+        }
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        let mut keys: Vec<&String> = self.properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            digest.update(key.as_bytes());
+            digest.update(self.properties.get(key).unwrap().as_bytes());
+        }
+        digest.finalize() as i32
+    }
+    default_impl!(BlockState);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

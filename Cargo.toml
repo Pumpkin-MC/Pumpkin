@@ -76,7 +76,7 @@ module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
 
 [workspace.package]
-version = "0.1.0-dev+26.1"
+version = "0.1.0-dev+26.2"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
@@ -102,7 +102,7 @@ syn = { version = "2.0", default-features = false, features = ["printing"] }
 
 thiserror = { version = "2.0", default-features = false }
 
-bytes = { version = "1.11", default-features = false, features = ["std"] }
+bytes = { version = "1.12", default-features = false, features = ["std"] }
 
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
@@ -119,7 +119,7 @@ proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
 async-compression = { version = "0.4.42", default-features = false }
 base64 = { version = "0.22.1", default-features = false, features = ["std"] }
-bitflags = { version = "2.12.1", default-features = false, features = ["std"] }
+bitflags = { version = "2.13.0", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
 colored = { version = "3.1", default-features = false }
@@ -128,7 +128,7 @@ crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = { version = "0.8.21", default-features = false, features = ["std"] }
 crossfire = { version = "3.1.16", default-features = false, features = ["compat"] }
-crypto-bigint = { version = "0.7.3", default-features = false }
+crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.16.9", default-features = false, features = ["std"] }
 either = { version = "1.16.0", default-features = false }
@@ -137,7 +137,7 @@ flate2 = { version = "1.1.9", default-features = false, features = ["rust_backen
 heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
-itertools = { version = "0.14.0", default-features = false, features = ["use_std"] }
+itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
 lru = { version = "0.18.0", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
@@ -146,7 +146,7 @@ num-bigint = { version = "0.4", default-features = false, features = ["std"] }
 num-derive = { version = "0.4", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.13.1", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
-phf = { version = "0.13.1", default-features = false, features = ["std"] }
+phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
 pumpkin-config = { path = "pumpkin-config", default-features = false }
@@ -190,12 +190,12 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.3", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "45.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "45.0", default-features = false, features = ["p2"] }
-wasmtime-wasi-http = { version = "45.0", default-features = false, features = ["p2", "default-send-request"] }
+wasmtime = { version = "46.0", default-features = false, features = ["runtime", "component-model", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { version = "46.0", default-features = false, features = ["p2"] }
+wasmtime-wasi-http = { version = "46.0", default-features = false, features = ["p2", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.10", default-features = false }
-wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.58", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }

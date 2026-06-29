@@ -14,6 +14,7 @@ default = [
     "registry",
     "screen",
     "particle",
+    "statistic",
     "sound",
     "recipes",
     "data_component",
@@ -41,13 +42,17 @@ default = [
     "potion",
     "recipe_remainder",
     "chunk_gen_settings",
+    "advancement",
     "carver",
     "villager",
     "placed_feature",
     "configured_feature",
-    "slot_ranges"
+    "slot_ranges",
+    "bedrock_creative"
 ]
 
+advancement = []
+bedrock_creative = []
 item = []
 packet = []
 jukebox_song = []
@@ -55,6 +60,7 @@ translation = []
 registry = []
 screen = []
 particle = []
+statistic = []
 sound = []
 recipes = []
 data_component = []
@@ -106,7 +112,7 @@ potion_brewing = []
 phf = { workspace = true, features = ["macros"] }
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
-serde.workspace = true
+serde = {workspace = true, features = ["rc"]}
 crc-fast.workspace = true
 rand.workspace = true
 

@@ -22,4 +22,22 @@ impl Mob for MagmaCubeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         self.slime.get_mob_entity()
     }
+
+    fn mob_tick<'a>(
+        &'a self,
+        caller: &'a Arc<dyn crate::entity::EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        self.slime.mob_tick(caller)
+    }
+
+    fn post_tick(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
+        self.slime.post_tick()
+    }
+
+    fn mob_player_collision<'a>(
+        &'a self,
+        player: &'a Arc<crate::entity::player::Player>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        self.slime.mob_player_collision(player)
+    }
 }

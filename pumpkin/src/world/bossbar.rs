@@ -94,7 +94,7 @@ impl Bossbar {
 /// Extra methods for [`Player`] to send and manage the bossbar.
 impl Player {
     pub async fn send_bossbar(&self, bossbar: &Bossbar) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::Add {
                     title: bossbar.title.clone(),
@@ -113,7 +113,6 @@ impl Player {
                     action: BossEventAction::Add {
                         title: bossbar.title.clone().get_text(),
                         health_percent: bossbar.health,
-                        screen_darken: u16::from(bossbar.flags.contains(BossbarFlags::DARKEN_SKY)),
                         color: bossbar.color.to_bedrock(),
                         overlay: bossbar.division.to_bedrock(),
                     },
@@ -124,7 +123,7 @@ impl Player {
     }
 
     pub async fn remove_bossbar(&self, uuid: Uuid) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::Remove;
 
@@ -142,7 +141,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_health(&self, uuid: &Uuid, health: f32) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateHealth(health);
 
@@ -160,7 +159,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_title(&self, uuid: &Uuid, title: TextComponent) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateTile(title);
 
@@ -182,9 +181,9 @@ impl Player {
         uuid: &Uuid,
         color: BossbarColor,
         dividers: BossbarDivisions,
-        flags: BossbarFlags,
+        _flags: BossbarFlags,
     ) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateStyle {
                     color: (color as u8).into(),
@@ -198,7 +197,6 @@ impl Player {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateProperties {
-                        screen_darken: u16::from(flags.contains(BossbarFlags::DARKEN_SKY)),
                         color: color.to_bedrock(),
                         overlay: dividers.to_bedrock(),
                     },
@@ -209,7 +207,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_flags(&self, uuid: &Uuid, flags: BossbarFlags) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateFlags(flags.bits());
 
@@ -225,7 +223,6 @@ impl Player {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateProperties {
-                        screen_darken: u16::from(flags.contains(BossbarFlags::DARKEN_SKY)),
                         color: VarInt(0),
                         overlay: VarInt(0),
                     },

@@ -15,7 +15,7 @@ use crate::{
             piece::StructurePieceType,
             structures::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition,
+                StructurePiecesCollector, StructurePosition, WorldPortalExt,
             },
         },
     },
@@ -26,7 +26,7 @@ pub struct BuriedTreasureGenerator;
 impl StructureGenerator for BuriedTreasureGenerator {
     fn get_structure_position(
         &self,
-        context: StructureGeneratorContext,
+        context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let x = get_center_x(context.chunk_x);
         let z = get_center_z(context.chunk_z);
@@ -51,9 +51,13 @@ pub struct BuriedTreasurePiece {
 }
 
 impl StructurePieceBase for BuriedTreasurePiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         _chunk_box: &BlockBox,

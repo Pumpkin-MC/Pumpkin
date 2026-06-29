@@ -7,6 +7,7 @@ use super::chunk_density_function::{
     ChunkNoiseFunctionSampleOptions, ChunkSpecificNoiseFunctionComponent,
 };
 
+pub(crate) mod beardifier;
 pub(crate) mod math;
 pub(crate) mod misc;
 pub(crate) mod noise;

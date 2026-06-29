@@ -23,7 +23,7 @@ use crate::{
             piece::StructurePieceType,
             structures::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition,
+                StructurePiecesCollector, StructurePosition, WorldPortalExt,
             },
         },
     },
@@ -38,7 +38,7 @@ pub struct JungleTempleGenerator;
 impl StructureGenerator for JungleTempleGenerator {
     fn get_structure_position(
         &self,
-        mut context: StructureGeneratorContext,
+        mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let x = start_block_x(context.chunk_x);
         let z = start_block_z(context.chunk_z);
@@ -78,6 +78,9 @@ pub struct JungleTemplePiece {
     placed_trap_2: bool,
 }
 impl StructurePieceBase for JungleTemplePiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece
     }
@@ -90,6 +93,7 @@ impl StructurePieceBase for JungleTemplePiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

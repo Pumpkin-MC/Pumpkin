@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::{Controls, Goal, GoalFuture};
+use crate::entity::EntityBase;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
 use pumpkin_data::item::Item;
 
@@ -55,7 +56,7 @@ impl TemptGoal {
 
     async fn is_player_still_tempting(&self, player: &Player, mob: &dyn Mob) -> bool {
         let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-        let player_pos = player.living_entity.entity.pos.load();
+        let player_pos = player.get_entity().pos.load();
         if mob_pos.squared_distance_to_vec(&player_pos) > TEMPT_RANGE * TEMPT_RANGE {
             return false;
         }
@@ -89,12 +90,12 @@ impl Goal for TemptGoal {
         Box::pin(async move {
             if let Some(player) = &self.target_player {
                 let mob_entity = mob.get_mob_entity();
-                let player_pos = player.living_entity.entity.pos.load();
+                let player_pos = player.get_entity().pos.load();
 
                 mob_entity.look_control.lock().unwrap().look_at(
                     mob,
                     player_pos.x,
-                    player.living_entity.entity.get_eye_y(),
+                    player.get_entity().get_eye_y(),
                     player_pos.z,
                 );
 

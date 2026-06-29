@@ -3,10 +3,12 @@ use std::io::{Error, ErrorKind, Read};
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::bedrock::network_item::NetworkItemDescriptor;
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt, var_ulong::VarULong},
     serial::PacketRead,
 };
+use pumpkin_util::math::vector3::Vector3;
 
 pub const WINDOW_ID_INVENTORY: i32 = 0;
 pub const WINDOW_ID_OFF_HAND: i32 = 119;
@@ -55,9 +57,8 @@ pub struct InventoryAction {
     pub window_id: Option<i32>,
     pub source_flags: Option<u32>,
     pub inventory_slot: u32,
-    // TODO
-    pub old_item: (),
-    pub new_item: (),
+    pub old_item: NetworkItemDescriptor,
+    pub new_item: NetworkItemDescriptor,
 }
 
 impl PacketRead for InventoryAction {
@@ -79,16 +80,16 @@ impl PacketRead for InventoryAction {
 
         let inventory_slot = VarULong::read(buf)?.0 as u32;
 
-        // let old_item = ItemStack::read(buf)?;
-        // let new_item = ItemStack::read(buf)?;
+        let old_item = NetworkItemDescriptor::read(buf)?;
+        let new_item = NetworkItemDescriptor::read(buf)?;
 
         Ok(Self {
             source_type,
             window_id,
             source_flags,
             inventory_slot,
-            old_item: (),
-            new_item: (),
+            old_item,
+            new_item,
         })
     }
 }
@@ -99,29 +100,79 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
-#[derive(Debug, PacketRead)]
+#[derive(Debug)]
 pub struct UseItemTransactionData {
-    pub action_type: VarULong,
-    pub trigger_type: VarULong,
+    pub action_type: VarUInt,
+    pub trigger_type: u8,
     pub block_position: BlockPos,
-    pub block_face: VarInt,
+    pub block_face: i32,
     pub hot_bar_slot: VarInt,
-    // TODO
+    pub item_in_hand: NetworkItemDescriptor,
+    pub player_position: Vector3<f32>,
+    pub click_position: Vector3<f32>,
+    pub block_runtime_id: VarUInt,
+    pub client_prediction: u8,
+    pub client_cooldown_state: u8,
 }
 
-#[derive(Debug, PacketRead)]
+impl PacketRead for UseItemTransactionData {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            action_type: VarUInt::read(buf)?,
+            trigger_type: u8::read(buf)?,
+            block_position: BlockPos::read(buf)?,
+            block_face: i32::from(u8::read(buf)?),
+            hot_bar_slot: VarInt::read(buf)?,
+            item_in_hand: NetworkItemDescriptor::read(buf)?,
+            player_position: Vector3::read(buf)?,
+            click_position: Vector3::read(buf)?,
+            block_runtime_id: VarUInt::read(buf)?,
+            client_prediction: u8::read(buf)?,
+            client_cooldown_state: u8::read(buf)?,
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
-    pub action_type: VarULong,
+    pub action_type: VarUInt,
     pub hot_bar_slot: VarInt,
-    // TODO
+    pub item_in_hand: NetworkItemDescriptor,
+    pub player_position: Vector3<f32>,
+    pub click_position: Vector3<f32>,
 }
 
-#[derive(Debug, PacketRead)]
+impl PacketRead for UseItemOnEntityTransactionData {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            target_entity_runtime_id: VarULong::read(buf)?,
+            action_type: VarUInt::read(buf)?,
+            hot_bar_slot: VarInt::read(buf)?,
+            item_in_hand: NetworkItemDescriptor::read(buf)?,
+            player_position: Vector3::read(buf)?,
+            click_position: Vector3::read(buf)?,
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct ReleaseItemTransactionData {
-    pub action_type: VarULong,
+    pub action_type: VarUInt,
     pub hot_bar_slot: VarInt,
-    // TODO
+    pub item_in_hand: NetworkItemDescriptor,
+    pub head_position: Vector3<f32>,
+}
+
+impl PacketRead for ReleaseItemTransactionData {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            action_type: VarUInt::read(buf)?,
+            hot_bar_slot: VarInt::read(buf)?,
+            item_in_hand: NetworkItemDescriptor::read(buf)?,
+            head_position: Vector3::read(buf)?,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -129,6 +180,7 @@ pub struct ReleaseItemTransactionData {
 pub struct SInventoryTransaction {
     pub legacy_request_id: VarInt,
     pub legacy_set_item_slots: Vec<LegacySetItemSlot>,
+    pub has_value: bool,
     pub actions: Vec<InventoryAction>,
     pub transaction_type: VarUInt,
     pub transaction_data: TransactionData,
@@ -138,20 +190,27 @@ impl PacketRead for SInventoryTransaction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let legacy_request_id = VarInt::read(buf)?;
 
+        let has_legacy_slots = bool::read(buf)?;
         let mut legacy_set_item_slots = Vec::new();
-        if legacy_request_id.0 != 0 {
+        if has_legacy_slots {
             let len = VarUInt::read(buf)?.0;
             for _ in 0..len {
                 legacy_set_item_slots.push(LegacySetItemSlot::read(buf)?);
             }
         }
 
+        let _has_transaction_type = bool::read(buf)?;
         let transaction_type = VarUInt::read(buf)?;
 
-        let actions_len = VarUInt::read(buf)?.0;
+        let _has_tr_data = bool::read(buf)?;
+
+        let has_value = bool::read(buf)?;
         let mut actions = Vec::new();
-        for _ in 0..actions_len {
-            actions.push(InventoryAction::read(buf)?);
+        if has_value {
+            let actions_len = VarUInt::read(buf)?.0;
+            for _ in 0..actions_len {
+                actions.push(InventoryAction::read(buf)?);
+            }
         }
 
         let transaction_data = match transaction_type.0 {
@@ -171,6 +230,7 @@ impl PacketRead for SInventoryTransaction {
         Ok(Self {
             legacy_request_id,
             legacy_set_item_slots,
+            has_value,
             actions,
             transaction_type,
             transaction_data,

@@ -97,7 +97,7 @@ impl BreathManager {
     }
 
     fn is_eye_in_water(player: &Player) -> bool {
-        let e = &player.living_entity.entity;
+        let e = &player.get_entity();
         let pos = e.pos.load();
         let eye_y = e.get_eye_y();
 
@@ -152,7 +152,7 @@ impl BreathManager {
     pub fn send_air_supply(&self, player: &Player) {
         let air = self.air_supply.load(Ordering::Relaxed).clamp(0, MAX_AIR);
 
-        player.living_entity.entity.send_meta_data(&[Metadata::new(
+        player.get_entity().send_meta_data(&[Metadata::new(
             TrackedData::AIR_SUPPLY_ID,
             MetaDataType::INTEGER,
             VarInt(air),

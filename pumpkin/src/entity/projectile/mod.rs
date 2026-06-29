@@ -21,11 +21,13 @@ pub mod shulker_bullet;
 pub mod small_fireball;
 pub mod snowball;
 pub mod splash_potion;
+pub mod trident;
 pub mod wind_charge;
 
 #[must_use]
 pub fn is_projectile(entity_type: &EntityType) -> bool {
     *entity_type == EntityType::ARROW
+        || *entity_type == EntityType::TRIDENT
         || *entity_type == EntityType::EGG
         || *entity_type == EntityType::SNOWBALL
         || *entity_type == EntityType::FIREWORK_ROCKET
@@ -117,6 +119,8 @@ impl ThrownItemEntity {
         let entity = self.get_entity();
         let world = entity.world.load();
 
+        entity.update_last_pos();
+
         // Apply gravity and inertia
         let mut velocity = entity.velocity.load();
         velocity.y -= self.get_gravity();
@@ -140,7 +144,8 @@ impl ThrownItemEntity {
 
         // Send updated velocity to clients
         let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        world.broadcast_packet_all(&packet);
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(chunk_pos, &packet);
 
         // Calculate search box for collisions
         let search_box = BoundingBox::new(

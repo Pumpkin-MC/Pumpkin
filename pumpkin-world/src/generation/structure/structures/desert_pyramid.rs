@@ -34,7 +34,7 @@ pub struct DesertPyramidGenerator;
 impl StructureGenerator for DesertPyramidGenerator {
     fn get_structure_position(
         &self,
-        mut context: StructureGeneratorContext,
+        mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let x = start_block_x(context.chunk_x);
         let z = start_block_z(context.chunk_z);
@@ -445,6 +445,9 @@ impl DesertPyramidPiece {
 }
 
 impl StructurePieceBase for DesertPyramidPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece
     }
@@ -457,6 +460,7 @@ impl StructurePieceBase for DesertPyramidPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn crate::world::WorldPortalExt,
         random: &mut RandomGenerator,
         seed: i64,
         chunk_box: &BlockBox,

@@ -17,6 +17,7 @@ use crate::{
             nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
         },
     },
+    world::WorldPortalExt,
 };
 
 /// Straight exterior bridge segment (5 × 10 × 19).
@@ -49,6 +50,9 @@ impl BridgePiece {
 }
 
 impl StructurePieceBase for BridgePiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -84,6 +88,7 @@ impl StructurePieceBase for BridgePiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

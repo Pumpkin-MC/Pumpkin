@@ -63,6 +63,13 @@ impl BlockBehaviour for HopperBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::InspectHopper as i32,
+                        1,
+                    )
+                    .await;
+                args.player
                     .open_handled_screen(&HopperBlockScreenFactory(inventory), Some(*args.position))
                     .await;
             }

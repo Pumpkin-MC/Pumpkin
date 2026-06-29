@@ -33,18 +33,29 @@ mod test {
         macro_rules! set_wrappers {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
-                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type {
-                            WrapperType::CellCache => (),
-                            _ => {
-                                *component =
-                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
-                                    ));
+                    match component {
+                        ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
+                            match wrapper.wrapper_type {
+                                WrapperType::CellCache => (),
+                                _ => {
+                                    *component = ProtoNoiseFunctionComponent::PassThrough(
+                                        PassThrough::new(
+                                            wrapper.input_index,
+                                            wrapper.min(),
+                                            wrapper.max(),
+                                        ),
+                                    );
+                                }
                             }
                         }
+                        ProtoNoiseFunctionComponent::Beardifier(_) => {
+                            *component = ProtoNoiseFunctionComponent::Independent(
+                                IndependentProtoNoiseFunctionComponent::Constant(Constant::new(
+                                    0.0,
+                                )),
+                            );
+                        }
+                        _ => (),
                     }
                 });
             };
@@ -92,19 +103,30 @@ mod test {
         macro_rules! set_wrappers {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
-                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type {
-                            WrapperType::CellCache => (),
-                            WrapperType::Cache2D => (),
-                            _ => {
-                                *component =
-                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
-                                    ));
+                    match component {
+                        ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
+                            match wrapper.wrapper_type {
+                                WrapperType::CellCache => (),
+                                WrapperType::Cache2D => (),
+                                _ => {
+                                    *component = ProtoNoiseFunctionComponent::PassThrough(
+                                        PassThrough::new(
+                                            wrapper.input_index,
+                                            wrapper.min(),
+                                            wrapper.max(),
+                                        ),
+                                    );
+                                }
                             }
                         }
+                        ProtoNoiseFunctionComponent::Beardifier(_) => {
+                            *component = ProtoNoiseFunctionComponent::Independent(
+                                IndependentProtoNoiseFunctionComponent::Constant(Constant::new(
+                                    0.0,
+                                )),
+                            );
+                        }
+                        _ => (),
                     }
                 });
             };
@@ -152,19 +174,30 @@ mod test {
         macro_rules! set_wrappers {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
-                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type {
-                            WrapperType::CellCache => (),
-                            WrapperType::CacheFlat => (),
-                            _ => {
-                                *component =
-                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
-                                    ));
+                    match component {
+                        ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
+                            match wrapper.wrapper_type {
+                                WrapperType::CellCache => (),
+                                WrapperType::CacheFlat => (),
+                                _ => {
+                                    *component = ProtoNoiseFunctionComponent::PassThrough(
+                                        PassThrough::new(
+                                            wrapper.input_index,
+                                            wrapper.min(),
+                                            wrapper.max(),
+                                        ),
+                                    );
+                                }
                             }
                         }
+                        ProtoNoiseFunctionComponent::Beardifier(_) => {
+                            *component = ProtoNoiseFunctionComponent::Independent(
+                                IndependentProtoNoiseFunctionComponent::Constant(Constant::new(
+                                    0.0,
+                                )),
+                            );
+                        }
+                        _ => (),
                     }
                 });
             };
@@ -212,19 +245,30 @@ mod test {
         macro_rules! set_wrappers {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
-                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type {
-                            WrapperType::CellCache => (),
-                            WrapperType::CacheOnce => (),
-                            _ => {
-                                *component =
-                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
-                                    ));
+                    match component {
+                        ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
+                            match wrapper.wrapper_type {
+                                WrapperType::CellCache => (),
+                                WrapperType::CacheOnce => (),
+                                _ => {
+                                    *component = ProtoNoiseFunctionComponent::PassThrough(
+                                        PassThrough::new(
+                                            wrapper.input_index,
+                                            wrapper.min(),
+                                            wrapper.max(),
+                                        ),
+                                    );
+                                }
                             }
                         }
+                        ProtoNoiseFunctionComponent::Beardifier(_) => {
+                            *component = ProtoNoiseFunctionComponent::Independent(
+                                IndependentProtoNoiseFunctionComponent::Constant(Constant::new(
+                                    0.0,
+                                )),
+                            );
+                        }
+                        _ => (),
                     }
                 });
             };
@@ -272,19 +316,30 @@ mod test {
         macro_rules! set_wrappers {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
-                    if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type {
-                            WrapperType::CellCache => (),
-                            WrapperType::Interpolated => (),
-                            _ => {
-                                *component =
-                                    ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
-                                    ));
+                    match component {
+                        ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
+                            match wrapper.wrapper_type {
+                                WrapperType::CellCache => (),
+                                WrapperType::Interpolated => (),
+                                _ => {
+                                    *component = ProtoNoiseFunctionComponent::PassThrough(
+                                        PassThrough::new(
+                                            wrapper.input_index,
+                                            wrapper.min(),
+                                            wrapper.max(),
+                                        ),
+                                    );
+                                }
                             }
                         }
+                        ProtoNoiseFunctionComponent::Beardifier(_) => {
+                            *component = ProtoNoiseFunctionComponent::Independent(
+                                IndependentProtoNoiseFunctionComponent::Constant(Constant::new(
+                                    0.0,
+                                )),
+                            );
+                        }
+                        _ => (),
                     }
                 });
             };

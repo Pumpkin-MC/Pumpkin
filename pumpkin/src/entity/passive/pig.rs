@@ -87,7 +87,8 @@ impl Mob for PigEntity {
             if is_food && self.is_breeding_ready() && !self.is_in_love() {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
 
-                self.mob_entity.set_love_ticks(600);
+                self.mob_entity
+                    .set_love_ticks(600, Some(player.gameprofile.id));
                 let entity = &self.mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.pos.load();

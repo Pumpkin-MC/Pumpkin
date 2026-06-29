@@ -76,6 +76,10 @@ name = "chunk_gen"
 harness = false
 
 [[bench]]
+name = "chunk_gen_concurrent"
+harness = false
+
+[[bench]]
 name = "noise_router"
 harness = false
 

@@ -83,6 +83,24 @@ mod tests {
             true
         }
 
+        fn mirror(
+            &self,
+            block: &pumpkin_data::Block,
+            state_id: u16,
+            mirror: pumpkin_data::Mirror,
+        ) -> &'static pumpkin_data::BlockState {
+            block.mirror(state_id, mirror)
+        }
+
+        fn rotate(
+            &self,
+            block: &pumpkin_data::Block,
+            state_id: u16,
+            rotation: pumpkin_data::Rotation,
+        ) -> &'static pumpkin_data::BlockState {
+            block.rotate(state_id, rotation)
+        }
+
         fn spawn_mobs_for_chunk_generation(
             &self,
             _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,

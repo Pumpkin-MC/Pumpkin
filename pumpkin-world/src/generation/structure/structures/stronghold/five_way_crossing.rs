@@ -22,6 +22,8 @@ use crate::{
     },
 };
 
+use crate::world::WorldPortalExt;
+
 pub struct FiveWayCrossingPiece {
     pub piece: StrongholdPiece,
     pub lower_left_exists: bool,
@@ -67,6 +69,9 @@ impl FiveWayCrossingPiece {
 }
 
 impl StructurePieceBase for FiveWayCrossingPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -161,6 +166,7 @@ impl StructurePieceBase for FiveWayCrossingPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

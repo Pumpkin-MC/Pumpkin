@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Actions Repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         submodules: recursive
     - name: Spell Check Repo
-      uses: crate-ci/typos@v1.47.0
+      uses: crate-ci/typos@v1.47.2

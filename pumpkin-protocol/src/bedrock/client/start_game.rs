@@ -55,6 +55,7 @@ pub struct CStartGame {
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
     pub server_auth_sounds: bool,
+    pub is_logging_chat: bool,
 
     // 2 Optionals is what we need Mojang :cap:
     pub server_join_information: Option<ServerJoinInformation>,
@@ -163,6 +164,8 @@ pub struct LevelSettings {
     pub override_force_experimental_gameplay_has_value: bool,
     pub chat_restriction_level: i8,
     pub disable_player_interactions: bool,
+    pub server_editor_connection_policy: VarInt,
+    pub allow_anonymous_block_drops_in_editor_worlds: bool,
 }
 
 #[derive(Default, PacketWrite)]

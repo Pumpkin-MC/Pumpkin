@@ -8,7 +8,7 @@
 
 use std::sync::{Arc, atomic::AtomicU8};
 
-use pumpkin_data::{fuels::is_fuel, item::Item};
+use pumpkin_data::{fuels::is_fuel, item::Item, statistic::StatisticCategory};
 use pumpkin_world::{block::entities::ExperienceContainer, inventory::Inventory};
 
 use tracing::debug;
@@ -140,10 +140,17 @@ impl Slot for FurnaceOutputSlot {
     fn on_take_item<'a>(
         &'a self,
         player: &'a dyn InventoryPlayer,
-        _stack: &'a pumpkin_data::item_stack::ItemStack,
+        stack: &'a pumpkin_data::item_stack::ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             debug!("FurnaceOutputSlot: on_take_item called");
+            player
+                .increment_stat(
+                    StatisticCategory::Crafted,
+                    stack.item.id as i32,
+                    stack.item_count as i32,
+                )
+                .await;
             // Extract accumulated experience and award to player
             let experience = self.experience_container.extract_experience();
             debug!("FurnaceOutputSlot: extracted experience = {experience}");

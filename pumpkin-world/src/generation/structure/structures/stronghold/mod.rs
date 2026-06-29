@@ -60,7 +60,7 @@ pub struct StrongholdGenerator;
 impl StructureGenerator for StrongholdGenerator {
     fn get_structure_position(
         &self,
-        context: StructureGeneratorContext,
+        context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let mut collector = StructurePiecesCollector::default();
         let mut random = context.random;

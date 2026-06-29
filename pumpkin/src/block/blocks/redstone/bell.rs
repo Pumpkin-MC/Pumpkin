@@ -139,6 +139,14 @@ impl BlockBehaviour for BellBlock {
                 args.hit.face.to_horizontal_facing(),
             );
 
+            args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::BellRing as i32,
+                    1,
+                )
+                .await;
+
             BlockActionResult::Success
         })
     }

@@ -70,12 +70,22 @@ impl BlockBehaviour for NetherPortalBlock {
 
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let target_world = if args.world.dimension == Dimension::THE_NETHER {
-                args.server.get_world_from_dimension(&Dimension::OVERWORLD)
-            } else {
-                args.server.get_world_from_dimension(&Dimension::THE_NETHER)
-            };
+            let target_world =
+                if args.world.dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name {
+                    args.server.get_world_from_dimension(&Dimension::OVERWORLD)
+                } else {
+                    args.server.get_world_from_dimension(&Dimension::THE_NETHER)
+                };
 
+            if Arc::ptr_eq(&target_world, args.world) {
+                return;
+            }
+
+            tracing::info!(
+                "Nether portal collision at {:?}, targeting world {:?}",
+                args.position,
+                target_world.dimension.minecraft_name
+            );
             let portal_delay = Self::get_portal_time(args.world, args.entity);
 
             args.entity

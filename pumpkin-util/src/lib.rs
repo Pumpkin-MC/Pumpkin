@@ -29,6 +29,7 @@ pub mod y_offset;
 
 pub mod identifier;
 pub mod jwt;
+pub mod resource_key;
 pub mod uuid;
 
 /// Represents the different types of height maps used for terrain generation and collision checks.
@@ -141,6 +142,30 @@ impl BlockDirection {
             1 => Self::East,
             2 => Self::South,
             _ => Self::West,
+        }
+    }
+
+    #[must_use]
+    pub const fn opposite(&self) -> Self {
+        match self {
+            Self::Down => Self::Up,
+            Self::Up => Self::Down,
+            Self::North => Self::South,
+            Self::South => Self::North,
+            Self::West => Self::East,
+            Self::East => Self::West,
+        }
+    }
+
+    #[must_use]
+    pub const fn to_vector(&self) -> crate::math::vector3::Vector3<i32> {
+        match self {
+            Self::Down => crate::math::vector3::Vector3::new(0, -1, 0),
+            Self::Up => crate::math::vector3::Vector3::new(0, 1, 0),
+            Self::North => crate::math::vector3::Vector3::new(0, 0, -1),
+            Self::South => crate::math::vector3::Vector3::new(0, 0, 1),
+            Self::West => crate::math::vector3::Vector3::new(-1, 0, 0),
+            Self::East => crate::math::vector3::Vector3::new(1, 0, 0),
         }
     }
 }

@@ -72,6 +72,28 @@ impl PaletteEntry {
     pub const fn with_properties(name: String, properties: Vec<(String, String)>) -> Self {
         Self { name, properties }
     }
+
+    /// Parses a block state string (e.g. "`minecraft:oak_log`[axis=x]") into a palette entry.
+    #[must_use]
+    pub fn from_string(s: &str) -> Self {
+        if let Some(bracket_pos) = s.find('[') {
+            let name = s[..bracket_pos].to_string();
+            let end_bracket = s.rfind(']').unwrap_or(s.len());
+            let props_str = &s[bracket_pos + 1..end_bracket];
+            let properties = props_str
+                .split(',')
+                .filter_map(|p| {
+                    let mut parts = p.split('=');
+                    let key = parts.next()?.trim().to_string();
+                    let value = parts.next()?.trim().to_string();
+                    Some((key, value))
+                })
+                .collect();
+            Self { name, properties }
+        } else {
+            Self::new(s.to_string())
+        }
+    }
 }
 
 /// A single block placement in the template.

@@ -19,6 +19,8 @@ use crate::{
     },
 };
 
+use crate::world::WorldPortalExt;
+
 pub struct CorridorPiece {
     piece: StrongholdPiece,
     left_exit: bool,
@@ -60,6 +62,9 @@ impl CorridorPiece {
 }
 
 impl StructurePieceBase for CorridorPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -121,6 +126,7 @@ impl StructurePieceBase for CorridorPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,
@@ -232,6 +238,9 @@ impl SmallCorridorPiece {
 }
 
 impl StructurePieceBase for SmallCorridorPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &crate::generation::structure::structures::StructurePiece {
         &self.piece.piece
     }
@@ -245,6 +254,7 @@ impl StructurePieceBase for SmallCorridorPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

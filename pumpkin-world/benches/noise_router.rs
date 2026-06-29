@@ -16,7 +16,8 @@ fn bench_noise_router_creation(c: &mut Criterion) {
     let proto_routers = ProtoNoiseRouters::generate(base_routers, &random_config);
     let proto_noise_router = proto_routers.noise;
 
-    let builder_options = ChunkNoiseFunctionBuilderOptions::new(4, 8, 4, 4, 0, 0, 3);
+    let builder_options =
+        ChunkNoiseFunctionBuilderOptions::new(4, 8, 4, 4, 0, 0, 3, vec![], vec![], None);
 
     // Benchmarking
     c.bench_function("noise_router_creation_with_pooling", |b| {

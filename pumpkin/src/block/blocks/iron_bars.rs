@@ -2,7 +2,9 @@ use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
@@ -49,16 +51,15 @@ pub fn compute_bars_state(
         let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
         let connected = other_block == block
-            || other_block_state.is_side_solid(direction.opposite())
+            || other_block_state.is_side_solid(direction.opposite().to_block_direction())
             || other_block.has_tag(&tag::Block::C_GLASS_PANES)
             || other_block.has_tag(&tag::Block::MINECRAFT_WALLS);
 
         match direction {
-            BlockDirection::North => bars_props.north = connected,
-            BlockDirection::South => bars_props.south = connected,
-            BlockDirection::West => bars_props.west = connected,
-            BlockDirection::East => bars_props.east = connected,
-            _ => {}
+            HorizontalFacing::North => bars_props.north = connected,
+            HorizontalFacing::South => bars_props.south = connected,
+            HorizontalFacing::West => bars_props.west = connected,
+            HorizontalFacing::East => bars_props.east = connected,
         }
     }
 

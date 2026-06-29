@@ -26,6 +26,7 @@ use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
 pub use entity_anchor::EntityAnchor;
+use pumpkin_data::advancement::Advancement;
 
 pub mod block;
 pub mod bool;
@@ -96,7 +97,7 @@ pub trait ArgumentConsumer: Sync + Send + GetClientSideArgParser {
 
 pub trait GetClientSideArgParser {
     /// Return the parser the client should use while typing a command in chat.
-    fn get_client_side_parser(&self) -> ArgumentType<'_>;
+    fn get_client_side_parser(&self) -> ArgumentType;
     /// Usually this should return None. This can be used to force suggestions to be processed on serverside.
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders>;
 }
@@ -137,6 +138,7 @@ pub enum Arg<'a> {
     DamageType(DamageType),
     Effect(&'static StatusEffect),
     Enchantment(&'static Enchantment),
+    Advancement(&'static Advancement),
     EntityAnchor(EntityAnchor),
 }
 

@@ -56,8 +56,8 @@ async fn register_player_event(
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
         player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
-        player_permission_check::PlayerPermissionCheckEvent, player_teleport::PlayerTeleportEvent,
-        player_toggle_flight_event::PlayerToggleFlightEvent,
+        player_permission_check::PlayerPermissionCheckEvent, player_respawn::PlayerRespawnEvent,
+        player_teleport::PlayerTeleportEvent, player_toggle_flight_event::PlayerToggleFlightEvent,
         player_toggle_sneak_event::PlayerToggleSneakEvent,
         player_toggle_sprint_event::PlayerToggleSprintEvent,
     };
@@ -95,6 +95,9 @@ async fn register_player_event(
         EventType::PlayerChangeWorldEvent => {
             register_typed_event::<PlayerChangeWorldEvent>(resource, handler, priority, blocking)
                 .await;
+        }
+        EventType::PlayerRespawnEvent => {
+            register_typed_event::<PlayerRespawnEvent>(resource, handler, priority, blocking).await;
         }
         EventType::PlayerExpChangeEvent => {
             register_typed_event::<PlayerExpChangeEvent>(resource, handler, priority, blocking)

@@ -6,6 +6,7 @@ use pumpkin_data::data_component_impl::EnchantableImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_util::random::RandomImpl;
 use pumpkin_world::inventory::Inventory;
@@ -356,6 +357,14 @@ impl ScreenHandler for EnchantingTableScreenHandler {
 
             self.update_enchantments(player).await;
             self.send_content_updates().await;
+
+            player
+                .increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::EnchantItem as i32,
+                    1,
+                )
+                .await;
 
             true
         })

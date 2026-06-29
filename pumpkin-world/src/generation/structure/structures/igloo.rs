@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 
+use pumpkin_data::block_rotation::Rotation;
 use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::RandomGenerator,
@@ -23,9 +24,9 @@ use crate::{
             shiftable_piece::ShiftableStructurePiece,
             structures::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition,
+                StructurePiecesCollector, StructurePosition, WorldPortalExt,
             },
-            template::{BlockRotation, StructureTemplate, get_template, place_template},
+            template::{StructureTemplate, get_template, place_template},
         },
     },
 };
@@ -63,7 +64,7 @@ pub struct IglooGenerator;
 impl StructureGenerator for IglooGenerator {
     fn get_structure_position(
         &self,
-        mut context: StructureGeneratorContext,
+        mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let chunk_center_x = get_center_x(context.chunk_x);
         let chunk_center_z = get_center_z(context.chunk_z);
@@ -75,7 +76,7 @@ impl StructureGenerator for IglooGenerator {
         // IMPORTANT: Random call order must match vanilla for deterministic placement:
         // 1. Rotation first (vanilla: BlockRotation.random(random) calls nextInt(4))
         let rotation_index = context.random.next_bounded_i32(4) as u8;
-        let rotation = BlockRotation::from_index(rotation_index);
+        let rotation = Rotation::from_index(rotation_index);
 
         // 2. Basement check (vanilla: random.nextDouble() < 0.5)
         let has_basement = context.random.next_f64() < 0.5;
@@ -134,18 +135,22 @@ pub struct IglooPiece {
     top_template: Arc<StructureTemplate>,
     middle_template: Option<Arc<StructureTemplate>>,
     bottom_template: Option<Arc<StructureTemplate>>,
-    rotation: BlockRotation,
+    rotation: Rotation,
     has_basement: bool,
     ladder_segments: u8,
 }
 
 impl StructurePieceBase for IglooPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
-        _chunk_box: &BlockBox,
+        chunk_box: &BlockBox,
     ) {
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
 
@@ -173,6 +178,8 @@ impl StructurePieceBase for IglooPiece {
             (0, 0),
             self.rotation,
             false,
+            &[],
+            Some(chunk_box),
         );
 
         // Place basement components if present
@@ -202,6 +209,8 @@ impl StructurePieceBase for IglooPiece {
                         (SHAFT_OFFSET_X, SHAFT_OFFSET_Z),
                         self.rotation,
                         false,
+                        &[],
+                        Some(chunk_box),
                     );
                 }
             }
@@ -218,6 +227,8 @@ impl StructurePieceBase for IglooPiece {
                     (BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z),
                     self.rotation,
                     false,
+                    &[],
+                    Some(chunk_box),
                 );
             }
         }

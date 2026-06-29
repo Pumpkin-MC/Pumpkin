@@ -152,6 +152,9 @@ impl WasmPlugin {
 
         let mut builder = WasiCtxBuilder::new();
 
+        builder.inherit_stdout();
+        builder.inherit_stderr();
+
         let metadata = context.get_metadata();
         let blocked_permissions = &context.server.advanced_config.plugins.blocked_permissions;
 

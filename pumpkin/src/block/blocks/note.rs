@@ -95,6 +95,14 @@ impl BlockBehaviour for NoteBlock {
                 .await;
             Self::play_note(&note_props, args.world, args.position).await;
 
+            args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::TuneNoteblock as i32,
+                    1,
+                )
+                .await;
+
             BlockActionResult::Success
         })
     }

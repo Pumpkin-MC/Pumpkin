@@ -26,7 +26,7 @@ impl ArgumentType for GameModeArgumentType {
             .map_err(|_| INVALID_ERROR_TYPE.create(reader, TextComponent::text(string)))
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Gamemode
     }
 

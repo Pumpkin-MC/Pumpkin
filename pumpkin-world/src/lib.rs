@@ -22,10 +22,10 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
-pub const CURRENT_MC_VERSION: &str = "26.1";
+pub const CURRENT_MC_VERSION: &str = "26.2";
 
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.20";
-pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 975;
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.30";
+pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 1001;
 
 #[macro_export]
 macro_rules! global_path {
@@ -96,6 +96,9 @@ pub fn bench_create_and_populate_noise(
         sampler,
         settings.aquifers_enabled,
         settings.ore_veins_enabled,
+        Vec::new(),
+        Vec::new(),
+        None,
     );
 
     // Surface height estimator
@@ -223,6 +226,9 @@ pub fn bench_create_and_populate_noise_with_surface(
         sampler,
         settings.aquifers_enabled,
         settings.ore_veins_enabled,
+        Vec::new(),
+        Vec::new(),
+        None,
     );
 
     // Surface height estimator

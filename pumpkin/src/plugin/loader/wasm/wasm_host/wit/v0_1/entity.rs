@@ -561,6 +561,32 @@ impl HostEntity for PluginHostState {
         }
     }
 
+    async fn set_vehicle(
+        &mut self,
+        entity: Resource<Entity>,
+        vehicle: Option<Resource<Entity>>,
+    ) -> wasmtime::Result<()> {
+        let entity_base = entity_from_resource(self, &entity)?;
+
+        // Remove from current vehicle if any
+        let current_vehicle = entity_base.get_entity().vehicle.lock().await.clone();
+        if let Some(v) = current_vehicle {
+            v.get_entity()
+                .remove_passenger(entity_base.get_entity().entity_id)
+                .await;
+        }
+
+        if let Some(vehicle_res) = vehicle {
+            let vehicle_base = entity_from_resource(self, &vehicle_res)?;
+            vehicle_base
+                .get_entity()
+                .add_passenger(vehicle_base.clone(), entity_base)
+                .await;
+        }
+
+        Ok(())
+    }
+
     async fn get_passengers(
         &mut self,
         entity: Resource<Entity>,

@@ -6,8 +6,6 @@ use std::sync::{
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use pumpkin_data::attributes::Attributes;
-use std::sync::LazyLock;
-use uuid::Uuid;
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
@@ -47,8 +45,7 @@ use crate::entity::{
 };
 
 const SPEED_BOOST: f64 = 0.15;
-static ENDERMAN_SPEED_BOOST_UUID: LazyLock<Uuid> =
-    LazyLock::new(|| Uuid::new_v3(&Uuid::NAMESPACE_OID, b"enderman:angry_speed"));
+const ENDERMAN_SPEED_BOOST_ID: &str = "minecraft:attacking";
 
 pub const ENDERMAN_EYE_HEIGHT: f64 = 2.55;
 pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
@@ -220,15 +217,18 @@ impl EndermanEntity {
         }
 
         entity.set_pos(new_pos);
-
-        world.broadcast_packet_all(&CEntityPositionSync::new(
-            entity.entity_id.into(),
-            new_pos,
-            Vector3::new(0.0, 0.0, 0.0),
-            entity.yaw.load(),
-            entity.pitch.load(),
-            entity.on_ground.load(Ordering::Relaxed),
-        ));
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityPositionSync::new(
+                entity.entity_id.into(),
+                new_pos,
+                Vector3::new(0.0, 0.0, 0.0),
+                entity.yaw.load(),
+                entity.pitch.load(),
+                entity.on_ground.load(Ordering::Relaxed),
+            ),
+        );
 
         self.mob_entity.navigator.lock().unwrap().stop();
 
@@ -246,7 +246,7 @@ impl EndermanEntity {
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
                 let living = &self.mob_entity.living_entity;
                 let modifier = Modifier {
-                    id: *ENDERMAN_SPEED_BOOST_UUID,
+                    id: ENDERMAN_SPEED_BOOST_ID.to_string(),
                     amount: SPEED_BOOST,
                     operation: ModifierOperation::Add,
                 };
@@ -268,7 +268,7 @@ impl EndermanEntity {
                 let living = &self.mob_entity.living_entity;
 
                 living.update_attribute(&Attributes::MOVEMENT_SPEED, |inst| {
-                    inst.remove_modifier(*ENDERMAN_SPEED_BOOST_UUID);
+                    inst.remove_modifier(ENDERMAN_SPEED_BOOST_ID);
                 });
 
                 crate::entity::attributes::send_attribute_updates_for_living(

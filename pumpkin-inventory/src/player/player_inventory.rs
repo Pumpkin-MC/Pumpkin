@@ -96,6 +96,23 @@ impl PlayerInventory {
         }
     }
 
+    /// Checks if the given item Arc already points to the target equipment slot's stack.
+    ///
+    /// Use before attempting to re-equip an item to prevent self-deadlock:
+    /// Tokio's `Mutex` is not reentrant, so locking an `Arc<Mutex<T>>` that
+    /// you already hold will deadlock forever.
+    pub async fn is_already_equipped(
+        &self,
+        item_arc: &Arc<Mutex<ItemStack>>,
+        slot: &EquipmentSlot,
+    ) -> bool {
+        match slot {
+            EquipmentSlot::OffHand(_) => Arc::ptr_eq(item_arc, &self.off_hand_item().await),
+            EquipmentSlot::MainHand(_) => Arc::ptr_eq(item_arc, &self.held_item()),
+            _ => false,
+        }
+    }
+
     /// Gets the item in the off-hand.
     ///
     /// Mojang name: `getOffHandStack`

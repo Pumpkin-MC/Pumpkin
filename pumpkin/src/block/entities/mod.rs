@@ -27,6 +27,7 @@ pub mod ender_chest;
 pub mod furnace;
 pub mod furnace_like_block_entity;
 pub mod hopper;
+pub mod jigsaw_block;
 pub mod jukebox;
 pub mod lectern;
 pub mod mob_spawner;
@@ -197,6 +198,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         }
         command_block::CommandBlockEntity::ID => Some(Arc::new(
             command_block::CommandBlockEntity::from_nbt(nbt, pos),
+        )),
+        jigsaw_block::JigsawBlockEntity::ID => Some(Arc::new(
+            jigsaw_block::JigsawBlockEntity::from_nbt(nbt, pos),
         )),
         comparator::ComparatorBlockEntity::ID => Some(Arc::new(
             comparator::ComparatorBlockEntity::from_nbt(nbt, pos),

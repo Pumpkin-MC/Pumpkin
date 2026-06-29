@@ -1,11 +1,11 @@
-use crate::entity::item::ItemEntity;
-use crate::net::ClientPlatform;
 use crate::{
+    entity::item::ItemEntity,
+    net::{ClientPlatform, bedrock::BedrockClient},
     server::Server,
     world::{
         World,
         chunker::is_within_view_distance,
-        portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
+        portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
 use arc_swap::ArcSwap;
@@ -32,7 +32,8 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::bedrock::client::CSetActorMotion;
+use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
+use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
@@ -146,6 +147,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         })
     }
 
+    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        None
+    }
+
+    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        None
+    }
+
     fn as_any(&self) -> &dyn std::any::Any
     where
         Self: Sized,
@@ -248,6 +257,35 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         None
     }
 
+    fn send_bedrock_spawn_packet<'a>(
+        &'a self,
+        client: &'a BedrockClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let runtime_id = entity.entity_id as u64;
+            let packet = CAddActor::new(
+                VarLong(runtime_id as i64),
+                VarULong(runtime_id),
+                self.get_entity().entity_type.resource_name.to_string(),
+                entity.pos.load().to_f32_lossy(),
+                entity.velocity.load().to_f32_lossy(),
+                entity.pitch.load(),
+                entity.yaw.load(),
+                entity.head_yaw.load(),
+                entity.body_yaw.load(),
+                Vec::new(),
+                entity.bedrock_metadata(),
+                PropertySyncData {
+                    int_properties: std::collections::HashMap::new(),
+                    float_properties: std::collections::HashMap::new(),
+                },
+                Vec::new(),
+            );
+            client.send_game_packet(&packet).await;
+        })
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -280,6 +318,233 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Called when a player collides with a entity
     fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
+    }
+
+    fn is_passenger(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async move { self.get_entity().has_vehicle().await })
+    }
+
+    fn is_vehicle(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async move { self.get_entity().has_passengers().await })
+    }
+
+    fn has_passenger<'a>(&'a self, other: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            self.get_entity()
+                .passengers
+                .lock()
+                .await
+                .iter()
+                .any(|p| p.get_entity().entity_id == other.get_entity().entity_id)
+        })
+    }
+
+    fn move_entity<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
+        motion: Vector3<f64>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_entity().move_entity(caller, motion).await;
+        })
+    }
+
+    fn is_pushable(&self) -> bool {
+        false
+    }
+
+    fn push<'a>(&'a self, entity: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let self_entity = self.get_entity();
+            let other_entity = entity.get_entity();
+
+            if self_entity.no_clip.load(Ordering::Relaxed)
+                || other_entity.no_clip.load(Ordering::Relaxed)
+            {
+                return;
+            }
+
+            {
+                let passengers = self_entity.passengers.lock().await;
+                if passengers
+                    .iter()
+                    .any(|p| p.get_entity().entity_id == other_entity.entity_id)
+                {
+                    return;
+                }
+            }
+            {
+                let passengers = other_entity.passengers.lock().await;
+                if passengers
+                    .iter()
+                    .any(|p| p.get_entity().entity_id == self_entity.entity_id)
+                {
+                    return;
+                }
+            }
+
+            let mut dx = other_entity.pos.load().x - self_entity.pos.load().x;
+            let mut dz = other_entity.pos.load().z - self_entity.pos.load().z;
+            let mut d = dx.abs().max(dz.abs());
+            if d >= 0.01 {
+                d = d.sqrt();
+                dx /= d;
+                dz /= d;
+                let mut d2 = 1.0 / d;
+                if d2 > 1.0 {
+                    d2 = 1.0;
+                }
+                dx *= d2;
+                dz *= d2;
+                dx *= 0.05;
+                dz *= 0.05;
+
+                if !self_entity.has_passengers().await && self.is_pushable() {
+                    let mut vel = self_entity.velocity.load();
+                    vel.x -= dx;
+                    vel.z -= dz;
+                    self_entity.velocity.store(vel);
+                    self_entity.send_velocity();
+                }
+
+                if !other_entity.has_passengers().await && entity.is_pushable() {
+                    let mut vel = other_entity.velocity.load();
+                    vel.x += dx;
+                    vel.z += dz;
+                    other_entity.velocity.store(vel);
+                    other_entity.send_velocity();
+                }
+            }
+        })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn push_entities<'a>(
+        &'a self,
+        dyn_self: &'a Arc<dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let mut picked_up = false;
+            let mut pushed = false;
+            let self_entity = self.get_entity();
+            let entity_bb = self_entity.bounding_box.load();
+
+            if !self.is_pushable() {
+                return false;
+            }
+
+            let world = self_entity.world.load();
+
+            let is_rideable_minecart = self_entity.entity_type.id == EntityType::MINECART.id;
+            let is_abstract_minecart = is_rideable_minecart
+                || self_entity.entity_type.id == EntityType::CHEST_MINECART.id
+                || self_entity.entity_type.id == EntityType::COMMAND_BLOCK_MINECART.id
+                || self_entity.entity_type.id == EntityType::FURNACE_MINECART.id
+                || self_entity.entity_type.id == EntityType::HOPPER_MINECART.id
+                || self_entity.entity_type.id == EntityType::SPAWNER_MINECART.id
+                || self_entity.entity_type.id == EntityType::TNT_MINECART.id;
+
+            let is_minecart_fn = |id| -> bool {
+                id == EntityType::MINECART.id
+                    || id == EntityType::CHEST_MINECART.id
+                    || id == EntityType::COMMAND_BLOCK_MINECART.id
+                    || id == EntityType::FURNACE_MINECART.id
+                    || id == EntityType::HOPPER_MINECART.id
+                    || id == EntityType::SPAWNER_MINECART.id
+                    || id == EntityType::TNT_MINECART.id
+            };
+
+            if is_abstract_minecart {
+                let is_vehicle = self.is_vehicle().await;
+
+                if is_rideable_minecart && !is_vehicle {
+                    let pickup_bb = entity_bb.expand(0.2, 0.0, 0.2);
+                    let other_entities = world.get_entities_at_box(&pickup_bb);
+
+                    for other in other_entities {
+                        if other.get_entity().entity_id != self_entity.entity_id {
+                            let other_type = other.get_entity().entity_type.id;
+                            let is_iron_golem = other_type == EntityType::IRON_GOLEM.id;
+                            let is_other_minecart = is_minecart_fn(other_type);
+
+                            if !is_iron_golem
+                                && !is_other_minecart
+                                && !other.is_passenger().await
+                                && other.is_pushable()
+                                && other.get_entity().riding_cooldown.load(Relaxed) == 0
+                            {
+                                dyn_self
+                                    .get_entity()
+                                    .add_passenger(dyn_self.clone(), other.clone())
+                                    .await;
+                                picked_up = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                let push_bb = entity_bb.expand(1.0e-7, 1.0e-7, 1.0e-7);
+
+                let other_entities = world.get_entities_at_box(&push_bb);
+                for other in other_entities {
+                    if other.get_entity().entity_id != self_entity.entity_id {
+                        let other_type = other.get_entity().entity_type.id;
+                        let is_other_minecart = is_minecart_fn(other_type);
+                        let is_iron_golem = other_type == EntityType::IRON_GOLEM.id;
+
+                        if is_rideable_minecart {
+                            if (is_iron_golem
+                                || is_other_minecart
+                                || is_vehicle
+                                || !other.get_entity().has_vehicle().await)
+                                && other.is_pushable()
+                            {
+                                dyn_self.push(&other).await;
+                                pushed = true;
+                            }
+                        } else if !self.has_passenger(&other).await
+                            && other.is_pushable()
+                            && is_other_minecart
+                        {
+                            dyn_self.push(&other).await;
+                            pushed = true;
+                        }
+                    }
+                }
+
+                let players = world.get_players_at_box(&push_bb);
+                for player in players {
+                    if player.get_entity().entity_id != self_entity.entity_id
+                        && is_rideable_minecart
+                    {
+                        let player_base: Arc<dyn EntityBase> = player.clone();
+                        dyn_self.push(&player_base).await;
+                        pushed = true;
+                        // Non-rideable minecarts (hoppers, chests) do not push players in vanilla.
+                    }
+                }
+            } else {
+                let other_entities = world.get_entities_at_box(&entity_bb);
+                for other in other_entities {
+                    if other.get_entity().entity_id != self_entity.entity_id {
+                        dyn_self.push(&other).await;
+                        pushed = true;
+                    }
+                }
+
+                let players = world.get_players_at_box(&entity_bb);
+                for player in players {
+                    if player.get_entity().entity_id != self_entity.entity_id {
+                        let player_base: Arc<dyn EntityBase> = player.clone();
+                        dyn_self.push(&player_base).await;
+                        pushed = true;
+                    }
+                }
+            }
+
+            picked_up && !pushed
+        })
     }
 
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
@@ -412,7 +677,8 @@ impl RemovalReason {
     }
 }
 
-static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
+// IMPORTANT: have that 1 and not 0 because fetch_add returns previous value and 0 would be invalid
+static CURRENT_ID: AtomicI32 = AtomicI32::new(1);
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -509,7 +775,7 @@ pub struct Entity {
 
     pub portal_cooldown: AtomicU32,
 
-    pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
+    pub portal_manager: Mutex<Option<Mutex<PortalProcessor>>>,
     /// Custom name for the entity
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
@@ -1735,7 +2001,11 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-    async fn move_entity<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
+    pub async fn move_entity<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
+        mut motion: Vector3<f64>,
+    ) {
         if caller.get_player().is_some() {
             return;
         }
@@ -1851,100 +2121,46 @@ impl Entity {
         let mut manager_guard = self.portal_manager.lock().await;
         let mut should_remove = false;
         if let Some(pmanager_mutex) = manager_guard.as_ref() {
-            let mut portal_manager = pmanager_mutex.lock().await;
-            if portal_manager.tick() {
+            let mut portal_processor = pmanager_mutex.lock().await;
+            if portal_processor.process_portal_teleportation(
+                &self.world.load(),
+                caller.as_ref(),
+                true,
+            ) {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
-                let pos = self.pos.load();
-                let current_yaw = self.yaw.load();
-                let dimensions = self.entity_dimension.load();
-                let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
-                let scale_factor_current = self.world.load().dimension.coordinate_scale;
 
-                let scale_factor = scale_factor_current / scale_factor_new;
-                let target_pos =
-                    BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
-
-                let dest_world = portal_manager.portal_world.clone();
-                let source_portal = portal_manager.source_portal.clone();
-                let source_axis = source_portal.as_ref().map(|p| p.axis);
-                drop(portal_manager);
-
-                let is_end_portal = dest_world.dimension == Dimension::THE_END
-                    || self.world.load().dimension == Dimension::THE_END;
-
-                let (teleport_pos, new_yaw) = if is_end_portal {
-                    if dest_world.dimension == Dimension::THE_END {
-                        // Entering the End: spawn on the obsidian platform at (100, 50, 0)
-                        (Vector3::new(100.5f64, 50.0f64, 0.5f64), None)
-                    } else {
-                        // Leaving the End through the exit portal: return to overworld spawn
-                        let info = dest_world.level_info.load();
-                        (
-                            Vector3::new(
-                                f64::from(info.spawn_x) + 0.5,
-                                f64::from(info.spawn_y),
-                                f64::from(info.spawn_z) + 0.5,
-                            ),
-                            None,
-                        )
-                    }
-                } else if let Some(dest_result) =
-                    NetherPortal::search_for_portal(&dest_world, target_pos).await
-                {
-                    let base_pos = source_portal.as_ref().map_or_else(
-                        || dest_result.get_teleport_position(),
-                        |source| {
-                            let source_result = PortalSearchResult {
-                                lower_corner: source.lower_corner,
-                                axis: source.axis,
-                                width: source.width,
-                                height: source.height,
-                            };
-                            let relative_pos = source_result.entity_pos_in_portal(pos, &dimensions);
-                            dest_result.calculate_exit_position(relative_pos, &dimensions)
-                        },
-                    );
-                    let final_pos =
-                        dest_result.find_open_position(&dest_world, base_pos, &dimensions);
-                    let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else if let Some((build_pos, axis, is_fallback)) =
-                    NetherPortal::find_safe_location(
-                        &dest_world,
-                        target_pos,
-                        pumpkin_data::block_properties::HorizontalAxis::X,
+                let transition = portal_processor
+                    .portal_type
+                    .get_portal_destination(
+                        &self.world.load(),
+                        portal_processor.destination_world.clone(),
+                        caller,
+                        portal_processor.entry_position,
+                        portal_processor.source_portal.clone(),
                     )
-                    .await
-                {
-                    NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
+                    .await;
+
+                drop(portal_processor);
+
+                if let Some(transition) = transition {
+                    let dest_world = transition.new_world.clone();
+                    let yaw = transition.yaw;
+                    let pitch = transition.pitch;
+                    let teleport_pos = transition.position;
+
+                    // Teleport the main entity
+                    caller
+                        .clone()
+                        .teleport(teleport_pos, yaw, pitch, dest_world.clone())
                         .await;
-                    let new_portal = PortalSearchResult {
-                        lower_corner: build_pos,
-                        axis,
-                        width: 2,
-                        height: 3,
-                    };
-                    let center_pos = new_portal.get_teleport_position();
-                    let final_pos =
-                        new_portal.find_open_position(&dest_world, center_pos, &dimensions);
-                    let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
-                    (final_pos, Some(yaw))
-                } else {
-                    (target_pos.0.to_f64(), None)
-                };
 
-                // Teleport the main entity
-                caller
-                    .clone()
-                    .teleport(teleport_pos, new_yaw, None, dest_world.clone())
-                    .await;
-
-                // Teleport all passengers recursively along with the vehicle
-                let yaw_delta = new_yaw.map(|y| y - current_yaw);
-                Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world)
-                    .await;
-            } else if portal_manager.ticks_in_portal == 0 {
+                    // Teleport all passengers recursively along with the vehicle
+                    let yaw_delta = yaw.map(|y| y - self.yaw.load());
+                    Self::teleport_passengers_recursive(self, teleport_pos, yaw_delta, &dest_world)
+                        .await;
+                }
+            } else if portal_processor.portal_time == 0 {
                 should_remove = true;
             }
         }
@@ -1992,7 +2208,12 @@ impl Entity {
         })
     }
 
-    pub async fn try_use_portal(&self, portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
+    pub async fn try_use_portal(
+        &self,
+        _portal_delay: u32,
+        portal_world: Arc<World>,
+        pos: BlockPos,
+    ) {
         // Passengers don't teleport independently - they wait for their vehicle
         if self.has_vehicle().await {
             return;
@@ -2025,7 +2246,15 @@ impl Entity {
         let mut manager = self.portal_manager.lock().await;
         let world = self.world.load();
         if manager.is_none() {
-            let mut new_manager = PortalManager::new(portal_delay, portal_world, pos);
+            let portal_type = if portal_world.dimension == Dimension::THE_END
+                || self.world.load().dimension == Dimension::THE_END
+            {
+                PortalType::End
+            } else {
+                PortalType::Nether
+            };
+
+            let mut new_manager = PortalProcessor::new(portal_type, pos, portal_world);
 
             if let Some(portal) = NetherPortal::get_on_axis(
                 &world,
@@ -2056,8 +2285,8 @@ impl Entity {
             *manager = Some(Mutex::new(new_manager));
         } else if let Some(manager) = manager.as_ref() {
             let mut manager = manager.lock().await;
-            manager.pos = pos;
-            manager.in_portal = true;
+            manager.entry_position = pos;
+            manager.inside_portal_this_tick = true;
         }
     }
 
@@ -2239,6 +2468,9 @@ impl Entity {
         self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
     }
+    pub fn is_sneaking(&self) -> bool {
+        self.sneaking.load(Ordering::Relaxed)
+    }
 
     pub async fn set_swimming(&self, invisible: bool) {
         if self.swimming.load(Ordering::Relaxed) != invisible {
@@ -2382,6 +2614,9 @@ impl Entity {
         self.set_flag(Flag::Sprinting, sprinting).await;
     }
 
+    pub fn is_sprinting(&self) -> bool {
+        self.sprinting.load(Ordering::Relaxed)
+    }
     pub fn check_fall_flying(&self) -> bool {
         !self.on_ground.load(Relaxed)
     }
@@ -2390,6 +2625,9 @@ impl Entity {
         assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying).await;
+    }
+    pub fn is_fall_flying(&self) -> bool {
+        self.fall_flying.load(Ordering::Relaxed)
     }
 
     async fn set_flag(&self, flag: Flag, value: bool) {
@@ -2433,8 +2671,8 @@ impl Entity {
             let world = self.world.load();
             let chunk_pos = self.chunk_pos.load();
             for player in world.players.load().iter() {
-                if let ClientPlatform::Bedrock(client) = &player.client {
-                    let center = player.living_entity.entity.chunk_pos.load();
+                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                    let center = player.get_entity().chunk_pos.load();
                     let view_distance =
                         crate::world::chunker::get_view_distance(player).get() as i32;
 
@@ -2449,7 +2687,7 @@ impl Entity {
                             MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
                         );
                         client
-                            .send_game_packet(&CSetActorData {
+                            .enqueue_packet(&CSetActorData {
                                 actor_runtime_id: VarULong(self.entity_id as u64),
                                 metadata,
                                 synced_properties: PropertySyncData {
@@ -2476,9 +2714,9 @@ impl Entity {
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
         for player in world.players.load().iter() {
-            if let ClientPlatform::Java(client) = &player.client {
+            if let ClientPlatform::Java(client) = player.client.as_ref() {
                 // Apply Chebyshev distance check
-                let center = player.living_entity.entity.chunk_pos.load();
+                let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
                 if is_within_view_distance(chunk_pos, center, view_distance) {
@@ -2724,9 +2962,6 @@ impl Entity {
         if let Some(passenger) = removed_passenger {
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();
-            let passenger_yaw = passenger_entity.yaw.load();
-            let passenger_width = passenger_entity.entity_dimension.load().width as f64;
-            let vehicle_width = self.entity_dimension.load().width as f64;
 
             // Pre-allocate teleport ID and block movement packets BEFORE sending
             // CSetPassengers. This prevents a race condition where the client receives
@@ -2759,35 +2994,82 @@ impl Entity {
                 player.client.enqueue_packet(&passengers_packet).await;
                 world.broadcast_to_chunk_except(
                     chunk_pos,
-                    &[player.living_entity.entity.entity_uuid],
+                    &[player.get_entity().entity_uuid],
                     &passengers_packet,
                 );
             } else {
                 world.broadcast_to_chunk(chunk_pos, &passengers_packet);
             }
 
-            // Calculate dismount offset (vanilla getPassengerDismountOffset)
-            let offset_dist =
-                (vehicle_width * std::f64::consts::SQRT_2 + passenger_width + 0.00001) / 2.0;
-            let yaw_rad = (-passenger_yaw).to_radians();
-            let sin_yaw = f64::from(yaw_rad.sin());
-            let cos_yaw = f64::from(yaw_rad.cos());
-            let max_component = sin_yaw.abs().max(cos_yaw.abs());
-            let offset_x = sin_yaw * offset_dist / max_component;
-            let offset_z = cos_yaw * offset_dist / max_component;
+            // Calculate dismount directions and offsets (vanilla DismountHelper)
+            let vehicle_yaw = self.yaw.load();
+            // Wrap yaw to 0..360 range
+            let wrapped_yaw = (vehicle_yaw % 360.0 + 360.0) % 360.0;
+            let forward_dir = if !(45.0..315.0).contains(&wrapped_yaw) {
+                BlockDirection::South
+            } else if (45.0..135.0).contains(&wrapped_yaw) {
+                BlockDirection::West
+            } else if (135.0..225.0).contains(&wrapped_yaw) {
+                BlockDirection::North
+            } else {
+                BlockDirection::East
+            };
 
-            let target_x = self.pos.load().x + offset_x;
-            let target_z = self.pos.load().z + offset_z;
+            let get_step = |dir: BlockDirection| -> (i32, i32) {
+                match dir {
+                    BlockDirection::North => (0, -1),
+                    BlockDirection::South => (0, 1),
+                    BlockDirection::East => (1, 0),
+                    BlockDirection::West => (-1, 0),
+                    _ => (0, 0),
+                }
+            };
+
+            let get_clockwise = |dir: BlockDirection| -> BlockDirection {
+                match dir {
+                    BlockDirection::North => BlockDirection::East,
+                    BlockDirection::East => BlockDirection::South,
+                    BlockDirection::South => BlockDirection::West,
+                    BlockDirection::West => BlockDirection::North,
+                    other => other,
+                }
+            };
+
+            let get_opposite = |dir: BlockDirection| -> BlockDirection {
+                match dir {
+                    BlockDirection::North => BlockDirection::South,
+                    BlockDirection::South => BlockDirection::North,
+                    BlockDirection::East => BlockDirection::West,
+                    BlockDirection::West => BlockDirection::East,
+                    other => other,
+                }
+            };
+
+            let right_dir = get_clockwise(forward_dir);
+            let left_dir = get_opposite(right_dir);
+            let back_dir = get_opposite(forward_dir);
+
+            let (fx, fz) = get_step(forward_dir);
+            let (rx, rz) = get_step(right_dir);
+            let (lx, lz) = get_step(left_dir);
+            let (bx, bz) = get_step(back_dir);
+
+            let offsets = [
+                (rx, rz),
+                (lx, lz),
+                (bx + rx, bz + rz),
+                (bx + lx, bz + lz),
+                (fx + rx, fz + rz),
+                (fx + lx, fz + lz),
+                (bx, bz),
+                (fx, fz),
+            ];
+
             let target_block_y = vehicle_box.max.y.floor() as i32;
-            let block_pos = BlockPos(Vector3::new(
-                target_x.floor() as i32,
-                target_block_y,
-                target_z.floor() as i32,
-            ));
             let below_pos = BlockPos(Vector3::new(
-                target_x.floor() as i32,
+                self.pos.load().x.floor() as i32,
                 target_block_y - 1,
-                target_z.floor() as i32,
+                self.pos.load().z.floor() as i32,
             ));
 
             let below_state_id = world.get_block_state_id(&below_pos);
@@ -2801,35 +3083,47 @@ impl Entity {
             let dismount_pos = if is_water {
                 fallback_pos
             } else {
-                // Vanilla tries two Y levels: at vehicle top and one block below
-                let mut candidates = Vec::new();
-                for pos in [&block_pos, &below_pos] {
-                    let height = world.get_dismount_height(pos);
-                    // Vanilla: canDismountInBlock = !height.is_infinite() && height < 1.0
-                    if height.is_finite() && height < 1.0 {
-                        candidates.push(Vector3::new(
-                            target_x,
-                            f64::from(pos.0.y) + height,
-                            target_z,
-                        ));
-                    }
-                }
-
-                // Try poses: Standing, Crouching, Swimming (vanilla order)
-                let poses = [
-                    EntityPose::Standing,
-                    EntityPose::Crouching,
-                    EntityPose::Swimming,
+                // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
+                let poses_and_heights = [
+                    (EntityPose::Standing, vec![0, 1, -1]),
+                    (EntityPose::Crouching, vec![0, 1, -1]),
+                    (EntityPose::Swimming, vec![0, 1]),
                 ];
+
+                let vehicle_block_pos = self.block_pos.load();
                 let mut found = None;
-                'outer: for pose in poses {
+
+                'search: for (pose, y_offsets) in poses_and_heights {
                     let dims = Self::get_entity_dimensions(pose);
-                    for candidate in &candidates {
-                        let bbox =
-                            BoundingBox::new_from_pos(candidate.x, candidate.y, candidate.z, &dims);
-                        if world.is_space_empty(bbox) {
-                            found = Some((*candidate, pose));
-                            break 'outer;
+
+                    for y_offset in y_offsets {
+                        for &(ox, oz) in &offsets {
+                            let target_block_x = vehicle_block_pos.0.x + ox;
+                            let target_block_y = vehicle_block_pos.0.y + y_offset;
+                            let target_block_z = vehicle_block_pos.0.z + oz;
+
+                            let target_pos = BlockPos(Vector3::new(
+                                target_block_x,
+                                target_block_y,
+                                target_block_z,
+                            ));
+                            let height = world.get_dismount_height(&target_pos);
+
+                            if height.is_finite() && height < 1.0 {
+                                let location = Vector3::new(
+                                    f64::from(target_block_x) + 0.5,
+                                    f64::from(target_block_y) + height,
+                                    f64::from(target_block_z) + 0.5,
+                                );
+
+                                let bbox = BoundingBox::new_from_pos(
+                                    location.x, location.y, location.z, &dims,
+                                );
+                                if world.is_space_empty(bbox) {
+                                    found = Some((location, pose));
+                                    break 'search;
+                                }
+                            }
                         }
                     }
                 }
@@ -2840,13 +3134,47 @@ impl Entity {
                     }
                     pos
                 } else {
-                    fallback_pos
+                    // Try dismounting directly on top of the vehicle as fallback
+                    let mut found_fallback = None;
+                    let vehicle_top = vehicle_box.max.y;
+
+                    let poses = [
+                        EntityPose::Standing,
+                        EntityPose::Crouching,
+                        EntityPose::Swimming,
+                    ];
+
+                    for pose in poses {
+                        let dims = Self::get_entity_dimensions(pose);
+                        let bbox = BoundingBox::new_from_pos(
+                            self.pos.load().x,
+                            vehicle_top,
+                            self.pos.load().z,
+                            &dims,
+                        );
+                        if world.is_space_empty(bbox) {
+                            found_fallback = Some((
+                                Vector3::new(self.pos.load().x, vehicle_top, self.pos.load().z),
+                                pose,
+                            ));
+                            break;
+                        }
+                    }
+
+                    if let Some((pos, pose)) = found_fallback {
+                        if pose != EntityPose::Standing {
+                            passenger_entity.set_pose(pose);
+                        }
+                        pos
+                    } else {
+                        fallback_pos
+                    }
                 }
             };
 
             if let Some(player) = passenger.get_player() {
                 let id = teleport_id.unwrap();
-                player.living_entity.entity.set_pos(dismount_pos);
+                player.get_entity().set_pos(dismount_pos);
                 // Update awaiting_teleport with the real dismount position
                 *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
                 // Use enqueue_packet (not send_packet_now) so the teleport goes through

@@ -121,6 +121,7 @@ const fn to_wasm_java_version(
         JavaMinecraftVersion::V_1_21_9 => pumpkin::plugin::player::JavaMinecraftVersion::V1219,
         JavaMinecraftVersion::V_1_21_11 => pumpkin::plugin::player::JavaMinecraftVersion::V12111,
         JavaMinecraftVersion::V_26_1 => pumpkin::plugin::player::JavaMinecraftVersion::V261,
+        JavaMinecraftVersion::V_26_2 => pumpkin::plugin::player::JavaMinecraftVersion::V262,
         JavaMinecraftVersion::Unknown => pumpkin::plugin::player::JavaMinecraftVersion::Unknown,
     }
 }
@@ -130,8 +131,8 @@ const fn to_wasm_bedrock_version(
 ) -> pumpkin::plugin::player::BedrockMinecraftVersion {
     match version {
         BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
-        BedrockMinecraftVersion::V_1_26_20 => {
-            pumpkin::plugin::player::BedrockMinecraftVersion::V12620
+        BedrockMinecraftVersion::V_1_26_30 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12630
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
@@ -699,12 +700,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
 
     async fn get_yaw(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
         let player = player_from_resource(self, &player)?;
-        Ok(player.living_entity.entity.yaw.load())
+        Ok(player.get_entity().yaw.load())
     }
 
     async fn get_pitch(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
         let player = player_from_resource(self, &player)?;
-        Ok(player.living_entity.entity.pitch.load())
+        Ok(player.get_entity().pitch.load())
     }
 
     async fn get_world(
@@ -1083,7 +1084,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         port: u16,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        if let crate::net::ClientPlatform::Java(client) = &player.client {
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
                 .send_packet_now(&pumpkin_protocol::java::client::play::CTransfer::new(
                     &host,
@@ -1424,7 +1425,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::JavaPlayer>>> {
         let player = player_from_resource(self, &player)?;
-        if let crate::net::ClientPlatform::Java(_) = player.client {
+        if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
             Ok(Some(self.add_java_player(player)?))
         } else {
             Ok(None)
@@ -1436,7 +1437,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::BedrockPlayer>>> {
         let player = player_from_resource(self, &player)?;
-        if let crate::net::ClientPlatform::Bedrock(_) = player.client {
+        if let crate::net::ClientPlatform::Bedrock(_) = player.client.as_ref() {
             Ok(Some(self.add_bedrock_player(player)?))
         } else {
             Ok(None)
@@ -1606,7 +1607,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        if let crate::net::ClientPlatform::Java(_) = player.client {
+        if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
             player
                 .client
                 .send_packet_now(&pumpkin_protocol::java::client::play::CCustomPayload::new(
@@ -1756,7 +1757,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             external_title: dialog.external_title.as_ref().map(|t| text_component_from_resource(self, t)),
         };
 
-        if let crate::net::ClientPlatform::Java(client) = &player.client {
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             match client.connection_state.load() {
                 pumpkin_protocol::ConnectionState::Config => {
                     client
@@ -1796,7 +1797,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .provider
             .clone();
 
-        if let crate::net::ClientPlatform::Java(client) = &player.client {
+        if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             match client.connection_state.load() {
                 pumpkin_protocol::ConnectionState::Config => {
                     client
@@ -1846,7 +1847,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             .provider
             .clone();
 
-        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             Ok(to_wasm_bedrock_version(client.version.load()))
         } else {
             Ok(pumpkin::plugin::player::BedrockMinecraftVersion::Unknown)
@@ -2038,7 +2039,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         );
 
         let packet = CSetActorData {
-            actor_runtime_id: VarULong(player.living_entity.entity.entity_id as u64),
+            actor_runtime_id: VarULong(player.get_entity().entity_id as u64),
             metadata,
             synced_properties: PropertySyncData {
                 int_properties: std::collections::HashMap::new(),
@@ -2047,7 +2048,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             tick: VarULong(0),
         };
 
-        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             client.send_game_packet(&packet).await;
         }
 
@@ -2067,7 +2068,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             .provider
             .clone();
 
-        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let data = client.client_data.load();
             (**data).as_ref().map_or_else(
                 || Err(wasmtime::Error::msg("client data not available")),
@@ -2082,7 +2083,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                         default_input_mode: to_wasm_bedrock_input_mode(data.default_input_mode),
                         ui_profile: to_wasm_bedrock_ui_profile(data.ui_profile),
                         gui_scale: data.gui_scale,
-                        is_editor_mode: data.is_editor_mode,
+                        is_editor_mode: data.client_is_editor_capable,
                         max_view_distance: data.max_view_distance,
                         memory_tier: data.memory_tier,
                         graphics_mode: to_wasm_bedrock_graphics_mode(data.graphics_mode),
@@ -2139,7 +2140,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
             .provider
             .clone();
 
-        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+        if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let form_id = client.next_form_id.fetch_add(1, Ordering::Relaxed);
 
             let locale_str = player.config.load().locale.clone();

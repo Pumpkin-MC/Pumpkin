@@ -23,6 +23,7 @@ pub mod stonecutter;
 
 // Redstone & mechanisms
 pub mod command; // command block / redstone control
+pub mod jigsaw;
 pub mod note;
 pub mod piston;
 pub mod redstone;

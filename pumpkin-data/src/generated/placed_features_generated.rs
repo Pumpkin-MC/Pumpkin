@@ -1319,6 +1319,31 @@ fn build_placed_features()
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -1585,6 +1610,31 @@ fn build_placed_features()
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -5929,6 +5979,47 @@ fn build_placed_features()
         },
     );
     map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::RootedSulfurSpring,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::RootedSulfurSpring,
+            ),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 1i32,
+                        max_inclusive: 2i32,
+                    })),
+                }),
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::HeightRange(HeightRangePlacementModifier {
+                    height: HeightProvider::Uniform(UniformHeightProvider {
+                        min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 0i8 }),
+                        max_inclusive: YOffset::Absolute(Absolute { absolute: 256i16 }),
+                    }),
+                }),
+                PlacementModifier::EnvironmentScan(EnvironmentScanPlacementModifier {
+                    direction_of_search: BlockDirection::Up,
+                    target_condition: BlockPredicate::Solid(SolidBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                    }),
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
+                            offset: OffsetBlocksBlockPredicate { offset: None },
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                        },
+                    )),
+                    max_steps: 12i32,
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Constant(0i32),
+                    y_spread: IntProvider::Constant(-1i32),
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
+            ],
+        },
+    );
+    map.insert(
         pumpkin_data::placed_feature::PlacedFeature::SculkPatchAncientCity,
         PlacedFeature {
             feature: Feature::Named(
@@ -6412,6 +6503,123 @@ fn build_placed_features()
                         ]),
                     }),
                 }),
+            ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::SulfurPool,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::SulfurPool,
+            ),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(256i32),
+                }),
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::HeightRange(HeightRangePlacementModifier {
+                    height: HeightProvider::Uniform(UniformHeightProvider {
+                        min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 0i8 }),
+                        max_inclusive: YOffset::Absolute(Absolute { absolute: 256i16 }),
+                    }),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::Solid(SolidBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                    }),
+                }),
+                PlacementModifier::EnvironmentScan(EnvironmentScanPlacementModifier {
+                    direction_of_search: BlockDirection::Up,
+                    target_condition: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                    allowed_search_condition: None,
+                    max_steps: 32i32,
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Constant(0i32),
+                    y_spread: IntProvider::Constant(-1i32),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:sulfur".to_string()),
+                    }),
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
+            ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::SulfurSpike,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::SulfurSpike,
+            ),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 192i32,
+                        max_inclusive: 256i32,
+                    })),
+                }),
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::HeightRange(HeightRangePlacementModifier {
+                    height: HeightProvider::Uniform(UniformHeightProvider {
+                        min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 0i8 }),
+                        max_inclusive: YOffset::Absolute(Absolute { absolute: 256i16 }),
+                    }),
+                }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 1i32,
+                        max_inclusive: 5i32,
+                    })),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                        ClampedNormalIntProvider {
+                            mean: 0f32,
+                            deviation: 3f32,
+                            min_inclusive: -10i32,
+                            max_inclusive: 10i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                        ClampedNormalIntProvider {
+                            mean: 0f32,
+                            deviation: 0.6f32,
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
+            ],
+        },
+    );
+    map.insert(
+        pumpkin_data::placed_feature::PlacedFeature::SulfurSpikeCluster,
+        PlacedFeature {
+            feature: Feature::Named(
+                pumpkin_data::configured_feature::ConfiguredFeature::SulfurSpikeCluster,
+            ),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 48i32,
+                        max_inclusive: 96i32,
+                    })),
+                }),
+                PlacementModifier::InSquare(SquarePlacementModifier),
+                PlacementModifier::HeightRange(HeightRangePlacementModifier {
+                    height: HeightProvider::Uniform(UniformHeightProvider {
+                        min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 0i8 }),
+                        max_inclusive: YOffset::Absolute(Absolute { absolute: 256i16 }),
+                    }),
+                }),
+                PlacementModifier::Biome(BiomePlacementModifier),
             ],
         },
     );

@@ -151,10 +151,16 @@ pub struct ChunkNoiseFunctionBuilderOptions {
 
     // Number of biome regions per chunk per axis
     pub horizontal_biome_end: usize,
-}
 
+    pub beardifier_structures:
+        Vec<crate::generation::noise::router::density_function::beardifier::BeardifierStructure>,
+    pub beardifier_junctions:
+        Vec<crate::generation::noise::router::density_function::beardifier::BeardifierJunction>,
+    pub affected_box: Option<pumpkin_util::math::block_box::BlockBox>,
+}
 impl ChunkNoiseFunctionBuilderOptions {
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         horizontal_cell_block_count: usize,
         vertical_cell_block_count: usize,
@@ -163,6 +169,13 @@ impl ChunkNoiseFunctionBuilderOptions {
         start_biome_x: i32,
         start_biome_z: i32,
         horizontal_biome_end: usize,
+        beardifier_structures: Vec<
+            crate::generation::noise::router::density_function::beardifier::BeardifierStructure,
+        >,
+        beardifier_junctions: Vec<
+            crate::generation::noise::router::density_function::beardifier::BeardifierJunction,
+        >,
+        affected_box: Option<pumpkin_util::math::block_box::BlockBox>,
     ) -> Self {
         Self {
             horizontal_cell_block_count,
@@ -172,6 +185,9 @@ impl ChunkNoiseFunctionBuilderOptions {
             start_biome_x,
             start_biome_z,
             horizontal_biome_end,
+            beardifier_structures,
+            beardifier_junctions,
+            affected_box,
         }
     }
 }
@@ -732,4 +748,5 @@ pub enum ChunkSpecificNoiseFunctionComponent {
     Cache2D(Cache2D),
     CacheOnce(CacheOnce),
     CellCache(CellCache),
+    Beardifier(crate::generation::noise::router::density_function::beardifier::Beardifier),
 }

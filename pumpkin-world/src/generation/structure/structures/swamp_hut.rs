@@ -29,7 +29,7 @@ pub struct SwampHutGenerator;
 impl StructureGenerator for SwampHutGenerator {
     fn get_structure_position(
         &self,
-        mut context: StructureGeneratorContext,
+        mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let x = get_center_x(context.chunk_x);
         let z = get_center_z(context.chunk_z);
@@ -60,9 +60,13 @@ pub struct SwampHutPiece {
 }
 
 impl StructurePieceBase for SwampHutPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn crate::world::WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

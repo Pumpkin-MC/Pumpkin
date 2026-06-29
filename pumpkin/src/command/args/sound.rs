@@ -18,7 +18,7 @@ use super::{
 pub struct SoundArgumentConsumer;
 
 impl GetClientSideArgParser for SoundArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::ResourceLocation
     }
 

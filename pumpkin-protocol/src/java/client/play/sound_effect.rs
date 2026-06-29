@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn numeric_sound_id_stays_latest_for_26_1() {
+    fn numeric_sound_id_stays_latest_for_26_2() {
         let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
         let packet = CSoundEffect::new(
             IdOr::Id(sound_id),
@@ -123,7 +123,7 @@ mod tests {
         let mut bytes = Vec::new();
 
         packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_1)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
             .unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(sound_id + 1));

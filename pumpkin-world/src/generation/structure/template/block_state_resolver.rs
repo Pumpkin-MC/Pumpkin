@@ -4,10 +4,10 @@
 //! to the runtime block state IDs used by the world, with support for rotation
 //! and mirroring transformations.
 
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, Mirror, Rotation};
 use tracing::warn;
 
-use super::{BlockMirror, BlockRotation, PaletteEntry};
+use super::PaletteEntry;
 
 /// Resolves template palette entries to block state IDs.
 ///
@@ -24,8 +24,8 @@ impl BlockStateResolver {
     #[must_use]
     pub fn resolve(
         entry: &PaletteEntry,
-        rotation: BlockRotation,
-        mirror: BlockMirror,
+        rotation: Rotation,
+        mirror: Mirror,
     ) -> Option<&'static BlockState> {
         // Strip minecraft: prefix if present
         let block_name = entry.name.strip_prefix("minecraft:").unwrap_or(&entry.name);
@@ -68,15 +68,15 @@ impl BlockStateResolver {
     /// Resolves a palette entry without any transformation.
     #[must_use]
     pub fn resolve_simple(entry: &PaletteEntry) -> Option<&'static BlockState> {
-        Self::resolve(entry, BlockRotation::None, BlockMirror::None)
+        Self::resolve(entry, Rotation::None, Mirror::None)
     }
 
     /// Transforms a property value based on rotation and mirror.
     fn transform_property(
         key: &str,
         value: &str,
-        rotation: BlockRotation,
-        mirror: BlockMirror,
+        rotation: Rotation,
+        mirror: Mirror,
     ) -> &'static str {
         match key {
             // Horizontal facing properties
@@ -217,8 +217,7 @@ mod tests {
         );
 
         // Get state with rotation
-        let rotated =
-            BlockStateResolver::resolve(&entry, BlockRotation::Clockwise90, BlockMirror::None);
+        let rotated = BlockStateResolver::resolve(&entry, Rotation::Clockwise90, Mirror::None);
         assert!(rotated.is_some());
 
         // The rotated block should have facing=east after 90 degree clockwise rotation

@@ -32,6 +32,7 @@ use crate::slot::{BoxFuture, NormalSlot, Slot};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::codec::recipe::{DynamicRecipe, OwnedCraftingRecipe};
@@ -437,10 +438,17 @@ impl Slot for ResultSlot {
     }
     fn on_take_item<'a>(
         &'a self,
-        _player: &'a dyn InventoryPlayer,
-        _stack: &'a ItemStack,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
+            player
+                .increment_stat(
+                    StatisticCategory::Crafted,
+                    stack.item.id as i32,
+                    stack.item_count as i32,
+                )
+                .await;
             for i in 0..self.inventory.size() {
                 let slot = self.inventory.get_stack(i).await;
                 let mut stack = slot.lock().await;
@@ -640,7 +648,11 @@ impl ScreenHandler for CraftingTableScreenHandler {
                 if stack.item_count == stack_prev.item_count {
                     return ItemStack::EMPTY.clone();
                 }
-                slot.on_take_item(player, &stack).await;
+
+                let mut taken_stack = stack_prev.clone();
+                taken_stack.set_count(stack_prev.item_count - stack.item_count);
+                slot.on_take_item(player, &taken_stack).await;
+
                 if slot_index == 0 {
                     slot.on_quick_move_crafted(stack.clone(), stack_prev.clone())
                         .await;

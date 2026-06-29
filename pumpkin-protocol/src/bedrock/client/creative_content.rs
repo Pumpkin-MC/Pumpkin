@@ -7,13 +7,13 @@ use crate::{
 };
 
 #[packet(145)]
-pub struct CreativeContent<'a> {
+pub struct CCreativeContent<'a> {
     // https://mojang.github.io/bedrock-protocol-docs/html/CreativeContentPacket.html
     pub groups: &'a [Group],
     pub entries: &'a [Entry],
 }
 
-impl PacketWrite for CreativeContent<'_> {
+impl PacketWrite for CCreativeContent<'_> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarUInt(self.groups.len() as _).write(writer)?;
         for group in self.groups {
@@ -28,9 +28,9 @@ impl PacketWrite for CreativeContent<'_> {
     }
 }
 
+#[derive(Copy, Clone)]
 #[repr(i32)]
-#[allow(unused)]
-enum CreativeCategory {
+pub enum CreativeCategory {
     Construction = 1,
     Nature = 2,
     Equipment = 3,
@@ -39,9 +39,16 @@ enum CreativeCategory {
     Undefined = 6,
 }
 
+impl PacketWrite for CreativeCategory {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        (*self as i32).write(writer)?;
+        Ok(())
+    }
+}
+
 #[derive(PacketWrite)]
 pub struct Group {
-    pub creative_category: i32,
+    pub creative_category: CreativeCategory,
     pub name: String,
     pub icon_item: NetworkItemDescriptor,
 }

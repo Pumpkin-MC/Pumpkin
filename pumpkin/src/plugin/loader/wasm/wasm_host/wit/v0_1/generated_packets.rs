@@ -713,6 +713,15 @@ pub fn deserialize_java_serverbound_packet(
                 button_id: p.button_id.0.try_into().unwrap(),
             }))
         }
+        id if id == pumpkin_protocol::java::server::play::SJigsawGenerate::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::SJigsawGenerate as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::SJigsawGenerate(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SJigsawGenerate {
+                pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
+                levels: p.levels.0.try_into().unwrap(),
+                keep_jigsaws: p.keep_jigsaws.try_into().unwrap(),
+            }))
+        }
         id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
@@ -878,6 +887,20 @@ pub fn deserialize_java_serverbound_packet(
             let p = <pumpkin_protocol::java::server::play::SSetHeldItem as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
             Some(ServerboundPacket::SSetHeldItem(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSetHeldItem {
                 slot: p.slot.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::play::SSetJigsawBlock::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::SSetJigsawBlock as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::SSetJigsawBlock(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSetJigsawBlock {
+                pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
+                name: p.name.into(),
+                target: p.target.into(),
+                pool: p.pool.into(),
+                final_state: p.final_state.into(),
+                joint: p.joint.into(),
+                selection_priority: p.selection_priority.0.try_into().unwrap(),
+                placement_priority: p.placement_priority.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SSwingArm::to_id(version) => {
@@ -1797,6 +1820,15 @@ pub fn deserialize_bedrock_serverbound_packet(
     payload: &[u8],
 ) -> Option<BServerboundPacket> {
     match id {
+        id if id == <pumpkin_protocol::bedrock::server::SBlockPickRequest as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SBlockPickRequest as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SBlockPickRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SBlockPickRequest {
+                block_pos: (p.block_pos.0.x, p.block_pos.0.y, p.block_pos.0.z),
+                add_block_nbt: p.add_block_nbt.try_into().unwrap(),
+                hotbar_slot: p.hotbar_slot.try_into().unwrap(),
+            }))
+        }
         id if id == <pumpkin_protocol::bedrock::server::SClientCacheStatus as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SClientCacheStatus as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;

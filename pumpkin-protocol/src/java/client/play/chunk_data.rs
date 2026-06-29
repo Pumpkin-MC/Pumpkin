@@ -213,7 +213,13 @@ impl ClientPacket for CChunkData<'_> {
             });
 
             write.write_var_int(&VarInt(id as i32))?;
-            write.write_nbt(nbt.clone().into())?;
+
+            let mut client_nbt = nbt.clone();
+            client_nbt.child_tags.remove("id");
+            client_nbt.child_tags.remove("x");
+            client_nbt.child_tags.remove("y");
+            client_nbt.child_tags.remove("z");
+            write.write_nbt(client_nbt.into())?;
         }
 
         {

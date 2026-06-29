@@ -3,10 +3,11 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use std::{
     any::Any,
+    future::Future,
     pin::Pin,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 use tokio::sync::Mutex;
@@ -17,6 +18,7 @@ use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 pub struct LecternBlockEntity {
     pub position: BlockPos,
     pub book: Arc<Mutex<ItemStack>>,
+    pub page: AtomicUsize,
     pub dirty: AtomicBool,
 }
 
@@ -41,9 +43,12 @@ impl BlockEntity for LecternBlockEntity {
                 |stack| Arc::new(Mutex::new(stack)),
             );
 
+        let page = nbt.get_int("Page").unwrap_or(0).max(0) as usize;
+
         Self {
             position,
             book,
+            page: AtomicUsize::new(page),
             dirty: AtomicBool::new(false),
         }
     }
@@ -59,6 +64,7 @@ impl BlockEntity for LecternBlockEntity {
                 book.write_item_stack(&mut book_nbt);
                 nbt.put_compound("Book", book_nbt);
             }
+            nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
         })
     }
 
@@ -87,6 +93,7 @@ impl LecternBlockEntity {
         Self {
             position,
             book: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
+            page: AtomicUsize::new(0),
             dirty: AtomicBool::new(false),
         }
     }

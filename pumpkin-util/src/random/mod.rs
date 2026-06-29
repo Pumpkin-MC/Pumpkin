@@ -144,6 +144,30 @@ pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32)
         .wrapping_add(i64::from(salt) as u64)
 }
 
+/// Generates a seed for slime chunk determination.
+///
+/// This follows Minecraft's specific formula for identifying if a chunk
+/// is a "slime chunk" where slimes can spawn regardless of light levels.
+///
+/// # Arguments
+/// - `x` – The X chunk coordinate.
+/// - `z` – The Z chunk coordinate.
+/// - `seed` – The world seed.
+/// - `salt` – A salt value (default is 987234911).
+///
+/// # Returns
+/// A seed value to be used with a legacy random generator.
+#[inline]
+#[must_use]
+pub const fn seed_slime_chunk(x: i32, z: i32, seed: u64, salt: u64) -> u64 {
+    (seed
+        .wrapping_add((x.wrapping_mul(x).wrapping_mul(4_987_142)) as i64 as u64)
+        .wrapping_add((x.wrapping_mul(5_947_611)) as i64 as u64)
+        .wrapping_add((z.wrapping_mul(z) as i64).wrapping_mul(4_392_871) as u64)
+        .wrapping_add((z.wrapping_mul(389_711)) as i64 as u64))
+        ^ salt
+}
+
 /// Generates a carver seed for cave and ravine generation.
 ///
 /// Carver seeds are used for terrain carving features like caves and ravines.

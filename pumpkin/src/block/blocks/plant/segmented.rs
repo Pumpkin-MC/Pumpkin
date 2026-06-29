@@ -3,6 +3,7 @@ use pumpkin_world::BlockStateId;
 
 use crate::block::{BlockBehaviour, BlockFuture, CanUpdateAtArgs};
 use crate::block::{BlockIsReplacing, OnPlaceArgs};
+use crate::entity::EntityBase;
 
 pub trait SegmentProperties {
     fn get_segment_amount(&self) -> u8;
@@ -93,7 +94,7 @@ pub trait Segmented: BlockBehaviour {
                 }
             } else {
                 // Set first segment orientation based on player direction
-                let player_facing = args.player.living_entity.entity.get_horizontal_facing();
+                let player_facing = args.player.get_entity().get_horizontal_facing();
                 let mut props = Self::Properties::default(args.block);
                 props.set_segment_amount(1);
                 props.set_facing(self.get_facing_for_segment(player_facing, 1));

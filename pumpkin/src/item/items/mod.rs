@@ -4,6 +4,7 @@ pub mod axe;
 pub mod boat;
 pub mod bow;
 pub mod bucket;
+pub mod bundle;
 pub mod crossbow;
 pub mod dye;
 pub mod egg;
@@ -31,6 +32,7 @@ pub mod wind_charge;
 
 use crate::item::items::armor_stand::ArmorStandItem;
 use crate::item::items::boat::BoatItem;
+use crate::item::items::bundle::BundleItem;
 use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::map::MapItem;
 use crate::item::items::minecart::MinecartItem;
@@ -105,6 +107,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(PotionItem);
     manager.register(SplashPotionItem);
     manager.register(LingeringPotionItem);
+    manager.register(BundleItem);
 
     Arc::new(manager)
 }

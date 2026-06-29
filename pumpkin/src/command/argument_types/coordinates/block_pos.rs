@@ -48,7 +48,7 @@ impl ArgumentType for BlockPosArgumentType {
         }
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::BlockPos
     }
 
@@ -64,13 +64,13 @@ impl ArgumentType for BlockPosArgumentType {
         Box::pin(async move {
             let remainder = builder.remaining();
 
-            let suggestioned_coordinates = if remainder.bytes().next() == Some(b'^') {
+            let suggested_coordinates = if remainder.bytes().next() == Some(b'^') {
                 TextCoordinates::Local
             } else {
                 TextCoordinates::Global
             };
 
-            builder.suggest_3d_coordinates(suggestioned_coordinates, |value| {
+            builder.suggest_3d_coordinates(suggested_coordinates, |value| {
                 self.parse(&mut StringReader::new(value)).is_ok()
             })
         })

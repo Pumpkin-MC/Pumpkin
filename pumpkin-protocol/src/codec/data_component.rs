@@ -4,18 +4,19 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl, DamageImpl, DataComponentImpl,
-    EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MapIdImpl, MaxStackSizeImpl,
-    PotionContentsImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl,
-    UseCooldownImpl, get,
+    BundleContentsImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl,
+    DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
+    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, IDSet, IDSetContent, IdOr,
+    ItemModelImpl, MapIdImpl, MaxStackSizeImpl, PotionContentsImpl, SoundEvent,
+    StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, UseCooldownImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
+use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use serde::de;
 use serde::de::SeqAccess;
-use serde::ser::SerializeStruct;
+use serde::ser::{SerializeStruct, Serializer};
 
 const MAX_STATUS_EFFECTS: usize = 128;
 
@@ -349,14 +350,28 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 
 impl DataComponentCodec<Self> for CustomNameImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
-        seq.serialize_field::<String>("", &self.name)
+        seq.serialize_field("", &NetworkTextNbtString(self.name.clone().get_text()))
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         let name = seq
             .next_element::<String>()?
             .ok_or(de::Error::custom("No CustomNameImpl name string!"))?;
-        Ok(Self { name })
+        Ok(Self {
+            name: pumpkin_util::text::TextComponent::text(name),
+        })
+    }
+}
+
+struct NetworkTextNbtString(String);
+
+impl serde::Serialize for NetworkTextNbtString {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut bytes = Vec::new();
+        NbtTag::String(self.0.clone().into_boxed_str())
+            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
+            .map_err(serde::ser::Error::custom)?;
+        serializer.serialize_bytes(&bytes)
     }
 }
 
@@ -845,6 +860,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom(format!("{id:?} (TODO)"))),
     }
 }
@@ -868,6 +884,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
+        DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
         _ => Err(serde::ser::Error::custom(format!(
             "{} not yet implemented",
             id.to_name()
@@ -908,5 +925,137 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
             seconds,
             cooldown_group,
         })
+    }
+}
+
+fn deserialize_item_stack_template<'a, A: SeqAccess<'a>>(
+    seq: &mut A,
+) -> Result<pumpkin_data::item_stack::ItemStack, A::Error> {
+    const MAX_COMPONENTS: i32 = 256;
+
+    let item_id = seq
+        .next_element::<VarInt>()?
+        .ok_or_else(|| de::Error::custom("Missing item_id in ItemStackTemplate"))?
+        .0 as u16;
+
+    let count = seq
+        .next_element::<VarInt>()?
+        .ok_or_else(|| de::Error::custom("Missing count in ItemStackTemplate"))?
+        .0 as u8;
+
+    let num_to_add = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
+    let num_to_remove = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
+
+    if num_to_add < 0 || num_to_remove < 0 {
+        return Err(de::Error::custom("Negative component count"));
+    }
+
+    let total_components = num_to_add
+        .checked_add(num_to_remove)
+        .ok_or_else(|| de::Error::custom("Component count overflow"))?;
+
+    if total_components > MAX_COMPONENTS {
+        return Err(de::Error::custom(
+            "Too many components in ItemStackTemplate patch",
+        ));
+    }
+
+    let mut patch = Vec::with_capacity((num_to_add + num_to_remove) as usize);
+
+    for _ in 0..num_to_add {
+        let id_val = seq
+            .next_element::<VarInt>()?
+            .ok_or_else(|| de::Error::custom("Missing component ID"))?
+            .0;
+        let id = DataComponent::try_from_id(id_val as u8)
+            .ok_or_else(|| de::Error::custom(format!("Unknown component ID: {id_val}")))?;
+
+        let _byte_len = seq
+            .next_element::<VarInt>()?
+            .ok_or_else(|| de::Error::custom("No data len VarInt!"))?;
+
+        let component_impl = deserialize(id, seq)?;
+        patch.push((id, Some(component_impl)));
+    }
+
+    for _ in 0..num_to_remove {
+        let id_val = seq
+            .next_element::<VarInt>()?
+            .ok_or_else(|| de::Error::custom("Missing remove component ID"))?
+            .0;
+        let id = DataComponent::try_from_id(id_val as u8)
+            .ok_or_else(|| de::Error::custom("Unknown component ID"))?;
+        patch.push((id, None));
+    }
+
+    Ok(pumpkin_data::item_stack::ItemStack::new_with_component(
+        count,
+        pumpkin_data::item::Item::from_id(item_id).unwrap_or(&pumpkin_data::item::Item::AIR),
+        patch,
+    ))
+}
+
+fn serialize_item_stack_template<T: SerializeStruct>(
+    stack: &pumpkin_data::item_stack::ItemStack,
+    seq: &mut T,
+) -> Result<(), T::Error> {
+    seq.serialize_field::<VarInt>("", &VarInt::from(stack.item.id))?;
+    seq.serialize_field::<VarInt>("", &VarInt::from(stack.item_count))?;
+
+    let mut to_add = 0u8;
+    let mut to_remove = 0u8;
+    for (_id, data) in &stack.patch {
+        if data.is_none() {
+            to_remove += 1;
+        } else {
+            to_add += 1;
+        }
+    }
+
+    seq.serialize_field::<VarInt>("", &VarInt::from(to_add))?;
+    seq.serialize_field::<VarInt>("", &VarInt::from(to_remove))?;
+
+    for (id, data) in &stack.patch {
+        if let Some(data) = data {
+            seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+            serialize(*id, data.as_ref(), seq)?;
+        }
+    }
+
+    for (id, data) in &stack.patch {
+        if data.is_none() {
+            seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+        }
+    }
+
+    Ok(())
+}
+
+impl DataComponentCodec<Self> for BundleContentsImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.items.len() as i32))?;
+        for item in &self.items {
+            serialize_item_stack_template(item, seq)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_BUNDLE_ITEMS: usize = 64;
+
+        let len = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No BundleContentsImpl len VarInt!"))?
+            .0 as usize;
+
+        if len > MAX_BUNDLE_ITEMS {
+            return Err(de::Error::custom("Too many items in BundleContents"));
+        }
+
+        let mut items = Vec::with_capacity(len);
+        for _ in 0..len {
+            items.push(deserialize_item_stack_template(seq)?);
+        }
+        Ok(Self { items })
     }
 }

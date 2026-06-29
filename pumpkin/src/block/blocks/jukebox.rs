@@ -168,8 +168,15 @@ impl BlockBehaviour for JukeboxBlock {
             // Start playing the music (client-side audio)
             Self::start_playing(args.position, world, jukebox_song.get_id());
 
+            args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::PlayRecord as i32,
+                    1,
+                )
+                .await;
+
             // TODO: world.emitGameEvent(GameEvent.BLOCK_CHANGE, pos, ...)
-            // TODO: player.incrementStat(Stats.PLAY_RECORD)
 
             BlockActionResult::Success
         })

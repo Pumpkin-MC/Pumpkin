@@ -68,7 +68,7 @@ impl ToTokens for EnumCreator {
 }
 
 /// The newest protocol version whose tag data is served as the latest-version fallback.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
 /// modules, and the `Taggable` trait with its lookup helpers.
@@ -88,6 +88,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
         (JavaMinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
         (JavaMinecraftVersion::V_26_1, "26_1_tags.json"),
+        (JavaMinecraftVersion::V_26_2, "26_2_tags.json"),
     ];
 
     // --- Load Global Assets ---

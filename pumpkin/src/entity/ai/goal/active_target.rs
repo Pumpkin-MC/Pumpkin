@@ -9,6 +9,7 @@ use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
+use std::future::Future;
 use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
@@ -39,9 +40,11 @@ impl ActiveTargetGoal {
         target_predicate.base_max_distance = mob
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
         if let Some(predicate) = predicate {
             target_predicate.set_predicate(predicate);
         }
+
         Self {
             track_target_goal,
             target: None,
@@ -62,6 +65,7 @@ impl ActiveTargetGoal {
         target_predicate.base_max_distance = mob
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
         Box::new(Self {
             track_target_goal,
             target: None,
@@ -71,16 +75,29 @@ impl ActiveTargetGoal {
         })
     }
 
+    pub fn set_target(&mut self, target: Option<Arc<dyn EntityBase>>) {
+        self.target = target;
+    }
+
     fn find_closest_target(&mut self, mob: &MobEntity) {
+        let follow_range = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
+        // Vanilla updates the target conditions with the current follow distance on every search
+        self.target_predicate.base_max_distance = follow_range;
+
         let world = mob.living_entity.entity.world.load();
+
+        // Vanilla searches using getEyeY(), so we offset the position by the eye height
+        let mut search_pos = mob.living_entity.entity.pos.load();
+        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+
         if self.target_type == &EntityType::PLAYER {
             let potential_player = world
-                .get_closest_player(
-                    mob.living_entity.entity.pos.load(),
-                    mob.living_entity
-                        .get_attribute_value(&Attributes::FOLLOW_RANGE),
-                )
+                .get_closest_player(search_pos, follow_range)
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+
             if let Some(potential_entity) = potential_player
                 && let Some(living) = potential_entity.get_living_entity()
                 && self
@@ -91,12 +108,9 @@ impl ActiveTargetGoal {
                 return;
             }
         } else {
-            let potential_entity = world.get_closest_entity(
-                mob.living_entity.entity.pos.load(),
-                mob.living_entity
-                    .get_attribute_value(&Attributes::FOLLOW_RANGE),
-                Some(&[self.target_type]),
-            );
+            let potential_entity =
+                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
+
             if let Some(potential_entity) = potential_entity
                 && let Some(living) = potential_entity.get_living_entity()
                 && self
@@ -123,6 +137,7 @@ impl Goal for ActiveTargetGoal {
             self.target.is_some()
         })
     }
+
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async { self.track_target_goal.should_continue(mob).await })
     }
@@ -130,7 +145,6 @@ impl Goal for ActiveTargetGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             mob.set_mob_target(self.target.clone()).await;
-
             self.track_target_goal.start(mob).await;
         })
     }

@@ -51,7 +51,7 @@ pub mod command {
 pub use wit::pumpkin::plugin::{
     bedrock_packets, block_entity, boss_bar, command as command_wit, common,
     context::{Context, Server},
-    entity,
+    data_components, entity,
     entity_types::EntityType,
     gui, i18n, java_dialogs, java_packets, particles, permission, player, scoreboard, server, text,
     world,

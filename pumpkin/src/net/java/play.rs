@@ -15,6 +15,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
+use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
@@ -34,6 +35,7 @@ use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
 
 use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
@@ -59,24 +61,28 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
-    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot,
+    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
+    PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SChangeGameMode, SChatCommand,
-    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
-    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
+    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
+    SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SCookieResponse as SPCookieResponse, SInteract, SJigsawGenerate, SKeepAlive, SMoveVehicle,
+    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe,
+    SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock,
+    SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity, STestInstanceBlockAction,
+    SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
+use pumpkin_world::generation::structure::structures::jigsaw::JigsawJointType;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
@@ -228,7 +234,7 @@ impl JavaClient {
             if id == &confirm_teleport.teleport_id {
                 // We should set the position now to what we requested in the teleport packet.
                 // This may fix issues when the client sends the position while being teleported.
-                player.living_entity.entity.set_pos(*position);
+                player.get_entity().set_pos(*position);
 
                 *awaiting_teleport = None;
                 drop(awaiting_teleport);
@@ -321,6 +327,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        if player.get_entity().has_vehicle().await {
+            return;
+        }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
         if player.awaiting_teleport.lock().await.is_some() {
             return;
@@ -346,16 +355,25 @@ impl JavaClient {
             server;
             PlayerMoveEvent {
                 player: player.clone(),
-                from: player.living_entity.entity.pos.load(),
+                from: player.get_entity().pos.load(),
                 to: position,
                 cancelled: false,
             };
 
             'after: {
                 let pos = event.to;
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.living_entity.entity.set_pos(pos);
+                player.get_entity().set_pos(pos);
+
+                let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
+                let cm = (distance * 100.0) as i32;
+                if cm > 0 {
+                    let stat = player.get_movement_statistic().await;
+                    player
+                        .increment_stat(StatisticCategory::Custom, stat as i32, cm)
+                        .await;
+                }
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
@@ -364,7 +382,7 @@ impl JavaClient {
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
-                if new_on_ground && entity.fall_flying.load(Ordering::Relaxed) {
+                if new_on_ground && entity.is_fall_flying() {
                     entity.set_fall_flying(false).await;
                 }
                 let world = &player.world();
@@ -427,7 +445,7 @@ impl JavaClient {
             }
 
             'cancelled: {
-                self.force_tp(player, player.living_entity.entity.pos.load()).await;
+                self.force_tp(player, player.get_entity().pos.load()).await;
             }
         }}
     }
@@ -440,6 +458,9 @@ impl JavaClient {
         packet: SPlayerPositionRotation,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        if player.get_entity().has_vehicle().await {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
@@ -473,15 +494,24 @@ impl JavaClient {
             server;
             PlayerMoveEvent::new(
                 player.clone(),
-                player.living_entity.entity.pos.load(),
+                player.get_entity().pos.load(),
                 position,
             );
 
             'after: {
                 let pos = event.to;
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.living_entity.entity.set_pos(pos);
+                player.get_entity().set_pos(pos);
+
+                let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
+                let cm = (distance * 100.0) as i32;
+                if cm > 0 {
+                    let stat = player.get_movement_statistic().await;
+                    player
+                        .increment_stat(StatisticCategory::Custom, stat as i32, cm)
+                        .await;
+                }
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed)
@@ -581,10 +611,10 @@ impl JavaClient {
         *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
         self.enqueue_packet(&CPlayerPosition::new(
             teleport_id.into(),
-            player.living_entity.entity.pos.load(),
+            player.get_entity().pos.load(),
             Vector3::new(0.0, 0.0, 0.0),
-            player.living_entity.entity.yaw.load(),
-            player.living_entity.entity.pitch.load(),
+            player.get_entity().yaw.load(),
+            player.get_entity().pitch.load(),
             Vec::new(),
         ))
         .await;
@@ -603,7 +633,7 @@ impl JavaClient {
             .await;
             return;
         }
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         entity.on_ground.store(rotation.ground, Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
@@ -838,6 +868,55 @@ impl JavaClient {
         }
     }
 
+    pub async fn handle_set_jigsaw_block(&self, player: &Arc<Player>, jigsaw: SSetJigsawBlock) {
+        if !player.is_creative() {
+            return;
+        }
+        if player.permission_lvl.load() < PermissionLvl::Two {
+            return;
+        }
+        let pos = jigsaw.pos;
+        if let Some(block_entity) = player.world().get_block_entity(&pos) {
+            if block_entity.resource_location() != JigsawBlockEntity::ID {
+                warn!("Client tried to change Jigsaw block but not Jigsaw block entity found");
+                return;
+            }
+
+            let jigsaw_block: &JigsawBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+
+            *jigsaw_block.name.lock().await = jigsaw.name;
+            *jigsaw_block.target.lock().await = jigsaw.target;
+            *jigsaw_block.pool.lock().await = jigsaw.pool;
+            *jigsaw_block.final_state.lock().await = jigsaw.final_state;
+            *jigsaw_block.joint.lock().await = JigsawJointType::from_str(&jigsaw.joint);
+            jigsaw_block
+                .selection_priority
+                .store(jigsaw.selection_priority.0, Ordering::SeqCst);
+            jigsaw_block
+                .placement_priority
+                .store(jigsaw.placement_priority.0, Ordering::SeqCst);
+
+            player.world().update_block_entity(&block_entity);
+        }
+    }
+
+    pub async fn handle_jigsaw_generate(&self, player: &Arc<Player>, generate: SJigsawGenerate) {
+        if !player.is_creative() {
+            return;
+        }
+        if player.permission_lvl.load() < PermissionLvl::Two {
+            return;
+        }
+        let pos = generate.pos;
+        if let Some(block_entity) = player.world().get_block_entity(&pos)
+            && let Some(jigsaw_block) = block_entity.as_any().downcast_ref::<JigsawBlockEntity>()
+        {
+            jigsaw_block
+                .generate(&player.world(), generate.levels.0, generate.keep_jigsaws)
+                .await;
+        }
+    }
+
     pub async fn handle_player_command(
         &self,
         player: &Arc<Player>,
@@ -852,26 +931,26 @@ impl JavaClient {
         }
         player.update_last_action_time();
 
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
         match command.action {
             Action::StartSprinting => {
-                if !entity.sprinting.load(Ordering::Relaxed) {
+                if !entity.is_sprinting() {
                     send_cancellable! {{
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), true);
                         'after: {
-                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                            player.get_entity().set_sprinting(event.is_sprinting).await;
                         }
                     }}
                 }
             }
             Action::StopSprinting => {
-                if entity.sprinting.load(Ordering::Relaxed) {
+                if entity.is_sprinting() {
                     send_cancellable! {{
                         server;
                         PlayerToggleSprintEvent::new(player.clone(), false);
                         'after: {
-                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                            player.get_entity().set_sprinting(event.is_sprinting).await;
                         }
                     }}
                 }
@@ -883,7 +962,7 @@ impl JavaClient {
             }
             Action::StartFlyingElytra => {
                 let fall_flying = entity.check_fall_flying();
-                if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
+                if entity.is_fall_flying() != fall_flying {
                     entity.set_fall_flying(fall_flying).await;
                 }
             }
@@ -907,8 +986,21 @@ impl JavaClient {
         input: SPlayerInput,
         server: &Server,
     ) {
+        player.last_input.store(input.input, Ordering::Relaxed);
+
         let sneak = input.input & SPlayerInput::SNEAK != 0;
-        if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
+        if sneak
+            && player.gamemode.load() == GameMode::Spectator
+            && player.camera_target_id.load().is_some()
+        {
+            player.camera_target_id.store(None);
+            player
+                .client
+                .send_packet_now(&CSetCamera::new(player.entity_id().into()))
+                .await;
+        }
+
+        if player.get_entity().is_sneaking() != sneak {
             send_cancellable! {{
                 server;
                 PlayerToggleSneakEvent::new(player.clone(), sneak);
@@ -1280,7 +1372,7 @@ impl JavaClient {
                     &message,
                 );
 
-                let entity = &player.living_entity.entity;
+                let entity = &player.get_entity();
                 let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
@@ -1557,7 +1649,7 @@ impl JavaClient {
             }
             1 => {
                 // Request stats
-                debug!("todo");
+                player.send_stats().await;
             }
             _ => {
                 self.kick(TextComponent::text("Invalid client status"))
@@ -1572,7 +1664,7 @@ impl JavaClient {
         }
         player.update_last_action_time();
         let entity_id = attack.entity_id;
-        let player_entity = &player.living_entity.entity;
+        let player_entity = &player.get_entity();
         let world = player_entity.world.load_full();
 
         let config = &server.advanced_config.pvp;
@@ -1620,6 +1712,7 @@ impl JavaClient {
         player.attack(target).await;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -1633,8 +1726,8 @@ impl JavaClient {
         let entity_id = interact.entity_id;
 
         let sneaking = interact.sneaking;
-        let player_entity = &player.living_entity.entity;
-        if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
+        let player_entity = &player.get_entity();
+        if player_entity.is_sneaking() != sneaking {
             player_entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
@@ -1651,6 +1744,14 @@ impl JavaClient {
             .or_else(|| world.get_entity_by_id(entity_id.0));
 
         if let Some(target) = target {
+            if player.gamemode.load() == GameMode::Spectator {
+                player.camera_target_id.store(Some(entity_id.0));
+                player
+                    .client
+                    .send_packet_now(&CSetCamera::new(entity_id))
+                    .await;
+                return;
+            }
             send_cancellable! {{
                 server;
                 PlayerInteractEntityEvent::new(
@@ -1696,13 +1797,15 @@ impl JavaClient {
                         }
                         ActionType::Interact | ActionType::InteractAt => {
                             let held = player.inventory.held_item();
-                            let mut stack = held.lock().await;
-                            if !event.target.interact(player, &mut stack).await {
+                            let mut stack = held.lock().await.clone();
+                            let interacted = event.target.interact(player, &mut stack).await;
+                            if !interacted {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target)
                                     .await;
                             }
+                            *held.lock().await = stack;
                         }
                     }
                 }
@@ -1751,9 +1854,25 @@ impl JavaClient {
                         return;
                     }
                     let position = player_action.position;
-                    let entity = &player.living_entity.entity;
+                    let entity = &player.get_entity();
                     let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position);
+
+                    if block == &pumpkin_data::Block::NOTE_BLOCK {
+                        let props =
+                            pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
+                                state.id, block,
+                            );
+                        crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position)
+                            .await;
+                        player
+                            .increment_stat(
+                                StatisticCategory::Custom,
+                                CustomStatistic::PlayNoteblock as i32,
+                                1,
+                            )
+                            .await;
+                    }
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
@@ -1813,6 +1932,17 @@ impl JavaClient {
                                     .broken(&world, block, player, &position, server, broken_state)
                                     .await;
                                 player.apply_tool_damage_for_block_break(broken_state).await;
+                                let item_id = player.inventory().held_item().lock().await.item.id;
+                                player
+                                    .increment_stat(StatisticCategory::Used, item_id as i32, 1)
+                                    .await;
+                                player
+                                    .increment_stat(
+                                        StatisticCategory::Mined,
+                                        broken_state.id as i32,
+                                        1,
+                                    )
+                                    .await;
                             }
                             self.sync_block_state_to_client(&world, position).await;
                         } else {
@@ -1837,7 +1967,7 @@ impl JavaClient {
                         return;
                     }
                     player.mining.store(false, Ordering::Relaxed);
-                    let entity = &player.living_entity.entity;
+                    let entity = &player.get_entity();
                     entity
                         .world
                         .load()
@@ -1858,7 +1988,7 @@ impl JavaClient {
                     }
 
                     // Block break & play sound
-                    let entity = &player.living_entity.entity;
+                    let entity = &player.get_entity();
                     let world = entity.world.load_full();
 
                     player.mining.store(false, Ordering::Relaxed);
@@ -1884,8 +2014,17 @@ impl JavaClient {
                             .block_registry
                             .broken(&world, block, player, &location, server, state)
                             .await;
+
                         player.apply_tool_damage_for_block_break(state).await;
+                        let item_id = player.inventory().held_item().lock().await.item.id;
+                        player
+                            .increment_stat(StatisticCategory::Used, item_id as i32, 1)
+                            .await;
+                        player
+                            .increment_stat(StatisticCategory::Mined, state.id as i32, 1)
+                            .await;
                     }
+
                     self.sync_block_state_to_client(&world, location).await;
 
                     self.update_sequence(player, player_action.sequence.0);
@@ -1935,12 +2074,12 @@ impl JavaClient {
         }
     }
 
-    pub fn update_sequence(&self, player: &Player, sequence: i32) {
+    pub fn update_sequence(&self, _player: &Player, sequence: i32) {
         if sequence < 0 {
             error!("Expected packet sequence >= 0");
         }
-        player.packet_sequence.store(
-            player.packet_sequence.load(Ordering::Relaxed).max(sequence),
+        self.packet_sequence.store(
+            self.packet_sequence.load(Ordering::Relaxed).max(sequence),
             Ordering::Relaxed,
         );
     }
@@ -2020,8 +2159,10 @@ impl JavaClient {
             return Err(BlockPlacingError::InvalidHand);
         };
 
-        //TODO this.player.resetLastActionTime();
-        //TODO this.gameModeForPlayer == GameType.SPECTATOR
+        if player.gamemode.load() == GameMode::Spectator {
+            // TODO: openMenu
+            return Ok(());
+        }
 
         let inventory = player.inventory();
         let held_item = inventory.held_item();
@@ -2035,7 +2176,12 @@ impl JavaClient {
             off_hand_item
         };
 
-        let entity = &player.living_entity.entity;
+        let item_id = item.lock().await.item.id;
+        player
+            .increment_stat(StatisticCategory::Used, item_id as i32, 1)
+            .await;
+
+        let entity = &player.get_entity();
         let world = entity.world.load_full();
         let block = world.get_block(&position);
 
@@ -2059,7 +2205,7 @@ impl JavaClient {
             }
         }}
 
-        let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
+        let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
@@ -2137,7 +2283,7 @@ impl JavaClient {
             };
             player
                 .world()
-                .send_entity_status(&player.living_entity.entity, equipment_break_status(slot));
+                .send_entity_status(player.get_entity(), equipment_break_status(slot));
         }
 
         if !after.are_equal(&before) {
@@ -2200,7 +2346,7 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = player.living_entity.entity.world.load_full();
+        let world = player.get_entity().world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location) else {
             return;
         };
@@ -2250,6 +2396,14 @@ impl JavaClient {
         } else {
             inventory.off_hand_item().await
         };
+
+        let (item_id, _item) = {
+            let guard = item_in_hand.lock().await;
+            (guard.item.id, guard.item)
+        };
+        player
+            .increment_stat(StatisticCategory::Used, item_id as i32, 1)
+            .await;
 
         let hit_result = player
             .world()
@@ -2341,6 +2495,17 @@ impl JavaClient {
             }
         }
         if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+            // Skip if the item is already in the target equipment slot.
+            // This prevents a self-deadlock: `held` already locks the same
+            // Mutex<ItemStack> that `get_or_insert` would return, and
+            // Tokio's Mutex is not reentrant.
+            if inventory
+                .is_already_equipped(item_in_hand, equippable.slot)
+                .await
+            {
+                return;
+            }
+
             // If it can be equipped we want to make sure we can actually equip it
             player
                 .enqueue_equipment_change(equippable.slot, &held)
@@ -2604,7 +2769,7 @@ impl JavaClient {
         location: BlockPos,
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
-        let entity = &player.living_entity.entity;
+        let entity = &player.get_entity();
 
         match player.gamemode.load() {
             GameMode::Spectator | GameMode::Adventure => {
@@ -2788,5 +2953,87 @@ impl JavaClient {
                 .set_selected_offer(packet.selected_slot.0 as usize)
                 .await;
         }
+    }
+
+    pub async fn handle_bundle_item_selected(
+        &self,
+        player: &Arc<Player>,
+        packet: SBundleItemSelected,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+
+        let selected_item_index = packet.selected_item_index.0;
+        if selected_item_index < 0 && selected_item_index != -1 {
+            self.kick(TextComponent::text("Invalid selected item index"))
+                .await;
+            return;
+        }
+
+        debug!(
+            "Bundle item selected: Slot ID {}, Selected Item Index {}",
+            packet.slot_id.0, selected_item_index
+        );
+    }
+
+    pub async fn handle_teleport_to_entity(
+        &self,
+        player: &Arc<Player>,
+        packet: STeleportToEntity,
+        server: &Server,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+
+        if player.gamemode.load() != GameMode::Spectator {
+            return;
+        }
+
+        if let Some(target_player) = server.get_player_by_uuid(packet.target) {
+            let target_pos = target_player.living_entity.entity.pos.load();
+            let target_yaw = target_player.living_entity.entity.yaw.load();
+            let target_pitch = target_player.living_entity.entity.pitch.load();
+
+            let target_id = target_player.living_entity.entity.entity_id;
+            player.camera_target_id.store(Some(target_id));
+            player
+                .client
+                .send_packet_now(&CSetCamera::new(target_id.into()))
+                .await;
+
+            player
+                .request_teleport(target_pos, target_yaw, target_pitch)
+                .await;
+        }
+    }
+
+    pub fn handle_test_instance_block_action(
+        &self,
+        player: &Arc<Player>,
+        packet: &STestInstanceBlockAction,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        debug!(
+            "Test instance block action at {:?}: action={:?}",
+            packet.pos, packet.action
+        );
+    }
+
+    pub fn handle_set_test_block(&self, player: &Arc<Player>, packet: &SSetTestBlock) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        debug!(
+            "Set test block at {:?}: mode={:?}, message={}",
+            packet.position, packet.mode, packet.message
+        );
     }
 }

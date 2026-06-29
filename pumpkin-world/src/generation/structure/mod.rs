@@ -12,7 +12,7 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
+            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator, jigsaw::JigsawGenerator,
             jungle_temple::JungleTempleGenerator, nether_fortress::NetherFortressGenerator,
             nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
             swamp_hut::SwampHutGenerator,
@@ -33,6 +33,7 @@ pub fn try_generate_structure(
     seed: i64,
     chunk: &ProtoChunk,
     sea_level: i32,
+    height_sampler: Option<&mut dyn crate::generation::structure::structures::HeightSampler>,
 ) -> Option<StructurePosition> {
     let random = create_chunk_random(seed, chunk.x, chunk.z);
     let context = StructureGeneratorContext {
@@ -42,6 +43,8 @@ pub fn try_generate_structure(
         random,
         sea_level,
         min_y: chunk.bottom_y() as i32,
+        height_sampler,
+        structure_key: Some(*key),
     };
     let structure_pos = match key {
         StructureKeys::BuriedTreasure => {
@@ -62,6 +65,32 @@ pub fn try_generate_structure(
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
         StructureKeys::JunglePyramid => JungleTempleGenerator.get_structure_position(context),
+        StructureKeys::VillagePlains
+        | StructureKeys::VillageDesert
+        | StructureKeys::VillageSavanna
+        | StructureKeys::VillageSnowy
+        | StructureKeys::VillageTaiga => {
+            let generator = JigsawGenerator::new(
+                structure
+                    .start_pool
+                    .expect("Jigsaw structure must have a start pool"),
+                structure.size.expect("Jigsaw structure must have a size"),
+            );
+            generator.get_structure_position(context)
+        }
+        StructureKeys::AncientCity
+        | StructureKeys::BastionRemnant
+        | StructureKeys::PillagerOutpost
+        | StructureKeys::TrailRuins
+        | StructureKeys::TrialChambers => {
+            let generator = JigsawGenerator::new(
+                structure
+                    .start_pool
+                    .expect("Jigsaw structure must have a start pool"),
+                structure.size.expect("Jigsaw structure must have a size"),
+            );
+            generator.get_structure_position(context)
+        }
         // TODO: Implement other structure types
         _ => None,
     };
@@ -127,6 +156,24 @@ pub fn lazily_generate_structure(
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
         StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
         StructureKeys::JunglePyramid => JungleTempleGenerator.get_structure_position(context),
+        StructureKeys::VillagePlains
+        | StructureKeys::VillageDesert
+        | StructureKeys::VillageSavanna
+        | StructureKeys::VillageSnowy
+        | StructureKeys::VillageTaiga
+        | StructureKeys::AncientCity
+        | StructureKeys::BastionRemnant
+        | StructureKeys::PillagerOutpost
+        | StructureKeys::TrailRuins
+        | StructureKeys::TrialChambers => {
+            let generator = JigsawGenerator::new(
+                structure
+                    .start_pool
+                    .expect("Jigsaw structure must have a start pool"),
+                structure.size.expect("Jigsaw structure must have a size"),
+            );
+            generator.get_structure_position(context)
+        }
         // TODO: Implement other structure types
         _ => None,
     };

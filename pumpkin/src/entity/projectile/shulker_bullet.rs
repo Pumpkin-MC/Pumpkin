@@ -426,15 +426,22 @@ impl EntityBase for ShulkerBulletEntity {
             entity.set_pos(new_pos);
 
             // Broadcast position and velocity
-            world.broadcast_packet_all(&CEntityPositionSync::new(
-                entity.entity_id.into(),
-                new_pos,
-                vel,
-                entity.yaw.load(),
-                entity.pitch.load(),
-                false,
-            ));
-            world.broadcast_packet_all(&CEntityVelocity::new(entity.entity_id.into(), vel));
+            let chunk_pos = entity.chunk_pos.load();
+            world.broadcast_to_chunk(
+                chunk_pos,
+                &CEntityPositionSync::new(
+                    entity.entity_id.into(),
+                    new_pos,
+                    vel,
+                    entity.yaw.load(),
+                    entity.pitch.load(),
+                    false,
+                ),
+            );
+            world.broadcast_to_chunk(
+                chunk_pos,
+                &CEntityVelocity::new(entity.entity_id.into(), vel),
+            );
 
             // Check for block collisions
             let new_bp = entity.block_pos.load();

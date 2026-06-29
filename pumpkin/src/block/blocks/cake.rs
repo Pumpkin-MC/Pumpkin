@@ -54,6 +54,13 @@ impl CakeBlock {
         let mut properties = CakeLikeProperties::from_state_id(state_id, block);
         match properties.bites {
             0..=5 => {
+                player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::EatCakeSlice as i32,
+                        1,
+                    )
+                    .await;
                 properties.bites += 1;
                 world
                     .set_block_state(
@@ -65,6 +72,13 @@ impl CakeBlock {
                 BlockActionResult::Consume
             }
             6 => {
+                player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::EatCakeSlice as i32,
+                        1,
+                    )
+                    .await;
                 world
                     .set_block_state(
                         location,

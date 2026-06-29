@@ -105,14 +105,14 @@ use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::projectile::small_fireball::SmallFireballEntity;
 use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
+use crate::entity::projectile::trident::TridentEntity;
 use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
+use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
-use pumpkin_data::item::Item;
-use pumpkin_data::item_stack::ItemStack;
 use std::sync::atomic::AtomicBool;
 
 #[expect(clippy::too_many_lines)]
@@ -237,11 +237,20 @@ pub fn from_type(
         }
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
         id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),
-        id if id == EntityType::ITEM.id => {
-            Arc::new(ItemEntity::new(entity, ItemStack::new(1, &Item::AIR)))
-        }
+        id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_for_restore(entity)),
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
+        id if id == EntityType::TRIDENT.id => Arc::new(TridentEntity::new(entity, None)),
+        id if id == EntityType::MINECART.id
+            || id == EntityType::CHEST_MINECART.id
+            || id == EntityType::FURNACE_MINECART.id
+            || id == EntityType::TNT_MINECART.id
+            || id == EntityType::HOPPER_MINECART.id
+            || id == EntityType::COMMAND_BLOCK_MINECART.id
+            || id == EntityType::SPAWNER_MINECART.id =>
+        {
+            Arc::new(MinecartEntity::new(entity))
+        }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {
@@ -252,7 +261,7 @@ pub fn from_type(
                 has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
-            Arc::new(WindChargeEntity::new(thrown))
+            Arc::new(WindChargeEntity::new_normal(thrown))
         }
         id if id == EntityType::BREEZE_WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
@@ -262,7 +271,7 @@ pub fn from_type(
                 has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
-            Arc::new(WindChargeEntity::new(thrown))
+            Arc::new(WindChargeEntity::new_breeze(thrown))
         }
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
@@ -337,6 +346,9 @@ pub fn check_spawn_rules(
     }
     if id == EntityType::BAT.id {
         return bat::BatEntity::check_bat_spawn_rules(world, pos);
+    }
+    if id == EntityType::SLIME.id {
+        return SlimeEntity::check_slime_spawn_rules(world, pos);
     }
 
     // TODO

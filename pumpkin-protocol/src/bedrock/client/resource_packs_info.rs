@@ -2,7 +2,7 @@ use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
 use std::io::{Error, Write};
 pub struct ResourcePackEntry {
-    pub uuid: String,
+    pub uuid: uuid::Uuid,
     pub version: String,
     pub size: u64,
     pub content_key: String,
@@ -24,6 +24,9 @@ impl PacketWrite for ResourcePackEntry {
         self.sub_pack_name.write(writer)?;
         self.content_id.write(writer)?;
         self.has_scripts.write(writer)?;
+        self.addon_pack.write(writer)?;
+        self.rtx_enabled.write(writer)?;
+        self.download_url.write(writer)?;
         Ok(())
     }
 }

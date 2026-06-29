@@ -53,11 +53,16 @@ pub struct LootPoolStruct {
     /// Number of times the pool is rolled.
     rolls: LootNumberProviderTypes,
     /// Extra rolls granted by luck-related enchantments.
+    #[serde(default = "default_bonus_rolls")]
     bonus_rolls: LootNumberProviderTypes,
     /// Conditions that must all pass for this pool to be rolled, if any.
     conditions: Option<Vec<LootConditionStruct>>,
     /// Functions applied to the selected entries, if any.
     functions: Option<Vec<LootFunctionStruct>>,
+}
+
+fn default_bonus_rolls() -> LootNumberProviderTypes {
+    LootNumberProviderTypes::Constant(0.0)
 }
 
 impl ToTokens for LootPoolStruct {
@@ -276,9 +281,8 @@ impl ToTokens for LootPoolEntryTypesStruct {
             Self::LootTable(entry) => {
                 tokens.extend(quote! { LootPoolEntryTypes::LootTable(#entry) });
             }
-            Self::Dynamic(_entry) => {
-                // TODO
-                tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
+            Self::Dynamic(entry) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Dynamic(#entry) });
             }
             Self::Tag(entry) => {
                 tokens.extend(quote! { LootPoolEntryTypes::Tag(#entry) });
@@ -657,13 +661,17 @@ pub enum LootFunctionTypesStruct {
     },
     /// Increases count based on the level of a relevant enchantment.
     #[serde(rename = "minecraft:enchanted_count_increase")]
-    EnchantedCountIncrease,
+    EnchantedCountIncrease {
+        enchantment: String,
+        count: LootFunctionNumberProviderStruct,
+        limit: Option<f32>,
+    },
     /// Smelts the item as if processed in a furnace.
     #[serde(rename = "minecraft:furnace_smelt")]
     FurnaceSmelt,
     /// Sets the potion type on the item.
     #[serde(rename = "minecraft:set_potion")]
-    SetPotion,
+    SetPotion { id: String },
     /// Sets the amplifier on an ominous bottle item.
     #[serde(rename = "minecraft:set_ominous_bottle_amplifier")]
     SetOminousBottleAmplifier,
@@ -719,11 +727,21 @@ impl ToTokens for LootFunctionTypesStruct {
             Self::FurnaceSmelt => {
                 quote! { LootFunctionTypes::FurnaceSmelt }
             }
-            Self::SetPotion => {
-                quote! { LootFunctionTypes::SetPotion }
+            Self::SetPotion { id } => {
+                let i = LitStr::new(id, Span::call_site());
+                quote! { LootFunctionTypes::SetPotion { id: #i } }
             }
-            Self::EnchantedCountIncrease => {
-                quote! { LootFunctionTypes::EnchantedCountIncrease }
+            Self::EnchantedCountIncrease {
+                enchantment,
+                count,
+                limit,
+            } => {
+                let e = LitStr::new(enchantment, Span::call_site());
+                let c = count.to_token_stream();
+                let l = limit
+                    .map(|val| quote! { Some(#val) })
+                    .unwrap_or(quote! { None });
+                quote! { LootFunctionTypes::EnchantedCountIncrease { enchantment: #e, count: #c, limit: #l } }
             }
             Self::LimitCount { limit } => {
                 let min = if let Some(min) = limit.min {

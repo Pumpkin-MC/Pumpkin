@@ -62,6 +62,9 @@ impl LibraryPiece {
 }
 
 impl StructurePieceBase for LibraryPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -73,6 +76,7 @@ impl StructurePieceBase for LibraryPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn crate::world::WorldPortalExt,
         random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,

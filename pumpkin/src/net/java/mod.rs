@@ -1,9 +1,9 @@
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
@@ -13,14 +13,16 @@ use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
-    SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SContainerButtonClick, SCookieResponse as SPCookieResponse, SCustomPayload, SInteract,
-    SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
-    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch,
+    SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
+    SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
+    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SJigsawGenerate, SMoveVehicle,
+    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
     SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
-    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
+    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -116,6 +118,8 @@ pub struct JavaClient {
     pub keep_alive_id: AtomicCell<i64>,
     /// The last time we sent a keep alive packet.
     pub last_keep_alive_time: AtomicCell<Instant>,
+
+    pub packet_sequence: AtomicI32,
 }
 
 pub enum OutgoingPacketType {
@@ -171,6 +175,7 @@ impl JavaClient {
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(std::time::Instant::now()),
+            packet_sequence: AtomicI32::new(-1),
         }
     }
     pub async fn set_encryption(
@@ -270,6 +275,13 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
+
+                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+                    if seq != -1 {
+                        self
+                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .await;
+                    }
                 }
 
                 // INCOMING PACKETS
@@ -291,7 +303,12 @@ impl JavaClient {
                                     .await;
                                 }
                             }
-                            e.log();
+                            error!(
+                                "Failed to handle play packet id {} (payload {} bytes): {}",
+                                packet.id,
+                                packet.payload.len(),
+                                e
+                            );
                         }
                     }
                 }
@@ -911,9 +928,24 @@ impl JavaClient {
                 self.handle_interact(player, SInteract::read(payload, &version)?, server)
                     .await;
             }
+            id if id == SBundleItemSelected::to_id(version) => {
+                self.handle_bundle_item_selected(
+                    player,
+                    SBundleItemSelected::read(payload, &version)?,
+                )
+                .await;
+            }
             id if id == SAttack::to_id(version) => {
                 self.handle_attack(player, SAttack::read(payload, &version)?, server)
                     .await;
+            }
+            id if id == STeleportToEntity::to_id(version) => {
+                self.handle_teleport_to_entity(
+                    player,
+                    STeleportToEntity::read(payload, &version)?,
+                    server,
+                )
+                .await;
             }
             id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
                 self.handle_keep_alive(
@@ -924,6 +956,15 @@ impl JavaClient {
             }
             id if id == SClientTickEnd::to_id(version) => {
                 // TODO
+            }
+            id if id == STestInstanceBlockAction::to_id(version) => {
+                self.handle_test_instance_block_action(
+                    player,
+                    &STestInstanceBlockAction::read(payload, &version)?,
+                );
+            }
+            id if id == SSetTestBlock::to_id(version) => {
+                self.handle_set_test_block(player, &SSetTestBlock::read(payload, &version)?);
             }
             id if id == SPlayerPosition::to_id(version) => {
                 self.handle_position(player, server, SPlayerPosition::read(payload, &version)?)
@@ -965,6 +1006,14 @@ impl JavaClient {
             }
             id if id == SSetCommandBlock::to_id(version) => {
                 self.handle_set_command_block(player, SSetCommandBlock::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SSetJigsawBlock::to_id(version) => {
+                self.handle_set_jigsaw_block(player, SSetJigsawBlock::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SJigsawGenerate::to_id(version) => {
+                self.handle_jigsaw_generate(player, SJigsawGenerate::read(payload, &version)?)
                     .await;
             }
             id if id == SPlayerCommand::to_id(version) => {

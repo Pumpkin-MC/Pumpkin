@@ -860,6 +860,9 @@ mod random_positions_and_hypot {
             sampler,
             true,
             true,
+            Vec::new(),
+            Vec::new(),
+            None,
         );
         let options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
@@ -1678,7 +1681,7 @@ mod random_positions_and_hypot {
                 &mut height_estimator,
                 &env,
             );
-            assert_eq!(level.max_y, y1);
+            assert_eq!(level.max_y, y1, "Failed at x={}, y={}, z={}", x, y, z);
             assert_eq!(level.block, &state);
         }
     }

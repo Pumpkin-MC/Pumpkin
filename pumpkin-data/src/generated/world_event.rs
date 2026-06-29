@@ -73,6 +73,7 @@ pub enum WorldEvent {
     SoundSkeletonToStray = 1048u16,
     SoundSmithingTableUsed = 1044u16,
     SoundStopJukeboxSong = 1011u16,
+    SoundSulfurSpikeLand = 1052u16,
     SoundWindChargeShoot = 1051u16,
     SoundWitherBlockBreak = 1022u16,
     SoundWitherBossShoot = 1024u16,

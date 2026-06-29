@@ -68,13 +68,12 @@ impl CoralFeature {
                 .properties(wall_coral.default_state.id)
                 .unwrap()
                 .to_props();
-            let facing = dir.to_facing();
             // Set the right Axis
             let props: Vec<(&str, &str)> = original_props
                 .iter()
                 .map(|(key, value)| {
                     if *key == "facing" {
-                        (*key, facing.to_value())
+                        (*key, dir.to_value())
                     } else {
                         (*key, *value)
                     }

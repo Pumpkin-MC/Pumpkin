@@ -4,10 +4,7 @@ pub mod perlin;
 pub mod router;
 
 use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationShapeConfig};
-use pumpkin_util::{
-    math::{floor_div, floor_mod, vector3::Vector3},
-    random::xoroshiro128::XoroshiroSplitter,
-};
+use pumpkin_util::{math::vector3::Vector3, random::xoroshiro128::XoroshiroSplitter};
 
 use crate::generation::{
     noise::{
@@ -138,12 +135,12 @@ impl IndexToNoisePos for ChunkIndexMapper {
         index: usize,
         sample_options: Option<&mut ChunkNoiseFunctionSampleOptions>,
     ) -> Vector3<i32> {
-        let cell_z_position = floor_mod(index, self.horizontal_cell_block_count);
-        let xy_portion = floor_div(index, self.horizontal_cell_block_count);
-        let cell_x_position = floor_mod(xy_portion, self.horizontal_cell_block_count);
-        let cell_y_position = self.vertical_cell_block_count
-            - 1
-            - floor_div(xy_portion, self.horizontal_cell_block_count);
+        // Matches vanilla mathematical index mapping (yInCell, xInCell, zInCell)
+        let cell_z_position = index % self.horizontal_cell_block_count;
+        let xy_portion = index / self.horizontal_cell_block_count;
+        let cell_x_position = xy_portion % self.horizontal_cell_block_count;
+        let cell_y_position =
+            self.vertical_cell_block_count - 1 - (xy_portion / self.horizontal_cell_block_count);
 
         if let Some(sample_options) = sample_options {
             sample_options.fill_index = index;
@@ -189,27 +186,27 @@ impl<'a> ChunkNoiseGenerator<'a> {
         level_sampler: StandardChunkFluidLevelSampler,
         aquifers: bool,
         ore_veins: bool,
+        beardifier_structures: Vec<
+            crate::generation::noise::router::density_function::beardifier::BeardifierStructure,
+        >,
+        beardifier_junctions: Vec<
+            crate::generation::noise::router::density_function::beardifier::BeardifierJunction,
+        >,
+        affected_box: Option<pumpkin_util::math::block_box::BlockBox>,
     ) -> Self {
-        let start_cell_pos_x = floor_div(
-            start_block_x,
-            generation_shape.horizontal_cell_block_count() as i32,
-        );
-        let start_cell_pos_z = floor_div(
-            start_block_z,
-            generation_shape.horizontal_cell_block_count() as i32,
-        );
+        let start_cell_pos_x =
+            start_block_x / generation_shape.horizontal_cell_block_count() as i32;
+        let start_cell_pos_z =
+            start_block_z / generation_shape.horizontal_cell_block_count() as i32;
 
         let horizontal_biome_end = biome_coords::from_block(
             horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
         );
-        let vertical_cell_count = floor_div(
-            generation_shape.height as usize,
-            generation_shape.vertical_cell_block_count() as usize,
-        );
-        let minimum_cell_y = floor_div(
-            generation_shape.min_y as i32,
-            generation_shape.vertical_cell_block_count() as i32,
-        );
+        let vertical_cell_count = (generation_shape.height as usize)
+            / (generation_shape.vertical_cell_block_count() as usize);
+        let minimum_cell_y =
+            (generation_shape.min_y as i32) / (generation_shape.vertical_cell_block_count() as i32);
+
         let vertical_cell_block_count = generation_shape.vertical_cell_block_count();
         let horizontal_cell_block_count = generation_shape.horizontal_cell_block_count();
 
@@ -221,6 +218,9 @@ impl<'a> ChunkNoiseGenerator<'a> {
             biome_coords::from_block(start_block_x),
             biome_coords::from_block(start_block_z),
             horizontal_biome_end as usize,
+            beardifier_structures,
+            beardifier_junctions,
+            affected_box,
         );
 
         let aquifer_sampler = if aquifers {
@@ -391,7 +391,6 @@ impl<'a> ChunkNoiseGenerator<'a> {
         cell_z: i32,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        //TODO: Fix this when Blender is added
         let pos = Vector3::new(start_x + cell_x, start_y + cell_y, start_z + cell_z);
 
         let options = ChunkNoiseFunctionSampleOptions::new(

@@ -40,6 +40,7 @@ use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
+use crate::block::blocks::jigsaw::JigsawBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::magma::MagmaBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
@@ -136,6 +137,7 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -262,6 +264,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(PumpkinBlock);
     manager.register(WetSpongeBlock);
     manager.register(CommandBlock);
+    manager.register(JigsawBlock);
     manager.register(ComposterBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
@@ -1016,5 +1019,21 @@ impl BlockRegistry {
                 .await;
         }
         BoundingBox::full_block()
+    }
+
+    #[must_use]
+    pub fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+        self.get_pumpkin_block(block.id).map_or_else(
+            || block.mirror(state_id, mirror),
+            |pumpkin_block| pumpkin_block.mirror(block, state_id, mirror),
+        )
+    }
+
+    #[must_use]
+    pub fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+        self.get_pumpkin_block(block.id).map_or_else(
+            || block.rotate(state_id, rotation),
+            |pumpkin_block| pumpkin_block.rotate(block, state_id, rotation),
+        )
     }
 }

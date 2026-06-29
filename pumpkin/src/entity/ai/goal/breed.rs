@@ -65,6 +65,20 @@ impl BreedGoal {
         let entity = mob.get_entity();
         let world = entity.world.load();
 
+        if let Some(player) = mob_entity
+            .breeder
+            .load()
+            .and_then(|uuid| world.get_player_by_uuid(uuid))
+        {
+            player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::AnimalsBred as i32,
+                    1,
+                )
+                .await;
+        }
+
         mob_entity.reset_love_ticks();
         mob_entity
             .breeding_cooldown

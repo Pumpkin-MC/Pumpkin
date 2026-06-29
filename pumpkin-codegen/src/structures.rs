@@ -25,14 +25,23 @@ pub struct WeightedEntryStruct {
 #[derive(Deserialize)]
 pub struct StructurePlacementStruct {
     /// Optional frequency-reduction method name applied before placement.
-    frequency_reduction_method: Option<String>,
+    pub frequency_reduction_method: Option<String>,
     /// Optional probability (0–1) that a candidate chunk actually spawns the structure.
-    frequency: Option<f32>,
+    pub frequency: Option<f32>,
     /// Per-structure salt mixed into the placement RNG seed.
-    salt: u32,
+    pub salt: u32,
+    /// Optional exclusion zone to prevent this structure from generating near others.
+    pub exclusion_zone: Option<ExclusionZoneStruct>,
     /// The specific placement algorithm and its parameters.
     #[serde(flatten)]
-    r#type: StructurePlacementTypeStruct,
+    pub r#type: StructurePlacementTypeStruct,
+}
+
+/// Deserialized exclusion zone configuration.
+#[derive(Deserialize)]
+pub struct ExclusionZoneStruct {
+    pub other_set: String,
+    pub chunk_count: i32,
 }
 
 /// Deserialized placement algorithm for a structure set.
@@ -70,10 +79,30 @@ pub struct StructureStruct {
     pub biomes: String,
     /// Generation step during which this structure is placed.
     pub step: String,
+    /// Optional jigsaw start pool.
+    pub start_pool: Option<String>,
+    /// Optional jigsaw size (depth).
+    pub size: Option<i32>,
+    /// Optional terrain adaptation (bearding).
+    pub terrain_adaptation: Option<String>,
+    /// Optional jigsaw start height.
+    pub start_height: Option<serde_json::Value>,
+    /// Optional heightmap to project the start to.
+    pub project_start_to_heightmap: Option<String>,
+    /// Optional max distance from center.
+    pub max_distance_from_center: Option<i32>,
+    /// Optional liquid settings.
+    pub liquid_settings: Option<String>,
+    /// Optional dimension padding.
+    pub dimension_padding: Option<i32>,
+    /// Critical for villages to appropriately truncate long village streets.
+    pub use_expansion_hack: Option<bool>,
+    /// Defines the generation behavior (e.g. "minecraft:jigsaw").
+    #[serde(rename = "type")]
+    pub structure_type: String,
 }
 
 impl ToTokens for StructureSetStruct {
-    /// Emits a `StructureSet { … }` struct literal token stream for the wrapped structure set.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let placement = &self.placement;
         let structures = &self.structures;
@@ -88,7 +117,6 @@ impl ToTokens for StructureSetStruct {
 }
 
 impl ToTokens for WeightedEntryStruct {
-    /// Emits a `WeightedEntry { … }` struct literal token stream for the wrapped entry.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let structure = structure_key_to_token(&self.structure);
         let weight = self.weight;
@@ -103,7 +131,6 @@ impl ToTokens for WeightedEntryStruct {
 }
 
 impl ToTokens for StructurePlacementStruct {
-    /// Emits a `StructurePlacement { … }` struct literal token stream for the wrapped placement config.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let frequency_reduction = if let Some(method) = &self.frequency_reduction_method {
             let method_token = frequency_reduction_to_token(method);
@@ -118,6 +145,17 @@ impl ToTokens for StructurePlacementStruct {
             quote!(None)
         };
 
+        let exclusion_zone = if let Some(ez) = &self.exclusion_zone {
+            let other_set = &ez.other_set;
+            let chunk_count = ez.chunk_count;
+            quote!(Some(ExclusionZone {
+                other_set: #other_set,
+                chunk_count: #chunk_count,
+            }))
+        } else {
+            quote!(None)
+        };
+
         let salt = self.salt;
         let placement_type = &self.r#type;
 
@@ -126,6 +164,7 @@ impl ToTokens for StructurePlacementStruct {
                 frequency_reduction_method: #frequency_reduction,
                 frequency: #frequency,
                 salt: #salt,
+                exclusion_zone: #exclusion_zone,
                 placement_type: #placement_type,
             }
         ));
@@ -133,7 +172,6 @@ impl ToTokens for StructurePlacementStruct {
 }
 
 impl ToTokens for StructurePlacementTypeStruct {
-    /// Emits a `StructurePlacementType` variant token stream for the wrapped placement algorithm.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::RandomSpread {
@@ -176,15 +214,85 @@ impl ToTokens for StructurePlacementTypeStruct {
 }
 
 impl ToTokens for StructureStruct {
-    /// Emits a `Structure { … }` struct literal token stream for the wrapped structure entry.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let biomes = &self.biomes;
         let step = generation_step_to_token(&self.step);
+        let start_pool = if let Some(pool) = &self.start_pool {
+            quote!(Some(#pool))
+        } else {
+            quote!(None)
+        };
+        let size = if let Some(s) = self.size {
+            quote!(Some(#s))
+        } else {
+            quote!(None)
+        };
+        let terrain_adaptation = if let Some(ta) = &self.terrain_adaptation {
+            let ta_token = terrain_adaptation_to_token(ta);
+            quote!(#ta_token)
+        } else {
+            quote!(TerrainAdaptation::None)
+        };
+        let project_start_to_heightmap = if let Some(ps) = &self.project_start_to_heightmap {
+            quote!(Some(#ps))
+        } else {
+            quote!(None)
+        };
+        let max_distance_from_center = if let Some(m) = self.max_distance_from_center {
+            quote!(Some(#m))
+        } else {
+            quote!(None)
+        };
+        let liquid_settings = if let Some(ls) = &self.liquid_settings {
+            quote!(Some(#ls))
+        } else {
+            quote!(None)
+        };
+        let dimension_padding = if let Some(dp) = self.dimension_padding {
+            quote!(Some(#dp))
+        } else {
+            quote!(None)
+        };
+        let use_expansion_hack = if let Some(hack) = self.use_expansion_hack {
+            quote!(Some(#hack))
+        } else {
+            quote!(None)
+        };
+
+        let structure_type = structure_type_to_token(&self.structure_type);
+
+        let start_height = if let Some(sh) = &self.start_height {
+            if let Some(abs) = sh.get("absolute") {
+                let abs_val = abs.as_i64().unwrap() as i16;
+                quote!(Some(#abs_val))
+            } else if let Some(min_inc) = sh.get("min_inclusive") {
+                if let Some(abs) = min_inc.get("absolute") {
+                    let abs_val = abs.as_i64().unwrap() as i16;
+                    quote!(Some(#abs_val))
+                } else {
+                    quote!(None)
+                }
+            } else {
+                quote!(None)
+            }
+        } else {
+            quote!(None)
+        };
 
         tokens.extend(quote!(
             Structure {
                 biomes: #biomes,
                 step: #step,
+                start_pool: #start_pool,
+                size: #size,
+                terrain_adaptation: #terrain_adaptation,
+                start_height: #start_height,
+                project_start_to_heightmap: #project_start_to_heightmap,
+                max_distance_from_center: #max_distance_from_center,
+                liquid_settings: #liquid_settings,
+                dimension_padding: #dimension_padding,
+                use_expansion_hack: #use_expansion_hack,
+                structure_type: #structure_type,
             }
         ));
     }
@@ -192,10 +300,38 @@ impl ToTokens for StructureStruct {
 
 // Helper functions
 
-/// Converts a structure registry key to the corresponding `StructureKeys` enum variant token stream.
-///
-/// # Arguments
-/// – `key` – structure registry name with or without the `minecraft:` prefix.
+fn structure_type_to_token(st: &str) -> TokenStream {
+    match st {
+        "minecraft:jigsaw" => quote!(StructureType::Jigsaw),
+        "minecraft:buried_treasure" => quote!(StructureType::BuriedTreasure),
+        "minecraft:desert_pyramid" => quote!(StructureType::DesertPyramid),
+        "minecraft:end_city" => quote!(StructureType::EndCity),
+        "minecraft:fortress" => quote!(StructureType::Fortress),
+        "minecraft:igloo" => quote!(StructureType::Igloo),
+        "minecraft:jungle_temple" => quote!(StructureType::JungleTemple),
+        "minecraft:woodland_mansion" => quote!(StructureType::WoodlandMansion),
+        "minecraft:mineshaft" => quote!(StructureType::Mineshaft),
+        "minecraft:ocean_monument" => quote!(StructureType::OceanMonument),
+        "minecraft:nether_fossil" => quote!(StructureType::NetherFossil),
+        "minecraft:ocean_ruin" => quote!(StructureType::OceanRuin),
+        "minecraft:ruined_portal" => quote!(StructureType::RuinedPortal),
+        "minecraft:shipwreck" => quote!(StructureType::Shipwreck),
+        "minecraft:stronghold" => quote!(StructureType::Stronghold),
+        "minecraft:swamp_hut" => quote!(StructureType::SwampHut),
+        _ => quote!(StructureType::Unknown),
+    }
+}
+
+fn terrain_adaptation_to_token(ta: &str) -> TokenStream {
+    match ta {
+        "beard_thin" => quote!(TerrainAdaptation::BeardThin),
+        "beard_box" => quote!(TerrainAdaptation::BeardBox),
+        "bury" => quote!(TerrainAdaptation::Bury),
+        "encapsulate" => quote!(TerrainAdaptation::Encapsulate),
+        _ => quote!(TerrainAdaptation::None),
+    }
+}
+
 fn structure_key_to_token(key: &str) -> TokenStream {
     let stripped = key.strip_prefix("minecraft:").unwrap_or(key);
 
@@ -238,10 +374,6 @@ fn structure_key_to_token(key: &str) -> TokenStream {
     }
 }
 
-/// Converts a frequency-reduction method string to its `FrequencyReductionMethod` variant token stream.
-///
-/// # Arguments
-/// – `method` – one of `"default"`, `"legacy_type_1"`, `"legacy_type_2"`, or `"legacy_type_3"`.
 fn frequency_reduction_to_token(method: &str) -> TokenStream {
     match method {
         "default" => quote!(FrequencyReductionMethod::Default),
@@ -252,10 +384,6 @@ fn frequency_reduction_to_token(method: &str) -> TokenStream {
     }
 }
 
-/// Converts a spread type string to its `SpreadType` variant token stream.
-///
-/// # Arguments
-/// – `spread` – `"linear"` or `"triangular"`.
 fn spread_type_to_token(spread: &str) -> TokenStream {
     match spread {
         "linear" => quote!(SpreadType::Linear),
@@ -264,10 +392,6 @@ fn spread_type_to_token(spread: &str) -> TokenStream {
     }
 }
 
-/// Converts a generation step name to its `GenerationStep` variant token stream.
-///
-/// # Arguments
-/// – `step` – the generation step name as it appears in the JSON (e.g., `"surface_structures"`).
 fn generation_step_to_token(step: &str) -> TokenStream {
     match step {
         "raw_generation" => quote!(GenerationStep::RawGeneration),
@@ -389,10 +513,16 @@ pub fn build() -> TokenStream {
             pub weight: u32,
         }
 
+        pub struct ExclusionZone {
+            pub other_set: &'static str,
+            pub chunk_count: i32,
+        }
+
         pub struct StructurePlacement {
             pub frequency_reduction_method: Option<FrequencyReductionMethod>,
             pub frequency: Option<f32>,
             pub salt: u32,
+            pub exclusion_zone: Option<ExclusionZone>,
             pub placement_type: StructurePlacementType,
         }
 
@@ -440,9 +570,49 @@ pub fn build() -> TokenStream {
             }
         }
 
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum TerrainAdaptation {
+            None,
+            BeardThin,
+            BeardBox,
+            Bury,
+            Encapsulate,
+        }
+
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum StructureType {
+            Jigsaw,
+            BuriedTreasure,
+            DesertPyramid,
+            EndCity,
+            Fortress,
+            Igloo,
+            JungleTemple,
+            WoodlandMansion,
+            Mineshaft,
+            OceanMonument,
+            NetherFossil,
+            OceanRuin,
+            RuinedPortal,
+            Shipwreck,
+            Stronghold,
+            SwampHut,
+            Unknown,
+        }
+
         pub struct Structure {
             pub biomes: &'static str,
             pub step: GenerationStep,
+            pub start_pool: Option<&'static str>,
+            pub size: Option<i32>,
+            pub terrain_adaptation: TerrainAdaptation,
+            pub start_height: Option<i16>,
+            pub project_start_to_heightmap: Option<&'static str>,
+            pub max_distance_from_center: Option<i32>,
+            pub liquid_settings: Option<&'static str>,
+            pub dimension_padding: Option<i32>,
+            pub use_expansion_hack: Option<bool>,
+            pub structure_type: StructureType,
         }
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

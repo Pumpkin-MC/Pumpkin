@@ -3,6 +3,7 @@ use std::sync::{Arc, atomic::Ordering};
 use super::redstone::block_receives_redstone_power;
 use crate::block::entities::{BlockEntity, command_block::CommandBlockEntity};
 use crate::command::CommandSender;
+use crate::entity::EntityBase;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
@@ -223,7 +224,7 @@ impl BlockBehaviour for CommandBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = CommandBlockLikeProperties::default(args.block);
-            props.facing = args.player.living_entity.entity.get_facing().opposite();
+            props.facing = args.player.get_entity().get_facing().opposite();
             props.to_state_id(args.block)
         })
     }

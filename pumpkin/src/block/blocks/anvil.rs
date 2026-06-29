@@ -26,6 +26,13 @@ impl BlockBehaviour for AnvilBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::InteractWithAnvil as i32,
+                    1,
+                )
+                .await;
+            args.player
                 .open_handled_screen(&AnvilScreenFactory, Some(*args.position))
                 .await;
 

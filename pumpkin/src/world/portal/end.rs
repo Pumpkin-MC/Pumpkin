@@ -52,10 +52,9 @@ impl EndPortal {
 
     fn is_valid_portal(world: &World, pos: BlockPos) -> bool {
         for dir in BlockDirection::horizontal() {
-            let facing = dir.to_horizontal_facing().unwrap();
             let mid_pos = pos.offset_dir(dir.to_offset(), 2);
-            let left_pos = mid_pos.offset_dir(facing.rotate_clockwise().to_offset(), 1);
-            let right_pos = mid_pos.offset_dir(facing.rotate_counter_clockwise().to_offset(), 1);
+            let left_pos = mid_pos.offset_dir(dir.rotate_clockwise().to_offset(), 1);
+            let right_pos = mid_pos.offset_dir(dir.rotate_counter_clockwise().to_offset(), 1);
 
             let (mid_block, mid_state) = world.get_block_and_state_id(&mid_pos);
             let (left_block, left_state) = world.get_block_and_state_id(&left_pos);
@@ -72,6 +71,8 @@ impl EndPortal {
             let left_properties = EndPortalFrameProperties::from_state_id(left_state, left_block);
             let right_properties =
                 EndPortalFrameProperties::from_state_id(right_state, right_block);
+
+            let facing = dir.to_facing();
 
             if left_properties.facing != facing.opposite()
                 || mid_properties.facing != facing.opposite()

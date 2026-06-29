@@ -62,7 +62,6 @@ impl ServerPlayerData {
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
             .expect("Player data save panicked")?;
-
         Ok(())
     }
 

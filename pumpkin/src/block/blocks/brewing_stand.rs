@@ -57,6 +57,13 @@ impl BlockBehaviour for BrewingStandBlock {
                 && let Some(pd) = block_entity.clone().to_property_delegate()
             {
                 args.player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::InteractWithBrewingstand as i32,
+                        1,
+                    )
+                    .await;
+                args.player
                     .open_handled_screen(&BrewingScreenFactory(inventory, pd), Some(*args.position))
                     .await;
             }

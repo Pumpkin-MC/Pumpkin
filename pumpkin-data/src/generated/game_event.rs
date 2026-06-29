@@ -9,6 +9,7 @@ pub enum GameEvent {
     BlockDetach,
     BlockOpen,
     BlockPlace,
+    Bounce,
     ContainerClose,
     ContainerOpen,
     Drink,

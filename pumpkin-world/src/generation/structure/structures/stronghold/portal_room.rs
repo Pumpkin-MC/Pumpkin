@@ -26,6 +26,8 @@ use crate::{
     },
 };
 
+use crate::world::WorldPortalExt;
+
 pub struct PortalRoomPiece {
     pub piece: StrongholdPiece,
     pub spawner_placed: bool,
@@ -64,6 +66,9 @@ impl PortalRoomPiece {
 }
 
 impl StructurePieceBase for PortalRoomPiece {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }
@@ -90,6 +95,7 @@ impl StructurePieceBase for PortalRoomPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,
