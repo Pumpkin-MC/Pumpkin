@@ -77,11 +77,11 @@ impl Default for DownloadConfig {
 /// # Download targets
 /// 1. `{mirror}/pumpkin/{code}.json` — pumpkin server translations
 /// 2. `{mirror}/vanilla/{code}_java.json` — vanilla Java Edition translations
-/// 3. `{mirror}/vanilla/{code}_bedrock.lang` — vanilla Bedrock Edition translations
+///
+/// Bedrock Edition translations are **not** downloaded at runtime; only the
+/// compile-time embedded `en_us` Bedrock strings are used.
 ///
 /// Each file is fetched independently; partial failures are tolerated.
-/// A download is considered fully successful only if **all three** files
-/// are retrieved and parsed.
 ///
 /// # Timeout
 /// The configured timeout applies per request. If any request exceeds
@@ -130,20 +130,8 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
         }
     }
 
-    // 3. Vanilla Bedrock Edition translations
-    let bedrock_url = format!("{base_url}/vanilla/{code}_bedrock.lang");
-    match fetch_bedrock_lang(&bedrock_url, timeout, skip_checksum) {
-        Ok(map) => {
-            debug!(
-                "Downloaded vanilla/{code}_bedrock.lang ({} entries)",
-                map.len()
-            );
-            result.bedrock = map;
-        }
-        Err(e) => {
-            warn!("Failed to download vanilla/{code}_bedrock.lang: {e}");
-        }
-    }
+    // Bedrock Edition translations are compile-time embedded en_us only.
+    // No runtime download for bedrock_minecraft namespace.
 
     result
 }
@@ -153,7 +141,9 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 /// # Namespaces
 /// * `pumpkin:` — pumpkin server translations
 /// * `java_minecraft:` — vanilla Java Edition translations
-/// * `bedrock_minecraft:` — vanilla Bedrock Edition translations
+///
+/// Bedrock Edition translations are **not** loaded at runtime; the
+/// compile-time embedded `en_us` Bedrock strings are always used.
 ///
 /// This function calls [`crate::store::add_translation_file`] for each
 /// namespace that has entries.
@@ -172,13 +162,7 @@ pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
         crate::store::add_translation_file("java_minecraft", &json, locale);
     }
 
-    if !downloaded.bedrock.is_empty() {
-        // Bedrock .lang files are already parsed into a HashMap at download time.
-        // We load them entry by entry since they may use different key formats.
-        for (key, value) in &downloaded.bedrock {
-            crate::store::add_translation("bedrock_minecraft", key, value.as_str(), locale);
-        }
-    }
+    // Bedrock Edition: compile-time embedded en_us only, no runtime loading.
 
     if !downloaded.has_any() {
         return;
@@ -187,29 +171,23 @@ pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
     let code = locale.to_code();
     let pumpkin_count = downloaded.pumpkin.len();
     let java_count = downloaded.java.len();
-    let bedrock_count = downloaded.bedrock.len();
 
     // For non‑English locales, flag any empty namespace that will silently
     // fall back to English — users need to know this at a glance.
-    if locale != Locale::EnUs && (pumpkin_count == 0 || java_count == 0 || bedrock_count == 0) {
-        let mut missing = Vec::with_capacity(3);
+    if locale != Locale::EnUs && (pumpkin_count == 0 || java_count == 0) {
+        let mut missing = Vec::with_capacity(2);
         if pumpkin_count == 0 {
             missing.push("server messages");
         }
         if java_count == 0 {
             missing.push("Java Edition vanilla strings");
         }
-        if bedrock_count == 0 {
-            missing.push("Bedrock Edition vanilla strings");
-        }
         warn!(
-            "Translation coverage for {code}: pumpkin={pumpkin_count}, java={java_count}, bedrock={bedrock_count} — {missing} will use English fallback",
+            "Translation coverage for {code}: pumpkin={pumpkin_count}, java={java_count} — {missing} will use English fallback",
             missing = missing.join(", "),
         );
     } else {
-        info!(
-            "Loaded translations for {code} (pumpkin: {pumpkin_count}, java: {java_count}, bedrock: {bedrock_count})",
-        );
+        info!("Loaded translations for {code} (pumpkin: {pumpkin_count}, java: {java_count})",);
     }
 }
 
@@ -225,11 +203,13 @@ fn translation_cache_dir(cache_root: &Path, locale: Locale) -> PathBuf {
 /// Creates the directory structure if it doesn't exist.
 /// Each namespace is saved as a separate JSON file.
 ///
+/// Bedrock Edition translations are not saved — only the compile-time
+/// embedded `en_us` Bedrock strings are used.
+///
 /// # File layout
 /// ```text
 /// {cache_root}/en_us/pumpkin.json
 /// {cache_root}/en_us/java_minecraft.json
-/// {cache_root}/en_us/bedrock_minecraft.json
 /// ```
 pub fn save_downloaded_translations(
     downloaded: &DownloadedTranslations,
@@ -288,26 +268,7 @@ pub fn save_downloaded_translations(
         }
     }
 
-    // Save Bedrock Edition vanilla translations
-    if !downloaded.bedrock.is_empty() {
-        let path = dir.join("bedrock_minecraft.json");
-        match serde_json::to_string_pretty(&downloaded.bedrock) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(&path, &json) {
-                    warn!("Failed to save bedrock translations to {:?}: {e}", path);
-                } else {
-                    debug!(
-                        "Saved bedrock translations to {:?} ({} entries)",
-                        path,
-                        downloaded.bedrock.len()
-                    );
-                }
-            }
-            Err(e) => {
-                warn!("Failed to serialize bedrock translations: {e}");
-            }
-        }
-    }
+    // Bedrock Edition: compile-time embedded en_us only, not saved to disk.
 
     if downloaded.has_any() {
         info!(
@@ -323,11 +284,13 @@ pub fn save_downloaded_translations(
 /// Looks for translation files under `{cache_root}/{locale_code}/`.
 /// Returns `None` if the directory doesn't exist or no files are found.
 ///
-/// # File layout (same as [`save_downloaded_translations`])
+/// Bedrock Edition translations are not cached on disk — only the
+/// compile-time embedded `en_us` Bedrock strings are used.
+///
+/// # File layout
 /// ```text
 /// {cache_root}/en_us/pumpkin.json
 /// {cache_root}/en_us/java_minecraft.json
-/// {cache_root}/en_us/bedrock_minecraft.json
 /// ```
 pub fn load_cached_translations(
     locale: Locale,
@@ -399,35 +362,7 @@ pub fn load_cached_translations(
         }
     }
 
-    // Load Bedrock Edition vanilla translations
-    let bedrock_path = dir.join("bedrock_minecraft.json");
-    if bedrock_path.exists() {
-        match std::fs::read_to_string(&bedrock_path) {
-            Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
-                Ok(map) if !map.is_empty() => {
-                    debug!(
-                        "Loaded cached bedrock translations from {:?} ({} entries)",
-                        bedrock_path,
-                        map.len()
-                    );
-                    result.bedrock = map;
-                    found_any = true;
-                }
-                Ok(_) => {
-                    warn!(
-                        "Cached bedrock translation file is empty: {:?}",
-                        bedrock_path
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to parse cached bedrock translations: {e}");
-                }
-            },
-            Err(e) => {
-                warn!("Failed to read cached bedrock translations: {e}");
-            }
-        }
-    }
+    // Bedrock Edition: compile-time embedded en_us only, not loaded from cache.
 
     found_any.then(|| {
         info!(
@@ -476,11 +411,14 @@ pub fn init_translation_loader(config: DownloadConfig, cache_root: PathBuf) {
 /// # Behaviour
 /// 1. **`EnUs`** — no-op (embedded at compile time).
 /// 2. **Already loaded** — no-op (deduplicated via internal tracking set).
-/// 3. **Complete disk cache** — loads all three namespaces and returns.
+/// 3. **Complete disk cache** — loads both namespaces and returns.
 /// 4. **Partial disk cache** — loads what exists, then downloads the full
 ///    set to fill gaps.
 /// 5. **No cache** — downloads from the configured mirror, saves to disk,
 ///    and injects into the engine.
+///
+/// Bedrock Edition translations are **not** downloaded or cached; only the
+/// compile-time embedded `en_us` Bedrock strings are used.
 ///
 /// # Thread safety
 /// Safe to call from multiple threads. The tracking set ensures the same
@@ -513,10 +451,9 @@ pub fn ensure_locale_translations(locale: Locale) {
 
     // 1. Try disk cache first
     let partial_cache = if let Some(cached) = load_cached_translations(locale, cache_root) {
-        let complete =
-            !cached.pumpkin.is_empty() && !cached.java.is_empty() && !cached.bedrock.is_empty();
+        let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
         if complete {
-            // All three namespaces present — no download needed
+            // Both namespaces present — no download needed
             load_downloaded(&cached, locale);
             return;
         }
@@ -651,52 +588,6 @@ fn fetch_json(
 
     let map: HashMap<String, String> =
         serde_json::from_str(&body).map_err(|e| format!("failed to parse JSON: {e}"))?;
-
-    Ok(map)
-}
-
-/// Fetch and parse a Bedrock `.lang` file from the given URL.
-///
-/// Bedrock lang files use `key=value` format, one entry per line.
-/// Keys are lowercased for case-insensitive lookup.
-///
-/// After downloading, the data is verified against a `.sha256` checksum file
-/// if one is available on the mirror — unless `skip_checksum` is `true`.
-fn fetch_bedrock_lang(
-    url: &str,
-    timeout: Duration,
-    skip_checksum: bool,
-) -> Result<HashMap<String, String>, String> {
-    let agent = create_agent(timeout);
-    let response = agent
-        .get(url)
-        .call()
-        .map_err(|e| format!("HTTP request failed: {e}"))?;
-
-    let body = response
-        .into_body()
-        .read_to_string()
-        .map_err(|e| format!("failed to read response body: {e}"))?;
-
-    // Verify checksum if available; reject on mismatch
-    if !skip_checksum {
-        try_verify_checksum(url, body.as_bytes(), timeout)?;
-    }
-
-    let mut map = HashMap::new();
-    for line in body.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if let Some((key, value)) = trimmed.split_once('=') {
-            map.insert(key.trim().to_ascii_lowercase(), value.trim().to_string());
-        }
-    }
-
-    if map.is_empty() {
-        return Err("no entries found in .lang file".to_string());
-    }
 
     Ok(map)
 }

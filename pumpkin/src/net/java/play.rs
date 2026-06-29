@@ -715,9 +715,11 @@ impl JavaClient {
 
                 if server.advanced_config.commands.log_console {
                     info!(
-                        "Player ({}): executed command /{}",
-                        player.gameprofile.name,
-                        command
+                        "{}",
+                        localized_log_format(
+                            "server.log.player_executed_command",
+                            &[player.gameprofile.name.clone(), format!("/{command}")],
+                        )
                     );
                 }
             }
