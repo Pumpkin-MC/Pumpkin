@@ -99,6 +99,9 @@ impl<'a> CarverAquiferSampler<'a> {
             biome_coords::from_block(start_x),
             biome_coords::from_block(start_z),
             horizontal_biome_end as usize,
+            Vec::new(),
+            Vec::new(),
+            None,
         );
         let surface_config =
             super::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
