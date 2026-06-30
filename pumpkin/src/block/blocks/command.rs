@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use super::redstone::block_receives_redstone_power;
 use crate::block::entities::{BlockEntity, command_block::CommandBlockEntity};
-use crate::command::{CommandSender, tr_format, tr_plain};
+use crate::command::{CommandSender, translate_format, translate_plain};
 use crate::entity::EntityBase;
 use crate::{
     block::{
@@ -62,7 +62,7 @@ impl CommandBlock {
         let Some(before_entity) = world.get_block_entity(&before.0) else {
             warn!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "server.log.command_block_no_matching_entity",
                     server_command_locale(),
                 )
@@ -73,7 +73,7 @@ impl CommandBlock {
         else {
             warn!(
                 "{}",
-                tr_format(
+                translate_format(
                     "server.log.command_not_a_command_block",
                     server_command_locale(),
                     &[before.0.to_string()],
@@ -116,7 +116,7 @@ impl CommandBlock {
         let Some(behind_entity) = world.get_block_entity(&behind.0) else {
             warn!(
                 "{}",
-                tr_format(
+                translate_format(
                     "server.log.command_block_missing_matching_entity",
                     server_command_locale(),
                     &[behind.0.to_string()],
@@ -128,7 +128,7 @@ impl CommandBlock {
             behind_entity.as_any().downcast_ref().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain("debug.expect.command_block_behind", server_command_locale())
+                    translate_plain("debug.expect.command_block_behind", server_command_locale())
                 )
             });
 
@@ -151,7 +151,7 @@ impl CommandBlock {
         let Ok(command_entity) = Arc::downcast::<CommandBlockEntity>(block_entity) else {
             warn!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "server.log.failed_downcast_command_block",
                     server_command_locale()
                 )
@@ -197,7 +197,7 @@ impl CommandBlock {
             let Some(block_entity) = world.get_block_entity(&pos) else {
                 warn!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "server.log.missing_command_block_entity",
                         server_command_locale()
                     )
@@ -209,7 +209,7 @@ impl CommandBlock {
             else {
                 warn!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.command_not_a_command_block",
                         server_command_locale(),
                         &[pos.to_string()],
@@ -229,7 +229,7 @@ impl CommandBlock {
                     let Some(entity) = world.get_block_entity(&pos) else {
                         warn!(
                             "{}",
-                            tr_plain(
+                            translate_plain(
                                 "server.log.command_block_disappeared",
                                 server_command_locale(),
                             )
@@ -248,7 +248,7 @@ impl CommandBlock {
             if i == 0 {
                 warn!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.command_block_chain_max_executed",
                         server_command_locale(),
                         &[u16::MAX.to_string()],
@@ -308,7 +308,7 @@ impl BlockBehaviour for CommandBlock {
                 else {
                     warn!(
                         "{}",
-                        tr_format(
+                        translate_format(
                             "server.log.command_not_a_command_block",
                             server_command_locale(),
                             &[args.position.to_string()],
@@ -346,7 +346,7 @@ impl BlockBehaviour for CommandBlock {
             else {
                 warn!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.command_not_a_command_block",
                         server_command_locale(),
                         &[args.position.to_string()],
@@ -426,7 +426,10 @@ impl BlockBehaviour for CommandBlock {
                 || {
                     warn!(
                         "{}",
-                        tr_plain("server.log.command_block_missing", server_command_locale(),)
+                        translate_plain(
+                            "server.log.command_block_missing",
+                            server_command_locale(),
+                        )
                     );
                     None
                 },
@@ -435,7 +438,7 @@ impl BlockBehaviour for CommandBlock {
                         entity.as_any().downcast_ref().unwrap_or_else(|| {
                             panic!(
                                 "{}",
-                                tr_plain(
+                                translate_plain(
                                     "debug.expect.command_block_position_matching_entity",
                                     server_command_locale(),
                                 )

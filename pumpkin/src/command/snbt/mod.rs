@@ -13,7 +13,7 @@ use crate::command::snbt::markers::{
 };
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::command::tr_format;
+use crate::command::translate_format;
 use pumpkin_codecs::Number;
 use pumpkin_data::translation;
 use pumpkin_i18n::server_command_locale;
@@ -21,11 +21,11 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
 fn tr_snbt_plain(key: &str) -> String {
-    tr_snbt_format(key, &[])
+    translate_snbt_format(key, &[])
 }
 
-fn tr_snbt_format(key: &str, args: &[String]) -> String {
-    tr_format(key, server_command_locale(), args)
+fn translate_snbt_format(key: &str, args: &[String]) -> String {
+    translate_format(key, server_command_locale(), args)
 }
 
 pub const NUMBER_PARSE_FAILURE: CommandErrorType<1> = CommandErrorType::new(
@@ -112,7 +112,7 @@ impl SnbtParser<'_, '_> {
                 );
                 tracing::error!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.failed_parse_snbt",
                         server_command_locale(),
                         &[reader.string().to_string()],
@@ -339,7 +339,7 @@ impl SnbtParser<'_, '_> {
                     |_| {
                         self.store_dynamic_error(
                             &NUMBER_PARSE_FAILURE,
-                            tr_snbt_format(
+                            translate_snbt_format(
                                 "commands.snbt.number_parse_failure.value_out_of_range_radix",
                                 &[number.clone(), radix.to_string()],
                             ),
@@ -356,7 +356,7 @@ impl SnbtParser<'_, '_> {
                     |_| {
                         self.store_dynamic_error(
                             &NUMBER_PARSE_FAILURE,
-                            tr_snbt_format(
+                            translate_snbt_format(
                                 "commands.snbt.number_parse_failure.value_out_of_range_radix",
                                 &[number.clone(), radix.to_string()],
                             ),
@@ -371,7 +371,7 @@ impl SnbtParser<'_, '_> {
                 |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
-                        tr_snbt_format(
+                        translate_snbt_format(
                             "commands.snbt.number_parse_failure.input_string",
                             std::slice::from_ref(&number),
                         ),
@@ -387,7 +387,7 @@ impl SnbtParser<'_, '_> {
                     |_| {
                         self.store_dynamic_error(
                             &NUMBER_PARSE_FAILURE,
-                            tr_snbt_format(
+                            translate_snbt_format(
                                 "commands.snbt.number_parse_failure.out_of_range",
                                 std::slice::from_ref(&number),
                             ),
@@ -404,7 +404,7 @@ impl SnbtParser<'_, '_> {
                     |_| {
                         self.store_dynamic_error(
                             &NUMBER_PARSE_FAILURE,
-                            tr_snbt_format(
+                            translate_snbt_format(
                                 "commands.snbt.number_parse_failure.out_of_range",
                                 std::slice::from_ref(&number),
                             ),
@@ -418,7 +418,7 @@ impl SnbtParser<'_, '_> {
                 |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
-                        tr_snbt_format(
+                        translate_snbt_format(
                             "commands.snbt.number_parse_failure.unsigned_int_range",
                             std::slice::from_ref(&number),
                         ),
@@ -431,7 +431,7 @@ impl SnbtParser<'_, '_> {
                 |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
-                        tr_snbt_format(
+                        translate_snbt_format(
                             "commands.snbt.number_parse_failure.unsigned_long_range",
                             std::slice::from_ref(&number),
                         ),
@@ -452,7 +452,7 @@ impl SnbtParser<'_, '_> {
             |_| {
                 self.store_dynamic_error(
                     &NUMBER_PARSE_FAILURE,
-                    tr_snbt_format(
+                    translate_snbt_format(
                         "commands.snbt.number_parse_failure.input_string",
                         &[number.to_owned()],
                     ),

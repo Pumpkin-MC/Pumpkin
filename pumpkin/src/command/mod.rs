@@ -18,7 +18,8 @@ use pumpkin_data::{
     dimension::Dimension,
 };
 use pumpkin_i18n::{
-    Locale, format_translation, resolve_translation, server_command_locale, try_player_locale,
+    Locale, PUMPKIN_NAMESPACE, pumpkin_translation_key, resolve_translation, server_command_locale,
+    try_player_locale,
 };
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -40,35 +41,23 @@ pub mod string_reader;
 pub mod suggestion;
 pub mod tree;
 
-const PUMPKIN_TRANSLATION_NAMESPACE: &str = "pumpkin";
+// Re-export translation helpers from pumpkin_util so existing `use
+// crate::command::{translate_plain, translate_format}` imports continue to work.
+pub(crate) use pumpkin_util::text::translation::{translate_format, translate_plain};
 
 #[must_use]
-pub(crate) fn tr<W>(key: &'static str, locale: Locale, with: W) -> TextComponent
+pub(crate) fn translate_component<W>(key: &'static str, locale: Locale, with: W) -> TextComponent
 where
     W: Into<Vec<TextComponent>>,
 {
-    TextComponent::custom(PUMPKIN_TRANSLATION_NAMESPACE, key, locale, with)
-}
-
-#[must_use]
-pub(crate) fn tr_plain(key: &str, locale: Locale) -> String {
-    tr_format(key, locale, &[])
-}
-
-#[must_use]
-pub(crate) fn tr_format(key: &str, locale: Locale, args: &[String]) -> String {
-    let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
-    namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    format_translation(&namespaced, locale, args)
+    TextComponent::custom(PUMPKIN_NAMESPACE, key, locale, with)
 }
 
 #[must_use]
 pub(crate) fn localized_description(description: &str, locale: Locale) -> TextComponent {
     if is_builtin_translation_key(description, locale) {
         TextComponent::custom(
-            PUMPKIN_TRANSLATION_NAMESPACE.to_owned(),
+            PUMPKIN_NAMESPACE.to_owned(),
             description.to_owned(),
             locale,
             Vec::new(),
@@ -87,11 +76,7 @@ fn is_builtin_translation_key(key: &str, locale: Locale) -> bool {
         return false;
     }
 
-    let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
-    namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    !resolve_translation(&namespaced, locale).is_missing()
+    !resolve_translation(&pumpkin_translation_key(key), locale).is_missing()
 }
 
 /// Represents the source of a command execution.
@@ -129,15 +114,16 @@ pub enum CommandSender {
 impl fmt::Display for CommandSender {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Console => f.write_str(&tr_plain(
+            Self::Console => f.write_str(&translate_plain(
                 "commands.sender.console",
                 server_command_locale(),
             )),
-            Self::Rcon(_) => {
-                f.write_str(&tr_plain("commands.sender.rcon", server_command_locale()))
-            }
+            Self::Rcon(_) => f.write_str(&translate_plain(
+                "commands.sender.rcon",
+                server_command_locale(),
+            )),
             Self::Player(p) => f.write_str(&p.gameprofile.name),
-            Self::CommandBlock(..) => f.write_str(&tr_plain(
+            Self::CommandBlock(..) => f.write_str(&translate_plain(
                 "commands.sender.command_block",
                 server_command_locale(),
             )),
@@ -167,7 +153,7 @@ impl CommandSender {
                 let timestamp = now.format(&format).unwrap_or_else(|_| {
                     panic!(
                         "{}",
-                        tr_plain(
+                        translate_plain(
                             "debug.expect.failed_format_timestamp",
                             server_command_locale(),
                         )
@@ -351,8 +337,8 @@ impl CommandSender {
                     None,
                     spawn_point,
                     Vector2::new(0.0, 0.0),
-                    tr_plain("commands.sender.rcon", locale),
-                    tr("commands.sender.rcon", locale, []),
+                    translate_plain("commands.sender.rcon", locale),
+                    translate_component("commands.sender.rcon", locale, []),
                     server.clone(),
                 )
             }
@@ -365,8 +351,8 @@ impl CommandSender {
                     None,
                     spawn_point,
                     Vector2::new(0.0, 0.0),
-                    tr_plain("commands.sender.console", locale),
-                    tr("commands.sender.console", locale, []),
+                    translate_plain("commands.sender.console", locale),
+                    translate_component("commands.sender.console", locale, []),
                     server.clone(),
                 )
             }
@@ -396,7 +382,11 @@ impl CommandSender {
                 };
 
                 // TODO: when command blocks get custom names, add a check for it
-                let name = tr("commands.sender.command_block", server_command_locale(), []);
+                let name = translate_component(
+                    "commands.sender.command_block",
+                    server_command_locale(),
+                    [],
+                );
 
                 CommandSource::new(
                     Self::CommandBlock(command_entity, world.clone()),

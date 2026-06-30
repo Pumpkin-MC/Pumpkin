@@ -10,7 +10,7 @@ use tracing::{debug, error, warn};
 use super::args::ConsumedArgs;
 use super::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use super::errors::error_types;
-use super::{tr, tr_format, tr_plain};
+use super::{translate_component, translate_format, translate_plain};
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError::{
@@ -44,35 +44,47 @@ impl CommandError {
             InvalidConsumption(s) => {
                 error!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "commands.dispatcher.log.invalid_consumption",
                         server_command_locale(),
                         &[cmd.to_owned(), format!("{s:?}")]
                     )
                 );
-                vec![tr("commands.dispatcher.internal_error", locale, [])]
+                vec![translate_component(
+                    "commands.dispatcher.internal_error",
+                    locale,
+                    [],
+                )]
             }
             InvalidRequirement => {
                 error!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "commands.dispatcher.log.invalid_requirement",
                         server_command_locale(),
                         &[cmd.to_owned()]
                     )
                 );
-                vec![tr("commands.dispatcher.internal_error", locale, [])]
+                vec![translate_component(
+                    "commands.dispatcher.internal_error",
+                    locale,
+                    [],
+                )]
             }
             PermissionDenied => {
                 warn!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "commands.dispatcher.log.permission_denied",
                         server_command_locale(),
                         &[cmd.to_owned()]
                     )
                 );
-                vec![tr("commands.dispatcher.permission_denied", locale, [])]
+                vec![translate_component(
+                    "commands.dispatcher.permission_denied",
+                    locale,
+                    [],
+                )]
             }
             CommandFailed(s) => vec![s],
             SyntaxError(s) => render_syntax_error_messages(s),
@@ -316,7 +328,7 @@ impl CommandDispatcher {
                 Err(InvalidConsumption(s)) => {
                     debug!(
                         "{}",
-                        tr_format(
+                        translate_format(
                             "commands.dispatcher.log.invalid_consumption",
                             server_command_locale(),
                             &[cmd.to_owned(), format!("{s:?}")],
@@ -327,7 +339,7 @@ impl CommandDispatcher {
                 Err(InvalidRequirement) => {
                     debug!(
                         "{}",
-                        tr_format(
+                        translate_format(
                             "commands.dispatcher.log.invalid_requirement",
                             server_command_locale(),
                             &[cmd.to_owned()],
@@ -338,7 +350,7 @@ impl CommandDispatcher {
                 Err(PermissionDenied) => {
                     debug!(
                         "{}",
-                        tr_format(
+                        translate_format(
                             "commands.dispatcher.log.permission_denied",
                             server_command_locale(),
                             &[cmd.to_owned()],
@@ -349,7 +361,7 @@ impl CommandDispatcher {
                 Err(CommandFailed(_)) => {
                     debug!(
                         "{}",
-                        tr_plain("server.log.command_failed", server_command_locale())
+                        translate_plain("server.log.command_failed", server_command_locale())
                     );
                     return Vec::new();
                 }
@@ -362,7 +374,7 @@ impl CommandDispatcher {
                 Ok(None) => {
                     debug!(
                         "{}",
-                        tr_plain("server.log.command_none", server_command_locale())
+                        translate_plain("server.log.command_none", server_command_locale())
                     );
                 }
             }
@@ -376,7 +388,7 @@ impl CommandDispatcher {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn split_parts(cmd: &str) -> Result<(&str, RawArgs<'_>), CommandError> {
         if cmd.is_empty() {
-            return Err(CommandFailed(tr(
+            return Err(CommandFailed(translate_component(
                 "commands.dispatcher.empty_command",
                 server_command_locale(),
                 [],
@@ -404,7 +416,7 @@ impl CommandDispatcher {
                 }
                 '}' if !in_single_quotes && !in_double_quotes => {
                     if in_braces == 0 {
-                        return Err(CommandFailed(tr(
+                        return Err(CommandFailed(translate_component(
                             "commands.dispatcher.unmatched_braces",
                             server_command_locale(),
                             [],
@@ -417,7 +429,7 @@ impl CommandDispatcher {
                 }
                 ']' if !in_single_quotes && !in_double_quotes => {
                     if in_brackets == 0 {
-                        return Err(CommandFailed(tr(
+                        return Err(CommandFailed(translate_component(
                             "commands.dispatcher.unmatched_brackets",
                             server_command_locale(),
                             [],
@@ -458,28 +470,28 @@ impl CommandDispatcher {
             });
         }
         if in_single_quotes || in_double_quotes {
-            return Err(CommandFailed(tr(
+            return Err(CommandFailed(translate_component(
                 "commands.dispatcher.unmatched_quotes",
                 server_command_locale(),
                 [],
             )));
         }
         if in_braces != 0 {
-            return Err(CommandFailed(tr(
+            return Err(CommandFailed(translate_component(
                 "commands.dispatcher.unmatched_braces_end",
                 server_command_locale(),
                 [],
             )));
         }
         if in_brackets != 0 {
-            return Err(CommandFailed(tr(
+            return Err(CommandFailed(translate_component(
                 "commands.dispatcher.unmatched_brackets_end",
                 server_command_locale(),
                 [],
             )));
         }
         if args.is_empty() {
-            return Err(CommandFailed(tr(
+            return Err(CommandFailed(translate_component(
                 "commands.dispatcher.empty_command",
                 server_command_locale(),
                 [],
@@ -503,7 +515,7 @@ impl CommandDispatcher {
         }
 
         let Some(permission) = self.permissions.get(key) else {
-            return Err(CommandFailed(tr(
+            return Err(CommandFailed(translate_component(
                 "commands.dispatcher.permission_not_found",
                 server_command_locale(),
                 [],
@@ -533,11 +545,14 @@ impl CommandDispatcher {
     }
 
     pub fn get_tree<'a>(&'a self, key: &str) -> Result<&'a CommandTree, CommandError> {
-        let command = self.commands.get(key).ok_or(CommandFailed(tr(
-            "commands.dispatcher.command_not_found",
-            server_command_locale(),
-            [],
-        )))?;
+        let command = self
+            .commands
+            .get(key)
+            .ok_or(CommandFailed(translate_component(
+                "commands.dispatcher.command_not_found",
+                server_command_locale(),
+                [],
+            )))?;
 
         match command {
             Command::Tree(tree) => Ok(tree),
@@ -546,7 +561,7 @@ impl CommandDispatcher {
                     error!(
                         "Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree"
                     );
-                    return Err(CommandFailed(tr(
+                    return Err(CommandFailed(translate_component(
                         "commands.dispatcher.internal_error",
                         server_command_locale(),
                         [],
@@ -603,7 +618,7 @@ impl CommandDispatcher {
                     if raw_arg.value != string.as_str() {
                         debug!(
                             "{}",
-                            tr_format(
+                            translate_format(
                                 "server.log.command_expected_argument",
                                 server_command_locale(),
                                 &[format!("{raw_args:?}"), string.clone()],
@@ -629,7 +644,7 @@ impl CommandDispatcher {
                         Ok(None) => {
                             debug!(
                                 "{}",
-                                tr_format(
+                                translate_format(
                                     "server.log.command_cannot_parse_argument",
                                     server_command_locale(),
                                     &[format!("{raw_args:?}"), name.clone()],
@@ -658,7 +673,7 @@ impl CommandDispatcher {
                     if !predicate(src) {
                         debug!(
                             "{}",
-                            tr_format(
+                            translate_format(
                                 "server.log.command_requirement_not_met",
                                 server_command_locale(),
                                 &[format!("{raw_args:?}")],
@@ -679,7 +694,7 @@ impl CommandDispatcher {
 
         debug!(
             "{}",
-            tr_format(
+            translate_format(
                 "server.log.command_unconsumed_args",
                 server_command_locale(),
                 &[format!("{raw_args:?}")],
@@ -749,7 +764,7 @@ impl CommandDispatcher {
         let primary_name = names.next().unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.name_must_be_provided",
                     server_command_locale(),
                 )

@@ -7,7 +7,7 @@ use crate::command::{
         ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
         bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
     },
-    tr_plain,
+    translate_plain,
     tree::{
         CommandTree,
         builder::{argument_default_name, literal},
@@ -57,7 +57,7 @@ impl CommandExecutor for GetExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -94,7 +94,7 @@ impl CommandExecutor for SetExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -148,7 +148,7 @@ impl CommandExecutor for SetTimeExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -228,7 +228,7 @@ impl CommandExecutor for AddExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -282,7 +282,7 @@ impl CommandExecutor for AddTimeExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -362,7 +362,7 @@ impl CommandExecutor for CenterExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -403,7 +403,7 @@ impl CommandExecutor for DamageAmountExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -456,7 +456,7 @@ impl CommandExecutor for DamageBufferExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -508,7 +508,7 @@ impl CommandExecutor for WarningDistanceExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )
@@ -559,7 +559,7 @@ impl CommandExecutor for WarningTimeExecutor {
             let world = worlds.first().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.there_should_always_be_one_world",
                         server_command_locale(),
                     )

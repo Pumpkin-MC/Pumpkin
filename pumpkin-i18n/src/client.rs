@@ -86,19 +86,3 @@ pub fn resolve_client_locale(player_locale: &str, config_value: &str) -> Locale 
     };
     crate::parse_locale_value(source)
 }
-
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
-/// Returns the locale string in lowercase underscore format for logging.
-///
-/// # Arguments
-/// * `locale` — The locale to format.
-///
-/// # Returns
-/// A string like `"en_us"`, `"zh_cn"`, etc.
-#[must_use]
-pub fn locale_to_log_string(locale: Locale) -> String {
-    locale.to_code().to_owned()
-}

@@ -6,7 +6,7 @@ use crate::command::node::attached::NodeId;
 use crate::command::node::dispatcher::{CommandDispatcher, ResultConsumer};
 use crate::command::node::tree::Tree;
 use crate::command::node::{Command, RedirectModifier};
-use crate::command::tr_plain;
+use crate::command::translate_plain;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_i18n::server_command_locale;
@@ -277,7 +277,7 @@ impl<'a> ContextChain<'a> {
         let mut result = match &executable.command {
             None => panic!(
                 "{}",
-                tr_plain("debug.expect.executable_expected", server_command_locale())
+                translate_plain("debug.expect.executable_expected", server_command_locale())
             ),
             Some(command) => command.execute(&context_to_use).await,
         };
@@ -566,7 +566,7 @@ mod test {
     use crate::command::node::dispatcher::{CommandDispatcher, EmptyResultConsumer};
     use crate::command::node::tree::ROOT_NODE_ID;
     use crate::command::node::{CommandExecutor, CommandExecutorResult, Redirection};
-    use crate::command::tr_plain;
+    use crate::command::translate_plain;
 
     struct TenExecutor;
     impl CommandExecutor for TenExecutor {
@@ -632,7 +632,7 @@ mod test {
         let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.command_context_flattened",
                     server_command_locale(),
                 )
@@ -660,7 +660,7 @@ mod test {
         let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.command_context_flattened",
                     server_command_locale(),
                 )
@@ -685,7 +685,7 @@ mod test {
         let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.command_context_flattened",
                     server_command_locale(),
                 )
@@ -715,7 +715,7 @@ mod test {
         let chain = ContextChain::try_flatten(&top_context).unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.command_context_flattened",
                     server_command_locale(),
                 )
@@ -726,7 +726,7 @@ mod test {
         let chain2 = chain.next_stage().unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.command_context_next_stage",
                     server_command_locale(),
                 )
@@ -737,7 +737,7 @@ mod test {
         let chain3 = chain2.next_stage().unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.command_context_next_stage",
                     server_command_locale(),
                 )

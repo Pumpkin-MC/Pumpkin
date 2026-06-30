@@ -1,7 +1,8 @@
 use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
 
 use crate::command::{
-    CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tr, tree::CommandTree,
+    CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, translate_component,
+    tree::CommandTree,
 };
 
 const NAMES: [&str; 2] = ["pl", "plugins"];
@@ -22,11 +23,11 @@ impl CommandExecutor for Executor {
             let locale = sender.get_locale();
 
             let mut message = if plugins.is_empty() {
-                tr("commands.plugins.no_plugins", locale, [])
+                translate_component("commands.plugins.no_plugins", locale, [])
             } else if plugins.len() == 1 {
-                tr("commands.plugins.one_plugin", locale, [])
+                translate_component("commands.plugins.one_plugin", locale, [])
             } else {
-                tr(
+                translate_component(
                     "commands.plugins.multiple_plugins",
                     locale,
                     [TextComponent::text(plugins.len().to_string())],
@@ -36,7 +37,7 @@ impl CommandExecutor for Executor {
             for (i, metadata) in plugins.clone().into_iter().enumerate() {
                 let mut component = TextComponent::text(metadata.name.clone())
                     .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(tr(
+                    .hover_event(HoverEvent::show_text(translate_component(
                         "commands.plugins.hover_text",
                         locale,
                         [
@@ -46,8 +47,11 @@ impl CommandExecutor for Executor {
                         ],
                     )));
                 if i != plugins.len() - 1 {
-                    component =
-                        component.add_child(tr("commands.plugins.list.separator", locale, []));
+                    component = component.add_child(translate_component(
+                        "commands.plugins.list.separator",
+                        locale,
+                        [],
+                    ));
                 }
                 message = message.add_child(component);
             }

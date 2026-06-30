@@ -81,11 +81,11 @@ pub(crate) fn resolve_translation_components(
 ) -> (String, Vec<TextComponentBase>) {
     let resolved = resolve_translation(namespaced_key, locale);
     if with.is_empty() {
-        return (resolved_text(namespaced_key, &resolved), Vec::new());
+        return (resolved.value_or_raw(namespaced_key), Vec::new());
     }
 
     let Some(tokens) = resolved.tokens() else {
-        return (resolved_text(namespaced_key, &resolved), Vec::new());
+        return (resolved.value_or_raw(namespaced_key), Vec::new());
     };
 
     let mut parent = String::new();
@@ -120,11 +120,11 @@ where
 {
     let resolved = resolve_translation(namespaced_key, locale);
     if with.is_empty() {
-        return resolved_text(namespaced_key, &resolved);
+        return resolved.value_or_raw(namespaced_key);
     }
 
     let Some(tokens) = resolved.tokens() else {
-        return resolved_text(namespaced_key, &resolved);
+        return resolved.value_or_raw(namespaced_key);
     };
 
     let mut result = String::with_capacity(resolved.as_str().len());
@@ -139,14 +139,6 @@ where
         }
     }
     result
-}
-
-fn resolved_text(raw_key: &str, resolved: &pumpkin_i18n::ResolvedTranslation) -> String {
-    if resolved.is_missing() {
-        raw_key.to_owned()
-    } else {
-        resolved.as_str().to_owned()
-    }
 }
 
 fn empty_text_component() -> TextComponentBase {

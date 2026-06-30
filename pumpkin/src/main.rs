@@ -29,7 +29,7 @@ use pumpkin_util::translation::{localized_log, localized_log_format, localized_t
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_i18n::{
     self, DownloadConfig, download_locale, init_translation_loader, load_cached_translations,
-    load_downloaded, locale_to_log_string, resolve_server_locale, save_downloaded_translations,
+    load_downloaded, mark_locale_loaded, resolve_server_locale, save_downloaded_translations,
     set_server_global_locale,
 };
 use pumpkin_util::text::{
@@ -77,7 +77,7 @@ async fn main() {
             "server.log.locale_info",
             &[format!(
                 "{} ({})",
-                locale_to_log_string(server_global_locale),
+                server_global_locale.to_code(),
                 config.advanced.locale.server_global
             )],
         )
@@ -130,10 +130,11 @@ async fn main() {
 
     if downloaded.has_any() {
         load_downloaded(&downloaded, server_global_locale);
+        mark_locale_loaded(server_global_locale);
     } else if server_global_locale != pumpkin_i18n::Locale::EnUs {
         warn!(
             "No translations downloaded for {} — using embedded English fallback",
-            locale_to_log_string(server_global_locale)
+            server_global_locale.to_code()
         );
     }
 

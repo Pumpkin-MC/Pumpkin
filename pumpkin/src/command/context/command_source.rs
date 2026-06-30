@@ -1,7 +1,7 @@
 use crate::command::argument_types::entity_anchor::EntityAnchor;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
-use crate::command::{CommandSender, tr_plain};
+use crate::command::{CommandSender, translate_plain};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -370,7 +370,7 @@ impl CommandSource {
         self.world.as_ref().unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain("debug.expect.world_should_exist", server_command_locale(),)
+                translate_plain("debug.expect.world_should_exist", server_command_locale(),)
             )
         })
     }
@@ -384,7 +384,7 @@ impl CommandSource {
         self.server.as_ref().unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain("debug.expect.server_should_exist", server_command_locale(),)
+                translate_plain("debug.expect.server_should_exist", server_command_locale(),)
             )
         })
     }

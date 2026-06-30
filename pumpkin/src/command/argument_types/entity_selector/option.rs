@@ -7,7 +7,7 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
-use crate::command::tr_format;
+use crate::command::translate_format;
 use pumpkin_data::translation;
 use pumpkin_i18n::server_command_locale;
 use pumpkin_util::GameMode;
@@ -283,7 +283,7 @@ impl EntitySelectorOption {
             _ => {
                 tracing::warn!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.entity_selector_unimplemented",
                         server_command_locale(),
                         &[format!("{self:?}")],

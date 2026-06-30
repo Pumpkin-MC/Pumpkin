@@ -1,4 +1,4 @@
-use crate::command::{CommandResult, tr_plain};
+use crate::command::{CommandResult, translate_plain};
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -98,8 +98,8 @@ async fn ban_profile(
 ) -> bool {
     let mut banned_players = server.data.banned_player_list.write().await;
 
-    let reason =
-        reason.unwrap_or_else(|| tr_plain("commands.ban.default_reason", sender.get_locale()));
+    let reason = reason
+        .unwrap_or_else(|| translate_plain("commands.ban.default_reason", sender.get_locale()));
 
     if let Some(entry) = banned_players
         .banned_players

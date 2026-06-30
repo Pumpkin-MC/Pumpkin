@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
-use crate::command::{CommandResult, tr, tr_format, tr_plain};
+use crate::command::{CommandResult, translate_component, translate_format, translate_plain};
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 
@@ -27,7 +27,10 @@ struct Contributor {
 
 fn fetch_all_contributors(locale: Locale) -> Vec<Contributor> {
     let mut all_contributors = Vec::new();
-    let mut next_url = Some(tr_plain("commands.pumpkin.contributors_api_url", locale));
+    let mut next_url = Some(translate_plain(
+        "commands.pumpkin.contributors_api_url",
+        locale,
+    ));
 
     while let Some(url) = next_url {
         let response = ureq::get(&url).header("User-Agent", "Pumpkin-MC").call();
@@ -86,7 +89,7 @@ impl CommandExecutor for Executor {
             } else {
                 "release"
             };
-            let version_string = tr_format(
+            let version_string = translate_format(
                 "commands.pumpkin.version_string",
                 locale,
                 &[
@@ -105,7 +108,7 @@ impl CommandExecutor for Executor {
                         vec![TextComponent::text(version_string.clone())],
                     )
                     .hover_event(HoverEvent::show_text(
-                        tr(
+                        translate_component(
                             "commands.pumpkin.commit_hover",
                             locale,
                             [TextComponent::text(GIT_HASH_FULL.to_owned())],
@@ -191,7 +194,10 @@ impl CommandExecutor for Executor {
                     .add_child(
                         TextComponent::custom("pumpkin", "commands.pumpkin.github", locale, vec![])
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::Owned(tr_plain("commands.pumpkin.github_url", locale)),
+                                url: Cow::Owned(translate_plain(
+                                    "commands.pumpkin.github_url",
+                                    locale,
+                                )),
                             })
                             .hover_event(HoverEvent::show_text(TextComponent::custom(
                                 "pumpkin",
@@ -206,11 +212,14 @@ impl CommandExecutor for Executor {
                     // Spacing
                     .add_child(TextComponent::text("  "))
                     .add_child(
-                        tr("commands.pumpkin.donate", locale, [])
+                        translate_component("commands.pumpkin.donate", locale, [])
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::Owned(tr_plain("commands.pumpkin.donate_url", locale)),
+                                url: Cow::Owned(translate_plain(
+                                    "commands.pumpkin.donate_url",
+                                    locale,
+                                )),
                             })
-                            .hover_event(HoverEvent::show_text(tr(
+                            .hover_event(HoverEvent::show_text(translate_component(
                                 "commands.pumpkin.donate.hover",
                                 locale,
                                 [],
@@ -229,7 +238,10 @@ impl CommandExecutor for Executor {
                             vec![],
                         )
                         .click_event(ClickEvent::OpenUrl {
-                            url: Cow::Owned(tr_plain("commands.pumpkin.website_url", locale)),
+                            url: Cow::Owned(translate_plain(
+                                "commands.pumpkin.website_url",
+                                locale,
+                            )),
                         })
                         .hover_event(HoverEvent::show_text(TextComponent::custom(
                             "pumpkin",

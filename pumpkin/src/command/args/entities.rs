@@ -6,7 +6,7 @@ use crate::command::dispatcher::CommandError;
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use crate::command::errors::error_types;
 use crate::command::tree::{RawArg, RawArgs};
-use crate::command::{CommandSender, tr_format, tr_plain};
+use crate::command::{CommandSender, translate_format, translate_plain};
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::{entity::EntityType, translation};
@@ -83,13 +83,13 @@ impl FromStr for EntityFilter {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '=');
         let key = parts.next().ok_or_else(|| {
-            tr_plain(
+            translate_plain(
                 "commands.selector.error.missing_key",
                 server_command_locale(),
             )
         })?;
         let mut value = parts.next().ok_or_else(|| {
-            tr_plain(
+            translate_plain(
                 "commands.selector.error.missing_value",
                 server_command_locale(),
             )
@@ -102,7 +102,7 @@ impl FromStr for EntityFilter {
         match key {
             "type" => {
                 let entity_type = EntityType::from_name(value).ok_or_else(|| {
-                    tr_format(
+                    translate_format(
                         "commands.selector.error.invalid_entity_type",
                         server_command_locale(),
                         &[value.to_owned()],
@@ -116,13 +116,13 @@ impl FromStr for EntityFilter {
             }
             "limit" => {
                 let limit = value.parse::<usize>().map_err(|_| {
-                    tr_plain(
+                    translate_plain(
                         "commands.selector.error.invalid_limit",
                         server_command_locale(),
                     )
                 })?;
                 if negate {
-                    return Err(tr_plain(
+                    return Err(translate_plain(
                         "commands.selector.error.limit_negation",
                         server_command_locale(),
                     ));
@@ -136,7 +136,7 @@ impl FromStr for EntityFilter {
                     "furthest" => EntityFilterSort::Furthest,
                     "random" => EntityFilterSort::Random,
                     _ => {
-                        return Err(tr_format(
+                        return Err(translate_format(
                             "commands.selector.error.invalid_sort",
                             server_command_locale(),
                             &[value.to_owned()],
@@ -144,14 +144,14 @@ impl FromStr for EntityFilter {
                     }
                 };
                 if negate {
-                    return Err(tr_plain(
+                    return Err(translate_plain(
                         "commands.selector.error.sort_negation",
                         server_command_locale(),
                     ));
                 }
                 Ok(Self::Sort(sort))
             }
-            _ => Err(tr_format(
+            _ => Err(translate_format(
                 "commands.selector.error.unimplemented_key",
                 server_command_locale(),
                 &[key.to_owned()],
@@ -205,7 +205,7 @@ impl TargetSelector {
         let player_type = EntityType::from_name("player").unwrap_or_else(|| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.entity_type_player_must_exist",
                     server_command_locale(),
                 )
@@ -290,7 +290,7 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
         "@n" => EntitySelectorType::NearestEntity,
         _ => {
             return Err(TargetSelectorParseError {
-                message: tr_format(
+                message: translate_format(
                     "commands.selector.error.invalid_selector_type",
                     server_command_locale(),
                     &[type_str.to_owned()],
@@ -307,7 +307,7 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
 
     if !arg.ends_with(']') {
         return Err(TargetSelectorParseError {
-            message: tr_plain(
+            message: translate_plain(
                 "commands.selector.error.missing_bracket",
                 server_command_locale(),
             ),
@@ -395,7 +395,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
             Err(e) => {
                 debug!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.failed_parse_target_selector",
                         server_command_locale(),
                         &[s.to_string(), e],

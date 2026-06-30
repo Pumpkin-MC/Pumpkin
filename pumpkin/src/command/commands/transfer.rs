@@ -12,7 +12,7 @@ use crate::command::args::{Arg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{self, InvalidConsumption, InvalidRequirement};
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{
-    CommandExecutor, CommandSender, args::ConsumedArgs, tr_plain, tree::CommandTree,
+    CommandExecutor, CommandSender, args::ConsumedArgs, translate_plain, tree::CommandTree,
 };
 use crate::entity::EntityBase;
 use crate::net::ClientPlatform;
@@ -51,7 +51,7 @@ impl CommandExecutor for TargetSelfExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    return Err(InvalidConsumption(Some(tr_plain(
+                    return Err(InvalidConsumption(Some(translate_plain(
                         "commands.transfer.port.invalid_range",
                         sender.get_locale(),
                     ))));
@@ -117,7 +117,7 @@ impl CommandExecutor for TargetPlayerExecutor {
                 Err(_) => 25565,
                 Ok(Ok(count)) => count,
                 Ok(Err(_)) => {
-                    return Err(InvalidConsumption(Some(tr_plain(
+                    return Err(InvalidConsumption(Some(translate_plain(
                         "commands.transfer.port.invalid_range",
                         sender.get_locale(),
                     ))));

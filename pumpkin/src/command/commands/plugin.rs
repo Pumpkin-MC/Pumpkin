@@ -9,7 +9,7 @@ use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
     dispatcher::CommandError,
-    tr,
+    translate_component,
     tree::{
         CommandTree,
         builder::{argument, literal, require},
@@ -38,11 +38,11 @@ impl CommandExecutor for ListExecutor {
             let locale = sender.get_locale();
 
             let mut message = if plugins.is_empty() {
-                tr("commands.plugin.no_plugins", locale, [])
+                translate_component("commands.plugin.no_plugins", locale, [])
             } else if plugins.len() == 1 {
-                tr("commands.plugin.one_plugin", locale, [])
+                translate_component("commands.plugin.one_plugin", locale, [])
             } else {
-                tr(
+                translate_component(
                     "commands.plugin.multiple_plugins",
                     locale,
                     [TextComponent::text(plugins.len().to_string())],
@@ -52,7 +52,7 @@ impl CommandExecutor for ListExecutor {
             for (i, metadata) in plugins.iter().enumerate() {
                 let mut component = TextComponent::text(metadata.name.clone())
                     .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(tr(
+                    .hover_event(HoverEvent::show_text(translate_component(
                         "commands.plugin.hover_text",
                         locale,
                         [
@@ -62,8 +62,11 @@ impl CommandExecutor for ListExecutor {
                         ],
                     )));
                 if i != plugins.len() - 1 {
-                    component =
-                        component.add_child(tr("commands.plugin.list.separator", locale, []));
+                    component = component.add_child(translate_component(
+                        "commands.plugin.list.separator",
+                        locale,
+                        [],
+                    ));
                 }
 
                 message = message.add_child(component);
@@ -92,7 +95,7 @@ impl CommandExecutor for LoadExecutor {
             let locale = sender.get_locale();
 
             if server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(tr(
+                return Err(CommandError::CommandFailed(translate_component(
                     "commands.plugin.already_loaded",
                     locale,
                     [TextComponent::text(plugin_name.to_string())],
@@ -108,7 +111,7 @@ impl CommandExecutor for LoadExecutor {
                 Ok(()) => {
                     sender
                         .send_message(
-                            tr(
+                            translate_component(
                                 "commands.plugin.loaded_successfully",
                                 locale,
                                 [TextComponent::text(plugin_name.to_string())],
@@ -118,7 +121,7 @@ impl CommandExecutor for LoadExecutor {
                         .await;
                     Ok(1)
                 }
-                Err(e) => Err(CommandError::CommandFailed(tr(
+                Err(e) => Err(CommandError::CommandFailed(translate_component(
                     "commands.plugin.failed_to_load",
                     locale,
                     [
@@ -147,7 +150,7 @@ impl CommandExecutor for UnloadExecutor {
             let locale = sender.get_locale();
 
             if !server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(tr(
+                return Err(CommandError::CommandFailed(translate_component(
                     "commands.plugin.not_loaded",
                     locale,
                     [TextComponent::text(plugin_name.to_string())],
@@ -160,7 +163,7 @@ impl CommandExecutor for UnloadExecutor {
                 Ok(()) => {
                     sender
                         .send_message(
-                            tr(
+                            translate_component(
                                 "commands.plugin.unloaded_successfully",
                                 locale,
                                 [TextComponent::text(plugin_name.to_string())],
@@ -171,7 +174,7 @@ impl CommandExecutor for UnloadExecutor {
 
                     Ok(1)
                 }
-                Err(e) => Err(CommandError::CommandFailed(tr(
+                Err(e) => Err(CommandError::CommandFailed(translate_component(
                     "commands.plugin.failed_to_unload",
                     locale,
                     [
@@ -199,7 +202,7 @@ impl CommandExecutor for HotReloadExecutor {
 
             if enabled {
                 if let Err(e) = server.plugin_manager.start_watcher().await {
-                    return Err(CommandError::CommandFailed(tr(
+                    return Err(CommandError::CommandFailed(translate_component(
                         "commands.plugin.failed_to_start_watcher",
                         locale,
                         [TextComponent::text(e.to_string())],
@@ -208,13 +211,13 @@ impl CommandExecutor for HotReloadExecutor {
 
                 sender
                     .send_message(
-                        tr("commands.plugin.hotreload_enabled", locale, [])
+                        translate_component("commands.plugin.hotreload_enabled", locale, [])
                             .color_named(NamedColor::Green),
                     )
                     .await;
                 sender
                     .send_message(
-                        tr("commands.plugin.hotreload_warning", locale, [])
+                        translate_component("commands.plugin.hotreload_warning", locale, [])
                             .color_named(NamedColor::Red),
                     )
                     .await;
@@ -223,7 +226,7 @@ impl CommandExecutor for HotReloadExecutor {
 
                 sender
                     .send_message(
-                        tr("commands.plugin.hotreload_disabled", locale, [])
+                        translate_component("commands.plugin.hotreload_disabled", locale, [])
                             .color_named(NamedColor::Green),
                     )
                     .await;

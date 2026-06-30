@@ -13,7 +13,7 @@ use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandSender, tr_plain};
+use crate::command::{CommandExecutor, CommandSender, translate_plain};
 use crate::entity::EntityBase;
 use crate::world::World;
 use pumpkin_i18n::server_command_locale;
@@ -66,7 +66,7 @@ fn resolve_sender_world(
             .unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    tr_plain(
+                    translate_plain(
                         "debug.expect.server_needs_one_world",
                         server_command_locale(),
                     )

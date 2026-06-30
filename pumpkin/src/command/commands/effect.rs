@@ -7,7 +7,7 @@ use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender, tr_plain};
+use crate::command::{CommandExecutor, CommandResult, CommandSender, translate_plain};
 use crate::entity::EntityBase;
 use pumpkin_data::potion::Effect;
 use pumpkin_i18n::server_command_locale;
@@ -98,7 +98,7 @@ impl CommandExecutor for GiveExecutor {
                         .unwrap_or_else(|| {
                             panic!(
                                 "{}",
-                                tr_plain(
+                                translate_plain(
                                     "debug.expect.effect_should_exist",
                                     server_command_locale(),
                                 )

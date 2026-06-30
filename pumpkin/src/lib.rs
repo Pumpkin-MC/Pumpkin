@@ -11,9 +11,7 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
-use pumpkin_i18n::{
-    ensure_locale_translations, locale_to_log_string, remove_player_locale, set_player_locale,
-};
+use pumpkin_i18n::{ensure_locale_translations, remove_player_locale, set_player_locale};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -559,7 +557,7 @@ impl PumpkinServer {
                                                 player.gameprofile.name.clone(),
                                                 player.gameprofile.id.to_string(),
                                                 "Java".to_owned(),
-                                                locale_to_log_string(resolved_locale),
+                                                resolved_locale.to_code(),
                                                 player_locale_str.clone(),
                                             ],
                                         )
@@ -708,7 +706,7 @@ impl PumpkinServer {
                                                                 player.gameprofile.name.clone(),
                                                                 player.gameprofile.id.to_string(),
                                                                 "Bedrock".to_owned(),
-                                                                locale_to_log_string(resolved_locale),
+                                                                resolved_locale.to_code(),
                                                                 player_locale_str.clone(),
                                                             ],
                                                         )

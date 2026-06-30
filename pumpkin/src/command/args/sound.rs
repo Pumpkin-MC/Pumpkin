@@ -4,7 +4,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
 use crate::{
-    command::{args::ConsumeResult, dispatcher::CommandError, tr},
+    command::{args::ConsumeResult, dispatcher::CommandError, translate_component},
     server::Server,
 };
 
@@ -55,7 +55,7 @@ impl<'a> FindArg<'a> for SoundArgumentConsumer {
             Some(Arg::Block(name)) => {
                 Sound::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::CommandFailed(tr(
+                        Err(CommandError::CommandFailed(translate_component(
                             "commands.args.sound.not_found",
                             server_command_locale(),
                             [TextComponent::text(name.to_string())],

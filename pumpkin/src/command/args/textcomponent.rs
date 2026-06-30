@@ -1,7 +1,7 @@
 use crate::command::args::{Arg, ArgumentConsumer, ConsumeResult, FindArg, GetClientSideArgParser};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
-use crate::command::{CommandSender, tr_format};
+use crate::command::{CommandSender, translate_format};
 use crate::server::Server;
 use pumpkin_i18n::server_command_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
@@ -66,7 +66,7 @@ fn parse_text_component(input: &str) -> Option<TextComponent> {
         .map_err(|e| {
             debug!(
                 "{}",
-                tr_format(
+                translate_format(
                     "server.log.failed_parse_text_component",
                     server_command_locale(),
                     &[e.to_string()],

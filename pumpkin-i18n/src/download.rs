@@ -355,6 +355,16 @@ static LOADER_STATE: OnceLock<(DownloadConfig, PathBuf)> = OnceLock::new();
 static LOADED_LOCALES: LazyLock<Mutex<HashSet<Locale>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
+/// Mark a locale as already loaded so that subsequent calls to
+/// [`ensure_locale_translations`] skip it without redundant disk I/O.
+///
+/// Call this when the caller has already completed the download → save →
+/// inject workflow outside of [`ensure_locale_translations`] (e.g. server
+/// startup loading the global locale).
+pub fn mark_locale_loaded(locale: Locale) {
+    LOADED_LOCALES.lock().unwrap().insert(locale);
+}
+
 /// Initialise the translation loader with download configuration and cache root.
 ///
 /// Must be called once during server startup, before any background locale

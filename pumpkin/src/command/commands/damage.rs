@@ -9,7 +9,7 @@ use crate::command::{
         resource::damage_type::DamageTypeArgumentConsumer,
     },
     dispatcher::CommandError,
-    tr,
+    translate_component,
     tree::{
         CommandTree,
         builder::{argument, literal},
@@ -70,7 +70,7 @@ impl CommandExecutor for LocationExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(CommandError::CommandFailed(tr(
+                return Err(CommandError::CommandFailed(translate_component(
                     "commands.damage.invalid_amount",
                     sender.get_locale(),
                     [],
@@ -107,7 +107,7 @@ impl CommandExecutor for EntityExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(CommandError::CommandFailed(tr(
+                return Err(CommandError::CommandFailed(translate_component(
                     "commands.damage.invalid_amount",
                     sender.get_locale(),
                     [],

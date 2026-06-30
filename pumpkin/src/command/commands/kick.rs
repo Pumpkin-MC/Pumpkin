@@ -8,7 +8,7 @@ use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandError, CommandResult};
-use crate::command::{CommandExecutor, CommandSender, tr};
+use crate::command::{CommandExecutor, CommandSender, translate_component};
 use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
 use CommandError::InvalidConsumption;
@@ -45,7 +45,8 @@ impl CommandExecutor for Executor {
 
             for target in targets {
                 target.kick(DisconnectReason::Kicked, reason.clone()).await;
-                let mut msg = tr("commands.kick.kicked_message", sender.get_locale(), []);
+                let mut msg =
+                    translate_component("commands.kick.kicked_message", sender.get_locale(), []);
                 msg = msg.add_child(target.get_display_name().await);
                 sender.send_message(msg.color_named(NamedColor::Blue)).await;
             }

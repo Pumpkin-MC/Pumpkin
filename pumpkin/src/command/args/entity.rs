@@ -4,7 +4,7 @@ use crate::command::args::entities::TargetSelector;
 use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
-use crate::command::{CommandSender, tr_format};
+use crate::command::{CommandSender, translate_format};
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_i18n::server_command_locale;
@@ -53,7 +53,7 @@ impl ArgumentConsumer for EntityArgumentConsumer {
             Err(e) => {
                 debug!(
                     "{}",
-                    tr_format(
+                    translate_format(
                         "server.log.failed_parse_target_selector",
                         server_command_locale(),
                         &[s.to_string(), e],
@@ -66,7 +66,7 @@ impl ArgumentConsumer for EntityArgumentConsumer {
         if entity_selector.get_limit() > 1 {
             debug!(
                 "{}",
-                tr_format(
+                translate_format(
                     "server.log.target_selector_limit_gt_one",
                     server_command_locale(),
                     &[s.to_string()],

@@ -1,27 +1,39 @@
-use pumpkin_i18n::{format_translation, get_translation, server_global_locale};
+use pumpkin_i18n::{
+    Locale, PUMPKIN_NAMESPACE, format_translation, get_translation, pumpkin_translation_key,
+    server_global_locale,
+};
 
 use crate::text::TextComponent;
 
-const PUMPKIN_TRANSLATION_NAMESPACE: &str = "pumpkin";
+// ---------------------------------------------------------------------------
+// Explicit‑locale helpers (used by the command module and other callers that
+// operate on a per‑sender locale).
+// ---------------------------------------------------------------------------
 
-/// Builds a fully-qualified translation key: `"pumpkin:{key}"`.
-#[inline]
-fn namespaced_key(key: &str) -> String {
-    let mut namespaced = String::with_capacity(PUMPKIN_TRANSLATION_NAMESPACE.len() + key.len() + 1);
-    namespaced.push_str(PUMPKIN_TRANSLATION_NAMESPACE);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    namespaced
+/// Translate a pumpkin‑namespaced key for a specific locale (no formatting).
+#[must_use]
+pub fn translate_plain(key: &str, locale: Locale) -> String {
+    get_translation(&pumpkin_translation_key(key), locale)
 }
+
+/// Translate a pumpkin‑namespaced key for a specific locale with format args.
+#[must_use]
+pub fn translate_format(key: &str, locale: Locale, args: &[String]) -> String {
+    format_translation(&pumpkin_translation_key(key), locale, args)
+}
+
+// ---------------------------------------------------------------------------
+// Server‑global‑locale convenience wrappers (log / console output).
+// ---------------------------------------------------------------------------
 
 #[must_use]
 pub fn localized_log(key: &str) -> String {
-    get_translation(&namespaced_key(key), server_global_locale())
+    translate_plain(key, server_global_locale())
 }
 
 #[must_use]
 pub fn localized_log_format(key: &str, args: &[String]) -> String {
-    format_translation(&namespaced_key(key), server_global_locale(), args)
+    translate_format(key, server_global_locale(), args)
 }
 
 #[must_use]
@@ -29,10 +41,5 @@ pub fn localized_text<W>(key: &'static str, with: W) -> TextComponent
 where
     W: Into<Vec<TextComponent>>,
 {
-    TextComponent::custom(
-        PUMPKIN_TRANSLATION_NAMESPACE,
-        key,
-        server_global_locale(),
-        with,
-    )
+    TextComponent::custom(PUMPKIN_NAMESPACE, key, server_global_locale(), with)
 }

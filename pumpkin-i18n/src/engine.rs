@@ -71,6 +71,16 @@ impl ResolvedTranslation {
         matches!(self, Self::Missing(_))
     }
 
+    /// Returns the translated string, or `raw_key` when the key is missing.
+    #[must_use]
+    pub fn value_or_raw(&self, raw_key: &str) -> String {
+        if self.is_missing() {
+            raw_key.to_owned()
+        } else {
+            self.as_str().to_owned()
+        }
+    }
+
     /// Convenience: format this resolved translation into `buf`.
     ///
     /// For [`Static`](Self::Static) this is a simple `push_str`;

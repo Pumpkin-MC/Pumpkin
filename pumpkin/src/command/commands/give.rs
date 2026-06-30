@@ -11,7 +11,9 @@ use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
-use crate::command::{CommandExecutor, CommandResult, CommandSender, tr_format, tr_plain};
+use crate::command::{
+    CommandExecutor, CommandResult, CommandSender, translate_format, translate_plain,
+};
 use crate::entity::EntityBase;
 use pumpkin_i18n::server_command_locale;
 
@@ -47,12 +49,12 @@ impl CommandExecutor for Executor {
                 Ok(Ok(count)) => count,
                 Ok(Err(err)) => {
                     let err_msg = match err {
-                        NotInBounds::LowerBound(_, min) => tr_format(
+                        NotInBounds::LowerBound(_, min) => translate_format(
                             "commands.give.cant_give_less",
                             sender.get_locale(),
                             &[min.to_string(), item_name.to_string()],
                         ),
-                        NotInBounds::UpperBound(_, max) => tr_format(
+                        NotInBounds::UpperBound(_, max) => translate_format(
                             "commands.give.cant_give_more",
                             sender.get_locale(),
                             &[max.to_string(), item_name.to_string()],
@@ -73,7 +75,7 @@ impl CommandExecutor for Executor {
                         .unwrap_or_else(|| {
                             panic!(
                                 "{}",
-                                tr_plain(
+                                translate_plain(
                                     "debug.expect.item_missing_max_stack_size",
                                     server_command_locale(),
                                 )

@@ -11,12 +11,12 @@ pub mod store;
 pub mod token;
 
 pub use client::{
-    locale_to_log_string, player_locale, remove_player_locale, resolve_client_locale,
-    set_player_locale, try_player_locale,
+    player_locale, remove_player_locale, resolve_client_locale, set_player_locale,
+    try_player_locale,
 };
 pub use download::{
     DownloadConfig, DownloadedTranslations, download_locale, ensure_locale_translations,
-    init_translation_loader, load_cached_translations, load_downloaded,
+    init_translation_loader, load_cached_translations, load_downloaded, mark_locale_loaded,
     save_downloaded_translations,
 };
 pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
@@ -32,6 +32,22 @@ pub use store::{
 pub use token::{Token, placeholder_ranges, precompile};
 
 use std::str::FromStr;
+
+/// Namespace prefix for all pumpkin server translation keys.
+pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
+
+/// Build a fully qualified translation key under the pumpkin namespace.
+///
+/// Equivalent to `format!("pumpkin:{key}")` with pre-allocated capacity.
+#[must_use]
+#[inline]
+pub fn pumpkin_translation_key(key: &str) -> String {
+    let mut out = String::with_capacity(PUMPKIN_NAMESPACE.len() + key.len() + 1);
+    out.push_str(PUMPKIN_NAMESPACE);
+    out.push(':');
+    out.push_str(key);
+    out
+}
 
 /// Parse a locale identifier string without unnecessary allocations.
 ///

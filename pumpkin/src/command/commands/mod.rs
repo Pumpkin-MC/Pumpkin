@@ -1,5 +1,5 @@
 use crate::command::node::dispatcher::CommandDispatcher;
-use crate::command::tr_plain;
+use crate::command::translate_plain;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_i18n::server_command_locale;
 use pumpkin_util::{
@@ -182,7 +182,7 @@ fn register_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -197,7 +197,7 @@ fn translated_permission(
 ) -> Permission {
     Permission::new(
         node,
-        &tr_plain(description_key, server_command_locale()),
+        &translate_plain(description_key, server_command_locale()),
         default,
     )
 }
@@ -213,7 +213,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -228,7 +228,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -243,7 +243,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -263,7 +263,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -278,7 +278,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -293,7 +293,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -308,7 +308,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -323,7 +323,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -338,7 +338,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -353,7 +353,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -368,7 +368,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -383,7 +383,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -398,7 +398,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -413,7 +413,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -428,7 +428,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -443,7 +443,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -458,7 +458,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -473,7 +473,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -488,7 +488,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -503,7 +503,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -518,7 +518,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -533,7 +533,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -548,7 +548,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -563,7 +563,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -578,7 +578,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -593,7 +593,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -608,7 +608,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -623,7 +623,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -638,7 +638,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -653,7 +653,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -673,7 +673,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -688,7 +688,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -703,7 +703,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -718,7 +718,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -733,7 +733,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -748,7 +748,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -763,7 +763,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -778,7 +778,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -793,7 +793,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -808,7 +808,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )
@@ -823,7 +823,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap_or_else(|_| {
             panic!(
                 "{}",
-                tr_plain(
+                translate_plain(
                     "debug.expect.permission_already_registered",
                     server_command_locale(),
                 )

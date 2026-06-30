@@ -15,7 +15,7 @@ use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::tree::Command;
-use crate::command::{tr_format, tr_plain};
+use crate::command::{translate_format, translate_plain};
 use futures::future;
 use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
 use pumpkin_i18n::server_command_locale;
@@ -233,7 +233,10 @@ impl CommandDispatcher {
                     .unwrap_or_else(|| {
                         panic!(
                             "{}",
-                            tr_plain("debug.expect.node_errors_next", server_command_locale(),)
+                            translate_plain(
+                                "debug.expect.node_errors_next",
+                                server_command_locale(),
+                            )
                         )
                     })
                     .clone())
@@ -373,7 +376,7 @@ impl CommandDispatcher {
                 .unwrap_or_else(|| {
                     panic!(
                         "{}",
-                        tr_plain(
+                        translate_plain(
                             "debug.expect.node_potentials_not_empty",
                             server_command_locale(),
                         )
@@ -654,7 +657,7 @@ impl CommandDispatcher {
                 } else {
                     warn!(
                         "{}",
-                        tr_format(
+                        translate_format(
                             "commands.dispatcher.warn.no_permission",
                             server_command_locale(),
                             &[command_tree.names[0].clone()],
@@ -926,7 +929,7 @@ impl CommandDispatcher {
                                 child_usages.into_iter().next().unwrap_or_else(|| {
                                     panic!(
                                         "{}",
-                                        tr_plain(
+                                        translate_plain(
                                             "debug.expect.node_child_usages_next",
                                             server_command_locale(),
                                         )

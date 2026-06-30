@@ -17,7 +17,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 pub mod chunker;
 pub mod explosion;

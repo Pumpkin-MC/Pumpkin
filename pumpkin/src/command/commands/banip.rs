@@ -4,7 +4,7 @@ use crate::{
     command::{
         CommandError, CommandExecutor, CommandResult, CommandSender,
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
-        tr_plain,
+        translate_plain,
         tree::{CommandTree, builder::argument},
     },
     data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry},
@@ -81,8 +81,8 @@ async fn ban_ip(
     target: &str,
     reason: Option<String>,
 ) -> Result<i32, CommandError> {
-    let reason =
-        reason.unwrap_or_else(|| tr_plain("commands.banip.default_reason", sender.get_locale()));
+    let reason = reason
+        .unwrap_or_else(|| translate_plain("commands.banip.default_reason", sender.get_locale()));
 
     let Some(target_ip) = parse_ip(target, server).await else {
         return Err(CommandError::CommandFailed(TextComponent::translate_cross(
