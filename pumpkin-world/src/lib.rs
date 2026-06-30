@@ -19,11 +19,10 @@ pub mod tick;
 pub mod world;
 pub mod world_info;
 
-pub type BlockId = u16;
-pub type BlockStateId = u16;
+// Temporary reexport; will be removed in the next commit
+pub use pumpkin_data::BlockStateId;
 
 pub const CURRENT_MC_VERSION: &str = "26.2";
-
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.30";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 1001;
 

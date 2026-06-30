@@ -2,7 +2,7 @@ use pumpkin_data::{Block, BlockId, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
-use pumpkin_world::BlockStateId;
+use pumpkin_data::BlockStateId;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
@@ -216,11 +216,11 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { BoundingBox::full_block() })
     }
 
-    fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+    fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
         block.mirror(state_id, mirror)
     }
 
-    fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+    fn rotate(&self, block: &Block, state_id: BlockStateId, rotation: Rotation) -> &'static BlockState {
         block.rotate(state_id, rotation)
     }
 }

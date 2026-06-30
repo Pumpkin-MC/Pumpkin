@@ -1,6 +1,8 @@
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, block_properties::BlockProperties};
+use pumpkin_data::{
+    Block, BlockDirection, BlockId, BlockState, BlockStateId, block_properties::BlockProperties,
+};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
@@ -118,12 +120,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         0
     }
 
-    fn set_redstone_output(
-        &self,
-        block: &Block,
-        state: &BlockState,
-        output: u8,
-    ) -> pumpkin_world::BlockStateId {
+    fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {
         let mut props = PressurePlateProps::from_state_id(state.id, block);
         props.power = output;
         props.to_state_id(block)

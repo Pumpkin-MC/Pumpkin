@@ -1088,11 +1088,11 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
             let block_ident =
                 quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
-            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::Block::#block_ident }) }
+            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::BlockId::#block_ident }) }
         }
         "minecraft:blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
-            quote! { RuleTest::BlockStateMatch(BlockStateMatchRuleTest { block_state: #state }) }
+            quote! { RuleTest::BlockStateMatch(BlockStateMatchRuleTest { block_state: #state.id }) }
         }
         "minecraft:tag_match" => {
             let tag = v["tag"].as_str().unwrap_or("");
@@ -1104,12 +1104,12 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
             let block_ident =
                 quote::format_ident!("{}", block.to_uppercase().replace([':', '-'], "_"));
-            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::Block::#block_ident, probability: #prob }) }
+            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::BlockId::#block_ident, probability: #prob }) }
         }
         "minecraft:random_blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
-            quote! { RuleTest::RandomBlockStateMatch(RandomBlockStateMatchRuleTest { block_state: #state, probability: #prob }) }
+            quote! { RuleTest::RandomBlockStateMatch(RandomBlockStateMatchRuleTest { block_state: #state.id, probability: #prob }) }
         }
         other => {
             let msg = format!("unknown rule test: {other}");

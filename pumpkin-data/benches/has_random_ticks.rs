@@ -41,7 +41,7 @@ pub fn bench_has_random_ticks(c: &mut Criterion) {
 criterion_group!(benches, bench_has_random_ticks);
 criterion_main!(benches);
 
-pub fn has_random_ticks_matches(state_id: u16) -> bool {
+pub fn has_random_ticks_matches(state_id: BlockStateId) -> bool {
     matches!(
         state_id,
         8 | 9

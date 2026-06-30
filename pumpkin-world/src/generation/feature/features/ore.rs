@@ -1,12 +1,12 @@
 use core::f32;
 
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::{
     math::{lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::rule::RuleTest, world::WorldPortalExt};
 
 pub struct OreFeature {
@@ -207,7 +207,7 @@ impl OreFeature {
     pub fn should_place<T: GenerationCache>(
         discard_chance: f32,
         chunk: &T,
-        state: RawBlockState,
+        state: BlockStateId,
         random: &mut RandomGenerator,
         target: &OreTarget,
         pos: &BlockPos,

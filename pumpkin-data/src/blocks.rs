@@ -1,5 +1,5 @@
 use crate::{
-    BlockState, BlockStateRef,
+    BlockState, BlockStateId,
     tag::{RegistryKey, Tag, Taggable},
 };
 use pumpkin_util::{
@@ -123,8 +123,8 @@ impl FromResourceLocation for &'static Block {
 
 impl Block {
     #[must_use]
-    pub fn is_waterlogged(&self, state_id: u16) -> bool {
-        self.properties(state_id).is_some_and(|properties| {
+    pub fn is_waterlogged(&self, id: BlockStateId) -> bool {
+        self.properties(id).is_some_and(|properties| {
             properties
                 .to_props()
                 .into_iter()
@@ -132,19 +132,19 @@ impl Block {
         })
     }
 
-    /// Returns a new [`BlockState`] reference for the given `state_id` with the
+    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
     /// `waterlogged` property forced to `true` if the block supports that
     /// property.  If the state is already waterlogged or the block does not
     /// expose a `waterlogged` property then `None` is returned.
     #[must_use]
-    pub fn with_waterlogged(&self, state_id: u16) -> Option<&'static BlockState> {
+    pub fn with_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
         // Check if already waterlogged
-        if self.is_waterlogged(state_id) {
-            return Some(BlockState::from_id(state_id));
+        if self.is_waterlogged(id) {
+            return Some(BlockState::from_id(id));
         }
 
         // Modify the property list if available
-        if let Some(props_source) = self.properties(state_id) {
+        if let Some(props_source) = self.properties(id) {
             let mut props: Vec<(&str, &str)> = props_source
                 .to_props()
                 .iter()
@@ -180,25 +180,25 @@ impl Block {
     #[must_use]
     pub const fn mirror(
         &self,
-        state_id: u16,
+        id: BlockStateId,
         _mirror: crate::block_rotation::Mirror,
     ) -> &'static BlockState {
-        BlockState::from_id(state_id)
+        BlockState::from_id(id)
     }
 
     #[must_use]
     pub const fn rotate(
         &self,
-        state_id: u16,
+        id: BlockStateId,
         _rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
-        BlockState::from_id(state_id)
+        BlockState::from_id(id)
     }
 }
 
 impl BlockId {
     // depends on generated impl:
-    // pub(crate) const MAX_ID: u16;
+    // pub(crate) const BLOCK_COUNT: u16;
 
     #[inline]
     #[must_use]
@@ -262,7 +262,12 @@ impl std::fmt::Display for BlockId {
                 Block::from_id(*self).name
             )
         } else {
-            write!(f, "BlockId(unsound! {} >= {})", self.0, BlockId::BLOCK_COUNT)
+            write!(
+                f,
+                "BlockId(unsound! {} >= {})",
+                self.0,
+                BlockId::BLOCK_COUNT
+            )
         }
     }
 }

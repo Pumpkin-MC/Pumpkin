@@ -1,5 +1,6 @@
 use crate::entity::EntityBase;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::DoorHinge;
@@ -11,7 +12,6 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
@@ -220,9 +220,7 @@ impl BlockBehaviour for DoorBlock {
             };
 
             let neighbor_state_id = args.world.get_block_state_id(&other_half_pos);
-            if let Some(neighbour_block_id) = Block::get_block_id_from_state_id(neighbor_state_id)
-                && neighbour_block_id != args.block.id
-            {
+            if neighbor_state_id.to_block_id() != args.block.id {
                 args.world.update_neighbors(&other_half_pos, None).await;
                 return; // Neighbor is already gone or is a different block
             }
@@ -307,7 +305,7 @@ impl BlockBehaviour for DoorBlock {
                     && args.direction == BlockDirection::Down
                     && !can_place_at(args.world, args.position)
                 {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             } else if Block::from_state_id(args.neighbor_state_id).id == args.block.id
                 && DoorProperties::from_state_id(args.neighbor_state_id, args.block).half != lv
@@ -317,7 +315,7 @@ impl BlockBehaviour for DoorBlock {
                 new_state.half = lv;
                 return new_state.to_state_id(args.block);
             } else {
-                return 0;
+                return BlockStateId::AIR;
             }
             args.state_id
         })

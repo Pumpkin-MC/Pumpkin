@@ -2898,7 +2898,7 @@ fn build_configured_features()
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: pumpkin_data::Block::NETHERRACK,
+                    block: pumpkin_data::BlockId::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::BLACKSTONE.default_state,
             }],
@@ -3207,7 +3207,7 @@ fn build_configured_features()
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: pumpkin_data::Block::NETHERRACK,
+                    block: pumpkin_data::BlockId::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::GRAVEL.default_state,
             }],
@@ -3333,7 +3333,7 @@ fn build_configured_features()
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: pumpkin_data::Block::NETHERRACK,
+                    block: pumpkin_data::BlockId::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::MAGMA_BLOCK.default_state,
             }],
@@ -3346,7 +3346,7 @@ fn build_configured_features()
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: pumpkin_data::Block::NETHERRACK,
+                    block: pumpkin_data::BlockId::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::NETHER_GOLD_ORE.default_state,
             }],
@@ -3359,7 +3359,7 @@ fn build_configured_features()
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: pumpkin_data::Block::NETHERRACK,
+                    block: pumpkin_data::BlockId::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::NETHER_QUARTZ_ORE.default_state,
             }],
@@ -3409,7 +3409,7 @@ fn build_configured_features()
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: pumpkin_data::Block::NETHERRACK,
+                    block: pumpkin_data::BlockId::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::SOUL_SAND.default_state,
             }],

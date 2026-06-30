@@ -67,6 +67,7 @@ mod tests {
     use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
+    use pumpkin_data::BlockStateId;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
@@ -86,7 +87,7 @@ mod tests {
         fn mirror(
             &self,
             block: &pumpkin_data::Block,
-            state_id: u16,
+            state_id: BlockStateId,
             mirror: pumpkin_data::Mirror,
         ) -> &'static pumpkin_data::BlockState {
             block.mirror(state_id, mirror)
@@ -95,7 +96,7 @@ mod tests {
         fn rotate(
             &self,
             block: &pumpkin_data::Block,
-            state_id: u16,
+            state_id: BlockStateId,
             rotation: pumpkin_data::Rotation,
         ) -> &'static pumpkin_data::BlockState {
             block.rotate(state_id, rotation)

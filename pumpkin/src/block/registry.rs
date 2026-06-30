@@ -145,7 +145,7 @@ use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
+use pumpkin_data::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -655,7 +655,7 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        state_id: u16,
+        state_id: BlockStateId,
         position: &BlockPos,
         direction: BlockDirection,
         player: &Player,
@@ -1022,7 +1022,7 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+    pub fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
         self.get_pumpkin_block(block.id).map_or_else(
             || block.mirror(state_id, mirror),
             |pumpkin_block| pumpkin_block.mirror(block, state_id, mirror),
@@ -1030,7 +1030,7 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+    pub fn rotate(&self, block: &Block, state_id: BlockStateId, rotation: Rotation) -> &'static BlockState {
         self.get_pumpkin_block(block.id).map_or_else(
             || block.rotate(state_id, rotation),
             |pumpkin_block| pumpkin_block.rotate(block, state_id, rotation),

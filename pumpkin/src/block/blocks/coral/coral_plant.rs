@@ -1,9 +1,9 @@
 use pumpkin_data::{
-    BlockDirection, BlockId,
+    BlockDirection, BlockId, BlockStateId,
     block_properties::{BlockProperties, MangroveRootsLikeProperties},
     tag,
 };
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
@@ -71,7 +71,7 @@ impl BlockBehaviour for CoralPlantBlock {
             if args.direction == BlockDirection::Down {
                 let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             }
             args.state_id

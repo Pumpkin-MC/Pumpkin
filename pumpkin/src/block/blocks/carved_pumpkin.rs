@@ -1,10 +1,10 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockId,
+    Block, BlockDirection, BlockId, BlockStateId,
     block_properties::{BlockProperties, WallTorchLikeProperties},
     entity::EntityType,
     world::WorldEvent,
 };
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs, PlacedArgs},
@@ -55,7 +55,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                     args.world.sync_world_event(
                         WorldEvent::ParticlesDestroyBlock,
                         pos,
-                        Block::SNOW_BLOCK.default_state.id.into(),
+                        Block::SNOW_BLOCK.default_state.id.as_u16().into(),
                     );
                 }
                 let entity = Entity::new(
@@ -90,7 +90,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                             args.world.sync_world_event(
                                 WorldEvent::ParticlesDestroyBlock,
                                 p,
-                                Block::IRON_BLOCK.default_state.id.into(),
+                                Block::IRON_BLOCK.default_state.id.as_u16().into(),
                             );
                         }
 

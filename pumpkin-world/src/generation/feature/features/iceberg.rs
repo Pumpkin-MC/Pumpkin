@@ -342,9 +342,9 @@ impl IcebergFeature {
         snow_on_top: bool,
         main_block: &'static BlockState,
     ) {
-        let raw = GenerationCache::get_block_state(chunk, pos);
-        let bid = raw.to_block_id();
-        if is_air(raw.0)
+        let state_id = GenerationCache::get_block_state(chunk, pos);
+        let bid = state_id.to_block_id();
+        if is_air(state_id)
             || bid == Block::SNOW_BLOCK.id
             || bid == Block::ICE.id
             || bid == Block::WATER.id
@@ -383,8 +383,8 @@ impl IcebergFeature {
                     let bid = raw.to_block_id();
                     if Self::is_iceberg_state(bid) || bid == Block::SNOW.id {
                         let below = pos.add(&Vector3::new(0, -1, 0));
-                        let below_raw = GenerationCache::get_block_state(chunk, &below);
-                        if is_air(below_raw.0) {
+                        let below_state_id = GenerationCache::get_block_state(chunk, &below);
+                        if is_air(below_state_id) {
                             chunk.set_block_state(&pos, Block::AIR.default_state);
                             let above = pos.add(&Vector3::new(0, 1, 0));
                             chunk.set_block_state(&above, Block::AIR.default_state);

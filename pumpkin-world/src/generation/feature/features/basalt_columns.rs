@@ -122,7 +122,7 @@ fn can_place_at<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
         return false;
     }
     let below = GenerationCache::get_block_state(chunk, &pos.down().0);
-    !is_air(below.0) && !is_cannot_place_on(below.to_block_id())
+    !is_air(below) && !is_cannot_place_on(below.to_block_id())
 }
 
 fn find_air<T: GenerationCache>(chunk: &T, pos: BlockPos, mut limit: i32) -> Option<BlockPos> {
@@ -133,7 +133,7 @@ fn find_air<T: GenerationCache>(chunk: &T, pos: BlockPos, mut limit: i32) -> Opt
         if is_cannot_place_on(state.to_block_id()) {
             return None;
         }
-        if is_air(state.0) {
+        if is_air(state) {
             return Some(cursor);
         }
         cursor = cursor.up();
@@ -143,7 +143,7 @@ fn find_air<T: GenerationCache>(chunk: &T, pos: BlockPos, mut limit: i32) -> Opt
 
 fn is_air_or_lava_ocean<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
     let state = GenerationCache::get_block_state(chunk, &pos.0);
-    is_air(state.0) || (state.to_block_id() == Block::LAVA.id && pos.0.y <= LAVA_SEA_LEVEL)
+    is_air(state) || (state.to_block_id() == Block::LAVA.id && pos.0.y <= LAVA_SEA_LEVEL)
 }
 
 fn is_cannot_place_on(id: BlockId) -> bool {

@@ -7,7 +7,7 @@ use crate::{
     entity::EntityBase,
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockId, FacingExt, HorizontalFacingExt,
+    Block, BlockDirection, BlockId, BlockStateId, FacingExt, HorizontalFacingExt,
     block_properties::{
         BlockProperties, Facing, HorizontalFacing, LadderLikeProperties,
         MangroveRootsLikeProperties,
@@ -15,10 +15,7 @@ use pumpkin_data::{
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 pub struct CoralFanBlock;
 
@@ -98,7 +95,7 @@ impl BlockBehaviour for CoralFanBlock {
                     )
                 {
                     let Some(wall_block) = get_corresponding_wall_fan_type(args.block.id) else {
-                        return 0;
+                        return BlockStateId::AIR;
                     };
                     let mut coral_wall_fan_props = CoralWallFanLikeProperties::default(wall_block);
                     coral_wall_fan_props.waterlogged = args.replacing.water_source();
@@ -111,7 +108,7 @@ impl BlockBehaviour for CoralFanBlock {
             if support_block.is_center_solid(BlockDirection::Up) {
                 return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
             }
-            0
+            BlockStateId::AIR
         })
     }
 
@@ -171,12 +168,12 @@ impl BlockBehaviour for CoralFanBlock {
                 if props.facing.to_block_direction().opposite() == args.direction
                     && !can_place_at(args.world, args.position, props.facing.opposite())
                 {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             } else if args.direction == BlockDirection::Down {
                 let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             }
 

@@ -392,27 +392,27 @@ impl ToTokens for BlockPropertyStruct {
                     matches!(block_id.as_u16(), #(#block_ids)|*)
                 }
 
-                fn to_state_id(&self, block: &Block) -> u16 {
+                fn to_state_id(&self, block: &Block) -> BlockStateId {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
-                    block.states[0].id + self.to_index()
+                    block.states[self.to_index() as usize].id 
                 }
 
-                fn from_state_id(state_id: u16, block: &Block) -> Self {
+                fn from_state_id(id: BlockStateId, block: &Block) -> Self {
                     debug_assert!(
                         Self::handles_block_id(block.id),
                         "{} is not a valid block for {}", block.name, #struct_name
                     );
 
-                    let min_id = block.states[0].id;
-                    let max_id = block.states.last().map(|s| s.id).unwrap_or(min_id);
+                    let min_id = block.states[0].id.as_u16();
+                    let max_id = block.states.last().map(|s| s.id.as_u16()).unwrap_or(min_id);
 
-                    if (min_id..=max_id).contains(&state_id) {
-                        Self::from_index(state_id - min_id)
+                    if (min_id..=max_id).contains(&id.as_u16()) {
+                        Self::from_index(id.as_u16() - min_id)
                     } else {
                         #[cfg(debug_assertions)]
-                        panic!("State ID {} does not exist for {}", state_id, &block.name);
+                        panic!("State ID {} does not exist for {}", id, &block.name);
 
                         #[cfg(not(debug_assertions))]
                         Self::from_index(0)
@@ -498,11 +498,21 @@ impl ToTokens for BoundingBox {
     }
 }
 
+#[derive(Deserialize, Copy, Clone, PartialEq, Eq)]
+pub struct BlockStateId(pub u16);
+
+impl ToTokens for BlockStateId {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let inner = self.0;
+        tokens.extend(quote! { BlockStateId::new(#inner).unwrap() });
+    }
+}
+
 /// Deserialized representation of a single block state as stored in `blocks.json`.
 #[derive(Deserialize, Clone)]
 pub struct BlockState {
     /// Globally unique numeric ID for this block state.
-    pub id: u16,
+    pub id: BlockStateId,
     /// Bitfield encoding boolean state properties (air, random ticks, etc.).
     pub state_flags: u16,
     /// Bitfield encoding which sides of the block are solid.
@@ -579,7 +589,7 @@ impl BlockState {
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
-        let id = LitInt::new(&self.id.to_string(), Span::call_site());
+        let id = self.id;
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
         let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
@@ -666,7 +676,7 @@ pub struct Block {
     /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
     /// State ID of the default (canonical) block state.
-    pub default_state_id: u16,
+    pub default_state_id: BlockStateId,
     /// All possible states for this block in state-ID order.
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
@@ -926,7 +936,6 @@ pub fn build() -> TokenStream {
 
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
-        let id_lit = LitInt::new(&block.id.0.to_string(), Span::call_site());
         let item_id = block.item_id;
         let block_id = block.id;
 
@@ -965,15 +974,15 @@ pub fn build() -> TokenStream {
 
         for (i, state) in block.states.iter().enumerate() {
             if state.has_random_ticks() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 random_tick_states.push(state_id);
             }
             if state.is_air() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 air_states.push(state_id);
             }
             if state.is_liquid() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 liquid_states.push(state_id);
             }
 
@@ -1031,9 +1040,9 @@ pub fn build() -> TokenStream {
                     );
             }
 
-            block_state_to_bedrock.push((state.id, matched_be_id));
-            raw_id_from_state_id_array.push((state.id, quote! { BlockId::#const_ident }));
-            state_from_state_id_array.push((const_ident.clone(), i, state.id));
+            block_state_to_bedrock.push((state.id.0, matched_be_id));
+            raw_id_from_state_id_array.push((state.id.0, quote! { BlockId::#const_ident }));
+            state_from_state_id_array.push((const_ident.clone(), i, state.id.0));
         }
 
         if !property_collection.is_empty() {
@@ -1138,7 +1147,7 @@ pub fn build() -> TokenStream {
         #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
-        use crate::{BlockState, Block, BlockId, blocks::Flammable};
+        use crate::{BlockState, BlockStateId, Block, BlockId, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
@@ -1165,9 +1174,9 @@ pub fn build() -> TokenStream {
         pub trait BlockProperties where Self: 'static {
             fn to_index(&self) -> u16;
             fn from_index(index: u16) -> Self where Self: Sized;
-            fn handles_block_id(block_id: BlockId) -> bool where Self: Sized;
-            fn to_state_id(&self, block: &Block) -> u16;
-            fn from_state_id(state_id: u16, block: &Block) -> Self where Self: Sized;
+            fn handles_block_id(id: BlockId) -> bool where Self: Sized;
+            fn to_state_id(&self, block: &Block) -> BlockStateId;
+            fn from_state_id(id: BlockStateId, block: &Block) -> Self where Self: Sized;
             fn default(block: &Block) -> Self where Self: Sized;
             fn to_props(&self) -> Vec<(&'static str, &'static str)>;
             fn from_props(props: &[(&str, &str)], block: &Block) -> Self where Self: Sized;
@@ -1191,20 +1200,20 @@ pub fn build() -> TokenStream {
 
         #[inline(always)]
         #[must_use]
-        pub const fn is_air(state_id: u16) -> bool {
-            matches!(state_id, #air_state_ids)
+        pub const fn is_air(id: BlockStateId) -> bool {
+            matches!(id.as_u16(), #air_state_ids)
         }
 
          #[inline(always)]
          #[must_use]
-        pub const fn is_liquid(state_id: u16) -> bool {
-            matches!(state_id, #liquid_state_ids)
+        pub const fn is_liquid(id: BlockStateId) -> bool {
+            matches!(id.as_u16(), #liquid_state_ids)
         }
 
         #[inline(always)]
         #[must_use]
-        pub fn has_random_ticks(state_id: u16) -> bool {
-            #mod_ident::#contains_ident(state_id)
+        pub fn has_random_ticks(id: BlockStateId) -> bool {
+            #mod_ident::#contains_ident(id.as_u16())
         }
 
         #[must_use]
@@ -1221,30 +1230,35 @@ pub fn build() -> TokenStream {
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
             #[must_use]
-            pub const fn from_id(id: u16) -> &'static Self {
-                // In debug, this avoids the slow range-checking logic
+            pub const fn from_id(id: BlockStateId) -> &'static Self {
                 unsafe {
-                    unchecked_index(&mappings::STATE_FROM_STATE_ID, id as usize)
+                    unchecked_index(&mappings::STATE_FROM_STATE_ID, id.as_u16() as usize)
                 }
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
             #[inline]
             #[must_use]
-            pub const fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
+            pub const fn from_id_with_block(id: BlockStateId) -> (&'static Block, &'static Self) {
                 let block = Block::from_state_id(id);
-                let state: &Self = mappings::STATE_FROM_STATE_ID[id as usize];
+                let state: &Self = mappings::STATE_FROM_STATE_ID[id.as_u16() as usize];
                 (block, state)
             }
 
             #[must_use]
-            pub const fn to_be_network_id(id: u16) -> u16 {
-                Self::STATE_ID_TO_BEDROCK[id as usize]
+            pub const fn to_be_network_id(id: BlockStateId) -> u16 {
+                Self::STATE_ID_TO_BEDROCK[id.as_u16() as usize]
             }
         }
 
+        impl BlockStateId {
+            pub const AIR: Self = Block::AIR.default_state.id;
+
+            pub(crate) const STATE_COUNT: u16 = mappings::STATE_FROM_STATE_ID.len() as u16;
+        }
+
         mod mappings {
-            use crate::{Block, BlockId, BlockState};
+            use crate::{Block, BlockId, BlockState, BlockStateId};
             use phf;
 
             pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
@@ -1289,25 +1303,11 @@ pub fn build() -> TokenStream {
                 unsafe { unchecked_index(&mappings::TYPE_FROM_RAW_ID, id.as_u16() as usize) }
             }
 
-            /// Get a [`BlockId`] from a state id
-            #[inline]
-            #[must_use]
-            pub const fn get_block_id_from_state_id(state_id: u16) -> Option<BlockId> {
-                let index = state_id as usize;
-                if index >= mappings::BLOCK_ID_FROM_STATE_ID.len() {
-                    return None;
-                }
-                Some(mappings::BLOCK_ID_FROM_STATE_ID[index])
-            }
-
             /// Get a [`Block`] from a state id
             #[inline]
             #[must_use]
-            pub const fn from_state_id(id: u16) -> &'static Self {
-                Self::from_id(match Self::get_block_id_from_state_id(id) {
-                    Some(id) => id,
-                    None => BlockId::AIR,
-                })
+            pub const fn from_state_id(id: BlockStateId) -> &'static Self {
+                Self::from_id(BlockId::from_state_id(id))
             }
 
             #[doc = r" Try to parse a block from an item id."]
@@ -1322,7 +1322,7 @@ pub fn build() -> TokenStream {
 
             #[track_caller]
             #[doc = r" Get the properties of the block."]
-            pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
+            pub fn properties(&self, state_id: BlockStateId) -> Option<Box<dyn BlockProperties>> {
                 Some(match self.id.as_u16() {
                     #(#block_properties_from_state_and_block_id_arms)*
                     _ => return None,
@@ -1343,6 +1343,13 @@ pub fn build() -> TokenStream {
             #(#block_id_constants)*
 
             pub(crate) const BLOCK_COUNT: u16 = mappings::TYPE_FROM_RAW_ID.len() as u16;
+
+            /// Get a [`BlockId`] from a [`BlockStateId`]
+            #[inline]
+            #[must_use]
+            pub const fn from_state_id(id: BlockStateId) -> BlockId {
+                mappings::BLOCK_ID_FROM_STATE_ID[id.as_u16() as usize]
+            }
         }
 
         #(#properties)*
@@ -1460,7 +1467,7 @@ fn get_be_data_from_nbt<R: Read + Seek>(
 
     let data_start = reader.stream_position().unwrap();
     let data_end = reader.seek(SeekFrom::End(0)).unwrap();
-    reader.seek(SeekFrom::Start(data_start));
+    let _ = reader.seek(SeekFrom::Start(data_start));
 
     let nbt_reader = &mut NbtReadHelperBedrock::new(&mut *reader);
 

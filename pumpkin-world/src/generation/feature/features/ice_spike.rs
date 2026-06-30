@@ -60,9 +60,9 @@ impl IceSpikeFeature {
                     if in_sphere && edge_ok {
                         // Place packed ice upward
                         let place_pos = origin.add(&Vector3::new(xo, y_off, zo));
-                        let raw = GenerationCache::get_block_state(chunk, &place_pos);
-                        let bid = raw.to_block_id();
-                        if is_air(raw.0)
+                        let state_id = GenerationCache::get_block_state(chunk, &place_pos);
+                        let bid = state_id.to_block_id();
+                        if is_air(state_id)
                             || bid.has_tag(tag::Block::MINECRAFT_DIRT)
                             || bid == BlockId::SNOW_BLOCK
                             || bid == BlockId::ICE
@@ -73,9 +73,9 @@ impl IceSpikeFeature {
                         // Mirror downward
                         if y_off != 0 && new_width > 1 {
                             let neg_pos = origin.add(&Vector3::new(xo, -y_off, zo));
-                            let raw2 = GenerationCache::get_block_state(chunk, &neg_pos);
-                            let bid2 = raw2.to_block_id();
-                            if is_air(raw2.0)
+                            let state_id2 = GenerationCache::get_block_state(chunk, &neg_pos);
+                            let bid2 = state_id2.to_block_id();
+                            if is_air(state_id2)
                                 || bid2.has_tag(tag::Block::MINECRAFT_DIRT)
                                 || bid2 == BlockId::SNOW_BLOCK
                                 || bid2 == BlockId::ICE
@@ -102,9 +102,9 @@ impl IceSpikeFeature {
                 };
 
                 while ice_block.y > 50 {
-                    let raw = GenerationCache::get_block_state(chunk, &ice_block);
-                    let bid = raw.to_block_id();
-                    if !is_air(raw.0)
+                    let state_id = GenerationCache::get_block_state(chunk, &ice_block);
+                    let bid = state_id.to_block_id();
+                    if !is_air(state_id)
                         && !bid.has_tag(tag::Block::MINECRAFT_DIRT)
                         && bid != BlockId::SNOW_BLOCK
                         && bid != BlockId::ICE

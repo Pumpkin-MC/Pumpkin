@@ -8,6 +8,8 @@ use std::{
 };
 use syn::{Ident, LitInt, LitStr};
 
+use crate::block::BlockStateId;
+
 /// Converts a fluid name (e.g. `water`) into its SCREAMING_SNAKE_CASE constant identifier.
 fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
     fluid.to_shouty_snake_case()
@@ -238,7 +240,7 @@ impl ToTokens for FluidPropertyStruct {
                     }
                 }
 
-                fn to_state_id(&self, fluid: &Fluid) -> u16 {
+                fn to_state_id(&self, fluid: &Fluid) -> BlockStateId {
                     if ![#(#fluid_names),*].contains(&fluid.name) {
                         panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
                     }
@@ -251,13 +253,13 @@ impl ToTokens for FluidPropertyStruct {
                     }
                 }
 
-                fn from_state_id(state_id: u16, fluid: &Fluid) -> Self {
+                fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Self {
                     if ![#(#fluid_names),*].contains(&fluid.name) {
                         panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
                     }
 
                     for (idx, state) in fluid.states.iter().enumerate() {
-                        if state.block_state_id == state_id {
+                        if state.block_state_id == id {
                             return Self::from_index(idx as u16);
                         }
                     }
@@ -270,7 +272,7 @@ impl ToTokens for FluidPropertyStruct {
                         panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
                     }
 
-                    Self::from_state_id(fluid.default_state_index, fluid)
+                    Self::from_index(fluid.default_state_index)
                 }
 
                 fn to_props(&self) -> Vec<(String, String)> {
@@ -310,7 +312,7 @@ struct FluidState {
     /// Blast resistance of the fluid in this state.
     blast_resistance: f32,
     /// Block state ID used to identify this fluid state in the world.
-    block_state_id: u16,
+    block_state_id: BlockStateId,
     /// Whether the fluid is still (not flowing).
     is_still: bool,
     // We'll derive is_source and falling from existing fields instead of requiring them in JSON
@@ -428,13 +430,13 @@ pub fn build() -> TokenStream {
         let state_id_start = fluid
             .states
             .iter()
-            .map(|state| state.block_state_id)
+            .map(|state| state.block_state_id.0)
             .min()
             .unwrap();
         let state_id_end = fluid
             .states
             .iter()
-            .map(|state| state.block_state_id)
+            .map(|state| state.block_state_id.0)
             .max()
             .unwrap();
 
@@ -642,7 +644,7 @@ pub fn build() -> TokenStream {
             );
 
             fluid_properties_from_state_and_name.extend(quote! {
-                #fluid_name => Box::new(#property_name::from_state_id(state_id, &Fluid::#const_fluid_name)),
+                #fluid_name => Box::new(#property_name::from_state_id(id, &Fluid::#const_fluid_name)),
             });
 
             fluid_properties_from_props_and_name.extend(quote! {
@@ -661,6 +663,7 @@ pub fn build() -> TokenStream {
     quote! {
         use std::hash::{Hash, Hasher};
         use crate::tag::{Taggable, RegistryKey};
+        use crate::BlockStateId;
         use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 
         #[derive(Clone)]
@@ -669,7 +672,7 @@ pub fn build() -> TokenStream {
             pub level: i16,
             pub is_empty: bool,
             pub blast_resistance: f32,
-            pub block_state_id: u16,
+            pub block_state_id: BlockStateId,
             pub is_still: bool,
             pub is_source: bool,
             pub falling: bool,
@@ -681,7 +684,7 @@ pub fn build() -> TokenStream {
             pub level: i16,
             pub is_empty: bool,
             pub blast_resistance: f32,
-            pub block_state_id: u16,
+            pub block_state_id: BlockStateId,
             pub is_still: bool,
             pub is_source: bool,
             pub falling: bool,
@@ -738,9 +741,9 @@ pub fn build() -> TokenStream {
             fn from_index(index: u16) -> Self where Self: Sized;
 
             // Convert properties to a state id.
-            fn to_state_id(&self, fluid: &Fluid) -> u16;
+            fn to_state_id(&self, fluid: &Fluid) -> BlockStateId;
             // Convert a state id back to properties.
-            fn from_state_id(state_id: u16, fluid: &Fluid) -> Self where Self: Sized;
+            fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Self where Self: Sized;
             // Get the default properties.
             fn default(fluid: &Fluid) -> Self where Self: Sized;
 
@@ -772,9 +775,10 @@ pub fn build() -> TokenStream {
                     _ => None
                 }
             }
+
             #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
-            pub const fn from_state_id(id: u16) -> Option<&'static Self> {
-                match id {
+            pub const fn from_state_id(id: BlockStateId) -> Option<&'static Self> {
+                match id.as_u16() {
                     #fluid_from_state_id
                     _ => None
                 }
@@ -790,7 +794,7 @@ pub fn build() -> TokenStream {
 
             #[track_caller]
             #[doc = r" Get the properties of the fluid."]
-            pub fn properties(&self, state_id: u16) -> Box<dyn FluidProperties> {
+            pub fn properties(&self, id: BlockStateId) -> Box<dyn FluidProperties> {
                 match self.name {
                     #fluid_properties_from_state_and_name
                     _ => panic!("Invalid state_id")
@@ -825,23 +829,23 @@ pub fn build() -> TokenStream {
             }
 
             // Added helper methods for fluid behavior
-            pub fn is_source(&self, state_id: u16) -> bool {
-                let idx = (state_id as usize) % self.states.len();
+            pub fn is_source(&self, state_id: BlockStateId) -> bool {
+                let idx = (state_id.as_u16() as usize) % self.states.len();
                 self.states[idx].is_source
             }
 
-            pub fn is_falling(&self, state_id: u16) -> bool {
-                let idx = (state_id as usize) % self.states.len();
+            pub fn is_falling(&self, state_id: BlockStateId) -> bool {
+                let idx = (state_id.as_u16() as usize) % self.states.len();
                 self.states[idx].falling
             }
 
-            pub fn get_level(&self, state_id: u16) -> i16 {
-                let idx = (state_id as usize) % self.states.len();
+            pub fn get_level(&self, state_id: BlockStateId) -> i16 {
+                let idx = (state_id.as_u16() as usize) % self.states.len();
                 self.states[idx].level
             }
 
-            pub fn get_height(&self, state_id: u16) -> f32 {
-                let idx = (state_id as usize) % self.states.len();
+            pub fn get_height(&self, state_id: BlockStateId) -> f32 {
+                let idx = (state_id.as_u16() as usize) % self.states.len();
                 self.states[idx].height
             }
         }

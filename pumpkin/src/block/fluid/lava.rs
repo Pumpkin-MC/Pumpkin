@@ -5,7 +5,7 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::blocks_movement,
     damage::DamageType,
     dimension::Dimension,
@@ -14,7 +14,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 use std::sync::atomic::Ordering;
@@ -238,11 +238,7 @@ impl FluidBehaviour for FlowingLava {
                             Self::ignite_fire_if_possible(world, &test_pos).await;
                             return;
                         }
-                    } else if blocks_movement(
-                        block_state,
-                        Block::get_block_id_from_state_id(block_state.id)
-                            .expect("invalid blockstate"),
-                    ) {
+                    } else if blocks_movement(block_state, block_state.id.to_block_id()) {
                         return;
                     }
                 }

@@ -1882,7 +1882,7 @@ impl JavaClient {
                     {
                         self.enqueue_packet(&CBlockUpdate::new(
                             position,
-                            VarInt(i32::from(state.id)),
+                            VarInt(i32::from(state.id.as_u16())),
                         ))
                         .await;
                         self.update_sequence(player, player_action.sequence.0);
@@ -1939,7 +1939,7 @@ impl JavaClient {
                                 player
                                     .increment_stat(
                                         StatisticCategory::Mined,
-                                        broken_state.id as i32,
+                                        broken_state.id.as_u16() as i32,
                                         1,
                                     )
                                     .await;
@@ -2021,7 +2021,7 @@ impl JavaClient {
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
                             .await;
                         player
-                            .increment_stat(StatisticCategory::Mined, state.id as i32, 1)
+                            .increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1)
                             .await;
                     }
 
@@ -2088,7 +2088,7 @@ impl JavaClient {
         let synced_state_id = world.get_block_state_id(&position);
         self.send_packet_now(&CBlockUpdate::new(
             position,
-            VarInt(i32::from(synced_state_id)),
+            VarInt(i32::from(synced_state_id.as_u16())),
         ))
         .await;
     }
@@ -2923,7 +2923,7 @@ impl JavaClient {
             .await;
         self.send_packet_now(&CBlockUpdate::new(
             final_block_pos,
-            VarInt(i32::from(new_state)),
+            VarInt(i32::from(new_state.as_u16())),
         ))
         .await;
 

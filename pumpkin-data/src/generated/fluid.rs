@@ -1,4 +1,5 @@
 /* This file is generated. Do not edit manually. */
+use crate::BlockStateId;
 use crate::tag::{RegistryKey, Taggable};
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use std::hash::{Hash, Hasher};
@@ -8,7 +9,7 @@ pub struct PartialFluidState {
     pub level: i16,
     pub is_empty: bool,
     pub blast_resistance: f32,
-    pub block_state_id: u16,
+    pub block_state_id: BlockStateId,
     pub is_still: bool,
     pub is_source: bool,
     pub falling: bool,
@@ -19,7 +20,7 @@ pub struct FluidState {
     pub level: i16,
     pub is_empty: bool,
     pub blast_resistance: f32,
-    pub block_state_id: u16,
+    pub block_state_id: BlockStateId,
     pub is_still: bool,
     pub is_source: bool,
     pub falling: bool,
@@ -57,7 +58,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 0i16,
         is_empty: true,
         blast_resistance: 0f32,
-        block_state_id: 0u16,
+        block_state_id: BlockStateId::new(0u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -67,7 +68,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 1i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 101u16,
+        block_state_id: BlockStateId::new(101u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -77,7 +78,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 2i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 100u16,
+        block_state_id: BlockStateId::new(100u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -87,7 +88,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 3i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 99u16,
+        block_state_id: BlockStateId::new(99u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -97,7 +98,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 4i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 98u16,
+        block_state_id: BlockStateId::new(98u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -107,7 +108,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 5i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 97u16,
+        block_state_id: BlockStateId::new(97u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -117,7 +118,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 6i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 96u16,
+        block_state_id: BlockStateId::new(96u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -127,7 +128,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 7i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 95u16,
+        block_state_id: BlockStateId::new(95u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -137,7 +138,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 8i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 94u16,
+        block_state_id: BlockStateId::new(94u16).unwrap(),
         is_still: false,
         is_source: false,
         falling: false,
@@ -147,7 +148,7 @@ pub const FLUID_STATES: &[PartialFluidState] = &[
         level: 8i16,
         is_empty: false,
         blast_resistance: 100f32,
-        block_state_id: 86u16,
+        block_state_id: BlockStateId::new(86u16).unwrap(),
         is_still: true,
         is_source: true,
         falling: false,
@@ -168,8 +169,8 @@ where
     fn from_index(index: u16) -> Self
     where
         Self: Sized;
-    fn to_state_id(&self, fluid: &Fluid) -> u16;
-    fn from_state_id(state_id: u16, fluid: &Fluid) -> Self
+    fn to_state_id(&self, fluid: &Fluid) -> BlockStateId;
+    fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Self
     where
         Self: Sized;
     fn default(fluid: &Fluid) -> Self
@@ -196,7 +197,7 @@ impl Fluid {
             level: 0i16,
             is_empty: true,
             blast_resistance: 0f32,
-            block_state_id: 0u16,
+            block_state_id: BlockStateId::new(0u16).unwrap(),
             is_still: false,
             is_source: false,
             falling: false,
@@ -219,7 +220,7 @@ impl Fluid {
                 level: 1i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 101u16,
+                block_state_id: BlockStateId::new(101u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -229,7 +230,7 @@ impl Fluid {
                 level: 2i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 100u16,
+                block_state_id: BlockStateId::new(100u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -239,7 +240,7 @@ impl Fluid {
                 level: 3i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 99u16,
+                block_state_id: BlockStateId::new(99u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -249,7 +250,7 @@ impl Fluid {
                 level: 4i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 98u16,
+                block_state_id: BlockStateId::new(98u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -259,7 +260,7 @@ impl Fluid {
                 level: 5i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 97u16,
+                block_state_id: BlockStateId::new(97u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -269,7 +270,7 @@ impl Fluid {
                 level: 6i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 96u16,
+                block_state_id: BlockStateId::new(96u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -279,7 +280,7 @@ impl Fluid {
                 level: 7i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 95u16,
+                block_state_id: BlockStateId::new(95u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -289,7 +290,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 94u16,
+                block_state_id: BlockStateId::new(94u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -299,7 +300,7 @@ impl Fluid {
                 level: 1i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 93u16,
+                block_state_id: BlockStateId::new(93u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -309,7 +310,7 @@ impl Fluid {
                 level: 2i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 92u16,
+                block_state_id: BlockStateId::new(92u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -319,7 +320,7 @@ impl Fluid {
                 level: 3i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 91u16,
+                block_state_id: BlockStateId::new(91u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -329,7 +330,7 @@ impl Fluid {
                 level: 4i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 90u16,
+                block_state_id: BlockStateId::new(90u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -339,7 +340,7 @@ impl Fluid {
                 level: 5i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 89u16,
+                block_state_id: BlockStateId::new(89u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -349,7 +350,7 @@ impl Fluid {
                 level: 6i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 88u16,
+                block_state_id: BlockStateId::new(88u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -359,7 +360,7 @@ impl Fluid {
                 level: 7i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 87u16,
+                block_state_id: BlockStateId::new(87u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -369,7 +370,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 86u16,
+                block_state_id: BlockStateId::new(86u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -390,7 +391,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 86u16,
+                block_state_id: BlockStateId::new(86u16).unwrap(),
                 is_still: true,
                 is_source: true,
                 falling: false,
@@ -400,7 +401,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 86u16,
+                block_state_id: BlockStateId::new(86u16).unwrap(),
                 is_still: true,
                 is_source: true,
                 falling: false,
@@ -424,7 +425,7 @@ impl Fluid {
                 level: 1i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 117u16,
+                block_state_id: BlockStateId::new(117u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -434,7 +435,7 @@ impl Fluid {
                 level: 2i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 116u16,
+                block_state_id: BlockStateId::new(116u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -444,7 +445,7 @@ impl Fluid {
                 level: 3i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 115u16,
+                block_state_id: BlockStateId::new(115u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -454,7 +455,7 @@ impl Fluid {
                 level: 4i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 114u16,
+                block_state_id: BlockStateId::new(114u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -464,7 +465,7 @@ impl Fluid {
                 level: 5i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 113u16,
+                block_state_id: BlockStateId::new(113u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -474,7 +475,7 @@ impl Fluid {
                 level: 6i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 112u16,
+                block_state_id: BlockStateId::new(112u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -484,7 +485,7 @@ impl Fluid {
                 level: 7i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 111u16,
+                block_state_id: BlockStateId::new(111u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -494,7 +495,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 110u16,
+                block_state_id: BlockStateId::new(110u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -504,7 +505,7 @@ impl Fluid {
                 level: 1i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 109u16,
+                block_state_id: BlockStateId::new(109u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -514,7 +515,7 @@ impl Fluid {
                 level: 2i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 108u16,
+                block_state_id: BlockStateId::new(108u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -524,7 +525,7 @@ impl Fluid {
                 level: 3i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 107u16,
+                block_state_id: BlockStateId::new(107u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -534,7 +535,7 @@ impl Fluid {
                 level: 4i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 106u16,
+                block_state_id: BlockStateId::new(106u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -544,7 +545,7 @@ impl Fluid {
                 level: 5i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 105u16,
+                block_state_id: BlockStateId::new(105u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -554,7 +555,7 @@ impl Fluid {
                 level: 6i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 104u16,
+                block_state_id: BlockStateId::new(104u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -564,7 +565,7 @@ impl Fluid {
                 level: 7i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 103u16,
+                block_state_id: BlockStateId::new(103u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -574,7 +575,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 102u16,
+                block_state_id: BlockStateId::new(102u16).unwrap(),
                 is_still: false,
                 is_source: false,
                 falling: false,
@@ -595,7 +596,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 102u16,
+                block_state_id: BlockStateId::new(102u16).unwrap(),
                 is_still: true,
                 is_source: true,
                 falling: false,
@@ -605,7 +606,7 @@ impl Fluid {
                 level: 8i16,
                 is_empty: false,
                 blast_resistance: 100f32,
-                block_state_id: 102u16,
+                block_state_id: BlockStateId::new(102u16).unwrap(),
                 is_still: true,
                 is_source: true,
                 falling: false,
@@ -637,8 +638,8 @@ impl Fluid {
         }
     }
     #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
-    pub const fn from_state_id(id: u16) -> Option<&'static Self> {
-        match id {
+    pub const fn from_state_id(id: BlockStateId) -> Option<&'static Self> {
+        match id.as_u16() {
             0..=0 => Some(&Fluid::EMPTY),
             86..=86 => Some(&Fluid::WATER),
             102..=102 => Some(&Fluid::LAVA),
@@ -659,22 +660,16 @@ impl Fluid {
     }
     #[track_caller]
     #[doc = r" Get the properties of the fluid."]
-    pub fn properties(&self, state_id: u16) -> Box<dyn FluidProperties> {
+    pub fn properties(&self, id: BlockStateId) -> Box<dyn FluidProperties> {
         match self.name {
-            "water" => Box::new(WaterLikeFluidProperties::from_state_id(
-                state_id,
-                &Fluid::WATER,
-            )),
-            "lava" => Box::new(WaterLikeFluidProperties::from_state_id(
-                state_id,
-                &Fluid::LAVA,
-            )),
+            "water" => Box::new(WaterLikeFluidProperties::from_state_id(id, &Fluid::WATER)),
+            "lava" => Box::new(WaterLikeFluidProperties::from_state_id(id, &Fluid::LAVA)),
             "flowing_water" => Box::new(FlowingWaterLikeFluidProperties::from_state_id(
-                state_id,
+                id,
                 &Fluid::FLOWING_WATER,
             )),
             "flowing_lava" => Box::new(FlowingWaterLikeFluidProperties::from_state_id(
-                state_id,
+                id,
                 &Fluid::FLOWING_LAVA,
             )),
             _ => panic!("Invalid state_id"),
@@ -714,20 +709,20 @@ impl Fluid {
             _ => Fluid::from_id(self.id).unwrap_or(&Fluid::EMPTY),
         }
     }
-    pub fn is_source(&self, state_id: u16) -> bool {
-        let idx = (state_id as usize) % self.states.len();
+    pub fn is_source(&self, state_id: BlockStateId) -> bool {
+        let idx = (state_id.as_u16() as usize) % self.states.len();
         self.states[idx].is_source
     }
-    pub fn is_falling(&self, state_id: u16) -> bool {
-        let idx = (state_id as usize) % self.states.len();
+    pub fn is_falling(&self, state_id: BlockStateId) -> bool {
+        let idx = (state_id.as_u16() as usize) % self.states.len();
         self.states[idx].falling
     }
-    pub fn get_level(&self, state_id: u16) -> i16 {
-        let idx = (state_id as usize) % self.states.len();
+    pub fn get_level(&self, state_id: BlockStateId) -> i16 {
+        let idx = (state_id.as_u16() as usize) % self.states.len();
         self.states[idx].level
     }
-    pub fn get_height(&self, state_id: u16) -> f32 {
-        let idx = (state_id as usize) % self.states.len();
+    pub fn get_height(&self, state_id: BlockStateId) -> f32 {
+        let idx = (state_id.as_u16() as usize) % self.states.len();
         self.states[idx].height
     }
 }
@@ -903,7 +898,7 @@ impl FluidProperties for WaterLikeFluidProperties {
             },
         }
     }
-    fn to_state_id(&self, fluid: &Fluid) -> u16 {
+    fn to_state_id(&self, fluid: &Fluid) -> BlockStateId {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
@@ -917,7 +912,7 @@ impl FluidProperties for WaterLikeFluidProperties {
             fluid.states[fluid.default_state_index as usize].block_state_id
         }
     }
-    fn from_state_id(state_id: u16, fluid: &Fluid) -> Self {
+    fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Self {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
@@ -925,7 +920,7 @@ impl FluidProperties for WaterLikeFluidProperties {
             );
         }
         for (idx, state) in fluid.states.iter().enumerate() {
-            if state.block_state_id == state_id {
+            if state.block_state_id == id {
                 return Self::from_index(idx as u16);
             }
         }
@@ -938,7 +933,7 @@ impl FluidProperties for WaterLikeFluidProperties {
                 &fluid.name, "WaterLikeFluidProperties"
             );
         }
-        Self::from_state_id(fluid.default_state_index, fluid)
+        Self::from_index(fluid.default_state_index)
     }
     fn to_props(&self) -> Vec<(String, String)> {
         vec![("falling".to_string(), self.r#falling.to_value().to_string())]
@@ -991,7 +986,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
             },
         }
     }
-    fn to_state_id(&self, fluid: &Fluid) -> u16 {
+    fn to_state_id(&self, fluid: &Fluid) -> BlockStateId {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
@@ -1005,7 +1000,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
             fluid.states[fluid.default_state_index as usize].block_state_id
         }
     }
-    fn from_state_id(state_id: u16, fluid: &Fluid) -> Self {
+    fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Self {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
@@ -1013,7 +1008,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
             );
         }
         for (idx, state) in fluid.states.iter().enumerate() {
-            if state.block_state_id == state_id {
+            if state.block_state_id == id {
                 return Self::from_index(idx as u16);
             }
         }
@@ -1026,7 +1021,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
                 &fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
-        Self::from_state_id(fluid.default_state_index, fluid)
+        Self::from_index(fluid.default_state_index)
     }
     fn to_props(&self) -> Vec<(String, String)> {
         vec![

@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::block::RawBlockState;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
@@ -217,8 +216,8 @@ impl GeodeFeature {
 
         // Determine which blocks can be replaced
         let can_replace_pred = |state: &BlockState| {
-            let raw_id = Block::get_block_id_from_state_id(state.id).unwrap_or_default();
-            state.is_air() || !cannot_replace_raw_ids.contains(&raw_id)
+            let block_id = state.id.to_block_id();
+            state.is_air() || !cannot_replace_raw_ids.contains(&block_id)
         };
 
         let min = origin.add(
@@ -267,7 +266,7 @@ impl GeodeFeature {
                     self.safe_set_block(
                         chunk,
                         point_inside,
-                        RawBlockState::AIR.to_state(),
+                        BlockStateId::AIR.to_state(),
                         &can_replace_pred,
                     );
                 } else if dist_sum_shell >= inner_air {

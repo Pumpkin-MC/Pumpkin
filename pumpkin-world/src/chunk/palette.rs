@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::Hash, iter::repeat_n};
 
 use pumpkin_data::{
-    BlockState,
+    BlockState, BlockStateId,
     block_properties::{has_random_ticks, is_air, is_liquid},
     fluid::Fluid,
 };
@@ -15,9 +15,8 @@ type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
 #[inline]
 #[must_use]
-pub fn has_random_ticking_fluid(state_id: u16) -> bool {
-    Fluid::from_state_id(state_id)
-        .is_some_and(|fluid| Fluid::same_fluid_type(fluid.id, Fluid::LAVA.id))
+pub fn has_random_ticking_fluid(id: BlockStateId) -> bool {
+    Fluid::from_state_id(id).is_some_and(|fluid| Fluid::same_fluid_type(fluid.id, Fluid::LAVA.id))
 }
 
 #[derive(Clone)]
@@ -495,7 +494,7 @@ impl BlockPalette {
         match self {
             Self::Homogeneous(registry_id) => NetworkSerialization {
                 bits_per_entry: 0,
-                palette: NetworkPalette::Single(*registry_id),
+                palette: NetworkPalette::Single(registry_id.as_u16()),
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
@@ -512,7 +511,7 @@ impl BlockPalette {
                                 let y = (current_idx + i) / (Self::SIZE * Self::SIZE);
                                 let z = ((current_idx + i) / Self::SIZE) % Self::SIZE;
                                 let x = (current_idx + i) % Self::SIZE;
-                                let value = data.get(x, y, z);
+                                let value = data.get(x, y, z).as_u16();
                                 debug_assert!((1 << bits_per_entry) > value);
                                 acc |= (value as u64) << (bits_per_entry as u64 * i as u64);
                             }
@@ -532,7 +531,9 @@ impl BlockPalette {
 
                     NetworkSerialization {
                         bits_per_entry,
-                        palette: NetworkPalette::Indirect(palette),
+                        palette: NetworkPalette::Indirect(
+                            palette.iter().map(|v| v.as_u16()).collect(),
+                        ),
                         packed_data: packed,
                     }
                 }
@@ -754,7 +755,7 @@ pub struct BeNetworkSerialization<V> {
 // directly instead of using a palette above a certain bits-per-entry
 
 // TODO: Do our own testing; do we really need to handle network and disk serialization differently?
-pub type BlockPalette = PalettedContainer<u16, 16>;
+pub type BlockPalette = PalettedContainer<BlockStateId, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;

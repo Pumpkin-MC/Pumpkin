@@ -81,7 +81,7 @@ async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>
             p.z.floor() as i32,
         ));
         let state_id = world.get_block_state_id(&pos);
-        let raw_block_id = Block::get_block_id_from_state_id(state_id).expect("invalid blockstate");
+        let raw_block_id = state_id.to_block_id();
         if raw_block_id == BlockId::FIRE || raw_block_id == BlockId::SOUL_FIRE {
             world
                 .set_block_state(&pos, air_state_id, BlockFlags::NOTIFY_ALL)

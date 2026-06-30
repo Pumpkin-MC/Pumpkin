@@ -319,7 +319,7 @@ pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
 #[cfg(feature = "block")]
 pub use block_rotation::{Mirror, Rotation};
 #[cfg(feature = "block")]
-pub use block_state::{BlockState, BlockStateRef};
+pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]
 pub use blocks::{Block, BlockId};
 

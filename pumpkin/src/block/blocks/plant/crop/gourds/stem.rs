@@ -4,7 +4,7 @@ use crate::block::{
     blocks::plant::{PlantBlockBase, crop::get_available_moisture},
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockId,
+    Block, BlockDirection, BlockId, BlockStateId,
     block_properties::{
         BlockProperties, HorizontalFacing, WallTorchLikeProperties, WheatLikeProperties,
     },
@@ -14,10 +14,7 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
 type StemProperties = WheatLikeProperties;
@@ -32,7 +29,7 @@ impl BlockMetadata for StemBlock {
 }
 
 impl StemBlock {
-    fn state_with_age(block: &Block, state: u16, age: i32) -> BlockStateId {
+    fn state_with_age(block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
         let mut props = StemProperties::from_state_id(state, block);
         props.age = age as u8;
         props.to_state_id(block)

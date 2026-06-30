@@ -5,6 +5,7 @@ use crate::block::entities::sign::SignBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::EnumVariants;
 use pumpkin_data::tag::Taggable;
@@ -12,7 +13,6 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -298,7 +298,7 @@ impl BlockBehaviour for SignBlock {
             let support = Self::detect_support(args.world, args.position);
 
             let Some(placement) = Self::determine_placement(&args, &support) else {
-                return 0; // Invalid placement
+                return BlockStateId::AIR; // Invalid placement
             };
 
             let actual_block = Block::from_id(placement.block_id);
@@ -416,7 +416,7 @@ impl BlockBehaviour for SignBlock {
                     };
 
                     if !is_valid {
-                        return 0; // Return AIR to break the block
+                        return BlockStateId::AIR; // Return AIR to break the block
                     }
                 }
             }

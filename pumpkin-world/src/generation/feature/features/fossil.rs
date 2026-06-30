@@ -177,10 +177,10 @@ fn place_fossil_template<T: GenerationCache>(
             continue;
         }
 
-        let current_state = GenerationCache::get_block_state(chunk, &world_pos).to_state();
+        let current_state = GenerationCache::get_block_state(chunk, &world_pos);
         if tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE
             .1
-            .contains(&current_state.id)
+            .contains(&current_state.to_block_id().as_u16())
         {
             continue;
         }
