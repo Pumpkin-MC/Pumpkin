@@ -196,6 +196,8 @@ impl BlockStateId {
     // depends on generated impl:
     // pub(crate) const STATE_COUNT: u16;
 
+    // SAFETY: There must never be a BlockStateId where self.0 >= BlockStateId::STATE_COUNT
+
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -214,7 +216,7 @@ impl BlockStateId {
         Self::AIR
     }
 
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub const fn as_u16(self) -> u16 {
         self.0
@@ -240,6 +242,7 @@ impl BlockStateId {
 }
 
 impl Default for BlockStateId {
+    #[inline]
     fn default() -> Self {
         Self::AIR
     }
@@ -248,21 +251,12 @@ impl Default for BlockStateId {
 impl std::fmt::Display for BlockStateId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use std::fmt::Write;
-        if self.0 < BlockStateId::STATE_COUNT {
-            write!(
-                f,
-                "BlockStateId({} = \"{}\")",
-                self.0,
-                Block::from_state_id(*self).name
-            )
-        } else {
-            write!(
-                f,
-                "BlockStateId(unsound! {} >= {})",
-                self.0,
-                BlockStateId::STATE_COUNT
-            )
-        }
+        write!(
+            f,
+            "BlockStateId({} = \"{}\")",
+            self.0,
+            Block::from_state_id(*self).name
+        )
     }
 }
 

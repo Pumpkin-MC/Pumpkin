@@ -200,6 +200,8 @@ impl BlockId {
     // depends on generated impl:
     // pub(crate) const BLOCK_COUNT: u16;
 
+    // SAFETY: There must never be a BlockId where self.0 >= BlockId::BLOCK_COUNT
+
     #[inline]
     #[must_use]
     pub const fn new(inner: u16) -> Option<Self> {
@@ -215,7 +217,7 @@ impl BlockId {
         if inner < Self::BLOCK_COUNT {
             return Self(inner);
         }
-        BlockId::AIR
+        Self::AIR
     }
 
     #[inline]
@@ -224,7 +226,7 @@ impl BlockId {
         Block::from_id(self)
     }
 
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub const fn as_u16(self) -> u16 {
         self.0
@@ -254,21 +256,12 @@ impl Default for BlockId {
 impl std::fmt::Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use std::fmt::Write;
-        if self.0 < BlockId::BLOCK_COUNT {
-            write!(
-                f,
-                "BlockId({} = \"{}\")",
-                self.0,
-                Block::from_id(*self).name
-            )
-        } else {
-            write!(
-                f,
-                "BlockId(unsound! {} >= {})",
-                self.0,
-                BlockId::BLOCK_COUNT
-            )
-        }
+        write!(
+            f,
+            "BlockId({} = \"{}\")",
+            self.0,
+            Block::from_id(*self).name
+        )
     }
 }
 
