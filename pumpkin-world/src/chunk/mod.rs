@@ -89,7 +89,7 @@ pub struct ChunkEntityData {
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: Mutex<FxHashMap<uuid::Uuid, NbtCompound>>,
+    pub data: Mutex<Vec<NbtCompound>>,
 
     pub dirty: AtomicBool,
 }

@@ -31,7 +31,6 @@ use crate::{
     server::{RecipeManager, Server},
     world::World,
 };
-use pumpkin_world::level::SyncChunk;
 
 pub struct WasmResource<T> {
     pub provider: T,
@@ -44,7 +43,7 @@ pub type JavaPlayerResource = WasmResource<Arc<Player>>;
 pub type BedrockPlayerResource = WasmResource<Arc<Player>>;
 pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
-pub type ChunkResource = WasmResource<(Arc<World>, SyncChunk)>;
+pub type ChunkResource = WasmResource<(Arc<World>, Weak<pumpkin_world::chunk::ChunkData>)>;
 pub type WorldBorderResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
@@ -157,7 +156,7 @@ impl PluginHostState {
     pub fn add_chunk<T>(
         &mut self,
         world: Arc<World>,
-        chunk: SyncChunk,
+        chunk: Weak<pumpkin_world::chunk::ChunkData>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(ChunkResource {
             provider: (world, chunk),

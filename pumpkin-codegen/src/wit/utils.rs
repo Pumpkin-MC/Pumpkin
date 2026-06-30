@@ -10,7 +10,7 @@ pub fn map_type(ty: &Type) -> WitType {
                 "String" | "TextComponent" => WitType::String,
                 "Uuid" => WitType::Named("uuid".into()),
                 "i32" | "VarInt" | "u32" | "VarUInt" | "usize" => WitType::S32,
-                "i64" | "u64" => WitType::S64,
+                "i64" | "u64" | "VarLong" | "VarULong" => WitType::S64,
                 "bool" => WitType::Bool,
                 "f32" => WitType::F32,
                 "f64" => WitType::F64,

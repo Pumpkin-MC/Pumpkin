@@ -235,7 +235,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .get(&pos)
             .map(|c| c.value().clone());
         if let Some(chunk) = chunk {
-            let res = self.add_chunk(world_provider, chunk)?;
+            let res = self.add_chunk(world_provider, std::sync::Arc::downgrade(&chunk))?;
             Ok(Some(res))
         } else {
             Ok(None)
@@ -719,12 +719,18 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     async fn get_x(&mut self, chunk: Resource<WitChunk>) -> wasmtime::Result<i32> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         Ok(chunk_data.x)
     }
 
     async fn get_z(&mut self, chunk: Resource<WitChunk>) -> wasmtime::Result<i32> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         Ok(chunk_data.z)
     }
 
@@ -735,6 +741,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<u16> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         Ok(chunk_data
             .section
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
@@ -748,6 +757,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<WitBlockState> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         let id = chunk_data
             .section
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
@@ -806,6 +818,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<()> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (world, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
 
         let replaced =
             chunk_data.set_block_absolute_y(pos.x as usize, pos.y, pos.z as usize, state);
@@ -827,6 +842,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         let id = chunk_data
             .section
             .get_rough_biome_absolute_y(pos.x as usize, pos.y, pos.z as usize)
@@ -844,6 +862,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<Option<BlockEntityType>> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (world, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         let absolute_pos =
             BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
         let block_entity = world.get_block_entity(&absolute_pos);
@@ -859,6 +880,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<i32> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         Ok(chunk_data.heightmap.lock().unwrap().get(
             ChunkHeightmapType::WorldSurface,
             x,
@@ -874,6 +898,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<u8> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         let section_index = (pos.y - chunk_data.section.min_y) as usize / 16;
         Ok(chunk_data
             .light_engine
@@ -893,6 +920,9 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
     ) -> wasmtime::Result<u8> {
         let chunk_res = self.get_chunk_res(&chunk)?;
         let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
         let section_index = (pos.y - chunk_data.section.min_y) as usize / 16;
         Ok(chunk_data
             .light_engine

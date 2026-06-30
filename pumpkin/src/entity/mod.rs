@@ -3300,6 +3300,13 @@ impl NBTStorage for Entity {
             if self.has_visual_fire.load(Relaxed) {
                 nbt.put_bool("HasVisualFire", true);
             }
+            nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
+            if let Some(custom_name) = &**self.custom_name.load()
+                && let Ok(name_json) = pumpkin_util::serde_json::to_string(custom_name)
+            {
+                nbt.put_string("CustomName", name_json);
+            }
+            nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
 
             // todo more...
         })
@@ -3340,6 +3347,15 @@ impl NBTStorage for Entity {
                 .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
             self.has_visual_fire
                 .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
+            self.frozen_ticks
+                .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
+            if let Some(name_json) = nbt.get_string("CustomName")
+                && let Ok(component) = pumpkin_util::serde_json::from_str(name_json)
+            {
+                self.custom_name.store(Arc::new(Some(component)));
+            }
+            self.custom_name_visible
+                .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
             // todo more...
         })
     }

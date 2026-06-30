@@ -17,7 +17,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
 pub mod explosion;
@@ -286,7 +286,7 @@ impl World {
         let generation_settings = GenerationSettings::from_dimension(&dimension);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
-        let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
+        let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| Mutex::new(dragon_fight::DragonFight::new()));
         Self {
@@ -381,7 +381,6 @@ impl World {
         // First lets see if the entity was saved on an other chunk, and if the current chunk does not match we remove it
         // Otherwise we just update the nbt data
         let base_entity = entity.get_entity();
-        let uuid = base_entity.entity_uuid;
         let current_chunk_coordinate = base_entity.block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
         entity.write_nbt(&mut nbt).await;
@@ -392,35 +391,19 @@ impl World {
             chunk.mark_dirty(true);
             let mut data = chunk.data.lock().await;
             if old_chunk == current_chunk_coordinate {
-                data.insert(uuid, nbt);
+                data.push(nbt);
                 return;
             }
 
             // The chunk has changed, lets remove the entity from the old chunk
-            data.remove(&uuid);
+            // TODO?
+            data.clear();
         }
         // We did not continue, so lets save data in a new chunk
         let chunk = self.level.get_entity_chunk(current_chunk_coordinate).await;
         let mut data = chunk.data.lock().await;
-        data.insert(uuid, nbt);
+        data.push(nbt);
         chunk.mark_dirty(true);
-    }
-
-    async fn remove_entity_data(&self, entity: &Entity) {
-        let current_chunk_coordinate = entity.block_pos.load().chunk_position();
-        if let Some(old_chunk) = entity.first_loaded_chunk_position.load() {
-            let old_chunk = old_chunk.to_vec2_i32();
-            let chunk = self.level.get_entity_chunk(old_chunk).await;
-            chunk.mark_dirty(true);
-            if old_chunk == current_chunk_coordinate {
-                chunk.data.lock().await.remove(&entity.entity_uuid);
-            } else {
-                let chunk = self.level.get_entity_chunk(current_chunk_coordinate).await;
-                // The chunk has changed, lets remove the entity from the old chunk
-                chunk.data.lock().await.remove(&entity.entity_uuid);
-                chunk.mark_dirty(true);
-            }
-        }
     }
 
     /// Sends an entity status update to all players tracking the specified entity.
@@ -1140,7 +1123,8 @@ impl World {
                 self.level.should_unload.store(true, Relaxed);
                 let cleaned_chunks = self.level.clean_memory();
                 if !cleaned_chunks.is_empty() {
-                    self.remove_entities_in_chunks(&cleaned_chunks);
+                    self.remove_entities_in_chunks(&cleaned_chunks).await;
+                    self.level.clean_entity_chunks(&cleaned_chunks);
                 }
                 // If autosave is configured and this tick will trigger an autosave, don't double notify
                 if self.level.autosave_ticks == 0 {
@@ -3550,6 +3534,7 @@ impl World {
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
         let world = self.clone();
+
         player.clone().spawn_task(async move {
             'main: loop {
                 let recv_result = tokio::select! {
@@ -3580,68 +3565,46 @@ impl World {
                         "Received chunk {:?}, but it is no longer watched... cleaning",
                         &position
                     );
-                    let mut ids_to_remove = Vec::new();
 
-                    for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
-                        let Some(id) = entity_nbt.get_string("id") else {
-                            warn!("{}", localized_log("server.log.entity_no_id"));
-                            continue;
-                        };
-                        let Some(entity_type) =
-                            EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-                        else {
-                            warn!(
-                                "{}",
-                                localized_log_format(
-                                    "server.log.invalid_entity_type",
-                                    &[id.to_string()]
-                                )
+                    if first_load {
+                        for entity_nbt in chunk.data.lock().await.iter() {
+                            let Some(id) = entity_nbt.get_string("id") else {
+                                continue;
+                            };
+                            let Some(entity_type) =
+                                EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+                            else {
+                                continue;
+                            };
+
+                            let entity = from_type(
+                                entity_type,
+                                Vector3::new(0.0, 0.0, 0.0),
+                                &world,
+                                Uuid::new_v4(),
                             );
-                            continue;
-                        };
-                        // Pos is zero since it will read from nbt
-                        let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
-                        entity.read_nbt_non_mut(entity_nbt).await;
-                        let base_entity = entity.get_entity();
+                            entity.read_nbt_non_mut(entity_nbt).await;
+                            let base_entity = entity.get_entity();
 
-                        ids_to_remove.push(VarInt(base_entity.entity_id));
-
-                        if first_load {
                             let mut nbt = NbtCompound::new();
                             entity.write_nbt(&mut nbt).await;
+
                             if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load()
                             {
                                 let old_chunk = old_chunk.to_vec2_i32();
                                 let chunk = world.level.get_entity_chunk(old_chunk).await;
                                 chunk.mark_dirty(true);
-                                let base_entity = entity.get_entity();
                                 let current_chunk_coordinate =
                                     base_entity.block_pos.load().chunk_position();
 
                                 let mut data = chunk.data.lock().await;
                                 if old_chunk == current_chunk_coordinate {
-                                    data.insert(*uuid, nbt);
+                                    data.push(nbt);
                                     continue;
                                 }
 
                                 // The chunk has changed, lets remove the entity from the old chunk
-                                data.remove(uuid);
-                            }
-                        }
-                    }
-                    if !ids_to_remove.is_empty() {
-                        match player.client.as_ref() {
-                            crate::net::ClientPlatform::Java(java) => {
-                                java.enqueue_packet(&CRemoveEntities::new(&ids_to_remove))
-                                    .await;
-                            }
-                            crate::net::ClientPlatform::Bedrock(bedrock) => {
-                                for id in &ids_to_remove {
-                                    bedrock
-                                        .enqueue_packet(&CRemoveActor::new(VarLong(id.0 as i64)))
-                                        .await;
-                                }
+                                data.clear();
                             }
                         }
                     }
@@ -3650,7 +3613,7 @@ impl World {
 
                 // Add all new Entities to the world
                 let mut entities_to_add: Vec<Arc<dyn EntityBase>> = Vec::new();
-                for (uuid, entity_nbt) in chunk.data.lock().await.iter() {
+                for entity_nbt in chunk.data.lock().await.iter() {
                     let Some(id) = entity_nbt.get_string("id") else {
                         debug!("{}", localized_log("server.log.entity_no_id"));
                         continue;
@@ -3668,29 +3631,17 @@ impl World {
                         continue;
                     };
 
-                    // Check if this entity already exists in the world (e.g. another player
-                    // is still online and tracking it). If so, just send the spawn packet
-                    // for the existing entity to the reconnecting player instead of
-                    // creating a duplicate with a different entity_id.
-                    let existing = world
-                        .entities
-                        .load()
-                        .iter()
-                        .find(|e| e.get_entity().entity_uuid == *uuid)
-                        .cloned();
-                    if let Some(existing_entity) = existing {
-                        let base_entity = existing_entity.get_entity();
-                        player
-                            .client
-                            .enqueue_packet(&base_entity.create_spawn_packet())
-                            .await;
-                        existing_entity.init_data_tracker().await;
-                        continue;
-                    }
-
                     // Pos is zero since it will read from nbt
-                    let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                    let entity = from_type(
+                        entity_type,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        &world,
+                        Uuid::new_v4(),
+                    );
                     entity.read_nbt_non_mut(entity_nbt).await;
+
+                    entity.init_data_tracker().await;
+
                     let base_entity = entity.get_entity();
 
                     // Clear velocity so the client does not replay the drop animation.
@@ -3702,12 +3653,12 @@ impl World {
                         .client
                         .enqueue_packet(&base_entity.create_spawn_packet())
                         .await;
-                    entity.init_data_tracker().await;
 
                     if first_load {
                         entities_to_add.push(entity);
                     }
                 }
+
                 if first_load && !entities_to_add.is_empty() {
                     world.entities.rcu(|current_entities| {
                         let mut new_entities = (**current_entities).clone();
@@ -4196,7 +4147,7 @@ impl World {
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
         let chunk = self.level.get_entity_chunk(chunk_coordinate).await;
-        chunk.data.lock().await.insert(base_entity.entity_uuid, nbt);
+        chunk.data.lock().await.push(nbt);
         chunk.mark_dirty(true);
 
         self.entities.rcu(|current_entities| {
@@ -4206,6 +4157,7 @@ impl World {
         });
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn remove_entity(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
         self.spawn_state.load().remove_entity(self, entity);
@@ -4221,11 +4173,9 @@ impl World {
             &CRemoveEntities::new(&[base_entity.entity_id.into()]),
             &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
         );
-
-        self.remove_entity_data(base_entity).await;
     }
 
-    pub fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
+    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
         let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
         let mut entities_to_remove = Vec::new();
 
@@ -4245,9 +4195,8 @@ impl World {
         });
 
         for entity in entities_to_remove {
+            self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
-            // Important: We do NOT call remove_entity_data here because we want the entities
-            // to persist in the chunk data on disk. We only remove them from the active world (RAM).
         }
 
         self.block_entities
