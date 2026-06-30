@@ -2,10 +2,10 @@ use crate::block::{BrokenArgs, PlacedArgs};
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
 };
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;

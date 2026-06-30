@@ -4,9 +4,10 @@ use crate::{
     entity::EntityBase,
     world::World,
 };
+use pumpkin_data::BlockStateId;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use pumpkin_world::tick::TickPriority;
 use std::sync::Arc;
 
 pub struct FlowingWater;

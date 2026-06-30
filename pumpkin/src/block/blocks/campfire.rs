@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, Enchantment,
+    Block, BlockDirection, BlockStateId, Enchantment,
     block_properties::{BlockProperties, CampfireLikeProperties},
     damage::DamageType,
     data_component_impl::EquipmentSlot,
@@ -7,7 +7,7 @@ use pumpkin_data::{
     fluid::Fluid,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use pumpkin_world::tick::TickPriority;
 
 use crate::{
     block::{

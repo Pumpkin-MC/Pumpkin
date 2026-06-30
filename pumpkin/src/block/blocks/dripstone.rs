@@ -2,23 +2,21 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs,
-        GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
+        BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+        OnPlaceArgs, PlacedArgs,
     },
     entity::player::Player,
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection, block_properties::{
+    Block, BlockDirection, BlockStateId,
+    block_properties::{
         BlockProperties, PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection,
     },
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 #[pumpkin_block("minecraft:pointed_dripstone")]
 pub struct DripstoneBlock;

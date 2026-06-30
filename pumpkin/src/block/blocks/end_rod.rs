@@ -1,10 +1,10 @@
 use crate::block::BlockFuture;
 use crate::block::{BlockBehaviour, OnPlaceArgs};
 use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EndRodLikeProperties;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 
 #[pumpkin_block("minecraft:end_rod")]
 pub struct EndRodBlock;

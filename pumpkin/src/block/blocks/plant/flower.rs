@@ -1,7 +1,7 @@
 use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::plant::PlantBlockBase;

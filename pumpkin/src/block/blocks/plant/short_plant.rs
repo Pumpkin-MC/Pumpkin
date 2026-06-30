@@ -1,5 +1,5 @@
 use pumpkin_data::BlockId;
-use pumpkin_world::BlockStateId;
+use pumpkin_data::BlockStateId;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,

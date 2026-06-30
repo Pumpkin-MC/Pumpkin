@@ -8,10 +8,10 @@ use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::AmethystClusterLikeProperties;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::BlockStateId;
 
 pub struct AmethystBlock;
 

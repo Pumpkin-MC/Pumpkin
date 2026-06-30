@@ -1,6 +1,6 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::{
-    BlockDirection,
+    BlockDirection, BlockStateId,
     block_properties::{BlockProperties, CandleLikeProperties},
     entity::EntityPose,
 };
@@ -8,7 +8,7 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::{BlockFuture, GetStateForNeighborUpdateArgs, OnScheduledTickArgs};
 use crate::{

@@ -8,16 +8,13 @@ use crate::{
     entity::{EntityBase, player::Player},
 };
 use pumpkin_data::{
-    Block, BlockDirection, FacingExt,
+    Block, BlockDirection, BlockStateId, FacingExt,
     block_properties::{BlockProperties, VineLikeProperties},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 #[pumpkin_block("minecraft:vine")]
 pub struct VineBlock;

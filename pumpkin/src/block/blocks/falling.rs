@@ -6,10 +6,10 @@ use crate::{
     entity::falling::FallingEntity,
 };
 use pumpkin_data::{
-    Block, BlockId, BlockState,
+    Block, BlockId, BlockState, BlockStateId,
     tag::{self, Taggable},
 };
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use pumpkin_world::tick::TickPriority;
 pub struct FallingBlock;
 
 impl FallingBlock {

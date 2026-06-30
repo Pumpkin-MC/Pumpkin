@@ -1,5 +1,5 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
-use pumpkin_world::BlockStateId;
 
 use crate::block::{BlockBehaviour, BlockFuture, CanUpdateAtArgs};
 use crate::block::{BlockIsReplacing, OnPlaceArgs};

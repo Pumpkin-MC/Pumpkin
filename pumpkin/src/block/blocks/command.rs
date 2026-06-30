@@ -13,13 +13,12 @@ use crate::{
     server::Server,
     world::World,
 };
-use pumpkin_data::BlockId;
 use pumpkin_data::{
-    Block, FacingExt,
+    Block, BlockId, BlockStateId, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use pumpkin_world::tick::TickPriority;
 use tracing::warn;
 
 pub struct CommandBlock;

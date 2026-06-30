@@ -1,6 +1,6 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, tag};
-use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::plant::PlantBlockBase;
 

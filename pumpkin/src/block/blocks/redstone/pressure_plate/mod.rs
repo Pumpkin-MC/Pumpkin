@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{OnEntityCollisionArgs, OnScheduledTickArgs, OnStateReplacedArgs},

@@ -8,6 +8,7 @@ use crate::block::{
     OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
@@ -18,7 +19,6 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 fn ring_bell(position: BlockPos, world: &Arc<World>, hit_direction: Option<HorizontalFacing>) {

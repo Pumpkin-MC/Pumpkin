@@ -1,7 +1,7 @@
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockId, tag};
+use pumpkin_data::{Block, BlockId, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use pumpkin_world::world::BlockAccessor;
 
 use crate::block::BlockFuture;
 use crate::block::{
