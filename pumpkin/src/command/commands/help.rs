@@ -110,6 +110,7 @@ impl HelpCommandExecutor {
             })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn page<'a>(context: &'a CommandContext, page_number: usize) -> CommandExecutorResult<'a> {
         Box::pin(async move {
             let server = context.server();
