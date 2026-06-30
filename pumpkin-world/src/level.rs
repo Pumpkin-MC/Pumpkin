@@ -24,7 +24,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use std::{
@@ -119,8 +119,10 @@ pub struct RandomTickSample {
 
 pub struct LevelFolder {
     pub root_folder: PathBuf,
+    pub dim_folder: PathBuf,
     pub region_folder: PathBuf,
     pub entities_folder: PathBuf,
+    pub poi_folder: PathBuf,
 }
 
 impl Level {
@@ -132,16 +134,26 @@ impl Level {
         dimension: Dimension,
         gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
-        let region_folder = root_folder.join("region");
-        let entities_folder = root_folder.join("entities");
+        let (namespace, name) = match dimension.minecraft_name.split_once(':') {
+            Some((ns, n)) => (ns, n),
+            None => ("minecraft", dimension.minecraft_name),
+        };
+        let dim_folder = root_folder.join("dimensions").join(namespace).join(name);
+
+        let region_folder = dim_folder.join("region");
+        let entities_folder = dim_folder.join("entities");
+        let poi_folder = dim_folder.join("poi");
 
         std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
         std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
+        std::fs::create_dir_all(&poi_folder).expect("Failed to create POI folder");
 
         let level_folder = Arc::new(LevelFolder {
             root_folder,
+            dim_folder,
             region_folder,
             entities_folder,
+            poi_folder,
         });
 
         let seed = Seed(seed as u64);
@@ -225,7 +237,7 @@ impl Level {
                 let arc_chunk = Arc::new(ChunkEntityData {
                     x: pos.x,
                     z: pos.y,
-                    data: tokio::sync::Mutex::new(FxHashMap::default()),
+                    data: tokio::sync::Mutex::new(Vec::new()),
                     dirty: AtomicBool::new(false),
                 });
 
@@ -246,7 +258,7 @@ impl Level {
                     let arc_chunk = Arc::new(ChunkEntityData {
                         x: pos.x,
                         z: pos.y,
-                        data: tokio::sync::Mutex::new(FxHashMap::default()),
+                        data: tokio::sync::Mutex::new(Vec::new()),
                         dirty: AtomicBool::new(false),
                     });
 
@@ -322,8 +334,9 @@ impl Level {
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        info!("Flushing data to disk for {}...", world_id);
+        info!("Flushing chunk data to disk for {}...", world_id);
         self.chunk_saver.block_and_await_ongoing_tasks().await;
+        info!("Flushing entity data to disk for {}...", world_id);
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
@@ -521,9 +534,7 @@ impl Level {
             .map(|entry| *entry.key())
             .collect();
 
-        if !entity_chunks_to_remove.is_empty() {
-            self.clean_entity_chunks(&entity_chunks_to_remove);
-        }
+        // We do not clean them here because we want the caller to save any active entities in them first.
 
         // if the difference is too big, we can shrink the loaded chunks
         // (1024 chunks is the equivalent to a 32x32 chunks area)

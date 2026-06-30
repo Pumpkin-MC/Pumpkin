@@ -76,17 +76,17 @@ pub async fn io_read_work(
 
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1000);
 
+        let batch_len = batch.len();
         let level_clone = level.clone();
-        let batch_clone = batch.clone();
 
         let fetch_task = tokio::spawn(async move {
             level_clone
                 .chunk_saver
-                .fetch_chunks(&level_clone.level_folder, &batch_clone, t_send)
+                .fetch_chunks(&level_clone.level_folder, &batch, t_send)
                 .await;
         });
 
-        for _ in 0..batch.len() {
+        for _ in 0..batch_len {
             let data = match t_recv.recv().await {
                 Some(res) => res,
                 None => break,

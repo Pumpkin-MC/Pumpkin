@@ -51,6 +51,7 @@ impl TemplatePool {
     }
 
     /// Discovers a pool from the filesystem/embedded assets.
+    #[must_use]
     pub fn discover(id: &str) -> Option<Self> {
         let elements = crate::generation::structure::template::get_pool_elements(id)?;
 
@@ -84,6 +85,7 @@ pub enum JigsawJointType {
 
 impl JigsawJointType {
     #[allow(clippy::should_implement_trait)]
+    #[must_use]
     pub fn from_str(s: &str) -> Self {
         match s {
             "aligned" => Self::Aligned,
@@ -107,6 +109,7 @@ pub struct JigsawBlock {
 }
 
 impl JigsawBlock {
+    #[must_use]
     pub fn from_template_block(
         block: &crate::generation::structure::template::TemplateBlock,
         palette: &PaletteEntry,
@@ -122,8 +125,7 @@ impl JigsawBlock {
             .properties
             .iter()
             .find(|(k, _)| *k == "orientation")
-            .map(|(_, v)| v.clone())
-            .unwrap_or_else(|| "north_up".to_string());
+            .map_or_else(|| "north_up".to_string(), |(_, v)| v.clone());
 
         let mut parts = facing_str.split('_');
         let facing_part = parts.next().unwrap_or("north");
@@ -166,6 +168,7 @@ impl JigsawBlock {
         })
     }
 
+    #[must_use]
     pub fn can_attach(
         source: &Self,
         target_facing: pumpkin_util::BlockDirection,
@@ -217,7 +220,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
         _block_registry: &dyn crate::world::WorldPortalExt,
         _random: &mut pumpkin_util::random::RandomGenerator,
         _seed: i64,
-        _chunk_box: &pumpkin_util::math::block_box::BlockBox,
+        chunk_box: &pumpkin_util::math::block_box::BlockBox,
     ) {
         let origin =
             pumpkin_util::math::vector3::Vector3::new(self.pos.0.x, self.pos.0.y, self.pos.0.z);
@@ -238,7 +241,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
             self.rotation,
             false,
             &processors,
-            Some(_chunk_box),
+            Some(chunk_box),
         );
 
         // Post-process: replace jigsaw blocks with their final_state
@@ -246,12 +249,12 @@ impl StructurePieceBase for PoolElementStructurePiece {
             let wx = jigsaw.pos.0.x;
             let wy = jigsaw.pos.0.y;
             let wz = jigsaw.pos.0.z;
-            if wx < _chunk_box.min.x
-                || wx > _chunk_box.max.x
-                || wy < _chunk_box.min.y
-                || wy > _chunk_box.max.y
-                || wz < _chunk_box.min.z
-                || wz > _chunk_box.max.z
+            if wx < chunk_box.min.x
+                || wx > chunk_box.max.x
+                || wy < chunk_box.min.y
+                || wy > chunk_box.max.y
+                || wz < chunk_box.min.z
+                || wz > chunk_box.max.z
             {
                 continue;
             }
@@ -282,6 +285,7 @@ pub struct JigsawGenerator {
 }
 
 impl JigsawGenerator {
+    #[must_use]
     pub fn new(start_pool: &str, size: i32) -> Self {
         Self {
             start_pool: start_pool.to_string(),
@@ -291,12 +295,14 @@ impl JigsawGenerator {
         }
     }
 
+    #[must_use]
     pub fn with_start_jigsaw(mut self, name: &str) -> Self {
         self.start_jigsaw_name = Some(name.to_string());
         self
     }
 
-    pub fn with_expansion_hack(mut self, use_hack: bool) -> Self {
+    #[must_use]
+    pub const fn with_expansion_hack(mut self, use_hack: bool) -> Self {
         self.use_expansion_hack = use_hack;
         self
     }
@@ -332,22 +338,22 @@ impl StructureGenerator for JigsawGenerator {
             .and_then(|s| s.max_distance_from_center)
             .unwrap_or(80); // Vanilla default is 80
 
-        let liquid_settings = structure
-            .and_then(|s| s.liquid_settings)
-            .map(|ls| match ls {
-                "apply_waterlogging" => LiquidSettings::ApplyWaterlog,
-                "ignore_waterlogging" => LiquidSettings::IgnoreWaterlogDone,
-                _ => LiquidSettings::ApplyWaterlog,
-            })
-            .unwrap_or(LiquidSettings::ApplyWaterlog);
+        let liquid_settings =
+            structure
+                .and_then(|s| s.liquid_settings)
+                .map_or(LiquidSettings::ApplyWaterlog, |ls| match ls {
+                    "apply_waterlogging" => LiquidSettings::ApplyWaterlog,
+                    "ignore_waterlogging" => LiquidSettings::IgnoreWaterlogDone,
+                    _ => LiquidSettings::ApplyWaterlog,
+                });
 
-        let dimension_padding = structure
-            .and_then(|s| s.dimension_padding)
-            .map(|dp| DimensionPadding {
-                top: dp,
-                bottom: dp,
-            })
-            .unwrap_or(DimensionPadding::ZERO);
+        let dimension_padding =
+            structure
+                .and_then(|s| s.dimension_padding)
+                .map_or(DimensionPadding::ZERO, |dp| DimensionPadding {
+                    top: dp,
+                    bottom: dp,
+                });
 
         JigsawPlacement::add_pieces(
             &mut context,

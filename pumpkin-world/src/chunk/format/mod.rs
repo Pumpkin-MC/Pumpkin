@@ -12,8 +12,6 @@ use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
-use tracing::{debug, trace};
-use uuid::Uuid;
 
 use crate::{
     chunk::{
@@ -289,43 +287,11 @@ impl ChunkEntityData {
                 chunk_entity_data.position[1],
             )));
         }
-        let mut map = FxHashMap::default();
-        for entity_nbt in chunk_entity_data.entities {
-            if entity_nbt.is_empty() {
-                continue;
-            }
-            let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
-                if uuid.len() != 4 {
-                    debug!(
-                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
-                        position.x,
-                        position.y,
-                        uuid.len(),
-                        entity_nbt
-                    );
-                    continue;
-                }
-                Uuid::from_u128(
-                    (uuid[0] as u128) << 96
-                        | (uuid[1] as u128) << 64
-                        | (uuid[2] as u128) << 32
-                        | (uuid[3] as u128),
-                )
-            } else {
-                trace!(
-                    "Entity in chunk {},{} is missing UUID: {:?}",
-                    position.x, position.y, entity_nbt
-                );
-                continue;
-            };
-
-            map.insert(uuid, entity_nbt);
-        }
 
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(map),
+            data: Mutex::new(chunk_entity_data.entities),
             dirty: AtomicBool::new(false),
         })
     }
@@ -334,7 +300,7 @@ impl ChunkEntityData {
         let nbt = EntityNbt {
             data_version: WORLD_DATA_VERSION,
             position: [self.x, self.z],
-            entities: self.data.lock().await.values().cloned().collect(),
+            entities: self.data.lock().await.clone(),
         };
 
         let mut result = Vec::new();

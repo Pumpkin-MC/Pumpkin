@@ -1,4 +1,4 @@
-use crate::serial::PacketWrite;
+use crate::{codec::var_long::VarLong, serial::PacketWrite};
 use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
@@ -9,7 +9,7 @@ use crate::codec::var_int::VarInt;
 #[derive(Debug, PacketWrite)]
 #[packet(27)]
 pub struct SActorEvent {
-    pub entity_runtime_id: VarInt,
+    pub entity_runtime_id: VarLong,
     pub event_type: ActorEventType,
     pub event_data: VarInt,
     pub fire_at_position: Option<Vector3<f32>>,

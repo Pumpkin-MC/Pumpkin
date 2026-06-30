@@ -16,7 +16,7 @@ use pumpkin_data::{registry::Registry, translation};
 use pumpkin_protocol::{
     ConnectionState,
     java::{
-        client::config::{CFinishConfig, CRegistryData, CUpdateTags, RegistryEntry},
+        client::config::{CFinishConfig, CRegistryData, CUpdateTags},
         server::config::{
             ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
             SConfigResourcePack, SKeepAlive, SKnownPacks, SPluginMessage,
@@ -164,13 +164,11 @@ impl JavaClient {
         let version = self.version.load();
         let registry = Registry::get_synced(version);
         for registry in registry {
-            let entries: Vec<RegistryEntry> = registry
-                .registry_entries
-                .iter()
-                .map(|r| RegistryEntry::new(r.entry_id.clone(), r.data.clone()))
-                .collect();
-            self.send_packet_now(&CRegistryData::new(&registry.registry_id, &entries))
-                .await;
+            self.send_packet_now(&CRegistryData::new(
+                &registry.registry_id,
+                &registry.registry_entries,
+            ))
+            .await;
             // if let Some(tag) = RegistryKey::from_string(&registry.registry_id.path)
             //     && pumpkin_data::tag::get_registry_key_tags(self.version.load(), tag).is_some()
             // {

@@ -451,10 +451,69 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SInventoryTransaction,
     ) {
+        tracing::info!("handle_inventory_action: packet={:?}", packet);
         let mut inventory_updated = false;
+        let mut updates = Vec::new();
+        let result = 0u8;
+
+        if packet.actions.is_empty() && packet.legacy_request_id.0 != 0 {
+            let mut player_screen_handler = player.player_screen_handler.lock().await;
+            for legacy_slot in &packet.legacy_set_item_slots {
+                let mapped_window_id = match legacy_slot.container_id {
+                    28 | 29 => 0,    // HotBar or Inventory
+                    6 | 120 => 120,  // Armor
+                    34 | 119 => 119, // Offhand
+                    other => other as i32,
+                };
+                for &slot_id in &legacy_slot.slots {
+                    if let Some(screen_slot) =
+                        map_bedrock_slot_to_screen_handler(mapped_window_id, slot_id as u32)
+                    {
+                        let current_stack = player_screen_handler
+                            .get_slot(screen_slot)
+                            .get_cloned_stack()
+                            .await;
+                        if !current_stack.is_empty() {
+                            player.drop_item(current_stack.clone()).await;
+
+                            player_screen_handler
+                                .get_slot(screen_slot)
+                                .set_stack(ItemStack::EMPTY.clone())
+                                .await;
+                            player_screen_handler
+                                .set_received_stack(screen_slot, ItemStack::EMPTY.clone());
+
+                            record_update(
+                                &mut updates,
+                                FullContainerName {
+                                    container_name: match legacy_slot.container_id {
+                                        28 => ContainerName::HotBar,
+                                        _ => ContainerName::Inventory,
+                                    },
+                                    dynamic_id: None,
+                                },
+                                slot_id,
+                                0,
+                                VarInt(0),
+                            );
+                            inventory_updated = true;
+                        }
+                    }
+                }
+            }
+            player_screen_handler.send_content_updates().await;
+        }
 
         for action in &packet.actions {
-            if let Some(window_id) = action.window_id {
+            use pumpkin_protocol::bedrock::server::inventory_transaction::InventoryActionSource;
+            let source_type = InventoryActionSource::from(action.source_type);
+            if source_type == InventoryActionSource::World {
+                let old_stack = descriptor_to_stack(&action.old_item);
+                let new_stack = descriptor_to_stack(&action.new_item);
+                if old_stack.is_empty() && !new_stack.is_empty() {
+                    player.drop_item(new_stack).await;
+                }
+            } else if let Some(window_id) = action.window_id {
                 if let Some(screen_slot) =
                     map_bedrock_slot_to_screen_handler(window_id, action.inventory_slot)
                 {
@@ -634,6 +693,52 @@ impl BedrockClient {
                 }
                 player.living_entity.clear_active_hand().await;
             }
+        }
+
+        if packet.legacy_request_id.0 != 0 {
+            use pumpkin_protocol::bedrock::client::item_stack_response::{
+                CItemStackResponse, ItemStackResponse, ItemStackResponseContainerInfo,
+                ItemStackResponseSlotInfo,
+            };
+
+            let mut container_infos = Vec::new();
+            if result == 0 {
+                for update in updates {
+                    let container_info = container_infos.iter_mut().find(
+                        |info: &&mut ItemStackResponseContainerInfo| {
+                            info.container_name == update.container_name
+                        },
+                    );
+
+                    let slot_info = ItemStackResponseSlotInfo {
+                        slot: update.slot_id,
+                        hotbar_slot: update.slot_id,
+                        count: update.count,
+                        item_stack_id: update.stack_id,
+                        custom_name: String::new(),
+                        filtered_custom_name: String::new(),
+                        durability_correction: VarInt(0),
+                    };
+
+                    if let Some(info) = container_info {
+                        info.slots.push(slot_info);
+                    } else {
+                        container_infos.push(ItemStackResponseContainerInfo {
+                            container_name: update.container_name.clone(),
+                            slots: vec![slot_info],
+                        });
+                    }
+                }
+            }
+
+            self.enqueue_packet(&CItemStackResponse {
+                responses: vec![ItemStackResponse {
+                    result,
+                    request_id: packet.legacy_request_id,
+                    container_infos,
+                }],
+            })
+            .await;
         }
     }
 
@@ -868,6 +973,9 @@ impl BedrockClient {
                 player.mining.store(false, Ordering::Relaxed);
                 world.set_block_breaking(entity, location, -1).await;
             }
+            PlayerAction::DropItem => {
+                player.drop_held_item(false).await;
+            }
             // TODO
             _ => {}
         }
@@ -953,6 +1061,7 @@ impl BedrockClient {
             let mut result = 0u8; // 0 = Success, 1 = Error
 
             for action in request.actions {
+                tracing::info!("Processing ItemStackRequestAction: {:?}", action);
                 match action {
                     ItemStackRequestAction::CraftCreative {
                         creative_item_id,
@@ -1041,6 +1150,29 @@ impl BedrockClient {
                             }
 
                             source_stack.decrement(count);
+                            if source.container_name.container_name == ContainerName::CreatedOutput
+                            {
+                                if let Some(ref mut stack) = created_item {
+                                    stack.decrement(count);
+                                    if stack.is_empty() {
+                                        created_item = None;
+                                    }
+                                }
+                            } else if source.container_name.container_name == ContainerName::Cursor
+                            {
+                                let cursor_is_empty = screen_handler
+                                    .get_behaviour()
+                                    .cursor_stack
+                                    .lock()
+                                    .await
+                                    .is_empty();
+                                if cursor_is_empty && let Some(ref mut stack) = created_item {
+                                    stack.decrement(count);
+                                    if stack.is_empty() {
+                                        created_item = None;
+                                    }
+                                }
+                            }
                             let source_stack = if source_stack.is_empty() {
                                 ItemStack::EMPTY.clone()
                             } else {
@@ -1554,11 +1686,23 @@ fn map_bedrock_container_slot(
         ContainerName::Cursor => None,
         ContainerName::CraftingInput => {
             if is_player_screen {
-                (slot_id < 4).then(|| 1 + slot_id as usize)
+                if slot_id < 4 {
+                    Some(1 + slot_id as usize)
+                } else if (28..32).contains(&slot_id) {
+                    Some(1 + (slot_id - 28) as usize)
+                } else {
+                    None
+                }
             } else if screen_handler.window_type()
                 == Some(pumpkin_data::screen::WindowType::Crafting)
             {
-                (slot_id < 9).then(|| 1 + slot_id as usize)
+                if slot_id < 9 {
+                    Some(1 + slot_id as usize)
+                } else if (32..41).contains(&slot_id) {
+                    Some(1 + (slot_id - 32) as usize)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -1800,6 +1944,11 @@ async fn get_slot_stack(
     }
     if slot_info.container_name.container_name == ContainerName::Cursor {
         let cursor_lock = screen_handler.get_behaviour().cursor_stack.lock().await;
+        if cursor_lock.is_empty()
+            && let Some(stack) = created_item
+        {
+            return stack.clone();
+        }
         return cursor_lock.clone();
     }
     if let Some(screen_slot) = map_bedrock_container_slot(

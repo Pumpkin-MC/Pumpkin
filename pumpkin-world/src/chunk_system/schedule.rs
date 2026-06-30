@@ -77,6 +77,7 @@ pub struct GenerationSchedule {
     gen_pool: Option<Arc<rayon::ThreadPool>>,
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
+    last_unload: std::time::Instant,
 }
 
 impl GenerationSchedule {
@@ -169,6 +170,7 @@ impl GenerationSchedule {
                     listener,
                     chunk_map: Default::default(),
                     lighting_config,
+                    last_unload: std::time::Instant::now(),
                 };
                 scheduler.work(level_sched);
             })
@@ -443,9 +445,12 @@ impl GenerationSchedule {
                 {
                     let task = &mut holder.tasks[i];
                     if !task.is_null() {
-                        self.waiting_for_chunks.remove(task);
-                        self.drop_node(*task);
-                        *task = NodeKey::null();
+                        let is_in_flight = self.graph.nodes.get(*task).is_some_and(|n| n.in_flight);
+                        if !is_in_flight {
+                            self.waiting_for_chunks.remove(task);
+                            self.drop_node(*task);
+                            *task = NodeKey::null();
+                        }
                     }
                 }
                 if new_stage == StagedChunkEnum::None
@@ -601,20 +606,13 @@ impl GenerationSchedule {
                             self.public_chunk_map.remove(&pos);
                             holder.public = false;
                         }
-                        let sc = Arc::strong_count(&chunk);
-                        if sc == 1 {
-                            if chunk.is_dirty() {
-                                chunks.push((pos, Chunk::Level(chunk)));
-                            }
-                            self.chunk_map.remove(&pos);
-                        } else {
-                            warn!(
-                                "unload_chunk: chunk {pos:?} still has {} strong refs; cannot unload. holder.public={}",
-                                sc, holder.public
-                            );
-                            self.unload_chunks.insert(pos);
-                            holder.chunk = Some(Chunk::Level(chunk));
+
+                        // Forcefully drop chunks when unloaded to prevent memory leaks
+                        // from dangling strong references
+                        if chunk.is_dirty() {
+                            chunks.push((pos, Chunk::Level(chunk)));
                         }
+                        self.chunk_map.remove(&pos);
                     }
                     Chunk::Proto(chunk) => {
                         debug_assert!(!holder.public);
@@ -646,8 +644,8 @@ impl GenerationSchedule {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
 
         for (pos, holder) in &mut self.chunk_map {
-            if let Some(chunk) = holder.chunk.take() {
-                let should_save = match &chunk {
+            if let Some(chunk) = &holder.chunk {
+                let should_save = match chunk {
                     Chunk::Level(sync_chunk) => sync_chunk.is_dirty(),
                     Chunk::Proto(proto) => {
                         save_proto_chunk
@@ -660,9 +658,11 @@ impl GenerationSchedule {
                 };
 
                 if should_save {
-                    chunks.push((*pos, chunk));
-                } else {
-                    holder.chunk = Some(chunk);
+                    let chunk_to_save = match chunk {
+                        Chunk::Level(sync_chunk) => Chunk::Level(sync_chunk.clone()),
+                        Chunk::Proto(_) => holder.chunk.take().unwrap(),
+                    };
+                    chunks.push((*pos, chunk_to_save));
                 }
             }
         }
@@ -803,13 +803,14 @@ impl GenerationSchedule {
 
                                 if was_public {
                                     self.apply_lighting_override(&chunk);
-                                    holder.chunk = Some(Chunk::Level(chunk.clone()));
-                                    self.public_chunk_map.insert(new_pos, chunk.clone());
+                                    let public_chunk = chunk.clone();
+                                    self.public_chunk_map.insert(new_pos, public_chunk);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
                                     );
                                     self.listener.process_new_chunk(new_pos, &chunk);
+                                    holder.chunk = Some(Chunk::Level(chunk));
                                 } else {
                                     self.apply_lighting_override(&chunk);
                                     let public_chunk = chunk.clone();
@@ -1009,9 +1010,13 @@ impl GenerationSchedule {
             // 1. Get latest world state (player moves, etc)
             self.resort_work(self.send_level.get());
 
-            // Process unload queue continuously if there are chunks to unload
-            if !self.unload_chunks.is_empty() {
+            // Process unload queue periodically (every 1 second) to batch writes together
+            // and act as a brief memory cache if a player walks back into the chunk.
+            if !self.unload_chunks.is_empty()
+                && self.last_unload.elapsed() >= std::time::Duration::from_secs(1)
+            {
                 self.process_unload_queue();
+                self.last_unload = std::time::Instant::now();
             }
 
             // 2. Process all pending chunk results from workers
@@ -1056,6 +1061,7 @@ impl GenerationSchedule {
                         node.in_queue = false;
                         continue;
                     }
+                    node.in_flight = true;
                     let node = node.clone();
                     if node.stage == StagedChunkEnum::Empty {
                         self.running_task_count += 1;
@@ -1114,6 +1120,7 @@ impl GenerationSchedule {
                             if !all_ready {
                                 if let Some(n) = self.graph.nodes.get_mut(task.1) {
                                     n.in_queue = false;
+                                    n.in_flight = false;
                                 }
                                 self.waiting_for_chunks.insert(task.1);
                                 // Close the TOCTOU window: the chunk we're waiting for may

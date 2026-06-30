@@ -8,6 +8,7 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -2172,7 +2173,7 @@ impl EntityBase for LivingEntity {
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 
             if config.hurt_animation {
-                let entity_id = VarInt(self.entity.entity_id);
+                let entity_id = self.entity.entity_id;
                 let hurt_yaw = source.map_or(0.0, |source| {
                     let src = source.get_entity().pos.load();
                     let tgt = self.entity.pos.load();
@@ -2180,13 +2181,16 @@ impl EntityBase for LivingEntity {
                         - self.entity.yaw.load()
                 });
                 let hurt_event = SActorEvent {
-                    entity_runtime_id: entity_id,
+                    entity_runtime_id: VarLong(entity_id as i64),
                     event_type: ActorEventType::Hurt,
                     event_data: VarInt(0),
                     fire_at_position: None,
                 };
                 world
-                    .broadcast_editioned(&CHurtAnimation::new(entity_id, hurt_yaw), &hurt_event)
+                    .broadcast_editioned(
+                        &CHurtAnimation::new(VarInt(entity_id), hurt_yaw),
+                        &hurt_event,
+                    )
                     .await;
             }
 

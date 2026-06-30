@@ -114,7 +114,7 @@ pub struct Beardifier {
 }
 
 impl Beardifier {
-    pub fn new(
+    pub const fn new(
         structures: Vec<BeardifierStructure>,
         junctions: Vec<BeardifierJunction>,
         affected_box: Option<BlockBox>,

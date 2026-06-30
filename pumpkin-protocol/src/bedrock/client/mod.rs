@@ -86,6 +86,7 @@ pub use set_player_gamemode::*;
 pub use set_time::*;
 pub use set_title::*;
 pub use start_game::*;
+pub use take_item_actor::*;
 pub use transfer::*;
 pub use update_abilities::*;
 pub use update_attributes::*;

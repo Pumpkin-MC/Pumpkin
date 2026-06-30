@@ -8,6 +8,7 @@ pub struct Node {
     pub stage: StagedChunkEnum,
     pub in_degree: u32,
     pub in_queue: bool,
+    pub in_flight: bool,
     pub edge: EdgeKey,
 }
 
@@ -19,6 +20,7 @@ impl Node {
             stage,
             in_degree: 0,
             in_queue: false,
+            in_flight: false,
             edge: EdgeKey::null(),
         }
     }

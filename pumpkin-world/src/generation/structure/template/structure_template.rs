@@ -73,7 +73,8 @@ impl PaletteEntry {
         Self { name, properties }
     }
 
-    /// Parses a block state string (e.g. "minecraft:oak_log[axis=x]") into a palette entry.
+    /// Parses a block state string (e.g. "`minecraft:oak_log`[axis=x]") into a palette entry.
+    #[must_use]
     pub fn from_string(s: &str) -> Self {
         if let Some(bracket_pos) = s.find('[') {
             let name = s[..bracket_pos].to_string();

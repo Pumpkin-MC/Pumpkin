@@ -161,7 +161,7 @@ pub struct ChunkNoiseFunctionBuilderOptions {
 impl ChunkNoiseFunctionBuilderOptions {
     #[must_use]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         horizontal_cell_block_count: usize,
         vertical_cell_block_count: usize,
         vertical_cell_count: usize,
