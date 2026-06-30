@@ -557,7 +557,7 @@ impl PumpkinServer {
                                                 player.gameprofile.name.clone(),
                                                 player.gameprofile.id.to_string(),
                                                 "Java".to_owned(),
-                                                resolved_locale.to_code(),
+                                                resolved_locale.to_code().to_owned(),
                                                 player_locale_str.clone(),
                                             ],
                                         )
@@ -706,7 +706,7 @@ impl PumpkinServer {
                                                                 player.gameprofile.name.clone(),
                                                                 player.gameprofile.id.to_string(),
                                                                 "Bedrock".to_owned(),
-                                                                resolved_locale.to_code(),
+                                                                resolved_locale.to_code().to_owned(),
                                                                 player_locale_str.clone(),
                                                             ],
                                                         )

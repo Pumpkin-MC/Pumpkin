@@ -4,6 +4,8 @@ use pumpkin_i18n::{Locale, SubstitutionRange, Token, placeholder_ranges, resolve
 
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
+pub use crate::translation::{translate_format, translate_plain};
+
 /// Reorders substitution placeholders within a translation string.
 ///
 /// # Arguments
