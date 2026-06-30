@@ -329,19 +329,19 @@ translation_cache_dir = "data/translation"
 
 ## 七、关键模块清单
 
-| 文件                                | 职责                                                    |
-|-----------------------------------|-------------------------------------------------------|
-| `pumpkin-i18n/build.rs`           | 编译期嵌入 en_us，生成 locale_code 映射                         |
-| `pumpkin-i18n/src/locale.rs`      | 128 变体 Locale 枚举，from_str/to_code/normalize           |
-| `pumpkin-i18n/src/download.rs`    | HTTP 下载、SHA256 校验、磁盘缓存、后台加载器                          |
-| `pumpkin-i18n/src/engine.rs`      | FST 构建/查找、DashMap 缓存、预编译 Token                        |
-| `pumpkin-i18n/src/store.rs`       | 全局 TRANSLATIONS、translation_engine、动态注入 API           |
-| `pumpkin-i18n/src/token.rs`       | `%s` / `{name}` 占位符解析、预编译 TokenStream                 |
-| `pumpkin-i18n/src/client.rs`      | 玩家 UUID→Locale 缓存、client locale 解析                    |
-| `pumpkin-i18n/src/server.rs`      | 服务端 locale 全局状态、系统语言检测                                |
-| `pumpkin-i18n/src/lib.rs`         | 模块声明、公共 API 导出、SubstitutionRange                      |
-| `pumpkin-config/src/locale.rs`    | 用户可配置的 TOML locale 设置                                 |
-| `pumpkin-util/src/translation.rs` | localized_log / localized_text / localized_log_format |
-| `pumpkin/src/main.rs`             | 启动流程编排：下载→加载→初始化后台加载器                                 |
-| `pumpkin/src/lib.rs`              | 玩家登录时触发后台翻译下载                                         |
-| `pumpkin/src/net/java/play.rs`    | 设置变更时同步 locale + 触发下载                                 |
+| 文件                                | 职责                                                                          |
+|-----------------------------------|-----------------------------------------------------------------------------|
+| `pumpkin-i18n/build.rs`           | 编译期嵌入 en_us，生成 locale_code 映射                                               |
+| `pumpkin-i18n/src/locale.rs`      | 128 变体 Locale 枚举，from_str/to_code/normalize                                 |
+| `pumpkin-i18n/src/download.rs`    | HTTP 下载、SHA256 校验、磁盘缓存、后台加载器、`mark_locale_loaded` 去重                        |
+| `pumpkin-i18n/src/engine.rs`      | FST 构建/查找、DashMap 缓存、预编译 Token、`value_or_raw` 回退                            |
+| `pumpkin-i18n/src/store.rs`       | 全局 TRANSLATIONS、translation_engine、动态注入 API                                 |
+| `pumpkin-i18n/src/token.rs`       | `%s` / `{name}` 占位符解析、预编译 TokenStream                                       |
+| `pumpkin-i18n/src/client.rs`      | 玩家 UUID→Locale 缓存、client locale 解析                                          |
+| `pumpkin-i18n/src/server.rs`      | 服务端 locale 全局状态、系统语言检测                                                      |
+| `pumpkin-i18n/src/lib.rs`         | 模块声明、公共 API 导出、`PUMPKIN_NAMESPACE`、`pumpkin_translation_key`                |
+| `pumpkin-config/src/locale.rs`    | 用户可配置的 TOML locale 设置                                                       |
+| `pumpkin-util/src/translation.rs` | `translate_plain` / `translate_format` / `localized_log` / `localized_text` |
+| `pumpkin/src/main.rs`             | 启动流程编排：下载→加载→初始化后台加载器                                                       |
+| `pumpkin/src/lib.rs`              | 玩家登录时触发后台翻译下载                                                               |
+| `pumpkin/src/net/java/play.rs`    | 设置变更时同步 locale + 触发下载                                                       |
