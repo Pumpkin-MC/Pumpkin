@@ -754,6 +754,7 @@
   "server.log.sending_player_info": "方傳戲者訊至%s",
   "server.log.sending_player_teleport": "方傳戲者移至%s",
   "server.log.sending_waiting_chunks": "方傳待區至%s",
+  "server.log.serialize_packet_failed": "Failed to serialize packet '%s' for version %s: %s",
   "server.log.server_running": "伺服器今行。連以埠：%s%s%s",
   "server.log.server_stopped": "伺服器已止。",
   "server.log.show_icon_not_present": "未可讀效。示標闕",

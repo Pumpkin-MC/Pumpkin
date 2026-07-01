@@ -754,6 +754,7 @@
   "server.log.sending_player_info": "Sending player info to %s",
   "server.log.sending_player_teleport": "Sending player teleport to %s",
   "server.log.sending_waiting_chunks": "Sending waiting chunks to %s",
+  "server.log.serialize_packet_failed": "Failed to serialize packet '%s' for version %s: %s",
   "server.log.server_running": "Server is now running. Connect using port: %s%s%s",
   "server.log.server_stopped": "The server has stopped.",
   "server.log.show_icon_not_present": "Unable to read effect. Show icon is not present",

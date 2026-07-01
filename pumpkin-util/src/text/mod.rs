@@ -173,6 +173,7 @@ impl TextComponentBase {
     /// Converts this component into a raw Bedrock string using the supplied locale
     /// for Pumpkin custom translation parameters.
     #[must_use]
+    #[allow(clippy::only_used_in_recursion)]
     pub fn to_bedrock_string_with_locale(&self, locale: Locale) -> String {
         let mut text = String::new();
 

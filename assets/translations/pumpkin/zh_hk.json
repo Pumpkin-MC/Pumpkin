@@ -754,6 +754,7 @@
   "server.log.sending_player_info": "向 %s 發送緊玩家資訊",
   "server.log.sending_player_teleport": "向 %s 發送緊玩家傳送",
   "server.log.sending_waiting_chunks": "向 %s 發送緊等待中嘅區塊",
+  "server.log.serialize_packet_failed": "Failed to serialize packet '%s' for version %s: %s",
   "server.log.server_running": "伺服器現已執行。使用連接埠連線：%s%s%s",
   "server.log.server_stopped": "伺服器已停止。",
   "server.log.show_icon_not_present": "無法讀取效果。顯示圖示唔存在",
