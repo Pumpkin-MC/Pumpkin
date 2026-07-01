@@ -1,5 +1,6 @@
 use std::fmt;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -19,7 +20,7 @@ use pumpkin_data::{
 };
 use pumpkin_i18n::{
     Locale, PUMPKIN_NAMESPACE, pumpkin_translation_key, resolve_translation, server_command_locale,
-    try_player_locale,
+    server_global_locale, try_player_locale,
 };
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -284,7 +285,10 @@ impl CommandSender {
                 server_command_locale()
             }
             Self::Player(player) => try_player_locale(&player.gameprofile.id.to_string())
-                .unwrap_or_else(server_command_locale),
+                .unwrap_or_else(|| {
+                    Locale::from_str(&player.config.load().locale)
+                        .unwrap_or_else(|()| server_global_locale())
+                }),
         }
     }
 

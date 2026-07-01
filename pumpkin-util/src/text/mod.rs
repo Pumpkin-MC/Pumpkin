@@ -7,7 +7,9 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use pumpkin_i18n::{Locale, get_translation, server_global_locale};
+use pumpkin_i18n::{
+    BEDROCK_NAMESPACE, JAVA_NAMESPACE, Locale, get_translation, server_global_locale,
+};
 use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -123,7 +125,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => translation_to_pretty(format!("java_minecraft:{translate}"), locale, &with),
+            } => translation_to_pretty(format!("{JAVA_NAMESPACE}:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -242,7 +244,7 @@ impl TextComponentBase {
                 with,
             } => {
                 text.push_str(&get_translation_text(
-                    format!("bedrock_minecraft:{translate}"),
+                    format!("{BEDROCK_NAMESPACE}:{translate}"),
                     locale,
                     with,
                 ));
@@ -280,7 +282,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate: _,
                 with,
-            } => get_translation_text(format!("java_minecraft:{translate}"), locale, &with),
+            } => get_translation_text(format!("{JAVA_NAMESPACE}:{translate}"), locale, &with),
             TextContent::EntityNames {
                 selector,
                 separator: _,

@@ -1,5 +1,5 @@
 use pumpkin_data::packet::CURRENT_MC_VERSION;
-use pumpkin_i18n::Locale;
+use pumpkin_i18n::{Locale, pumpkin_translation_key};
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::translation::get_translation_text;
@@ -122,7 +122,7 @@ impl CommandExecutor for Executor {
                     .click_event(ClickEvent::CopyToClipboard {
                         value: Cow::from(
                             get_translation_text(
-                                "pumpkin:commands.pumpkin.version",
+                                pumpkin_translation_key("commands.pumpkin.version"),
                                 locale,
                                 &[TextComponent::text(version_string).0],
                             )
@@ -140,7 +140,7 @@ impl CommandExecutor for Executor {
                         .click_event(ClickEvent::CopyToClipboard {
                             value: Cow::from(
                                 get_translation_text(
-                                    "pumpkin:commands.pumpkin.description",
+                                    pumpkin_translation_key("commands.pumpkin.description"),
                                     locale,
                                     &[],
                                 )
@@ -170,7 +170,7 @@ impl CommandExecutor for Executor {
                         .click_event(ClickEvent::CopyToClipboard {
                             value: Cow::from(
                                 get_translation_text(
-                                    "pumpkin:commands.pumpkin.minecraft_version",
+                                    pumpkin_translation_key("commands.pumpkin.minecraft_version"),
                                     locale,
                                     &[
                                         TextComponent::text(CURRENT_MC_VERSION.to_string()).0,

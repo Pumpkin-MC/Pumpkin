@@ -32,6 +32,12 @@ use std::str::FromStr;
 /// Namespace prefix for all pumpkin server translation keys.
 pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
 
+/// Namespace for vanilla Java Edition translation keys.
+pub const JAVA_NAMESPACE: &str = "java_minecraft";
+
+/// Namespace for vanilla Bedrock Edition translation keys.
+pub const BEDROCK_NAMESPACE: &str = "bedrock_minecraft";
+
 /// Build a fully qualified translation key under the pumpkin namespace.
 ///
 /// Equivalent to `format!("pumpkin:{key}")` with pre-allocated capacity.

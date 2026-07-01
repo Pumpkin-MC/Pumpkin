@@ -5,6 +5,7 @@ include!(concat!(env!("OUT_DIR"), "/generated_locale_codes.rs"));
 
 /// Supported locales for translations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Locale {
     AfZa,
     ArSa,
