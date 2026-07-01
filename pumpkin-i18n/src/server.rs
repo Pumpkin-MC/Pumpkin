@@ -56,9 +56,15 @@ fn detect_platform_locale() -> Locale {
         return Locale::EnUs;
     }
 
-    // Extract language part before the first '.'
-    // e.g. "zh_CN.UTF-8" -> "zh_CN"
-    let lang = raw.split('.').next().unwrap_or("en_us");
+    // Extract language part before the first '.' or '@'
+    // e.g. "zh_CN.UTF-8" -> "zh_CN", "sr_RS@latin" -> "sr_RS"
+    let lang = raw
+        .split('.')
+        .next()
+        .unwrap_or("en_us")
+        .split('@')
+        .next()
+        .unwrap_or("en_us");
     Locale::from_str(lang).unwrap_or(Locale::EnUs)
 }
 

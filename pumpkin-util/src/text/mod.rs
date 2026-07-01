@@ -131,7 +131,7 @@ impl TextComponentBase {
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, locale, &with),
+            TextContent::Custom { key, with, locale } => translation_to_pretty(key, locale, &with),
         };
         let style = self.style;
         let color = style.color;
@@ -188,8 +188,8 @@ impl TextComponentBase {
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
-            TextContent::Custom { key, with, .. } => {
-                text.push_str(&get_translation_text(key, locale, with));
+            TextContent::Custom { key, with, locale } => {
+                text.push_str(&get_translation_text(key, *locale, with));
             }
         }
 
@@ -251,8 +251,8 @@ impl TextComponentBase {
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
-            TextContent::Custom { key, with, .. } => {
-                text.push_str(&get_translation_text(key, locale, with));
+            TextContent::Custom { key, with, locale } => {
+                text.push_str(&get_translation_text(key, *locale, with));
             }
         }
 
@@ -288,7 +288,7 @@ impl TextComponentBase {
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, &with),
+            TextContent::Custom { key, with, locale } => get_translation_text(key, locale, &with),
         };
 
         // Recursively append the text of all child components
