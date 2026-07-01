@@ -106,7 +106,7 @@ fn main() {
     code.push_str("            }\n");
     code.push_str("            if let Some((key, value)) = trimmed.split_once('=') {\n");
     code.push_str(
-        "                array[crate::Locale::EnUs as usize].insert(format!(\"bedrock_minecraft:{}\", key.trim().to_ascii_lowercase()), value.trim().replace(\"%%\", \"%\").to_string());\n",
+        "                array[crate::Locale::EnUs as usize].insert(format!(\"bedrock_minecraft:{}\", key.trim().to_ascii_lowercase()), value.trim().replace(\"%%\", \"%\"));\n",
     );
     code.push_str("            }\n");
     code.push_str("        }\n");
