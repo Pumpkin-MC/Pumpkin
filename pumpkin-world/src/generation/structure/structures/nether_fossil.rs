@@ -188,6 +188,7 @@ impl StructurePieceBase for NetherFossilPiece {
             (0, 0),
             self.rotation,
             true,
+            false,
             &[],
             Some(_chunk_box),
         );

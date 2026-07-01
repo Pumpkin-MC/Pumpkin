@@ -89,7 +89,7 @@ pub fn try_generate_structure(
         | StructureKeys::PillagerOutpost
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
-            let generator = JigsawGenerator::new(
+            let mut generator = JigsawGenerator::new(
                 structure.start_pool.unwrap_or_else(|| {
                     panic!(
                         "{}",
@@ -100,6 +100,9 @@ pub fn try_generate_structure(
                     panic!("{}", localized_log("world.structure.jigsaw_must_have_size"))
                 }),
             );
+            if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
+                generator = generator.with_start_jigsaw(start_jigsaw_name);
+            }
             generator.get_structure_position(context)
         }
         // TODO: Implement other structure types
@@ -177,7 +180,7 @@ pub fn lazily_generate_structure(
         | StructureKeys::PillagerOutpost
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
-            let generator = JigsawGenerator::new(
+            let mut generator = JigsawGenerator::new(
                 structure.start_pool.unwrap_or_else(|| {
                     panic!(
                         "{}",
@@ -188,6 +191,9 @@ pub fn lazily_generate_structure(
                     panic!("{}", localized_log("world.structure.jigsaw_must_have_size"))
                 }),
             );
+            if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
+                generator = generator.with_start_jigsaw(start_jigsaw_name);
+            }
             generator.get_structure_position(context)
         }
         // TODO: Implement other structure types

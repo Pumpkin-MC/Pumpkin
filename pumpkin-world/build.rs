@@ -12,6 +12,12 @@ fn main() {
     let mut pool_code = String::from(
         "pub fn get_pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {\n    match pool_id {\n",
     );
+    let mut template_pool_json_code = String::from(
+        "pub fn get_template_pool_json(path: &str) -> Option<&'static str> {\n    match path {\n",
+    );
+    let mut processor_list_json_code = String::from(
+        "pub fn get_processor_list_json(path: &str) -> Option<&'static str> {\n    match path {\n",
+    );
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let assets_dir = Path::new(&manifest_dir).join("assets/structures");
@@ -36,8 +42,29 @@ fn main() {
     pool_code.push_str("        _ => None,\n");
     pool_code.push_str("    }\n}\n");
 
-    fs::write(&dest_path, format!("{code}\n{pool_code}")).unwrap();
+    let worldgen_dir = Path::new(&manifest_dir).join("assets/worldgen");
+    process_json_dir(
+        &worldgen_dir.join("template_pool"),
+        "",
+        &mut template_pool_json_code,
+    );
+    process_json_dir(
+        &worldgen_dir.join("processor_list"),
+        "",
+        &mut processor_list_json_code,
+    );
+    template_pool_json_code.push_str("        _ => None,\n");
+    template_pool_json_code.push_str("    }\n}\n");
+    processor_list_json_code.push_str("        _ => None,\n");
+    processor_list_json_code.push_str("    }\n}\n");
+
+    fs::write(
+        &dest_path,
+        format!("{code}\n{pool_code}\n{template_pool_json_code}\n{processor_list_json_code}"),
+    )
+    .unwrap();
     println!("cargo:rerun-if-changed=assets/structures");
+    println!("cargo:rerun-if-changed=assets/worldgen");
 }
 
 fn process_dir(
@@ -73,6 +100,42 @@ fn process_dir(
                     .or_default()
                     .push(template_name);
             }
+        }
+    }
+}
+
+fn process_json_dir(dir: &Path, prefix: &str, code: &mut String) {
+    if !dir.exists() {
+        return;
+    }
+
+    let mut entries = fs::read_dir(dir)
+        .unwrap()
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+
+    for entry in entries {
+        let path = entry.path();
+        let name = entry.file_name().into_string().unwrap();
+        if path.is_dir() {
+            let new_prefix = if prefix.is_empty() {
+                name
+            } else {
+                format!("{prefix}/{name}")
+            };
+            process_json_dir(&path, &new_prefix, code);
+        } else if let Some(stem) = name.strip_suffix(".json") {
+            let id = if prefix.is_empty() {
+                stem.to_string()
+            } else {
+                format!("{prefix}/{stem}")
+            };
+            let abs_path = path.canonicalize().unwrap();
+            code.push_str(&format!(
+                "        \"minecraft:{id}\" | \"{id}\" => Some(include_str!(r#\"{}\"#)),\n",
+                abs_path.display()
+            ));
         }
     }
 }

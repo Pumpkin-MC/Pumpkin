@@ -178,6 +178,7 @@ impl StructurePieceBase for IglooPiece {
             (0, 0),
             self.rotation,
             false,
+            false,
             &[],
             Some(chunk_box),
         );
@@ -209,6 +210,7 @@ impl StructurePieceBase for IglooPiece {
                         (SHAFT_OFFSET_X, SHAFT_OFFSET_Z),
                         self.rotation,
                         false,
+                        false,
                         &[],
                         Some(chunk_box),
                     );
@@ -226,6 +228,7 @@ impl StructurePieceBase for IglooPiece {
                     basement_origin,
                     (BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z),
                     self.rotation,
+                    false,
                     false,
                     &[],
                     Some(chunk_box),
