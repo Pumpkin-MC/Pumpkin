@@ -771,6 +771,7 @@
   "server.log.team_update_missing": "Tried to update Team which does not exist, %s",
   "server.log.ticker_stopped": "Ticker stopped",
   "server.log.ticks_behind_error": "Can't keep up! Is the server overloaded? Running %s ms or %s ticks behind",
+  "server.log.serialize_packet_failed": "Failed to serialize packet '%s' for version %s: %s",
   "server.log.todo": "todo",
   "server.log.udp_bind_failed": "Failed to bind UDP Socket",
   "server.log.udp_socket_error": "UDP socket error: %s",

@@ -139,6 +139,8 @@ impl FstLocaleStore {
             .map(|(k, v)| (k.to_ascii_lowercase(), v.as_str()))
             .collect();
         sorted.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        // Deduplicate keys that collide after lowercasing (e.g. "Foo" / "foo").
+        sorted.dedup_by(|a, b| a.0 == b.0);
 
         let mut entries: Vec<ResolvedTranslation> = Vec::with_capacity(sorted.len());
 

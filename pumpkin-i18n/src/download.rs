@@ -411,14 +411,8 @@ pub fn ensure_locale_translations(locale: Locale) {
         return;
     }
 
-    // Check if already loaded or being loaded
-    {
-        let mut loaded = LOADED_LOCALES.lock().unwrap();
-        if !loaded.insert(locale) {
-            return; // Already handled
-        }
-    }
-
+    // Check loader state BEFORE marking locale as loaded (Bug : prevent
+    // permanent poisoning when the loader hasn't been initialised yet).
     let Some((config, cache_root)) = LOADER_STATE.get() else {
         warn!(
             "Translation loader not initialised — cannot load translations for {}",
@@ -426,6 +420,18 @@ pub fn ensure_locale_translations(locale: Locale) {
         );
         return;
     };
+
+    // Check if already loaded or being loaded.
+    // The lock is released before I/O starts so that different locales can
+    // load concurrently. A second concurrent call for the same locale may
+    // briefly observe English fallback, but translations will be available
+    // as soon as the first call completes (sub-second for small JSON files).
+    {
+        let mut loaded = LOADED_LOCALES.lock().unwrap();
+        if !loaded.insert(locale) {
+            return; // Already handled
+        }
+    }
 
     // 1. Try disk cache first
     let partial_cache = if let Some(cached) = load_cached_translations(locale, cache_root) {

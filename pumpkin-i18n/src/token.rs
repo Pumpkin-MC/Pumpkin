@@ -169,6 +169,16 @@ fn parse_percent_placeholder(
         (idx, pct + 2)
     };
 
+    // Validate the format specifier character (e.g. 's' in %s or %1$s).
+    // Non-alphabetic specifiers (typos like %!, %$, or trailing %) are
+    // treated as literal percent signs so the error is visible to the user.
+    if !bytes[end_exclusive - 1].is_ascii_alphabetic() {
+        tokens.push(Token::Text("%".into()));
+        *cursor = pct + 1;
+        *text_start = *cursor;
+        return;
+    }
+
     tokens.push(Token::Var(arg_idx));
     placeholders.push((
         arg_idx,
@@ -239,7 +249,9 @@ fn brace_arg_index<'a>(
     }
 
     if field.bytes().all(|byte| byte.is_ascii_digit()) {
-        return field.parse::<usize>().ok();
+        let idx: usize = field.parse().ok()?;
+        *sequential_idx = (*sequential_idx).max(idx + 1);
+        return Some(idx);
     }
 
     if !is_identifier(field) {
