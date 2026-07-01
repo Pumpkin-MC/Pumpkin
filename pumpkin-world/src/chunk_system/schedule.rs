@@ -1063,6 +1063,31 @@ impl GenerationSchedule {
                     }
                     node.in_flight = true;
                     let node = node.clone();
+
+                    // A chunk can be advanced as part of a neighboring task's write cache.
+                    // In that case its queued node may survive even though the returned
+                    // ProtoChunk has already reached this stage. Dispatching the stale node
+                    // would run the same stage twice and trip ProtoChunk's stage invariant.
+                    let actual_stage = self
+                        .chunk_map
+                        .get(&node.pos)
+                        .and_then(|holder| holder.chunk.as_ref())
+                        .map(Chunk::get_stage_id);
+                    if actual_stage.is_some_and(|stage| stage >= node.stage as u8) {
+                        if let Some(holder) = self.chunk_map.get_mut(&node.pos) {
+                            holder.current_stage = holder
+                                .current_stage
+                                .max(StagedChunkEnum::from(actual_stage.expect("checked above")));
+                            let task_slot = &mut holder.tasks[node.stage as usize];
+                            if *task_slot == task.1 {
+                                *task_slot = NodeKey::null();
+                            }
+                        }
+                        self.waiting_for_chunks.remove(&task.1);
+                        self.drop_node(task.1);
+                        continue;
+                    }
+
                     if node.stage == StagedChunkEnum::Empty {
                         self.running_task_count += 1;
                         let holder = self.chunk_map.get_mut(&node.pos).unwrap();

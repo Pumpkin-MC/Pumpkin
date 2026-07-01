@@ -20,9 +20,9 @@ use pumpkin_protocol::java::server::play::{
     SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
     SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
-    SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
+    SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm,
+    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -1143,6 +1143,10 @@ impl JavaClient {
             }
             id if id == SSelectTrade::to_id(version) => {
                 self.handle_select_trade(player, SSelectTrade::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SSeenAdvancement::to_id(version) => {
+                self.handle_seen_advancement(player, SSeenAdvancement::read(payload, &version)?)
                     .await;
             }
             _ => {

@@ -81,6 +81,8 @@ pub struct StructureStruct {
     pub step: String,
     /// Optional jigsaw start pool.
     pub start_pool: Option<String>,
+    /// Optional named jigsaw in the start pool that must be placed at the start position.
+    pub start_jigsaw_name: Option<String>,
     /// Optional jigsaw size (depth).
     pub size: Option<i32>,
     /// Optional terrain adaptation (bearding).
@@ -222,6 +224,11 @@ impl ToTokens for StructureStruct {
         } else {
             quote!(None)
         };
+        let start_jigsaw_name = if let Some(name) = &self.start_jigsaw_name {
+            quote!(Some(#name))
+        } else {
+            quote!(None)
+        };
         let size = if let Some(s) = self.size {
             quote!(Some(#s))
         } else {
@@ -284,6 +291,7 @@ impl ToTokens for StructureStruct {
                 biomes: #biomes,
                 step: #step,
                 start_pool: #start_pool,
+                start_jigsaw_name: #start_jigsaw_name,
                 size: #size,
                 terrain_adaptation: #terrain_adaptation,
                 start_height: #start_height,
@@ -604,6 +612,7 @@ pub fn build() -> TokenStream {
             pub biomes: &'static str,
             pub step: GenerationStep,
             pub start_pool: Option<&'static str>,
+            pub start_jigsaw_name: Option<&'static str>,
             pub size: Option<i32>,
             pub terrain_adaptation: TerrainAdaptation,
             pub start_height: Option<i16>,

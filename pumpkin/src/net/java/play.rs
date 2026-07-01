@@ -50,7 +50,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection, BlockState, translation};
+use pumpkin_data::{Advancement, Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -73,9 +73,9 @@ use pumpkin_protocol::java::server::play::{
     SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
     SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe,
-    SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock,
-    SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity, STestInstanceBlockAction,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
+    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
+    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -2952,6 +2952,20 @@ impl JavaClient {
             merchant
                 .set_selected_offer(packet.selected_slot.0 as usize)
                 .await;
+        }
+    }
+
+    pub async fn handle_seen_advancement(&self, player: &Arc<Player>, packet: SSeenAdvancement) {
+        if let SSeenAdvancement::OpenTab(tab) = packet {
+            let advancement = Advancement::from_minecraft_name(&tab.to_string());
+            if advancement.is_some() {
+                player
+                    .advancements
+                    .lock()
+                    .await
+                    .set_selected_tab(advancement)
+                    .await;
+            }
         }
     }
 
