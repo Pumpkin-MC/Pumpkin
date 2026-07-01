@@ -204,6 +204,22 @@ pub fn build() -> TokenStream {
     }
 }
 
+fn value_to_fossil_processor(value: &Value) -> TokenStream {
+    let variant = match value
+        .as_str()
+        .expect("fossil processor names must be strings")
+    {
+        "minecraft:fossil_rot" => format_ident!("FossilRot"),
+        "minecraft:fossil_coal" => format_ident!("Coal"),
+        "minecraft:fossil_diamonds" => format_ident!("Diamonds"),
+        processor => panic!("Unsupported fossil processor: {processor}"),
+    };
+
+    quote! {
+        crate::generation::feature::features::fossil::FossilProcessor::#variant
+    }
+}
+
 /// Converts a single configured-feature JSON value into its `ConfiguredFeature` token stream.
 ///
 /// # Arguments
@@ -668,9 +684,45 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
 
-        // All TODO/empty features
         "minecraft:fossil" => {
-            quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
+            let fossil_structures = config["fossil_structures"]
+                .as_array()
+                .expect("fossil_structures must be an array")
+                .iter()
+                .map(|value| {
+                    let name = value
+                        .as_str()
+                        .expect("fossil structure names must be strings");
+                    quote! { #name }
+                });
+            let overlay_structures = config["overlay_structures"]
+                .as_array()
+                .expect("overlay_structures must be an array")
+                .iter()
+                .map(|value| {
+                    let name = value
+                        .as_str()
+                        .expect("fossil overlay structure names must be strings");
+                    quote! { #name }
+                });
+            let fossil_processor = value_to_fossil_processor(&config["fossil_processors"]);
+            let overlay_processor = value_to_fossil_processor(&config["overlay_processors"]);
+            let max_empty_corners_allowed = config["max_empty_corners_allowed"]
+                .as_u64()
+                .expect("max_empty_corners_allowed must be an unsigned integer")
+                as u8;
+
+            quote! {
+                ConfiguredFeature::Fossil(
+                    crate::generation::feature::features::fossil::FossilFeature {
+                        fossil_structures: vec![#(#fossil_structures),*],
+                        overlay_structures: vec![#(#overlay_structures),*],
+                        fossil_processor: #fossil_processor,
+                        overlay_processor: #overlay_processor,
+                        max_empty_corners_allowed: #max_empty_corners_allowed,
+                    }
+                )
+            }
         }
         "minecraft:lake" => {
             let fluid = value_to_block_state_provider(&config["fluid"]);

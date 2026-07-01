@@ -142,7 +142,7 @@ impl FireBlockBase {
 
                 // Apply fire ticks
                 if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
-                    base_entity.set_on_fire_for(8.0);
+                    args.entity.set_on_fire_for(8.0);
                 }
 
                 // Regular fire vs soul fire damage

@@ -2215,11 +2215,67 @@ fn build_configured_features()
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::FossilCoal,
-        ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}),
+        ConfiguredFeature::Fossil(
+            crate::generation::feature::features::fossil::FossilFeature {
+                fossil_structures: vec![
+                    "minecraft:fossil/spine_1",
+                    "minecraft:fossil/spine_2",
+                    "minecraft:fossil/spine_3",
+                    "minecraft:fossil/spine_4",
+                    "minecraft:fossil/skull_1",
+                    "minecraft:fossil/skull_2",
+                    "minecraft:fossil/skull_3",
+                    "minecraft:fossil/skull_4",
+                ],
+                overlay_structures: vec![
+                    "minecraft:fossil/spine_1_coal",
+                    "minecraft:fossil/spine_2_coal",
+                    "minecraft:fossil/spine_3_coal",
+                    "minecraft:fossil/spine_4_coal",
+                    "minecraft:fossil/skull_1_coal",
+                    "minecraft:fossil/skull_2_coal",
+                    "minecraft:fossil/skull_3_coal",
+                    "minecraft:fossil/skull_4_coal",
+                ],
+                fossil_processor:
+                    crate::generation::feature::features::fossil::FossilProcessor::FossilRot,
+                overlay_processor:
+                    crate::generation::feature::features::fossil::FossilProcessor::Coal,
+                max_empty_corners_allowed: 4u8,
+            },
+        ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::FossilDiamonds,
-        ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}),
+        ConfiguredFeature::Fossil(
+            crate::generation::feature::features::fossil::FossilFeature {
+                fossil_structures: vec![
+                    "minecraft:fossil/spine_1",
+                    "minecraft:fossil/spine_2",
+                    "minecraft:fossil/spine_3",
+                    "minecraft:fossil/spine_4",
+                    "minecraft:fossil/skull_1",
+                    "minecraft:fossil/skull_2",
+                    "minecraft:fossil/skull_3",
+                    "minecraft:fossil/skull_4",
+                ],
+                overlay_structures: vec![
+                    "minecraft:fossil/spine_1_coal",
+                    "minecraft:fossil/spine_2_coal",
+                    "minecraft:fossil/spine_3_coal",
+                    "minecraft:fossil/spine_4_coal",
+                    "minecraft:fossil/skull_1_coal",
+                    "minecraft:fossil/skull_2_coal",
+                    "minecraft:fossil/skull_3_coal",
+                    "minecraft:fossil/skull_4_coal",
+                ],
+                fossil_processor:
+                    crate::generation::feature::features::fossil::FossilProcessor::FossilRot,
+                overlay_processor:
+                    crate::generation::feature::features::fossil::FossilProcessor::Diamonds,
+                max_empty_corners_allowed: 4u8,
+            },
+        ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::FreezeTopLayer,

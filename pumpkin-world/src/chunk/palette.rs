@@ -687,16 +687,16 @@ impl BlockPalette {
         match self {
             Self::Homogeneous(registry_id) => {
                 if is_liquid(*registry_id) {
-                    0
-                } else {
                     Self::VOLUME as u16
+                } else {
+                    0
                 }
             }
             Self::Heterogeneous(data) => data
                 .palette
                 .iter()
                 .zip(data.counts.iter())
-                .filter_map(|(registry_id, count)| (!is_liquid(*registry_id)).then_some(*count))
+                .filter_map(|(registry_id, count)| is_liquid(*registry_id).then_some(*count))
                 .sum(),
         }
     }
