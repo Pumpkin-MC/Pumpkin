@@ -1,7 +1,3 @@
-/// TODO List
-/// - Open a public translation system, maybe a Crowdin like Minecraft?
-/// - Add support for translations on commands descriptions
-/// - Integrate custom translations with the plugins API
 pub mod client;
 pub mod download;
 pub mod engine;
