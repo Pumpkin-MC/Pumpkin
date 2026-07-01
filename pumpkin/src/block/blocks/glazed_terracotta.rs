@@ -6,7 +6,7 @@ use pumpkin_world::BlockStateId;
 pub struct GlazedTerracottaBlock;
 impl BlockMetadata for GlazedTerracottaBlock {
     fn ids() -> Box<[u16]> {
-        tag::Item::C_GLAZED_TERRACOTTAS.1.into()
+        tag::Block::C_GLAZED_TERRACOTTAS.1.into()
     }
 }
 
