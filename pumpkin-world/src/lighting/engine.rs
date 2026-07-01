@@ -8,11 +8,14 @@ use pumpkin_data::BlockDirection;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 //use std::time::Instant;
 
-type FastHashSet<K> = HashSet<K>;
-type FastHashMap<K, V> = HashMap<K, V>;
+// These are hit on every neighbour of every propagated block, so the hash
+// function dominates. Use rustc-hash's fast hasher instead of the std default
+// (SipHash), which is what "Fast" was meant to imply.
+type FastHashSet<K> = rustc_hash::FxHashSet<K>;
+type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
 /// Trait to unify Block and Sky light logic
 pub trait LightProvider {
