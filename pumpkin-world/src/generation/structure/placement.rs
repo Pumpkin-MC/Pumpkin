@@ -13,6 +13,10 @@ use std::f64::consts::PI;
 use std::sync::OnceLock;
 
 use crate::ProtoChunk;
+use dashmap::DashMap;
+use pumpkin_data::structures::StructureKeys;
+
+use super::structures::StructurePosition;
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -21,6 +25,12 @@ use crate::ProtoChunk;
 pub struct GlobalStructureCache {
     /// A cached list of mathematically predicted (`chunk_x`, `chunk_z`) coordinates.
     stronghold_chunks: OnceLock<Vec<(i32, i32)>>,
+    /// Memoized structure starts, keyed by (structure, start chunk x, start chunk z).
+    ///
+    /// A jigsaw structure's placement is fully determined by its start chunk and the
+    /// world seed, so it is computed once here instead of being recomputed for every
+    /// surrounding chunk whose structure references overlap it.
+    structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), Option<StructurePosition>>>,
 }
 impl GlobalStructureCache {
     /// Creates a new, empty global structure cache.
@@ -28,6 +38,7 @@ impl GlobalStructureCache {
     pub const fn new() -> Self {
         Self {
             stronghold_chunks: OnceLock::new(),
+            structure_starts: OnceLock::new(),
         }
     }
 
@@ -35,6 +46,28 @@ impl GlobalStructureCache {
         self.stronghold_chunks
             .get()
             .map_or(&[], std::vec::Vec::as_slice)
+    }
+
+    /// Returns the memoized structure start for the given structure and start chunk,
+    /// computing it via `compute` on the first request and caching the result.
+    ///
+    /// Because a structure's placement depends only on its start chunk and the world
+    /// seed, every chunk whose references overlap that structure can reuse the cached
+    /// result instead of re-running the expensive jigsaw expansion.
+    pub fn get_or_compute_structure_start(
+        &self,
+        key: StructureKeys,
+        chunk_x: i32,
+        chunk_z: i32,
+        compute: impl FnOnce() -> Option<StructurePosition>,
+    ) -> Option<StructurePosition> {
+        let cache = self.structure_starts.get_or_init(DashMap::new);
+        if let Some(cached) = cache.get(&(key, chunk_x, chunk_z)) {
+            return cached.value().clone();
+        }
+        let computed = compute();
+        cache.insert((key, chunk_x, chunk_z), computed.clone());
+        computed
     }
 
     /// Retrieves the list of chunk coordinates for Concentric Ring structures.
