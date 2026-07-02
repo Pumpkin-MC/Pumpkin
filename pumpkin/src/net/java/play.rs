@@ -718,7 +718,7 @@ impl JavaClient {
                         "{}",
                         localized_log_format(
                             "server.log.player_executed_command",
-                            &[player.gameprofile.name.clone(), format!("/{command}")],
+                            &[player.gameprofile.name.clone(), command],
                         )
                     );
                 }
