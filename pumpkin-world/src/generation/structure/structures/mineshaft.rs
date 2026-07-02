@@ -26,8 +26,6 @@ use crate::{
     },
 };
 
-/// Probability a candidate chunk actually contains a mineshaft (vanilla default).
-const PROBABILITY: f64 = 0.01;
 /// Hard cap on recursive depth so generation always terminates.
 const MAX_CHAIN_LENGTH: u32 = 16;
 /// Maximum horizontal radius (blocks) pieces may extend from the start.
@@ -79,11 +77,8 @@ impl StructureGenerator for MineshaftGenerator {
         &self,
         mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
-        // Vanilla gates mineshaft generation on a 1% roll after the chunk is selected.
-        if context.random.next_f64() >= PROBABILITY {
-            return None;
-        }
-
+        // Gating is handled by the structure_set's frequency reduction (0.004, LegacyType3);
+        // every chunk that reaches this generator should produce a mineshaft.
         let start_x = context.chunk_x * 16 + 8;
         let start_z = context.chunk_z * 16 + 8;
         // Vanilla places the start room somewhere underground.
