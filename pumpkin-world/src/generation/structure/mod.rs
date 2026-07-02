@@ -1,3 +1,4 @@
+bwrap: /home/zoliviragh/.local/share/flatpak/app/dev.zed.Zed/x86_64/stable/d723b1334a83e703a7fd9419ba74d4567e26200e5541ac018186b3bc61d69c44/files/lib/libselinux.so.1: no version information available (required by bwrap)
 use pumpkin_data::{
     structures::{Structure, StructureKeys},
     tag::{RegistryKey, get_tag_ids},
@@ -14,7 +15,7 @@ use crate::{
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
             desert_pyramid::DesertPyramidGenerator, end_city::EndCityGenerator,
             igloo::IglooGenerator, jigsaw::JigsawGenerator, jungle_temple::JungleTempleGenerator,
-            mansion::MansionGenerator, mineshaft::MineshaftGenerator,
+            mansion::MansionGenerator, mineshaft::{MineshaftGenerator, MineshaftType},
             nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
             ocean_monument::OceanMonumentGenerator, ocean_ruin::OceanRuinGenerator,
             ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
@@ -118,7 +119,11 @@ pub fn generate_structure_position(
         StructureKeys::Monument => OceanMonumentGenerator.get_structure_position(context),
         StructureKeys::Mineshaft | StructureKeys::MineshaftMesa => {
             let generator = MineshaftGenerator {
-                is_mesa: *key == StructureKeys::MineshaftMesa,
+                mineshaft_type: if *key == StructureKeys::MineshaftMesa {
+                    MineshaftType::Mesa
+                } else {
+                    MineshaftType::Normal
+                },
             };
             generator.get_structure_position(context)
         }
