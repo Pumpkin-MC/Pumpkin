@@ -22,7 +22,7 @@ pub use server::{
     set_server_global_locale,
 };
 pub use store::{
-    TRANSLATIONS, add_translation, add_translation_file, format_translation, get_translation,
+    add_translation, add_translation_file, format_translation, get_translation,
     resolve_translation, translation_engine,
 };
 pub use token::{Token, placeholder_ranges, precompile};

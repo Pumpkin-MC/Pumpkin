@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    sync::{LazyLock, Mutex},
-};
+use std::{collections::HashMap, sync::Arc, sync::LazyLock};
 
 use tracing::warn;
 
@@ -13,16 +9,6 @@ use crate::{
 
 // Include auto-generated translation loading code from build.rs
 include!(concat!(env!("OUT_DIR"), "/generated_store.rs"));
-
-/// Legacy global translation store, populated on first direct access.
-///
-/// Hot-path lookups use [`translation_engine`] instead. Mutating this map
-/// directly will not update the engine; use [`add_translation`] or
-/// [`add_translation_file`] for runtime/plugin translations.
-///
-/// Indexed by `locale as usize`.
-pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>> =
-    LazyLock::new(|| Mutex::new(load_all_translations()));
 
 static ENGINE: LazyLock<TranslationEngine> = LazyLock::new(|| {
     let translations = load_all_translations();
@@ -61,11 +47,6 @@ where
     let translation = translation.into();
 
     translation_engine().add_translation(locale as usize, &namespaced_key, &translation);
-
-    if let Some(translations) = LazyLock::get(&TRANSLATIONS) {
-        let mut translations = translations.lock().unwrap();
-        translations[locale as usize].insert(namespaced_key, translation);
-    }
 }
 
 /// Loads translations from a JSON string and registers them under a namespace.
@@ -100,11 +81,6 @@ where
         .into_iter()
         .map(|(key, translation)| (namespaced_key(namespace, &key), translation))
         .collect::<Vec<_>>();
-
-    if let Some(translations) = LazyLock::get(&TRANSLATIONS) {
-        let mut translations = translations.lock().unwrap();
-        translations[locale as usize].extend(entries.iter().cloned());
-    }
 
     translation_engine().add_translations(locale as usize, entries);
 }
