@@ -1,4 +1,5 @@
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::{
     effect::StatusEffect,
     entity::EntityType,
@@ -6,7 +7,6 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::Difficulty;
-use pumpkin_world::BlockStateId;
 
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, OnEntityCollisionArgs};
 #[pumpkin_block("minecraft:wither_rose")]

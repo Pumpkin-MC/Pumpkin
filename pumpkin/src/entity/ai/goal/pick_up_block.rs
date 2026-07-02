@@ -3,6 +3,7 @@ use std::sync::Arc;
 use super::{Goal, GoalFuture, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
@@ -84,7 +85,7 @@ impl Goal for PickUpBlockGoal {
 
             // TODO: Emit game event (BLOCK_DESTROY)
             world
-                .set_block_state(&target_pos, 0, BlockFlags::NOTIFY_ALL)
+                .set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
                 .await;
             self.enderman.set_carried_block(Some(default_state_id));
         })

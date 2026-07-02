@@ -1,8 +1,8 @@
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs};
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 #[pumpkin_block("minecraft:nether_sprouts")]
 pub struct NetherSproutsBlock;
 

@@ -28,9 +28,9 @@ impl NetherForestVegetationFeature {
         let origin_pos = pos;
         let below_state = GenerationCache::get_block_state(chunk, &origin_pos.down().0);
 
-        if !tag::Block::MINECRAFT_NYLIUM
-            .1
-            .contains(&below_state.to_block_id())
+        if !below_state
+            .to_block_id()
+            .has_tag(tag::Block::MINECRAFT_NYLIUM)
         {
             return false;
         }

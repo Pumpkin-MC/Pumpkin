@@ -1,7 +1,7 @@
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockId, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use pumpkin_world::world::BlockAccessor;
 
 use crate::block::BlockFuture;
 use crate::block::{
@@ -12,8 +12,8 @@ use crate::block::{
 pub struct RootsBlock;
 
 impl BlockMetadata for RootsBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::WARPED_ROOTS.id, Block::CRIMSON_ROOTS.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::WARPED_ROOTS, BlockId::CRIMSON_ROOTS].into()
     }
 }
 

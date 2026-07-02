@@ -14,12 +14,12 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    Block, FacingExt,
+    Block, BlockId, BlockStateId, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
 use pumpkin_i18n::server_command_locale;
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use pumpkin_world::tick::TickPriority;
 use tracing::warn;
 
 pub struct CommandBlock;
@@ -260,11 +260,11 @@ impl CommandBlock {
 }
 
 impl BlockMetadata for CommandBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::COMMAND_BLOCK.id,
-            Block::CHAIN_COMMAND_BLOCK.id,
-            Block::REPEATING_COMMAND_BLOCK.id,
+            BlockId::COMMAND_BLOCK,
+            BlockId::CHAIN_COMMAND_BLOCK,
+            BlockId::REPEATING_COMMAND_BLOCK,
         ]
         .into()
     }

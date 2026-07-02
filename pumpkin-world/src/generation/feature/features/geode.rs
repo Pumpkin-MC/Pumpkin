@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::block::RawBlockState;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
@@ -114,41 +113,33 @@ impl GeodeFeature {
         let noise = NormalNoise::create(random, -4, &[1.0], 0.8333333333333333f64);
 
         // Precompute sets of raw block ids for fast lookups
-        let mut invalid_raw_ids: HashSet<u16> = HashSet::new();
+        let mut invalid_raw_ids: HashSet<BlockId> = HashSet::new();
         match &self.invalid_blocks {
             BlockWrapper::Single(s) => {
-                if let Some(b) = pumpkin_data::Block::from_name(s.as_str()) {
-                    invalid_raw_ids.insert(pumpkin_data::Block::get_raw_id_from_state_id(
-                        b.default_state.id,
-                    ));
+                if let Some(b) = Block::from_name(s.as_str()) {
+                    invalid_raw_ids.insert(b.id);
                 }
             }
             BlockWrapper::Multi(v) => {
                 for s in v {
-                    if let Some(b) = pumpkin_data::Block::from_name(s.as_str()) {
-                        invalid_raw_ids.insert(pumpkin_data::Block::get_raw_id_from_state_id(
-                            b.default_state.id,
-                        ));
+                    if let Some(b) = Block::from_name(s.as_str()) {
+                        invalid_raw_ids.insert(b.id);
                     }
                 }
             }
         }
 
-        let mut cannot_replace_raw_ids: HashSet<u16> = HashSet::new();
+        let mut cannot_replace_raw_ids: HashSet<BlockId> = HashSet::new();
         match &self.cannot_replace {
             BlockWrapper::Single(s) => {
-                if let Some(b) = pumpkin_data::Block::from_name(s.as_str()) {
-                    cannot_replace_raw_ids.insert(pumpkin_data::Block::get_raw_id_from_state_id(
-                        b.default_state.id,
-                    ));
+                if let Some(b) = Block::from_name(s.as_str()) {
+                    cannot_replace_raw_ids.insert(b.id);
                 }
             }
             BlockWrapper::Multi(v) => {
                 for s in v {
-                    if let Some(b) = pumpkin_data::Block::from_name(s.as_str()) {
-                        cannot_replace_raw_ids.insert(
-                            pumpkin_data::Block::get_raw_id_from_state_id(b.default_state.id),
-                        );
+                    if let Some(b) = Block::from_name(s.as_str()) {
+                        cannot_replace_raw_ids.insert(b.id);
                     }
                 }
             }
@@ -183,7 +174,7 @@ impl GeodeFeature {
             let state = raw.to_state();
 
             // Check against precomputed invalid raw ids
-            let raw_id = pumpkin_data::Block::get_raw_id_from_state_id(state.id);
+            let raw_id = raw.to_block_id();
             if state.is_air() || invalid_raw_ids.contains(&raw_id) {
                 num_invalid_points += 1;
                 if num_invalid_points > self.invalid_blocks_threshold {
@@ -225,8 +216,8 @@ impl GeodeFeature {
 
         // Determine which blocks can be replaced
         let can_replace_pred = |state: &BlockState| {
-            let raw_id = pumpkin_data::Block::get_raw_id_from_state_id(state.id);
-            state.is_air() || !cannot_replace_raw_ids.contains(&raw_id)
+            let block_id = state.id.to_block_id();
+            state.is_air() || !cannot_replace_raw_ids.contains(&block_id)
         };
 
         let min = origin.add(
@@ -275,7 +266,7 @@ impl GeodeFeature {
                     self.safe_set_block(
                         chunk,
                         point_inside,
-                        RawBlockState::AIR.to_state(),
+                        BlockStateId::AIR.to_state(),
                         &can_replace_pred,
                     );
                 } else if dist_sum_shell >= inner_air {

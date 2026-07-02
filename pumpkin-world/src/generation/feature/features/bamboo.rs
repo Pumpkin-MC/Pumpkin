@@ -39,7 +39,7 @@ impl BambooFeature {
                             let block_below =
                                 BlockPos::new(x, chunk.top_block_height_exclusive(x, z) - 1, z);
                             let block = GenerationCache::get_block_state(chunk, &block_below.0);
-                            if !tag::Block::MINECRAFT_DIRT.1.contains(&block.to_block_id()) {
+                            if !block.to_block_id().has_tag(tag::Block::MINECRAFT_DIRT) {
                                 continue;
                             }
                             chunk.set_block_state(&block_below.0, Block::PODZOL.default_state);

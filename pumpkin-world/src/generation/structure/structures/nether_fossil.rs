@@ -139,11 +139,11 @@ impl NetherFossilPiece {
             y -= 1;
             let lower = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
 
-            let upper_state = BlockState::from_id(upper.0);
-            let lower_state = BlockState::from_id(lower.0);
+            let upper_state = BlockState::from_id(upper);
+            let lower_state = BlockState::from_id(lower);
 
             if upper_state.is_air()
-                && (Block::from_state_id(lower.0) == &Block::SOUL_SAND
+                && (Block::from_state_id(lower) == &Block::SOUL_SAND
                     || lower_state.is_side_solid(BlockDirection::Up))
             {
                 break;
@@ -244,7 +244,7 @@ impl NetherFossilPiece {
         }
 
         let block_at = chunk.get_block_state(&Vector3::new(x, y, z));
-        if !BlockState::from_id(block_at.0).is_air() {
+        if !BlockState::from_id(block_at).is_air() {
             return;
         }
 

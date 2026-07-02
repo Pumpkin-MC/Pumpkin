@@ -5,6 +5,7 @@ use crate::block::{
     OnScheduledTickArgs, PlacedArgs,
 };
 
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::translation;
 use pumpkin_inventory::anvil::AnvilScreenHandler;
@@ -14,7 +15,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::SimpleInventory;
 use std::sync::Arc;
 use tokio::sync::Mutex;

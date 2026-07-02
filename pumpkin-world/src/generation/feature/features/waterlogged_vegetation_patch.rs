@@ -118,7 +118,7 @@ impl WaterloggedVegetationPatchFeature {
             let placed_state = placed_raw.to_state();
 
             if !placed_state.is_waterlogged()
-                && let Some(new_state) = placed_raw.to_block().with_waterlogged(placed_raw.0)
+                && let Some(new_state) = placed_raw.to_block().with_waterlogged(placed_raw)
             {
                 chunk.set_block_state(&placement_pos.0, new_state);
             }

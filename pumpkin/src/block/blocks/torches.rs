@@ -1,10 +1,10 @@
 use crate::block::{BlockFuture, BlockIsReplacing};
 use crate::entity::EntityBase;
-use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
+use pumpkin_data::{BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
 
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
@@ -17,14 +17,14 @@ use crate::block::{
 pub struct TorchBlock;
 
 impl BlockMetadata for TorchBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::TORCH.id,
-            Block::SOUL_TORCH.id,
-            Block::WALL_TORCH.id,
-            Block::SOUL_WALL_TORCH.id,
-            Block::COPPER_TORCH.id,
-            Block::COPPER_WALL_TORCH.id,
+            BlockId::TORCH,
+            BlockId::SOUL_TORCH,
+            BlockId::WALL_TORCH,
+            BlockId::SOUL_WALL_TORCH,
+            BlockId::COPPER_TORCH,
+            BlockId::COPPER_WALL_TORCH,
         ]
         .into()
     }
@@ -83,7 +83,7 @@ impl BlockBehaviour for TorchBlock {
             if support_block.is_center_solid(BlockDirection::Up) {
                 args.block.default_state.id
             } else {
-                0
+                BlockStateId::AIR
             }
         })
     }
@@ -118,12 +118,12 @@ impl BlockBehaviour for TorchBlock {
                         props.facing.to_block_direction().opposite(),
                     )
                 {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             } else if args.direction == BlockDirection::Down {
                 let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             }
             args.state_id

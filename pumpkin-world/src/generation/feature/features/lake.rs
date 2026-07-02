@@ -124,9 +124,10 @@ impl LakeFeature {
                             let block_state =
                                 GenerationCache::get_block_state(chunk, &barrier_pos.0).to_state();
                             if block_state.is_solid()
-                                && !tag::Block::MINECRAFT_LAVA_POOL_STONE_CANNOT_REPLACE
-                                    .1
-                                    .contains(&block_state.id)
+                                && !block_state
+                                    .id
+                                    .to_block_id()
+                                    .has_tag(tag::Block::MINECRAFT_LAVA_POOL_STONE_CANNOT_REPLACE)
                             {
                                 chunk.set_block_state(&barrier_pos.0, barrier_state);
                             }
@@ -167,8 +168,9 @@ impl LakeFeature {
     }
 
     fn can_replace_block(&self, state: &BlockState) -> bool {
-        !tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE
-            .1
-            .contains(&state.id)
+        !state
+            .id
+            .to_block_id()
+            .has_tag(tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE)
     }
 }

@@ -1,6 +1,6 @@
-use pumpkin_data::BlockDirection as InternalBlockDirection;
 use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInstrument;
 use pumpkin_data::block_state::PistonBehavior;
+use pumpkin_data::{BlockDirection as InternalBlockDirection, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use pumpkin_world::chunk::io::Dirtiable;
@@ -249,7 +249,10 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<u16> {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
-        Ok(world_ref.provider.get_block_state_id(&internal_pos))
+        Ok(world_ref
+            .provider
+            .get_block_state_id(&internal_pos)
+            .as_u16())
     }
 
     async fn get_block_state(
@@ -262,7 +265,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let state = world_ref.provider.get_block_state(&internal_pos);
 
         Ok(WitBlockState {
-            id: state.id,
+            id: state.id.as_u16(),
             luminance: state.luminance,
             opacity: state.opacity,
             hardness: state.hardness,
@@ -340,7 +343,9 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
             internal_flags |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
         }
-
+        let Some(state) = BlockStateId::new(state) else {
+            return Err(wasmtime::Error::msg("Invalid BlockStateId"));
+        };
         world_ref
             .provider
             .clone()
@@ -747,7 +752,8 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         Ok(chunk_data
             .section
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
-            .unwrap_or(0))
+            .unwrap_or(BlockStateId::AIR)
+            .as_u16())
     }
 
     async fn get_block_state(
@@ -763,11 +769,11 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         let id = chunk_data
             .section
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
-            .unwrap_or(0);
-        let state = pumpkin_data::block_state::BlockState::from_id(id);
+            .unwrap_or(BlockStateId::AIR);
+        let state = id.to_state();
 
         Ok(WitBlockState {
-            id: state.id,
+            id: id.as_u16(),
             luminance: state.luminance,
             opacity: state.opacity,
             hardness: state.hardness,
@@ -820,6 +826,10 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         let (world, chunk_data) = &chunk_res.provider;
         let Some(chunk_data) = chunk_data.upgrade() else {
             return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+
+        let Some(state) = BlockStateId::new(state) else {
+            return Err(wasmtime::Error::msg("Invalid BlockStateId"));
         };
 
         let replaced =

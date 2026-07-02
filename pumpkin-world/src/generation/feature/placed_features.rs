@@ -1,5 +1,5 @@
 use pumpkin_data::block_properties::is_air;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_util::HeightMap;
 use std::collections::HashMap;
 use std::iter;
@@ -11,7 +11,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
-use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::height_provider::HeightProvider;
 use crate::generation::proto_chunk::GenerationCache;
@@ -342,8 +341,8 @@ impl CountOnEveryLayerPlacementModifier {
             mutable_pos.0.y = j - 1;
             let next_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
 
-            if !Self::blocks_spawn(&next_block_state)
-                && Self::blocks_spawn(&current_block_state)
+            if !Self::blocks_spawn(next_block_state)
+                && Self::blocks_spawn(current_block_state)
                 && next_block_state.to_block_id() != Block::BEDROCK
             {
                 if found_count == target_y {
@@ -356,9 +355,9 @@ impl CountOnEveryLayerPlacementModifier {
         i32::MAX
     }
 
-    fn blocks_spawn(state: &RawBlockState) -> bool {
+    fn blocks_spawn(state: BlockStateId) -> bool {
         let block = state.to_block_id();
-        is_air(state.0) || block == Block::WATER || block == Block::LAVA
+        is_air(state) || block == Block::WATER || block == Block::LAVA
     }
 }
 

@@ -141,7 +141,7 @@ impl MangroveRootPlacer {
             || self
                 .mangrove_root_placement
                 .can_grow_through
-                .contains(&block_id)
+                .contains(&block_id.as_u16())
     }
 
     fn place_roots<T: GenerationCache>(
@@ -154,7 +154,7 @@ impl MangroveRootPlacer {
         if self
             .mangrove_root_placement
             .muddy_roots_in
-            .contains(&existing_id)
+            .contains(&existing_id.as_u16())
         {
             let state = self
                 .mangrove_root_placement

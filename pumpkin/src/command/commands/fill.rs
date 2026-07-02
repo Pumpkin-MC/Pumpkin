@@ -10,8 +10,8 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::world::World;
 
-use pumpkin_data::Block;
 use pumpkin_data::translation;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -47,7 +47,7 @@ struct Executor(Mode);
 
 fn not_in_filter(filter: &BlockPredicate, old_block: &Block) -> bool {
     match filter {
-        BlockPredicate::Tag(tag) => !tag.contains(&old_block.id),
+        BlockPredicate::Tag(tag) => !tag.contains(&old_block.id.as_u16()),
         BlockPredicate::Block(block) => *block != old_block.id,
     }
 }
@@ -59,7 +59,7 @@ enum FillerResult {
 }
 
 struct Context {
-    block_state_id: u16,
+    block_state_id: BlockStateId,
     option_filter: Option<BlockPredicate>,
     world: Arc<World>,
     placed_blocks: i32,
@@ -160,7 +160,7 @@ impl Filler for HollowFiller {
         } else {
             context
                 .world
-                .set_block_state(&block_position, 0, BlockFlags::FORCE_STATE)
+                .set_block_state(&block_position, BlockStateId::AIR, BlockFlags::FORCE_STATE)
                 .await;
         }
         FillerResult::PlacedBlock

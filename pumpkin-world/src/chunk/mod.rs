@@ -1,4 +1,3 @@
-use crate::BlockStateId;
 use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette, has_random_ticking_fluid};
@@ -6,7 +5,7 @@ use pumpkin_data::block_properties::{blocks_movement, has_random_ticks, is_air};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
@@ -125,7 +124,7 @@ impl RandomTickSectionCache {
 impl ChunkSections {
     #[cfg(test)]
     #[must_use]
-    pub fn dump_blocks(&self) -> Vec<u16> {
+    pub fn dump_blocks(&self) -> Vec<BlockStateId> {
         self.block_sections
             .read()
             .unwrap()
@@ -174,13 +173,13 @@ impl TryFrom<usize> for ChunkHeightmapType {
 impl ChunkHeightmapType {
     #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
-        let block = Block::get_raw_id_from_state_id(block_state.id);
+        let block = block_state.id.to_block_id();
         match self {
             Self::WorldSurface => !block_state.is_air(),
             Self::MotionBlocking => blocks_movement(block_state, block) || block_state.is_liquid(),
             Self::MotionBlockingNoLeaves => {
                 (blocks_movement(block_state, block) || block_state.is_liquid())
-                    && !MINECRAFT_LEAVES.1.contains(&block)
+                    && !block.has_tag(MINECRAFT_LEAVES)
             }
         }
     }
@@ -519,7 +518,7 @@ impl ChunkSections {
 
             return replaced_block_state_id;
         }
-        0
+        BlockStateId::AIR
     }
 
     pub fn set_relative_biome(
@@ -625,7 +624,7 @@ impl ChunkData {
                 let id = self
                     .section
                     .get_block_absolute_y(relative_x, y_at, relative_z)
-                    .unwrap_or(0);
+                    .unwrap_or(BlockStateId::AIR);
                 BlockState::from_id(id)
             });
         }

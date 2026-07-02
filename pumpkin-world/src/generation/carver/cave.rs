@@ -1,6 +1,7 @@
 use super::Carver;
 use crate::ProtoChunk;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
+use pumpkin_data::{Block, BlockId};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -353,15 +354,13 @@ impl CaveCarver {
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state = chunk.get_block_state(&Vector3::new(x, y, z));
-        let block = state.to_block();
+        let block = state.to_block_id();
 
-        if block.id == pumpkin_data::Block::GRASS_BLOCK.id
-            || block.id == pumpkin_data::Block::MYCELIUM.id
-        {
+        if block == BlockId::GRASS_BLOCK || block == BlockId::MYCELIUM {
             *has_grass = true;
         }
 
-        if !config.replaceable.1.contains(&block.id) {
+        if !block.has_tag(config.replaceable) {
             return false;
         }
 
@@ -375,17 +374,15 @@ impl CaveCarver {
             };
 
             if y <= lava_y {
-                Some(pumpkin_data::Block::LAVA.default_state)
+                Some(Block::LAVA.default_state)
             } else {
                 // TODO: Aquifer logic goes here.
                 // BlockState state = aquifer.computeSubstance(...)
                 // return state (or debug barrier if null)
-                if block.id == pumpkin_data::Block::WATER.id
-                    || block.id == pumpkin_data::Block::LAVA.id
-                {
+                if block == BlockId::WATER || block == BlockId::LAVA {
                     None
                 } else {
-                    Some(pumpkin_data::Block::AIR.default_state)
+                    Some(Block::AIR.default_state)
                 }
             }
         };

@@ -1,6 +1,6 @@
-use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
@@ -630,7 +630,9 @@ impl EnderDragonEntity {
                 && block != &Block::END_PORTAL
                 && block != &Block::END_PORTAL_FRAME
             {
-                world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;
+                world
+                    .set_block_state(&pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
+                    .await;
             }
         }
     }

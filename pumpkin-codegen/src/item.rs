@@ -1010,19 +1010,13 @@ pub fn build() -> TokenStream {
                 identifier: be_identifier,
                 data: *be_item_data_overrides.get(name).unwrap_or(&0),
                 block_runtime_id_range: block.and_then(|b| {
-                    let mut min = None;
-                    let mut max = None;
+                    let min = b.states.first();
+                    let max = b.states.last();
 
-                    for state in &b.states {
-                        if min.is_none() {
-                            min = Some(state.id);
-                        }
-                        max = Some(state.id);
-                    }
-
-                    match (min, max) {
-                        (Some(min), Some(max)) => Some((min as i32, max as i32)),
-                        _ => None,
+                    if let (Some(min), Some(max)) = (min, max) {
+                        Some((min.id.0 as i32, max.id.0 as i32))
+                    } else {
+                        None
                     }
                 }),
                 tool_type: match type_suffix {

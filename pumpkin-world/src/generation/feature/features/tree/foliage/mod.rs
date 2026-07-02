@@ -146,7 +146,7 @@ impl FoliagePlacer {
         pos: BlockPos,
         foliage_provider: &BlockState,
     ) -> bool {
-        GenerationCache::get_block_state(chunk, &pos.0).0 == foliage_provider.id
+        GenerationCache::get_block_state(chunk, &pos.0) == foliage_provider.id
     }
 
     fn try_place_extension<T: GenerationCache>(
