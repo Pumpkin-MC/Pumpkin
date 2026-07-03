@@ -749,27 +749,27 @@ mod tests {
     fn custom_data_sets_and_reads_typed_values() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 
-        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
-        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
         stack.set_custom_data(
-            "worldpumpkin",
+            "test_plugin",
             "payload",
             NbtTag::ByteArray(vec![0, 1, 127, -128, -1].into()),
         );
 
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "wand"),
+            stack.get_custom_data("test_plugin", "marker"),
             Some(NbtTag::Byte(1))
         );
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "mode"),
+            stack.get_custom_data("test_plugin", "mode"),
             Some(NbtTag::String("pos1".into()))
         );
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "payload"),
+            stack.get_custom_data("test_plugin", "payload"),
             Some(NbtTag::ByteArray(vec![0, 1, 127, -128, -1].into()))
         );
-        assert!(stack.has_custom_data("worldpumpkin", "wand"));
+        assert!(stack.has_custom_data("test_plugin", "marker"));
     }
 
     #[test]
@@ -804,30 +804,30 @@ mod tests {
             .insert("long_array".into(), NbtTag::LongArray(vec![5, 6]));
 
         let tag = NbtTag::Compound(compound);
-        stack.set_custom_data("worldpumpkin", "full", tag.clone());
+        stack.set_custom_data("test_plugin", "full", tag.clone());
 
-        assert_eq!(stack.get_custom_data("worldpumpkin", "full"), Some(tag));
+        assert_eq!(stack.get_custom_data("test_plugin", "full"), Some(tag));
     }
 
     #[test]
     fn custom_data_preserves_sibling_namespaces_and_keys() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 
-        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
-        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
-        stack.set_custom_data("other_plugin", "marked", NbtTag::Byte(1));
-        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(0));
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("other_plugin", "flag", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(0));
 
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "wand"),
+            stack.get_custom_data("test_plugin", "marker"),
             Some(NbtTag::Byte(0))
         );
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "mode"),
+            stack.get_custom_data("test_plugin", "mode"),
             Some(NbtTag::String("pos1".into()))
         );
         assert_eq!(
-            stack.get_custom_data("other_plugin", "marked"),
+            stack.get_custom_data("other_plugin", "flag"),
             Some(NbtTag::Byte(1))
         );
     }
@@ -836,24 +836,24 @@ mod tests {
     fn remove_custom_data_removes_only_target_key_and_cleans_empty_component() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 
-        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
-        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
-        stack.set_custom_data("other_plugin", "marked", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("other_plugin", "flag", NbtTag::Byte(1));
 
-        stack.remove_custom_data("worldpumpkin", "wand");
-        assert!(!stack.has_custom_data("worldpumpkin", "wand"));
+        stack.remove_custom_data("test_plugin", "marker");
+        assert!(!stack.has_custom_data("test_plugin", "marker"));
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "mode"),
+            stack.get_custom_data("test_plugin", "mode"),
             Some(NbtTag::String("pos1".into()))
         );
         assert_eq!(
-            stack.get_custom_data("other_plugin", "marked"),
+            stack.get_custom_data("other_plugin", "flag"),
             Some(NbtTag::Byte(1))
         );
         assert!(stack.get_data_component::<CustomDataImpl>().is_some());
 
-        stack.remove_custom_data("worldpumpkin", "mode");
-        stack.remove_custom_data("other_plugin", "marked");
+        stack.remove_custom_data("test_plugin", "mode");
+        stack.remove_custom_data("other_plugin", "flag");
         assert!(stack.get_data_component::<CustomDataImpl>().is_none());
     }
 
@@ -864,7 +864,7 @@ mod tests {
             DataComponent::CustomName,
             Some(
                 CustomNameImpl {
-                    name: pumpkin_util::text::TextComponent::text("Selection Wand"),
+                    name: pumpkin_util::text::TextComponent::text("Marked Item"),
                 }
                 .to_dyn(),
             ),
@@ -873,13 +873,13 @@ mod tests {
             .patch
             .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
 
-        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
-        stack.remove_custom_data("worldpumpkin", "missing");
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.remove_custom_data("test_plugin", "missing");
 
         assert!(stack.get_data_component::<CustomNameImpl>().is_some());
         assert!(stack.get_data_component::<UnbreakableImpl>().is_some());
         assert_eq!(
-            stack.get_custom_data("worldpumpkin", "wand"),
+            stack.get_custom_data("test_plugin", "marker"),
             Some(NbtTag::Byte(1))
         );
     }
@@ -887,8 +887,8 @@ mod tests {
     #[test]
     fn custom_data_survives_item_stack_nbt_roundtrip() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
-        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
-        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
         stack
             .patch
             .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
@@ -898,11 +898,11 @@ mod tests {
         let decoded = ItemStack::read_item_stack(&compound).expect("stack should decode");
 
         assert_eq!(
-            decoded.get_custom_data("worldpumpkin", "wand"),
+            decoded.get_custom_data("test_plugin", "marker"),
             Some(NbtTag::Byte(1))
         );
         assert_eq!(
-            decoded.get_custom_data("worldpumpkin", "mode"),
+            decoded.get_custom_data("test_plugin", "mode"),
             Some(NbtTag::String("pos1".into()))
         );
         assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
