@@ -2680,23 +2680,27 @@ impl JavaClient {
             return;
         };
 
-        let Some((last_word_start, _)) = cmd.char_indices().rfind(|(_, c)| c.is_whitespace())
-        else {
-            return;
-        };
-
         let suggestions = server
             .command_dispatcher
             .read()
             .await
-            .suggest(cmd, &player.get_command_source(server).await)
+            .suggest_with_range(cmd, &player.get_command_source(server).await)
             .await;
 
         let response = CCommandSuggestions::new(
             packet.id,
-            (last_word_start + 2).try_into().unwrap(),
-            (cmd.len() - last_word_start - 1).try_into().unwrap(),
-            suggestions.into(),
+            (suggestions.range.start + 1).try_into().unwrap(),
+            suggestions.range.len().try_into().unwrap(),
+            suggestions
+                .suggestions
+                .into_iter()
+                .map(|suggestion| {
+                    pumpkin_protocol::java::client::play::CommandSuggestion::new(
+                        suggestion.text.cached_text().clone(),
+                        suggestion.tooltip,
+                    )
+                })
+                .collect(),
         );
 
         self.enqueue_packet(&response).await;

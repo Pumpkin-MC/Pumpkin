@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::CommandExecutor;
 use crate::command::CommandSender;
 use crate::command::args::{ArgumentConsumer, DefaultNameArgConsumer};
-use crate::command::tree::{CommandTree, Node, NodeType};
+use crate::command::tree::{CommandSuggestionProvider, CommandTree, Node, NodeType};
 
 impl CommandTree {
     /// Add a child [Node] to the root of this [`CommandTree`].
@@ -127,6 +127,18 @@ impl NonLeafNodeBuilder {
 
         self
     }
+
+    #[must_use]
+    pub fn suggests(mut self, provider: impl CommandSuggestionProvider + 'static) -> Self {
+        if let NodeType::Argument {
+            suggestion_provider,
+            ..
+        } = &mut self.node_type
+        {
+            *suggestion_provider = Some(Arc::new(provider));
+        }
+        self
+    }
 }
 
 /// Matches a string literal.
@@ -157,6 +169,7 @@ pub fn argument(
         node_type: NodeType::Argument {
             name: name.into(),
             consumer: Arc::new(consumer),
+            suggestion_provider: None,
         },
         child_nodes: Vec::new(),
         leaf_nodes: Vec::new(),
@@ -171,6 +184,7 @@ pub fn argument_default_name(
         node_type: NodeType::Argument {
             name: consumer.default_name().to_string(),
             consumer: Arc::new(consumer),
+            suggestion_provider: None,
         },
         child_nodes: Vec::new(),
         leaf_nodes: Vec::new(),
