@@ -29,8 +29,11 @@
 //! ```
 
 use crate::{
-    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
-    scheduler::TASK_HANDLERS, text::TextComponent,
+    commands::{COMMAND_HANDLERS, COMMAND_SUGGESTION_HANDLERS},
+    events::EVENT_HANDLERS,
+    logging::WitSubscriber,
+    scheduler::TASK_HANDLERS,
+    text::TextComponent,
 };
 
 pub mod commands;
@@ -44,7 +47,8 @@ pub mod scheduler;
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
-        Command, CommandError, CommandNode, CommandSender, ConsumedArgs,
+        Command, CommandError, CommandNode, CommandSender, CommandSuggestion, CommandSuggestions,
+        ConsumedArgs, SuggestionRequest,
     };
 }
 
@@ -150,6 +154,25 @@ impl wit::Guest for Component {
             },
             |handler| handler.handle(sender, server, args),
         )
+    }
+
+    /// WIT entry point — dispatches an incoming command suggestion request to the registered handler.
+    fn handle_command_suggestion(
+        handler_id: u32,
+        sender: command::CommandSender,
+        server: Server,
+        request: command::SuggestionRequest,
+    ) -> command::CommandSuggestions {
+        let handlers = COMMAND_SUGGESTION_HANDLERS.lock().unwrap();
+        if let Some(handler) = handlers.get(&handler_id) {
+            handler.suggest(sender, server, request)
+        } else {
+            command::CommandSuggestions {
+                start: request.start,
+                length: 0,
+                values: Vec::new(),
+            }
+        }
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
