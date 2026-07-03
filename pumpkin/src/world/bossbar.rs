@@ -2,7 +2,6 @@ use crate::entity::player::Player;
 use crate::net::ClientPlatform;
 use bitflags::bitflags;
 use pumpkin_protocol::bedrock::client::boss_event::{BossEventAction, CBossEvent as BBossEvent};
-use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{BosseventAction, CBossEvent};
 use pumpkin_util::text::TextComponent;
@@ -21,15 +20,15 @@ pub enum BossbarColor {
 
 impl BossbarColor {
     #[must_use]
-    pub const fn to_bedrock(self) -> VarInt {
+    pub const fn to_bedrock(self) -> u8 {
         match self {
-            Self::Pink => VarInt(0),
-            Self::Blue => VarInt(1),
-            Self::Red => VarInt(2),
-            Self::Green => VarInt(3),
-            Self::Yellow => VarInt(4),
-            Self::Purple => VarInt(5),
-            Self::White => VarInt(6),
+            Self::Pink => 0,
+            Self::Blue => 1,
+            Self::Red => 2,
+            Self::Green => 3,
+            Self::Yellow => 4,
+            Self::Purple => 5,
+            Self::White => 6,
         }
     }
 }
@@ -45,13 +44,13 @@ pub enum BossbarDivisions {
 
 impl BossbarDivisions {
     #[must_use]
-    pub const fn to_bedrock(self) -> VarInt {
+    pub const fn to_bedrock(self) -> u8 {
         match self {
-            Self::NoDivision => VarInt(0),
-            Self::Notches6 => VarInt(1),
-            Self::Notches10 => VarInt(2),
-            Self::Notches12 => VarInt(3),
-            Self::Notches20 => VarInt(4),
+            Self::NoDivision => 0,
+            Self::Notches6 => 1,
+            Self::Notches10 => 2,
+            Self::Notches12 => 3,
+            Self::Notches20 => 4,
         }
     }
 }
@@ -223,8 +222,8 @@ impl Player {
                 let packet = BBossEvent {
                     boss_entity_id: VarLong(uuid.as_u128() as i64),
                     action: BossEventAction::UpdateProperties {
-                        color: VarInt(0),
-                        overlay: VarInt(0),
+                        color: 0,
+                        overlay: 0,
                     },
                 };
                 bedrock.send_game_packet(&packet).await;

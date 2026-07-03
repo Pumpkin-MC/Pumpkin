@@ -1,7 +1,7 @@
 use std::io::{Error, Write};
 
 use crate::{
-    codec::{var_int::VarInt, var_long::VarLong},
+    codec::{var_long::VarLong},
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
@@ -16,15 +16,15 @@ pub enum BossEventAction {
     Add {
         title: String,
         health_percent: f32,
-        color: VarInt,
-        overlay: VarInt,
+        color: u8,
+        overlay: u8,
     },
     Remove,
     UpdateHealth(f32),
     UpdateTitle(String),
     UpdateProperties {
-        color: VarInt,
-        overlay: VarInt,
+        color: u8,
+        overlay: u8,
     },
 }
 
@@ -43,33 +43,33 @@ impl PacketWrite for CBossEvent {
             BossEventAction::Add {
                 title: t,
                 health_percent: hp,
-                color: c,
-                overlay: o,
+                color: _c,
+                overlay: _o,
             } => {
                 event_type = 0;
                 title.clone_from(t);
                 health_percent = *hp;
-                color = c.0 as u8;
-                overlay = o.0 as u8;
+                color = 0;
+                overlay = 0;
             }
             BossEventAction::Remove => {
                 event_type = 2;
             }
             BossEventAction::UpdateHealth(health) => {
-                event_type = 3;
+                event_type = 4;
                 health_percent = *health;
             }
             BossEventAction::UpdateTitle(t) => {
-                event_type = 4;
+                event_type = 5;
                 title.clone_from(t);
             }
             BossEventAction::UpdateProperties {
-                color: c,
-                overlay: o,
+                color: _c,
+                overlay: _o,
             } => {
-                event_type = 5;
-                color = c.0 as u8;
-                overlay = o.0 as u8;
+                event_type = 6;
+                color = 0;
+                overlay = 0;
             }
         }
 
