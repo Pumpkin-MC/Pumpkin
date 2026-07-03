@@ -461,46 +461,6 @@ impl ItemStack {
             .cloned()
     }
 
-    fn get_custom_data_tag(&self, namespace: &str, key: &str) -> Option<&NbtTag> {
-        self.custom_data_compound()?
-            .get(namespace)?
-            .extract_compound()?
-            .get(key)
-    }
-
-    pub fn set_custom_data_bool(&mut self, namespace: &str, key: &str, value: bool) {
-        self.set_custom_data(namespace, key, NbtTag::Byte(i8::from(value)));
-    }
-
-    #[must_use]
-    pub fn get_custom_data_bool(&self, namespace: &str, key: &str) -> Option<bool> {
-        self.get_custom_data_tag(namespace, key)
-            .and_then(NbtTag::extract_bool)
-    }
-
-    pub fn set_custom_data_string(&mut self, namespace: &str, key: &str, value: String) {
-        self.set_custom_data(namespace, key, NbtTag::String(value.into()));
-    }
-
-    #[must_use]
-    pub fn get_custom_data_string(&self, namespace: &str, key: &str) -> Option<String> {
-        self.get_custom_data_tag(namespace, key)
-            .and_then(NbtTag::extract_string)
-            .map(str::to_owned)
-    }
-
-    pub fn set_custom_data_bytes(&mut self, namespace: &str, key: &str, value: Vec<u8>) {
-        let bytes = value.into_iter().map(|byte| byte as i8).collect::<Vec<_>>();
-        self.set_custom_data(namespace, key, NbtTag::ByteArray(bytes.into()));
-    }
-
-    #[must_use]
-    pub fn get_custom_data_bytes(&self, namespace: &str, key: &str) -> Option<Vec<u8>> {
-        self.get_custom_data_tag(namespace, key)
-            .and_then(NbtTag::extract_byte_array)
-            .map(|bytes| bytes.iter().map(|byte| *byte as u8).collect())
-    }
-
     pub fn remove_custom_data(&mut self, namespace: &str, key: &str) {
         let Some(mut custom_data) = self
             .get_data_component::<CustomDataImpl>()
@@ -531,7 +491,7 @@ impl ItemStack {
 
     #[must_use]
     pub fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
-        self.get_custom_data_tag(namespace, key).is_some()
+        self.get_custom_data(namespace, key).is_some()
     }
 
     #[must_use]
@@ -789,21 +749,25 @@ mod tests {
     fn custom_data_sets_and_reads_typed_values() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 
-        stack.set_custom_data_bool("worldpumpkin", "wand", true);
-        stack.set_custom_data_string("worldpumpkin", "mode", "pos1".to_string());
-        stack.set_custom_data_bytes("worldpumpkin", "payload", vec![0, 1, 127, 128, 255]);
+        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
+        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data(
+            "worldpumpkin",
+            "payload",
+            NbtTag::ByteArray(vec![0, 1, 127, -128, -1].into()),
+        );
 
         assert_eq!(
-            stack.get_custom_data_bool("worldpumpkin", "wand"),
-            Some(true)
+            stack.get_custom_data("worldpumpkin", "wand"),
+            Some(NbtTag::Byte(1))
         );
         assert_eq!(
-            stack.get_custom_data_string("worldpumpkin", "mode"),
-            Some("pos1".to_string())
+            stack.get_custom_data("worldpumpkin", "mode"),
+            Some(NbtTag::String("pos1".into()))
         );
         assert_eq!(
-            stack.get_custom_data_bytes("worldpumpkin", "payload"),
-            Some(vec![0, 1, 127, 128, 255])
+            stack.get_custom_data("worldpumpkin", "payload"),
+            Some(NbtTag::ByteArray(vec![0, 1, 127, -128, -1].into()))
         );
         assert!(stack.has_custom_data("worldpumpkin", "wand"));
     }
@@ -849,22 +813,22 @@ mod tests {
     fn custom_data_preserves_sibling_namespaces_and_keys() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 
-        stack.set_custom_data_bool("worldpumpkin", "wand", true);
-        stack.set_custom_data_string("worldpumpkin", "mode", "pos1".to_string());
-        stack.set_custom_data_bool("other_plugin", "marked", true);
-        stack.set_custom_data_bool("worldpumpkin", "wand", false);
+        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
+        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("other_plugin", "marked", NbtTag::Byte(1));
+        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(0));
 
         assert_eq!(
-            stack.get_custom_data_bool("worldpumpkin", "wand"),
-            Some(false)
+            stack.get_custom_data("worldpumpkin", "wand"),
+            Some(NbtTag::Byte(0))
         );
         assert_eq!(
-            stack.get_custom_data_string("worldpumpkin", "mode"),
-            Some("pos1".to_string())
+            stack.get_custom_data("worldpumpkin", "mode"),
+            Some(NbtTag::String("pos1".into()))
         );
         assert_eq!(
-            stack.get_custom_data_bool("other_plugin", "marked"),
-            Some(true)
+            stack.get_custom_data("other_plugin", "marked"),
+            Some(NbtTag::Byte(1))
         );
     }
 
@@ -872,19 +836,19 @@ mod tests {
     fn remove_custom_data_removes_only_target_key_and_cleans_empty_component() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 
-        stack.set_custom_data_bool("worldpumpkin", "wand", true);
-        stack.set_custom_data_string("worldpumpkin", "mode", "pos1".to_string());
-        stack.set_custom_data_bool("other_plugin", "marked", true);
+        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
+        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("other_plugin", "marked", NbtTag::Byte(1));
 
         stack.remove_custom_data("worldpumpkin", "wand");
         assert!(!stack.has_custom_data("worldpumpkin", "wand"));
         assert_eq!(
-            stack.get_custom_data_string("worldpumpkin", "mode"),
-            Some("pos1".to_string())
+            stack.get_custom_data("worldpumpkin", "mode"),
+            Some(NbtTag::String("pos1".into()))
         );
         assert_eq!(
-            stack.get_custom_data_bool("other_plugin", "marked"),
-            Some(true)
+            stack.get_custom_data("other_plugin", "marked"),
+            Some(NbtTag::Byte(1))
         );
         assert!(stack.get_data_component::<CustomDataImpl>().is_some());
 
@@ -909,22 +873,22 @@ mod tests {
             .patch
             .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
 
-        stack.set_custom_data_bool("worldpumpkin", "wand", true);
+        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
         stack.remove_custom_data("worldpumpkin", "missing");
 
         assert!(stack.get_data_component::<CustomNameImpl>().is_some());
         assert!(stack.get_data_component::<UnbreakableImpl>().is_some());
         assert_eq!(
-            stack.get_custom_data_bool("worldpumpkin", "wand"),
-            Some(true)
+            stack.get_custom_data("worldpumpkin", "wand"),
+            Some(NbtTag::Byte(1))
         );
     }
 
     #[test]
     fn custom_data_survives_item_stack_nbt_roundtrip() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
-        stack.set_custom_data_bool("worldpumpkin", "wand", true);
-        stack.set_custom_data_string("worldpumpkin", "mode", "pos1".to_string());
+        stack.set_custom_data("worldpumpkin", "wand", NbtTag::Byte(1));
+        stack.set_custom_data("worldpumpkin", "mode", NbtTag::String("pos1".into()));
         stack
             .patch
             .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
@@ -934,12 +898,12 @@ mod tests {
         let decoded = ItemStack::read_item_stack(&compound).expect("stack should decode");
 
         assert_eq!(
-            decoded.get_custom_data_bool("worldpumpkin", "wand"),
-            Some(true)
+            decoded.get_custom_data("worldpumpkin", "wand"),
+            Some(NbtTag::Byte(1))
         );
         assert_eq!(
-            decoded.get_custom_data_string("worldpumpkin", "mode"),
-            Some("pos1".to_string())
+            decoded.get_custom_data("worldpumpkin", "mode"),
+            Some(NbtTag::String("pos1".into()))
         );
         assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
     }
