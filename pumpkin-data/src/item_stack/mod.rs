@@ -418,7 +418,7 @@ impl ItemStack {
             .map(|custom_data| &custom_data.data)
     }
 
-    fn set_custom_data_tag(&mut self, namespace: &str, key: &str, value: NbtTag) {
+    pub fn set_custom_data(&mut self, namespace: &str, key: &str, value: NbtTag) {
         let mut custom_data = self
             .get_data_component::<CustomDataImpl>()
             .map_or_else(NbtCompound::new, |custom_data| custom_data.data.clone());
@@ -453,6 +453,14 @@ impl ItemStack {
         }
     }
 
+    pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<NbtTag> {
+        self.custom_data_compound()?
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
     fn get_custom_data_tag(&self, namespace: &str, key: &str) -> Option<&NbtTag> {
         self.custom_data_compound()?
             .get(namespace)?
@@ -461,7 +469,7 @@ impl ItemStack {
     }
 
     pub fn set_custom_data_bool(&mut self, namespace: &str, key: &str, value: bool) {
-        self.set_custom_data_tag(namespace, key, NbtTag::Byte(i8::from(value)));
+        self.set_custom_data(namespace, key, NbtTag::Byte(i8::from(value)));
     }
 
     #[must_use]
@@ -471,7 +479,7 @@ impl ItemStack {
     }
 
     pub fn set_custom_data_string(&mut self, namespace: &str, key: &str, value: String) {
-        self.set_custom_data_tag(namespace, key, NbtTag::String(value.into()));
+        self.set_custom_data(namespace, key, NbtTag::String(value.into()));
     }
 
     #[must_use]
@@ -483,7 +491,7 @@ impl ItemStack {
 
     pub fn set_custom_data_bytes(&mut self, namespace: &str, key: &str, value: Vec<u8>) {
         let bytes = value.into_iter().map(|byte| byte as i8).collect::<Vec<_>>();
-        self.set_custom_data_tag(namespace, key, NbtTag::ByteArray(bytes.into()));
+        self.set_custom_data(namespace, key, NbtTag::ByteArray(bytes.into()));
     }
 
     #[must_use]
@@ -798,6 +806,43 @@ mod tests {
             Some(vec![0, 1, 127, 128, 255])
         );
         assert!(stack.has_custom_data("worldpumpkin", "wand"));
+    }
+
+    #[test]
+    fn custom_data_sets_and_reads_full_nbt_tags() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+        let mut compound = NbtCompound::new();
+        compound.child_tags.insert("byte".into(), NbtTag::Byte(1));
+        compound.child_tags.insert("short".into(), NbtTag::Short(2));
+        compound.child_tags.insert("int".into(), NbtTag::Int(3));
+        compound.child_tags.insert("long".into(), NbtTag::Long(4));
+        compound
+            .child_tags
+            .insert("float".into(), NbtTag::Float(5.0));
+        compound
+            .child_tags
+            .insert("double".into(), NbtTag::Double(6.0));
+        compound
+            .child_tags
+            .insert("string".into(), NbtTag::String("value".into()));
+        compound.child_tags.insert(
+            "list".into(),
+            NbtTag::List(vec![NbtTag::Int(1), NbtTag::Int(2)]),
+        );
+        compound
+            .child_tags
+            .insert("byte_array".into(), NbtTag::ByteArray(vec![1, 2].into()));
+        compound
+            .child_tags
+            .insert("int_array".into(), NbtTag::IntArray(vec![3, 4]));
+        compound
+            .child_tags
+            .insert("long_array".into(), NbtTag::LongArray(vec![5, 6]));
+
+        let tag = NbtTag::Compound(compound);
+        stack.set_custom_data("worldpumpkin", "full", tag.clone());
+
+        assert_eq!(stack.get_custom_data("worldpumpkin", "full"), Some(tag));
     }
 
     #[test]
