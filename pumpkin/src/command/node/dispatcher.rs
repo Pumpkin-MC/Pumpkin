@@ -586,7 +586,8 @@ impl CommandDispatcher {
         };
 
         let (a, b) = future::join(future1, future2).await;
-        Suggestions::merge(input, [a, b])
+        let suggestions = <[Suggestions; 2]>::from((a, b));
+        Suggestions::merge(input, suggestions)
     }
 
     /// Gets all the commands usable in this dispatcher, sorted.
