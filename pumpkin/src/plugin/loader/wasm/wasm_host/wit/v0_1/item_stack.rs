@@ -88,7 +88,7 @@ fn to_wit_nbt_tree(tag: NbtTag) -> WitNbtTree {
     WitNbtTree { root, tags }
 }
 
-fn from_wit_nbt_tree(tree: WitNbtTree) -> Result<NbtTag, String> {
+fn from_wit_nbt_tree(tree: &WitNbtTree) -> Result<NbtTag, String> {
     fn read_tag(index: u32, tags: &[WitNbtTag], visiting: &mut Vec<u32>) -> Result<NbtTag, String> {
         let Some(tag) = tags.get(index as usize) else {
             return Err(format!("NBT tag index {index} is out of bounds"));
@@ -377,7 +377,7 @@ impl HostItemStack for PluginHostState {
     ) -> wasmtime::Result<()> {
         let stack = self.get_item_stack(&res)?;
         let mut stack = stack.lock().await;
-        let value = from_wit_nbt_tree(value).map_err(wasmtime::Error::msg)?;
+        let value = from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
         stack.set_custom_data(&namespace, &key, value);
         Ok(())
     }
