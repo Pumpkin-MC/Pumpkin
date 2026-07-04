@@ -471,7 +471,7 @@ mod tests {
             carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
 
             assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)).0,
+                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
                 Block::PODZOL.default_state.id,
             );
         });
@@ -488,7 +488,7 @@ mod tests {
                 .set_block_state(x, y - 1, z, Block::DIRT.default_state);
             carve_top_material(run, x, y, z, Block::AIR.default_state, false, true);
             assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)).0,
+                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
                 Block::DIRT.default_state.id,
             );
 
@@ -496,7 +496,7 @@ mod tests {
                 .set_block_state(x, y - 1, z, Block::STONE.default_state);
             carve_top_material(run, x, y, z, Block::AIR.default_state, true, true);
             assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)).0,
+                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
                 Block::STONE.default_state.id,
             );
 
@@ -504,7 +504,7 @@ mod tests {
                 .set_block_state(x, y - 1, z, Block::DIRT.default_state);
             carve_top_material(run, x, y, z, Block::AIR.default_state, true, false);
             assert_eq!(
-                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)).0,
+                run.chunk.get_block_state(&Vector3::new(x, y - 1, z)),
                 Block::DIRT.default_state.id,
             );
         });

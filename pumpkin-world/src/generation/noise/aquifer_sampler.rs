@@ -2603,7 +2603,7 @@ mod random_positions_and_hypot {
                 aquifer
                     .apply_internal(&mut router, &pos, &env, &mut height_estimator, sample)
                     .0,
-                result.map(|r| r.to_state())
+                result.map(pumpkin_data::BlockStateId::to_state)
             );
         }
     }

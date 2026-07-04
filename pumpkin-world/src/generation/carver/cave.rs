@@ -428,7 +428,7 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
 mod tests {
     use super::*;
     use pumpkin_data::carver::CAVE;
-    use pumpkin_data::{Block, dimension::Dimension};
+    use pumpkin_data::{Block, BlockStateId, dimension::Dimension};
 
     type Run<'a, 'b> = super::super::CarveRun<'a, 'b>;
 
@@ -465,7 +465,7 @@ mod tests {
         });
     }
 
-    fn assert_world_y(run: &mut Run, x: i32, y: i32, z: i32, expected: u16) {
+    fn assert_world_y(run: &mut Run, x: i32, y: i32, z: i32, expected: BlockStateId) {
         let old_wrong_y = y - run.chunk.bottom_y() as i32;
         let stone = Block::STONE.default_state;
 
@@ -481,7 +481,7 @@ mod tests {
         y: i32,
         z: i32,
         initial_state: &'static pumpkin_data::BlockState,
-        expected: u16,
+        expected: BlockStateId,
     ) {
         let mut has_grass = false;
 
@@ -491,8 +491,8 @@ mod tests {
         assert_eq!(block_id(run, x, y, z), expected);
     }
 
-    fn block_id(run: &Run, x: i32, y: i32, z: i32) -> u16 {
-        run.chunk.get_block_state(&Vector3::new(x, y, z)).0
+    fn block_id(run: &Run, x: i32, y: i32, z: i32) -> BlockStateId {
+        run.chunk.get_block_state(&Vector3::new(x, y, z))
     }
 
     fn find_aquifer_carve_state(
