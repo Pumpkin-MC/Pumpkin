@@ -516,7 +516,7 @@ pub trait CountPlacementModifierBase {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
-        let count = self.get_count(random, pos);
+        let count = self.get_count(random, pos).max(0);
         Box::new(std::iter::repeat_n(pos, count as usize))
     }
 
