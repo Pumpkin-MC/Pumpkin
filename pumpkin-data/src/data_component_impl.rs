@@ -57,6 +57,7 @@ pub trait DataComponentImpl: Send + Sync {
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
+        CustomData => Some(CustomDataImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
@@ -147,9 +148,22 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     value.as_mut_any().downcast_mut::<T>().unwrap()
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CustomDataImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomDataImpl {
+    pub data: NbtCompound,
+}
+impl CustomDataImpl {
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_compound()
+            .map(|data| Self { data: data.clone() })
+    }
+}
 impl DataComponentImpl for CustomDataImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(self.data.clone())
+    }
+
     default_impl!(CustomData);
 }
 
