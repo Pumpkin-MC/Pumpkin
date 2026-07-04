@@ -43,8 +43,8 @@ use crate::{
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{
-            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
-            player_respawn::PlayerRespawnEvent,
+            player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
         },
     },
     server::Server,
@@ -3292,11 +3292,10 @@ impl World {
                 )
             };
 
-        // Get target world (may be different from current world for cross-dimension respawn)
-        let target_world = if respawn_dimension == self.dimension {
+        // Candidate destination world for a cross-dimension respawn.
+        let candidate_world = if respawn_dimension == self.dimension {
             None
         } else {
-            // Cross-dimension respawn: get target world from server
             self.server.upgrade().map_or_else(
                 || {
                     warn!("Could not get server for cross-dimension respawn");
@@ -3312,38 +3311,76 @@ impl World {
             )
         };
 
-        // Handle cross-dimension transfer if we found a different target world
-        let (target_world, position) = if let Some(ref new_world) = target_world {
-            debug!(
-                "Cross-dimension respawn: {} -> {}",
-                self.dimension.minecraft_name, new_world.dimension.minecraft_name
-            );
+        // Fire PlayerChangeWorldEvent (cancellable) before the transfer; it runs before
+        // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
+        let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
+            if let Some(server) = self.server.upgrade() {
+                let event = server
+                    .plugin_manager
+                    .fire(PlayerChangeWorldEvent {
+                        player: player.clone(),
+                        previous_world: self.clone(),
+                        new_world: new_world.clone(),
+                        position,
+                        yaw,
+                        pitch,
+                        cancelled: false,
+                    })
+                    .await;
 
-            // Remove player from current world
-            self.remove_player(player, false).await;
-            new_world.players.rcu(|current_list| {
-                let mut new_list = (**current_list).clone();
-                new_list.push(player.clone());
-                new_list
-            });
+                if event.cancelled {
+                    (None, position, yaw, pitch)
+                } else {
+                    let destination = event.new_world;
+                    let position = event.position;
+                    let yaw = event.yaw;
+                    let pitch = event.pitch;
 
-            // Update chunk manager to target world
-            player
-                .chunk_manager
-                .lock()
-                .await
-                .change_world(&self.level, new_world.clone());
+                    // Skip the transfer if redirected back to the current world.
+                    if destination.uuid != self.uuid {
+                        debug!(
+                            "Cross-dimension respawn: {} -> {}",
+                            self.dimension.minecraft_name, destination.dimension.minecraft_name
+                        );
 
-            // Unload watched chunks from current world
-            player.unload_watched_chunks(self).await;
+                        // Detach from the old world before publishing into the new one, so no
+                        // observer sees the player in a world whose chunk manager doesn't match.
+                        self.remove_player(player, false).await;
+                        player.unload_watched_chunks(self).await;
+                        player
+                            .chunk_manager
+                            .lock()
+                            .await
+                            .change_world(&self.level, destination.clone());
+                        player.living_entity.entity.set_world(destination.clone());
+                        destination.players.rcu(|current_list| {
+                            let mut new_list = (**current_list).clone();
+                            new_list.push(player.clone());
+                            new_list
+                        });
+                    }
 
-            (new_world.clone(), position)
+                    (Some(destination), position, yaw, pitch)
+                }
+            } else {
+                warn!("Server dropped during cross-dimension respawn");
+                (None, position, yaw, pitch)
+            }
+        } else {
+            if respawn_dimension != self.dimension {
+                warn!(
+                    "Target world {:?} not found, using world spawn in {:?}",
+                    respawn_dimension, self.dimension
+                );
+            }
+            (None, position, yaw, pitch)
+        };
+
+        // Cancelled or unresolved cross-dimension respawns fall back to the current
+        // world's spawn below; otherwise the resolved values from the event apply.
+        let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
+            (new_world.clone(), position, yaw, pitch)
         } else if respawn_dimension != self.dimension {
-            // Cross-dimension failed - fall back to current world's spawn
-            warn!(
-                "Target world {:?} not found, using world spawn in {:?}",
-                respawn_dimension, self.dimension
-            );
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
             let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
@@ -3354,9 +3391,9 @@ impl World {
                 (top + 1).into(),
                 f64::from(spawn_z) + 0.5,
             );
-            (self.clone(), fallback_pos)
+            (self.clone(), fallback_pos, spawn_yaw, spawn_pitch)
         } else {
-            (self.clone(), position)
+            (self.clone(), position, yaw, pitch)
         };
 
         // Notify plugins that the player has respawned (non-cancellable).
