@@ -107,7 +107,11 @@ pub async fn io_read_work(
 
                         if needs_relight {
                             debug!(
-                                "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
+                                "{}",
+                                localized_log_format(
+                                    "world.chunk_system.relight_downgrade",
+                                    &[format!("{pos:?}")]
+                                )
                             );
 
                             // Create ProtoChunk using the async method
@@ -202,10 +206,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
         {
             error!(
                 "{}",
-                localized_log_format(
-                    "world.chunk_system.failed_save_chunks",
-                    &[format!("{:?}", e)]
-                )
+                localized_log_format("world.chunk_system.failed_save_chunks", &[format!("{e:?}")])
             );
         }
 
@@ -227,7 +228,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                         "{}",
                         localized_log_format(
                             "world.chunk_system.io_write_missing_lock_entry",
-                            &[format!("{:?}", i)]
+                            &[format!("{i:?}")]
                         )
                     );
                     // continue without panicking to avoid crashing on shutdown races

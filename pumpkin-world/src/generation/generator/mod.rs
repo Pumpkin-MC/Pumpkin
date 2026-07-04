@@ -53,7 +53,7 @@ impl GeneratorInit for VanillaGenerator {
                 "{}",
                 localized_log_format(
                     "world.generation.unsupported_noise_router_dimension",
-                    &[format!("{:?}", dimension)]
+                    &[format!("{dimension:?}")]
                 )
             );
             OVERWORLD_BASE_NOISE_ROUTER

@@ -373,7 +373,8 @@ impl GenerationSchedule {
         let ano_task = holder.tasks[req_end];
         debug_assert!(
             !ano_task.is_null(),
-            "holder.tasks[req_stage] must not be null before adding edge"
+            "{}",
+            localized_log("world.chunk_system.holder_tasks_must_not_be_null")
         );
         graph.add_edge(ano_task, dependency_task);
     }
@@ -646,8 +647,11 @@ impl GenerationSchedule {
         drop(data);
         if let Err(e) = self.io_write.send(chunks) {
             error!(
-                "Failed to send chunks to io write thread during save (may have shut down): {:?}",
-                e
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.failed_send_chunks_save",
+                    &[format!("{e:?}")]
+                )
             );
         }
     }
@@ -702,7 +706,7 @@ impl GenerationSchedule {
                 "{}",
                 localized_log_format(
                     "world.chunk_system.failed_send_chunks_io_write",
-                    &[format!("{:?}", e)]
+                    &[format!("{e:?}")]
                 )
             );
         }
@@ -746,8 +750,11 @@ impl GenerationSchedule {
                 let mut holder = self.chunk_map.remove(&pos).unwrap();
                 if holder.chunk.is_some() {
                     warn!(
-                        "receive_chunk(IO): holder already has chunk at {:?}; replacing",
-                        pos
+                        "{}",
+                        localized_log_format(
+                            "world.chunk_system.holder_already_has_chunk",
+                            &[format!("{pos:?}")]
+                        )
                     );
                 }
                 debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
@@ -767,22 +774,31 @@ impl GenerationSchedule {
                         let result = self.public_chunk_map.insert(pos, data.clone());
                         if result.is_some() {
                             warn!(
-                                "receive_chunk(IO): replacing existing public chunk at {:?}",
-                                pos
+                                "{}",
+                                localized_log_format(
+                                    "world.chunk_system.replacing_existing_public_chunk",
+                                    &[format!("{pos:?}")]
+                                )
                             );
                         }
                         holder.public = true;
                         trace!(
-                            "Notifying players: chunk {:?} loaded from disk (Full status)",
-                            pos
+                            "{}",
+                            localized_log_format(
+                                "world.chunk_system.notify_chunk_loaded_disk",
+                                &[format!("{pos:?}")]
+                            )
                         );
                         self.listener.process_new_chunk(pos, data);
                     }
                     Chunk::Proto(_) => {
                         if holder.public {
                             debug!(
-                                "Chunk {:?} downgraded to Proto for relighting, marking as non-public",
-                                pos
+                                "{}",
+                                localized_log_format(
+                                    "world.chunk_system.downgraded_proto_relight",
+                                    &[format!("{pos:?}")]
+                                )
                             );
                             self.public_chunk_map.remove(&pos);
                             holder.public = false;
@@ -806,10 +822,15 @@ impl GenerationSchedule {
                             if new_pos == pos {
                                 if holder.current_stage != StagedChunkEnum::Spawn {
                                     warn!(
-                                        "receive_chunk(Level): holder at {:?} for pos {:?} expected {:?}; aligning",
-                                        holder.current_stage,
-                                        new_pos,
-                                        StagedChunkEnum::Spawn
+                                        "{}",
+                                        localized_log_format(
+                                            "world.chunk_system.holder_mismatch_aligning",
+                                            &[
+                                                format!("{:?}", holder.current_stage),
+                                                format!("{new_pos:?}"),
+                                                format!("{:?}", StagedChunkEnum::Spawn)
+                                            ]
+                                        )
                                     );
                                     holder.current_stage = StagedChunkEnum::Spawn;
                                 }
@@ -826,8 +847,11 @@ impl GenerationSchedule {
                                 if was_public {
                                     self.public_chunk_map.insert(new_pos, public_chunk);
                                     info!(
-                                        "Notifying players: regenerated chunk at {:?} (was already public)",
-                                        new_pos
+                                        "{}",
+                                        localized_log_format(
+                                            "world.chunk_system.notify_regenerated_chunk",
+                                            &[format!("{new_pos:?}")]
+                                        )
                                     );
                                     self.listener.process_new_chunk(new_pos, &chunk);
                                     holder.chunk = Some(Chunk::Level(chunk));
@@ -838,19 +862,29 @@ impl GenerationSchedule {
                                     holder.public = true;
                                     if result.is_some() {
                                         warn!(
-                                            "public_chunk_map.insert returned existing chunk for {new_pos:?}"
+                                            "{}",
+                                            localized_log_format(
+                                                "world.chunk_system.public_chunk_map_insert_existing",
+                                                &[format!("{new_pos:?}")]
+                                            )
                                         );
                                     }
                                     if let Some(pc) = self.public_chunk_map.get(&new_pos) {
                                         trace!(
-                                            "Notifying players: new chunk at {:?} (generation complete)",
-                                            new_pos
+                                            "{}",
+                                            localized_log_format(
+                                                "world.chunk_system.notify_new_chunk_complete",
+                                                &[format!("{new_pos:?}")]
+                                            )
                                         );
                                         self.listener.process_new_chunk(new_pos, &pc);
                                     } else {
                                         error!(
-                                            "CRITICAL: Failed to retrieve chunk {:?} from public_chunk_map immediately after insert!",
-                                            new_pos
+                                            "{}",
+                                            localized_log_format(
+                                                "world.chunk_system.critical_public_chunk_map_failure",
+                                                &[format!("{new_pos:?}")]
+                                            )
                                         );
                                     }
                                 }
@@ -937,8 +971,11 @@ impl GenerationSchedule {
                 error,
             } => {
                 error!(
-                    "Received generation failure notification for chunk {:?} at stage {:?}: {}",
-                    fail_pos, stage, error
+                    "{}",
+                    localized_log_format(
+                        "world.chunk_system.generation_failure_notification",
+                        &[format!("{fail_pos:?}"), format!("{stage:?}"), error]
+                    )
                 );
 
                 if let Some(mut holder) = self.chunk_map.remove(&pos) {
@@ -995,7 +1032,7 @@ impl GenerationSchedule {
                         "{}",
                         localized_log_format(
                             "world.chunk_system.chunk_requeued",
-                            &[format!("{:?}", pos), format!("{:?}", target_stage)]
+                            &[format!("{pos:?}"), format!("{target_stage:?}")]
                         )
                     );
                 } else {
@@ -1003,7 +1040,7 @@ impl GenerationSchedule {
                         "{}",
                         localized_log_format(
                             "world.chunk_system.failed_find_holder",
-                            &[format!("{:?}", pos)]
+                            &[format!("{pos:?}")]
                         )
                     );
                 }
@@ -1222,8 +1259,15 @@ impl GenerationSchedule {
                                 swap(&mut tmp, &mut holder.chunk);
                                 let Some(tmp) = tmp else {
                                     panic!(
-                                        "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
-                                        new_pos, node.pos, node.stage
+                                        "{}",
+                                        localized_log_format(
+                                            "world.chunk_system.missing_chunk_for_generation",
+                                            &[
+                                                format!("{new_pos:?}"),
+                                                format!("{:?}", node.pos),
+                                                format!("{:?}", node.stage)
+                                            ]
+                                        )
                                     )
                                 };
                                 match tmp {

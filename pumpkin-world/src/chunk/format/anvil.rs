@@ -252,10 +252,9 @@ impl AnvilChunkData {
 
         if length > bytes.len() {
             return Err(ChunkReadingError::ParsingError(
-                ChunkParsingError::ErrorDeserializingChunk(format!(
-                    "Chunk length is greater than available bytes ({} vs {})",
-                    length,
-                    bytes.len()
+                ChunkParsingError::ErrorDeserializingChunk(localized_log_format(
+                    "world.chunk.length_greater_than_available",
+                    &[length.to_string(), bytes.len().to_string()],
                 )),
             ));
         }
@@ -422,9 +421,14 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         for (index, chunk) in chunks {
             debug_assert!(
                 current_sector <= chunk.file_sector_offset,
-                "Current sector is {} but we want to write to {}!",
-                current_sector,
-                chunk.file_sector_offset
+                "{}",
+                localized_log_format(
+                    "world.chunk.current_sector_mismatch",
+                    &[
+                        current_sector.to_string(),
+                        chunk.file_sector_offset.to_string()
+                    ]
+                )
             );
 
             // Seek only if we need to
@@ -470,7 +474,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
             "{}",
             localized_log_format(
                 "world.chunk.anvil.writing_tmp_file",
-                &[format!("{temp_path:?}")]
+                &[format!("{}", temp_path.display())]
             )
         );
 
@@ -556,8 +560,11 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         match &*write_action {
             WriteAction::Pass => {
                 debug!(
-                    "Skipping write for {}, as there were no dirty chunks",
-                    path.display()
+                    "{}",
+                    localized_log_format(
+                        "world.chunk.skipping_write_no_dirty",
+                        &[format!("{}", path.display())]
+                    )
                 );
                 Ok(())
             }
@@ -607,11 +614,16 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
             if bytes_offset + bytes_count > raw_file_bytes.len() {
                 return Err(ChunkReadingError::ParsingError(
-                    ChunkParsingError::ErrorDeserializingChunk(format!(
-                        "Not enough bytes available for the chunk {} ({} vs {})",
-                        i,
-                        bytes_count,
-                        raw_file_bytes.len().saturating_sub(bytes_offset)
+                    ChunkParsingError::ErrorDeserializingChunk(localized_log_format(
+                        "world.chunk.not_enough_bytes_for_chunk",
+                        &[
+                            i.to_string(),
+                            bytes_count.to_string(),
+                            raw_file_bytes
+                                .len()
+                                .saturating_sub(bytes_offset)
+                                .to_string(),
+                        ],
                     )),
                 ));
             }
