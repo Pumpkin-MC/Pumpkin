@@ -16,11 +16,12 @@ pub mod vector2;
 pub mod vector3;
 pub mod vertical_surface_type;
 
-const SIN_SCALE: f32 = 10430.378350470453; // 65536 / 2PI
+const SIN_SCALE: f32 = 10430.378; // 65536 / 2P
 const SIN_MASK: i32 = 65535;
 
-static SIN: LazyLock<[f32; 65536]> =
-    LazyLock::new(|| std::array::from_fn(|i| (f64::from(i as u32) / SIN_SCALE).sin() as f32));
+static SIN: LazyLock<[f32; 65536]> = LazyLock::new(|| {
+    std::array::from_fn(|i| (f64::from(i as u32) / 10430.378350470453).sin() as f32)
+});
 
 /// Returns the vanilla sine table value for an angle in radians.
 #[must_use]
