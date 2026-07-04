@@ -23,7 +23,7 @@ pub struct PlayerDropItemEvent {
 
 impl PlayerDropItemEvent {
     /// Creates a new instance of `PlayerDropItemEvent`.
-    pub fn new(player: Arc<Player>, item_stack: ItemStack, drop_full_stack: bool) -> Self {
+    pub const fn new(player: Arc<Player>, item_stack: ItemStack, drop_full_stack: bool) -> Self {
         Self {
             player,
             item_stack,
