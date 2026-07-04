@@ -10,6 +10,15 @@ use super::PlayerEvent;
 ///
 /// This is a notification fired once a respawn destination (world, position and
 /// rotation) has been determined. It is not cancellable.
+///
+/// On a cross-dimension respawn the cancellable
+/// [`PlayerChangeWorldEvent`](super::player_change_world::PlayerChangeWorldEvent)
+/// fires first, before the world transfer; this event fires after the transfer
+/// and reflects the world the player actually ended up in — including
+/// `PlayerChangeWorldEvent` redirects and the no-op fallback (player stays in
+/// the previous world) when that event is cancelled. See that event's docs for
+/// the mutation-vs-cancellation semantics; in particular, edits made by a
+/// cancelled `PlayerChangeWorldEvent` do not carry over here.
 #[derive(Event, Clone)]
 pub struct PlayerRespawnEvent {
     /// The player who respawned.
