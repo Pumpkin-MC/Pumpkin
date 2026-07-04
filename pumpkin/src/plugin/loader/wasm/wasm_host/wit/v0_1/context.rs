@@ -50,7 +50,7 @@ async fn register_player_event(
         exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
         player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
-        player_custom_payload::PlayerCustomPayloadEvent,
+        player_custom_payload::PlayerCustomPayloadEvent, player_drop_item::PlayerDropItemEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
         player_interact_event::PlayerInteractEvent,
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
@@ -105,6 +105,10 @@ async fn register_player_event(
         }
         EventType::PlayerItemHeldEvent => {
             register_typed_event::<PlayerItemHeldEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerDropItemEvent => {
+            register_typed_event::<PlayerDropItemEvent>(resource, handler, priority, blocking)
                 .await;
         }
         EventType::PlayerChangedMainHandEvent => {
