@@ -37,7 +37,7 @@ impl Carver for CanyonCarver {
         let distance =
             (max_distance as f32 * canyon_config.shape.distance_factor.get(random)) as i32;
 
-        self.do_carve(
+        Self::do_carve(
             config,
             run,
             random.next_i64(),
@@ -58,7 +58,6 @@ impl Carver for CanyonCarver {
 impl CanyonCarver {
     #[allow(clippy::too_many_arguments)]
     fn do_carve(
-        &self,
         config: &CarverConfig,
         run: &mut CarveRun,
         tunnel_seed: i64,
@@ -75,7 +74,7 @@ impl CanyonCarver {
     ) {
         let mut random = super::new_carver_random(tunnel_seed as u64, legacy_random_source);
         let width_factor_per_height =
-            self.init_width_factors(run.chunk.height() as usize, config, &mut random);
+            Self::init_width_factors(run.chunk.height() as usize, config, &mut random);
         let mut y_rota = 0.0f32;
         let mut x_rota = 0.0f32;
 
@@ -92,7 +91,7 @@ impl CanyonCarver {
                 .shape
                 .horizontal_radius_factor
                 .get(&mut random) as f64;
-            vertical_radius = self.update_vertical_radius(
+            vertical_radius = Self::update_vertical_radius(
                 config,
                 &mut random,
                 vertical_radius,
@@ -115,7 +114,7 @@ impl CanyonCarver {
             y_rota += (random.next_f32() - random.next_f32()) * random.next_f32() * 4.0;
 
             if random.next_bounded_i32(4) != 0 {
-                if !self.can_reach(
+                if !Self::can_reach(
                     run.chunk.x,
                     run.chunk.z,
                     x,
@@ -127,7 +126,7 @@ impl CanyonCarver {
                     return;
                 }
 
-                self.carve_ellipsoid(
+                Self::carve_ellipsoid(
                     run,
                     config,
                     x,
@@ -142,7 +141,6 @@ impl CanyonCarver {
     }
 
     fn init_width_factors(
-        &self,
         depth: usize,
         config: &CarverConfig,
         random: &mut RandomGenerator,
@@ -163,7 +161,6 @@ impl CanyonCarver {
     }
 
     fn update_vertical_radius(
-        &self,
         config: &CarverConfig,
         random: &mut RandomGenerator,
         vertical_radius: f64,
@@ -181,7 +178,6 @@ impl CanyonCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn can_reach(
-        &self,
         chunk_x: i32,
         chunk_z: i32,
         x: f64,
@@ -201,7 +197,6 @@ impl CanyonCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn carve_ellipsoid(
-        &self,
         run: &mut CarveRun,
         config: &CarverConfig,
         x: f64,
@@ -222,8 +217,8 @@ impl CanyonCarver {
         let chunk_min_x = run.chunk.x << 4;
         let chunk_min_z = run.chunk.z << 4;
 
-        let min_x_index = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
-        let max_x_index = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
+        let x_index_min = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
+        let x_index_max = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
         let min_y = ((y - vertical_radius).floor() as i32 - 1).max(run.chunk.bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
@@ -231,14 +226,14 @@ impl CanyonCarver {
             run.chunk.bottom_y() as i32 + run.chunk.height() as i32 - 1 - protected_blocks_on_top,
         );
 
-        let min_z_index = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
-        let max_z_index = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
+        let z_index_min = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
+        let z_index_max = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
 
-        for x_index in min_x_index..=max_x_index {
+        for x_index in x_index_min..=x_index_max {
             let world_x = chunk_min_x + x_index;
             let xd = (world_x as f64 + 0.5 - x) / horizontal_radius;
 
-            for z_index in min_z_index..=max_z_index {
+            for z_index in z_index_min..=z_index_max {
                 let world_z = chunk_min_z + z_index;
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
@@ -248,7 +243,7 @@ impl CanyonCarver {
                     for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
-                        if !self.should_skip(
+                        if !Self::should_skip(
                             width_factor_per_height,
                             xd,
                             yd,
@@ -274,7 +269,6 @@ impl CanyonCarver {
     }
 
     fn should_skip(
-        &self,
         width_factor_per_height: &[f32],
         xd: f64,
         yd: f64,
@@ -301,11 +295,13 @@ impl CanyonCarver {
         let state_id = run.chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
 
-        if block.id == run.ids.grass_block.id || block.id == run.ids.mycelium.id {
+        if block.id == pumpkin_data::Block::GRASS_BLOCK.id
+            || block.id == pumpkin_data::Block::MYCELIUM.id
+        {
             *has_grass = true;
         }
 
-        if config.replaceable.1.contains(&block.id) {
+        if block.id.has_tag(config.replaceable) {
             let Some((state, should_schedule_fluid_update)) =
                 overworld_carve_state(run, config, x, y, z)
             else {

@@ -2,7 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use crate::block::entities::comparator::ComparatorBlockEntity;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{
         BlockProperties, ComparatorLikeProperties, HorizontalFacing, ModeComparator,
     },
@@ -10,7 +10,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{

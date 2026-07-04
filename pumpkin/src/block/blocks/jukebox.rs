@@ -14,7 +14,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
-    Block,
+    Block, BlockStateId,
     block_properties::{BlockProperties, JukeboxLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
@@ -29,7 +29,7 @@ use tracing::error;
 pub struct JukeboxBlock;
 
 impl JukeboxBlock {
-    fn has_record_state(block: &Block, state_id: u16) -> bool {
+    fn has_record_state(block: &Block, state_id: BlockStateId) -> bool {
         JukeboxLikeProperties::from_state_id(state_id, block).has_record
     }
 

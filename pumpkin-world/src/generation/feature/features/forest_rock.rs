@@ -25,10 +25,8 @@ impl ForestRockFeature {
             let below_state = GenerationCache::get_block_state(chunk, &pos.down().0);
             let below_id = below_state.to_block_id();
             if !chunk.is_air(&pos.down().0)
-                && (tag::Block::MINECRAFT_DIRT.1.contains(&below_id)
-                    || tag::Block::MINECRAFT_BASE_STONE_OVERWORLD
-                        .1
-                        .contains(&below_id))
+                && (below_id.has_tag(tag::Block::MINECRAFT_DIRT)
+                    || below_id.has_tag(tag::Block::MINECRAFT_BASE_STONE_OVERWORLD))
             {
                 break;
             }

@@ -15,7 +15,7 @@ impl ForkingTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         block_registry: &dyn WorldPortalExt,
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
@@ -23,7 +23,7 @@ impl ForkingTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
@@ -53,7 +53,7 @@ impl ForkingTrunkPlacer {
             }
 
             let pos = BlockPos::new(current_tx, yy, current_tz);
-            if placer.place(chunk, &pos, trunk_state) {
+            if TrunkPlacer::place(chunk, &pos, trunk_state) {
                 logs.push(pos);
                 last_y = Some(yy + 1);
             }
@@ -84,7 +84,7 @@ impl ForkingTrunkPlacer {
                     branch_tx += offset.x;
                     branch_tz += offset.z;
                     let pos = BlockPos::new(branch_tx, yyx, branch_tz);
-                    if placer.place(chunk, &pos, trunk_state) {
+                    if TrunkPlacer::place(chunk, &pos, trunk_state) {
                         logs.push(pos);
                         branch_last_y = Some(yyx + 1);
                     }

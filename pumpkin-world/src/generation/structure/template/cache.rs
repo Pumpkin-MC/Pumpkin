@@ -14,7 +14,7 @@ use super::{StructureTemplate, structure_template::TemplateError};
 /// Templates are loaded lazily on first access and stored for reuse.
 /// The cache is thread-safe and can be accessed from multiple threads.
 pub struct TemplateCache {
-    cache: DashMap<&'static str, Arc<StructureTemplate>>,
+    cache: DashMap<String, Arc<StructureTemplate>>,
 }
 
 impl Default for TemplateCache {
@@ -36,7 +36,9 @@ impl TemplateCache {
     ///
     /// Returns the loaded template wrapped in an `Arc`, or `None` if the template
     /// doesn't exist or failed to load.
-    pub fn get(&self, name: &'static str) -> Option<Arc<StructureTemplate>> {
+    pub fn get(&self, name: &str) -> Option<Arc<StructureTemplate>> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+
         // Check cache first
         if let Some(template) = self.cache.get(name) {
             return Some(Arc::clone(&template));
@@ -48,7 +50,7 @@ impl TemplateCache {
         match StructureTemplate::from_nbt_bytes(bytes) {
             Ok(template) => {
                 let arc = Arc::new(template);
-                self.cache.insert(name, Arc::clone(&arc));
+                self.cache.insert(name.to_owned(), Arc::clone(&arc));
                 Some(arc)
             }
             Err(e) => {
@@ -63,10 +65,9 @@ impl TemplateCache {
     /// # Errors
     ///
     /// Returns an error if the template doesn't exist or fails to parse.
-    pub fn get_or_error(
-        &self,
-        name: &'static str,
-    ) -> Result<Arc<StructureTemplate>, TemplateError> {
+    pub fn get_or_error(&self, name: &str) -> Result<Arc<StructureTemplate>, TemplateError> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+
         // Check cache first
         if let Some(template) = self.cache.get(name) {
             return Ok(Arc::clone(&template));
@@ -78,7 +79,7 @@ impl TemplateCache {
 
         let template = StructureTemplate::from_nbt_bytes(bytes)?;
         let arc = Arc::new(template);
-        self.cache.insert(name, Arc::clone(&arc));
+        self.cache.insert(name.to_owned(), Arc::clone(&arc));
         Ok(arc)
     }
 
@@ -139,6 +140,6 @@ pub fn global_cache() -> &'static TemplateCache {
 ///
 /// Returns the loaded template wrapped in an `Arc`, or `None` if not found.
 #[must_use]
-pub fn get_template(name: &'static str) -> Option<Arc<StructureTemplate>> {
+pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
     global_cache().get(name)
 }

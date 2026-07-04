@@ -4,10 +4,10 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::block::{BlockBehaviour, BlockFuture, OnNeighborUpdateArgs, PlacedArgs};
-use pumpkin_data::Block;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
@@ -69,7 +69,7 @@ impl SpongeBlock {
         } else {
             for water_pos in &water_blocks {
                 world
-                    .set_block_state(water_pos, 0, BlockFlags::NOTIFY_ALL)
+                    .set_block_state(water_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
                     .await;
             }
             world

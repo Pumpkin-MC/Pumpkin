@@ -14,8 +14,8 @@ impl DesertWellFeature {
     const SLAB: Block = Block::SANDSTONE_SLAB;
     const WALL: Block = Block::SANDSTONE;
 
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
@@ -23,12 +23,13 @@ impl DesertWellFeature {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
+        const CAN_GENERATE: Block = Block::SAND;
+
         let mut block_pos = pos.up();
         while chunk.is_air(&block_pos.0) && block_pos.0.y > chunk.bottom_y() as i32 + 2 {
             block_pos = block_pos.down();
         }
         let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
-        const CAN_GENERATE: Block = Block::SAND;
         if CAN_GENERATE.id != block {
             return false;
         }

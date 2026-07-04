@@ -12,7 +12,6 @@ pub struct CoralClawFeature;
 impl CoralClawFeature {
     #[allow(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         block_registry: &dyn WorldPortalExt,
         _min_y: i8,
@@ -36,27 +35,26 @@ impl CoralClawFeature {
             let j = random.next_bounded_i32(2) + 1;
             pos = pos.offset(direction2.to_offset());
 
-            let direction3;
-            let k;
+            let branch_direction;
 
-            if direction2 == direction {
-                direction3 = direction;
-                k = random.next_bounded_i32(3) + 2;
+            let k = if direction2 == direction {
+                branch_direction = direction;
+                random.next_bounded_i32(3) + 2
             } else {
                 pos = pos.up();
                 //let _directions = [direction2, BlockDirection::Up];
-                direction3 = direction2; // TODO: make this random
-                k = random.next_bounded_i32(3) + 5;
-            }
+                branch_direction = direction2; // TODO: make this random
+                random.next_bounded_i32(3) + 5
+            };
 
             for _ in 0..j {
                 if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
                     break;
                 }
-                pos = pos.offset(direction3.to_offset());
+                pos = pos.offset(branch_direction.to_offset());
             }
 
-            pos = pos.offset(direction3.to_offset());
+            pos = pos.offset(branch_direction.to_offset());
             pos = pos.up();
 
             for _l in 0..k {

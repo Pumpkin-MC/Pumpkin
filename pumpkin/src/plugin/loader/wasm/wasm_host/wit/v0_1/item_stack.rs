@@ -4,6 +4,7 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantm
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::{
     DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
     Host as ItemStackInterfaceHost, HostItemStack, ItemStack as ItemStackHandle,
+    NbtEntry as WitNbtEntry, NbtTag as WitNbtTag, NbtTree as WitNbtTree,
 };
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent as WitTextComponent;
 use std::sync::Arc;
@@ -16,6 +17,8 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::{
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
 use pumpkin_protocol::ser::deserializer::Deserializer;
 use pumpkin_protocol::ser::serializer::Serializer;
@@ -41,6 +44,91 @@ pub(crate) fn to_wit_enchantment(id: &Enchantment) -> WitEnchantment {
 pub(crate) fn from_wit_enchantment(id: WitEnchantment) -> &'static Enchantment {
     // Safety: WIT enum is generated in the same order as the internal enum
     Enchantment::from_id(id as u8).unwrap()
+}
+
+fn push_wit_nbt_tag(tag: NbtTag, tags: &mut Vec<WitNbtTag>) -> u32 {
+    let index = tags.len() as u32;
+    tags.push(WitNbtTag::Byte(0));
+    let tag = match tag {
+        NbtTag::End => WitNbtTag::Compound(Vec::new()),
+        NbtTag::Byte(value) => WitNbtTag::Byte(value),
+        NbtTag::Short(value) => WitNbtTag::Short(value),
+        NbtTag::Int(value) => WitNbtTag::Int(value),
+        NbtTag::Long(value) => WitNbtTag::Long(value),
+        NbtTag::Float(value) => WitNbtTag::Float(value),
+        NbtTag::Double(value) => WitNbtTag::Double(value),
+        NbtTag::ByteArray(value) => WitNbtTag::ByteArray(value.into_vec()),
+        NbtTag::String(value) => WitNbtTag::StringTag(value.into()),
+        NbtTag::List(value) => WitNbtTag::ListTag(
+            value
+                .into_iter()
+                .map(|value| push_wit_nbt_tag(value, tags))
+                .collect(),
+        ),
+        NbtTag::Compound(value) => WitNbtTag::Compound(
+            value
+                .child_tags
+                .into_iter()
+                .map(|(key, value)| WitNbtEntry {
+                    key: key.into(),
+                    value: push_wit_nbt_tag(value, tags),
+                })
+                .collect(),
+        ),
+        NbtTag::IntArray(value) => WitNbtTag::IntArray(value),
+        NbtTag::LongArray(value) => WitNbtTag::LongArray(value),
+    };
+    tags[index as usize] = tag;
+    index
+}
+
+fn to_wit_nbt_tree(tag: NbtTag) -> WitNbtTree {
+    let mut tags = Vec::new();
+    let root = push_wit_nbt_tag(tag, &mut tags);
+    WitNbtTree { root, tags }
+}
+
+fn from_wit_nbt_tree(tree: &WitNbtTree) -> Result<NbtTag, String> {
+    fn read_tag(index: u32, tags: &[WitNbtTag], visiting: &mut Vec<u32>) -> Result<NbtTag, String> {
+        let Some(tag) = tags.get(index as usize) else {
+            return Err(format!("NBT tag index {index} is out of bounds"));
+        };
+        if visiting.contains(&index) {
+            return Err(format!("NBT tag tree contains a cycle at index {index}"));
+        }
+        visiting.push(index);
+        let tag = match tag {
+            WitNbtTag::Byte(value) => NbtTag::Byte(*value),
+            WitNbtTag::Short(value) => NbtTag::Short(*value),
+            WitNbtTag::Int(value) => NbtTag::Int(*value),
+            WitNbtTag::Long(value) => NbtTag::Long(*value),
+            WitNbtTag::Float(value) => NbtTag::Float(*value),
+            WitNbtTag::Double(value) => NbtTag::Double(*value),
+            WitNbtTag::ByteArray(value) => NbtTag::ByteArray(value.clone().into()),
+            WitNbtTag::StringTag(value) => NbtTag::String(value.clone().into()),
+            WitNbtTag::ListTag(value) => NbtTag::List(
+                value
+                    .iter()
+                    .map(|value| read_tag(*value, tags, visiting))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            WitNbtTag::Compound(value) => NbtTag::Compound(NbtCompound {
+                child_tags: value
+                    .iter()
+                    .map(|entry| {
+                        read_tag(entry.value, tags, visiting)
+                            .map(|value| (entry.key.clone().into(), value))
+                    })
+                    .collect::<Result<_, _>>()?,
+            }),
+            WitNbtTag::IntArray(value) => NbtTag::IntArray(value.clone()),
+            WitNbtTag::LongArray(value) => NbtTag::LongArray(value.clone()),
+        };
+        visiting.pop();
+        Ok(tag)
+    }
+
+    read_tag(tree.root, &tree.tags, &mut Vec::new())
 }
 
 impl PluginHostState {
@@ -278,6 +366,54 @@ impl HostItemStack for PluginHostState {
                 .retain(|(id, _)| *id != DataComponent::CustomName);
         }
         Ok(())
+    }
+
+    async fn set_custom_data(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        namespace: String,
+        key: String,
+        value: WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+        let value = from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        stack.set_custom_data(&namespace, &key, value);
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<WitNbtTree>> {
+        let stack = self.get_item_stack(&res)?;
+        let stack = stack.lock().await;
+        Ok(stack.get_custom_data(&namespace, &key).map(to_wit_nbt_tree))
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+        stack.remove_custom_data(&namespace, &key);
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let stack = self.get_item_stack(&res)?;
+        let stack = stack.lock().await;
+        Ok(stack.has_custom_data(&namespace, &key))
     }
 
     async fn get_components(

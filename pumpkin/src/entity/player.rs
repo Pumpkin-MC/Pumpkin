@@ -886,11 +886,15 @@ impl Player {
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         if !chunks_to_clean.is_empty() {
+            world.remove_entities_in_chunks(&chunks_to_clean).await;
             level.clean_entity_chunks(&chunks_to_clean);
-            world.remove_entities_in_chunks(&chunks_to_clean);
         }
         // Remove left over entries from all possiblily loaded chunks
-        level.clean_memory();
+        let cleaned_chunks = level.clean_memory();
+        if !cleaned_chunks.is_empty() {
+            world.remove_entities_in_chunks(&cleaned_chunks).await;
+            level.clean_entity_chunks(&cleaned_chunks);
+        }
 
         debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
@@ -3093,6 +3097,7 @@ impl Player {
             .await
         {
             screen_handler.set_received_stack(slot_index, updated_stack);
+            screen_handler.send_content_updates().await;
         }
     }
 
@@ -4497,6 +4502,18 @@ impl EntityBase for Player {
         self.gamemode.load() == GameMode::Spectator
     }
 
+    fn set_on_fire_for_ticks(&self, ticks: u32) {
+        let entity = self.get_entity();
+        let ticks = if entity.invulnerable.load(Ordering::Relaxed) {
+            1
+        } else {
+            ticks
+        };
+        if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
+            entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
+        }
+    }
+
     fn is_pushable(&self) -> bool {
         self.gamemode.load() != GameMode::Spectator && self.gamemode.load() != GameMode::Creative
     }
@@ -4869,19 +4886,170 @@ impl InventoryPlayer for Player {
         packet: &'a CSetContainerContent,
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
-            self.client.enqueue_packet(packet).await;
+            match self.client.as_ref() {
+                ClientPlatform::Java(java) => {
+                    java.enqueue_packet(packet).await;
+                }
+                ClientPlatform::Bedrock(bedrock) => {
+                    use pumpkin_protocol::bedrock::{
+                        client::inventory_content::CInventoryContent,
+                        network_item::{
+                            ContainerName, FullContainerName, NetworkItemStackDescriptor,
+                        },
+                    };
+                    use pumpkin_protocol::codec::var_uint::VarUInt;
+
+                    let window_id = packet.window_id.0 as u32;
+                    let slots: Vec<NetworkItemStackDescriptor> = packet
+                        .slot_data
+                        .iter()
+                        .map(|s| NetworkItemStackDescriptor::from(&*s.0))
+                        .collect();
+
+                    if window_id == 0 {
+                        let bedrock_packet = CInventoryContent {
+                            container_id: VarUInt(0),
+                            slots,
+                            full_container_name: FullContainerName {
+                                container_name: ContainerName::Inventory,
+                                dynamic_id: None,
+                            },
+                            storage_item: NetworkItemStackDescriptor::default(),
+                        };
+                        bedrock.enqueue_packet(&bedrock_packet).await;
+                    }
+                }
+            }
         })
     }
 
     fn enqueue_slot_packet<'a>(&'a self, packet: &'a CSetContainerSlot) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
-            self.client.enqueue_packet(packet).await;
+            match self.client.as_ref() {
+                ClientPlatform::Java(java) => {
+                    java.enqueue_packet(packet).await;
+                }
+                ClientPlatform::Bedrock(bedrock) => {
+                    use pumpkin_protocol::bedrock::{
+                        client::inventory_content::CInventoryContent,
+                        client::inventory_slot::CInventorySlot,
+                        network_item::{
+                            ContainerName, FullContainerName, NetworkItemStackDescriptor,
+                        },
+                    };
+                    use pumpkin_protocol::codec::var_uint::VarUInt;
+
+                    let window_id = packet.window_id;
+                    tracing::info!(
+                        "enqueue_slot_packet: window_id={}, slot={}",
+                        window_id,
+                        packet.slot
+                    );
+
+                    if window_id == 0 {
+                        tracing::info!(
+                            "enqueue_slot_packet: window_id is 0, sending CInventoryContent to Bedrock client"
+                        );
+                        let mut slots = Vec::with_capacity(36);
+                        let main_inventory = &self.inventory().main_inventory;
+                        for s in main_inventory {
+                            let stack = s.lock().await;
+                            slots.push(NetworkItemStackDescriptor::from(&*stack));
+                        }
+
+                        let bedrock_packet = CInventoryContent {
+                            container_id: VarUInt(0),
+                            slots,
+                            full_container_name: FullContainerName {
+                                container_name: ContainerName::Inventory,
+                                dynamic_id: None,
+                            },
+                            storage_item: NetworkItemStackDescriptor::default(),
+                        };
+                        bedrock.enqueue_packet(&bedrock_packet).await;
+                    } else {
+                        let slot_idx = packet.slot as usize;
+                        let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
+
+                        // Container screen
+                        let current_handler = self.current_screen_handler.lock().await.clone();
+                        let handler = current_handler.lock().await;
+                        let window_type = handler.window_type();
+                        let total_slots = handler.get_behaviour().slots.len();
+                        let bedrock_info = if total_slots >= 36 {
+                            let container_slots = total_slots - 36;
+                            if slot_idx < container_slots {
+                                if window_type == Some(WindowType::Crafting) {
+                                    if slot_idx == 0 {
+                                        Some((ContainerName::CreatedOutput, 0))
+                                    } else {
+                                        Some((
+                                            ContainerName::CraftingInput,
+                                            (32 + slot_idx - 1) as u8,
+                                        ))
+                                    }
+                                } else {
+                                    Some((ContainerName::LevelEntity, slot_idx as u8))
+                                }
+                            } else {
+                                let inv_slot = slot_idx - container_slots;
+                                if inv_slot < 27 {
+                                    Some((ContainerName::Inventory, (inv_slot + 9) as u8))
+                                } else {
+                                    Some((ContainerName::Inventory, (inv_slot - 27) as u8))
+                                }
+                            }
+                        } else {
+                            None
+                        };
+
+                        if let Some((container_name, slot_id)) = bedrock_info {
+                            let bedrock_packet = CInventorySlot {
+                                window_id: VarUInt(window_id as u32),
+                                inventory_slot: VarUInt(slot_id as u32),
+                                container_name: Some(FullContainerName {
+                                    container_name,
+                                    dynamic_id: None,
+                                }),
+                                storage: None,
+                                item: item_desc,
+                            };
+                            bedrock.enqueue_packet(&bedrock_packet).await;
+                        }
+                    }
+                }
+            }
         })
     }
 
     fn enqueue_cursor_packet<'a>(&'a self, packet: &'a CSetCursorItem) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
-            self.client.enqueue_packet(packet).await;
+            match self.client.as_ref() {
+                ClientPlatform::Java(java) => {
+                    java.enqueue_packet(packet).await;
+                }
+                ClientPlatform::Bedrock(bedrock) => {
+                    use pumpkin_protocol::bedrock::{
+                        client::inventory_content::CInventoryContent,
+                        network_item::{
+                            ContainerName, FullContainerName, NetworkItemStackDescriptor,
+                        },
+                    };
+                    use pumpkin_protocol::codec::var_uint::VarUInt;
+
+                    let item_desc = NetworkItemStackDescriptor::from(&*packet.stack.0);
+                    let bedrock_packet = CInventoryContent {
+                        container_id: VarUInt(59),
+                        slots: vec![item_desc],
+                        full_container_name: FullContainerName {
+                            container_name: ContainerName::Cursor,
+                            dynamic_id: None,
+                        },
+                        storage_item: NetworkItemStackDescriptor::default(),
+                    };
+                    bedrock.enqueue_packet(&bedrock_packet).await;
+                }
+            }
         })
     }
 
@@ -4899,7 +5067,42 @@ impl InventoryPlayer for Player {
         packet: &'a CSetPlayerInventory,
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
-            self.client.enqueue_packet(packet).await;
+            match self.client.as_ref() {
+                ClientPlatform::Java(java) => {
+                    java.enqueue_packet(packet).await;
+                }
+                ClientPlatform::Bedrock(bedrock) => {
+                    use pumpkin_protocol::bedrock::{
+                        client::inventory_content::CInventoryContent,
+                        network_item::{
+                            ContainerName, FullContainerName, NetworkItemStackDescriptor,
+                        },
+                    };
+                    use pumpkin_protocol::codec::var_uint::VarUInt;
+
+                    tracing::info!(
+                        "enqueue_slot_set_packet: slot={}, sending CInventoryContent to Bedrock client",
+                        packet.slot.0
+                    );
+                    let mut slots = Vec::with_capacity(36);
+                    let main_inventory = &self.inventory().main_inventory;
+                    for s in main_inventory {
+                        let stack = s.lock().await;
+                        slots.push(NetworkItemStackDescriptor::from(&*stack));
+                    }
+
+                    let bedrock_packet = CInventoryContent {
+                        container_id: VarUInt(0),
+                        slots,
+                        full_container_name: FullContainerName {
+                            container_name: ContainerName::Inventory,
+                            dynamic_id: None,
+                        },
+                        storage_item: NetworkItemStackDescriptor::default(),
+                    };
+                    bedrock.enqueue_packet(&bedrock_packet).await;
+                }
+            }
         })
     }
 

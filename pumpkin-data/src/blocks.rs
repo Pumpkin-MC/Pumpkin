@@ -1,6 +1,6 @@
 use crate::{
-    BlockState, BlockStateRef,
-    tag::{RegistryKey, Taggable},
+    BlockState, BlockStateId,
+    tag::{RegistryKey, Tag, Taggable},
 };
 use pumpkin_util::{
     loot_table::LootTable,
@@ -17,7 +17,7 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug, Clone)]
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
-    pub id: u16,
+    pub id: BlockId,
     /// The unique namespaced ID (e.g., "`diamond_ore`").
     pub name: &'static str,
     /// How hard the block is to break. A value of -1.0 indicates an unbreakable block (e.g., Bedrock).
@@ -45,13 +45,30 @@ pub struct Block {
     pub experience: Option<Experience>,
 }
 
-impl PartialEq<u16> for Block {
-    fn eq(&self, other: &u16) -> bool {
+/// Helper struct to ensure the validity of BlockIds parsed from external sources.
+/// Every [`BlockId`] is guaranteed to correspond to a valid [`Block`].
+///
+/// Also enables [`Block`]-type pattern matching, even in const contexts:
+/// ```rs
+/// const fn to_waxed(block: &'static Block) -> Option<&'static Block> {
+///     match block.id {
+///         BlockId::COPPER_BLOCK => Some(Block::WAXED_COPPER_BLOCK),
+///         //...
+///         _ => None
+///     }
+/// }
+/// ```
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct BlockId(u16);
+
+impl PartialEq<BlockId> for Block {
+    fn eq(&self, other: &BlockId) -> bool {
         self.id == *other
     }
 }
 
-impl PartialEq<Block> for u16 {
+impl PartialEq<Block> for BlockId {
     fn eq(&self, other: &Block) -> bool {
         *self == other.id
     }
@@ -84,7 +101,7 @@ impl Taggable for Block {
 
     #[inline]
     fn registry_id(&self) -> u16 {
-        self.id
+        self.id.as_u16()
     }
 }
 
@@ -106,8 +123,8 @@ impl FromResourceLocation for &'static Block {
 
 impl Block {
     #[must_use]
-    pub fn is_waterlogged(&self, state_id: u16) -> bool {
-        self.properties(state_id).is_some_and(|properties| {
+    pub fn is_waterlogged(&self, id: BlockStateId) -> bool {
+        self.properties(id).is_some_and(|properties| {
             properties
                 .to_props()
                 .into_iter()
@@ -115,19 +132,19 @@ impl Block {
         })
     }
 
-    /// Returns a new [`BlockState`] reference for the given `state_id` with the
+    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
     /// `waterlogged` property forced to `true` if the block supports that
     /// property.  If the state is already waterlogged or the block does not
     /// expose a `waterlogged` property then `None` is returned.
     #[must_use]
-    pub fn with_waterlogged(&self, state_id: u16) -> Option<&'static BlockState> {
+    pub fn with_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
         // Check if already waterlogged
-        if self.is_waterlogged(state_id) {
-            return Some(BlockState::from_id(state_id));
+        if self.is_waterlogged(id) {
+            return Some(BlockState::from_id(id));
         }
 
         // Modify the property list if available
-        if let Some(props_source) = self.properties(state_id) {
+        if let Some(props_source) = self.properties(id) {
             let mut props: Vec<(&str, &str)> = props_source
                 .to_props()
                 .iter()
@@ -163,19 +180,88 @@ impl Block {
     #[must_use]
     pub const fn mirror(
         &self,
-        state_id: u16,
+        id: BlockStateId,
         _mirror: crate::block_rotation::Mirror,
     ) -> &'static BlockState {
-        BlockState::from_id(state_id)
+        BlockState::from_id(id)
     }
 
     #[must_use]
     pub const fn rotate(
         &self,
-        state_id: u16,
+        id: BlockStateId,
         _rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
-        BlockState::from_id(state_id)
+        BlockState::from_id(id)
+    }
+}
+
+impl BlockId {
+    // depends on generated impl:
+    // pub(crate) const BLOCK_COUNT: u16;
+
+    // SAFETY: There must never be a BlockId where self.0 >= BlockId::BLOCK_COUNT
+
+    #[inline]
+    #[must_use]
+    pub const fn new(inner: u16) -> Option<Self> {
+        if inner < Self::BLOCK_COUNT {
+            return Some(Self(inner));
+        }
+        None
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn new_or_air(inner: u16) -> Self {
+        if inner < Self::BLOCK_COUNT {
+            return Self(inner);
+        }
+        Self::AIR
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn to_block(self) -> &'static Block {
+        Block::from_id(self)
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn as_u16(self) -> u16 {
+        self.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn has_tag(self, tag: Tag) -> bool {
+        tag.1.contains(&self.0)
+    }
+}
+
+impl From<BlockId> for u16 {
+    #[inline]
+    fn from(value: BlockId) -> Self {
+        value.as_u16()
+    }
+}
+
+impl Default for BlockId {
+    #[inline]
+    fn default() -> Self {
+        Self::AIR
+    }
+}
+
+impl std::fmt::Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use std::fmt::Write;
+        write!(
+            f,
+            "BlockId({} = \"{}\")",
+            self.0,
+            Block::from_id(*self).name
+        )
     }
 }
 

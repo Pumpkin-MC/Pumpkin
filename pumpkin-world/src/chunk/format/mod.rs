@@ -8,12 +8,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
+use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
-use tracing::{debug, trace};
-use uuid::Uuid;
 
 use crate::{
     chunk::{
@@ -47,7 +45,7 @@ impl SingleChunkDataSerializer for ChunkData {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+        Box::pin(async move { self.internal_to_bytes() })
     }
 
     #[inline]
@@ -175,7 +173,14 @@ impl ChunkData {
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+            match light {
+                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                _ => None,
+            }
+        }
+
         let is_light_correct = self
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
@@ -184,13 +189,6 @@ impl ChunkData {
             let entities_guard = self.pending_block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
-
-        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
-            match light {
-                Some(LightContainer::Full(data)) => Some(data.as_ref()),
-                _ => None,
-            }
-        }
 
         let light_lock = self.light_engine.lock().unwrap();
         let heightmap_lock = self.heightmap.lock().unwrap();
@@ -289,43 +287,11 @@ impl ChunkEntityData {
                 chunk_entity_data.position[1],
             )));
         }
-        let mut map = FxHashMap::default();
-        for entity_nbt in chunk_entity_data.entities {
-            if entity_nbt.is_empty() {
-                continue;
-            }
-            let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
-                if uuid.len() != 4 {
-                    debug!(
-                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
-                        position.x,
-                        position.y,
-                        uuid.len(),
-                        entity_nbt
-                    );
-                    continue;
-                }
-                Uuid::from_u128(
-                    (uuid[0] as u128) << 96
-                        | (uuid[1] as u128) << 64
-                        | (uuid[2] as u128) << 32
-                        | (uuid[3] as u128),
-                )
-            } else {
-                trace!(
-                    "Entity in chunk {},{} is missing UUID: {:?}",
-                    position.x, position.y, entity_nbt
-                );
-                continue;
-            };
-
-            map.insert(uuid, entity_nbt);
-        }
 
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(map),
+            data: Mutex::new(chunk_entity_data.entities),
             dirty: AtomicBool::new(false),
         })
     }
@@ -334,7 +300,7 @@ impl ChunkEntityData {
         let nbt = EntityNbt {
             data_version: WORLD_DATA_VERSION,
             position: [self.x, self.z],
-            entities: self.data.lock().await.values().cloned().collect(),
+            entities: self.data.lock().await.clone(),
         };
 
         let mut result = Vec::new();
@@ -389,7 +355,31 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Box<[u16]>,
+    #[serde(with = "block_state_checked")]
+    pub(crate) palette: Box<[BlockStateId]>,
+}
+
+mod block_state_checked {
+    use pumpkin_data::BlockStateId;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        value: &[BlockStateId],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        value
+            .iter()
+            .map(|v| BlockStateId::as_u16(*v))
+            .collect::<Vec<u16>>()
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Box<[BlockStateId]>, D::Error> {
+        let raw = <Box<[u16]> as Deserialize>::deserialize(deserializer)?;
+        Ok(raw.iter().map(|v| BlockStateId::new_or_air(*v)).collect())
+    }
 }
 
 #[derive(Debug, Clone)]

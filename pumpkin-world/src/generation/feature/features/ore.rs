@@ -1,12 +1,12 @@
 use core::f32;
 
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::{
     math::{lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::rule::RuleTest, world::WorldPortalExt};
 
 pub struct OreFeature {
@@ -41,7 +41,6 @@ impl OreFeature {
         let h = pos.0.z as f64 + f.cos() as f64 * g as f64; // Use f.cos() for Math.cos(f)
         let j = pos.0.z as f64 - f.cos() as f64 * g as f64;
 
-        let _k = 2; // This variable 'k' from Java seems unused
         let l = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
         let m = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
 
@@ -63,6 +62,7 @@ impl OreFeature {
     }
 
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     fn generate_vein_part<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -207,7 +207,7 @@ impl OreFeature {
     pub fn should_place<T: GenerationCache>(
         discard_chance: f32,
         chunk: &T,
-        state: RawBlockState,
+        state: BlockStateId,
         random: &mut RandomGenerator,
         target: &OreTarget,
         pos: &BlockPos,

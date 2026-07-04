@@ -22,6 +22,7 @@ pub enum Action {
     AbortBreak = 1,
     StopBreak = 2,
     GetUpdatedBlock = 3,
+    /// Seems to be not used, or atleast not send by client
     DropItem = 4,
     StartSleeping = 5,
     StopSleeping = 6,

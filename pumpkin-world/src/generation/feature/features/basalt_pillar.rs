@@ -6,11 +6,10 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-pub struct BasaltPillarFeature {}
+pub struct BasaltPillarFeature;
 
 impl BasaltPillarFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,

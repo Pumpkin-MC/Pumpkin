@@ -469,6 +469,7 @@ impl PlayerAdvancement {
         result
     }
 
+    /// set the selected advancement tab of the player
     pub async fn set_selected_tab(&mut self, advancement: Option<&'static Advancement>) {
         let old = self.last_selected_tab;
         if let Some(value) = advancement

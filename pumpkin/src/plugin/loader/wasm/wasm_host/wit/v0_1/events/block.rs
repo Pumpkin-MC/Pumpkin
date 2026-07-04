@@ -1,3 +1,5 @@
+use pumpkin_data::BlockStateId;
+
 use crate::plugin::{
     block::{
         block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
@@ -27,7 +29,7 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
 
         Event::BlockRedstoneEvent(BlockRedstoneEventData {
             target_world,
-            state_id: self.block_state_id,
+            state_id: self.block_state_id.as_u16(),
             block_pos: to_wasm_block_position(self.block_pos),
             old_current: self.old_current,
             new_current: self.new_current,
@@ -39,7 +41,7 @@ impl ToFromWasmEvent for BlockRedstoneEvent {
         match event {
             Event::BlockRedstoneEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
-                block_state_id: data.state_id,
+                block_state_id: BlockStateId::new_or_air(data.state_id),
                 block_pos: from_wasm_block_position(data.block_pos),
                 old_current: data.old_current,
                 new_current: data.new_current,
@@ -142,9 +144,9 @@ impl ToFromWasmEvent for BlockGrowEvent {
         Event::BlockGrowEvent(BlockGrowEventData {
             target_world,
             old_block: to_wasm_block_name(self.old_block),
-            old_state_id: self.old_state_id,
+            old_state_id: self.old_state_id.as_u16(),
             new_block: to_wasm_block_name(self.new_block),
-            new_state_id: self.new_state_id,
+            new_state_id: self.new_state_id.as_u16(),
             block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
         })
@@ -155,9 +157,9 @@ impl ToFromWasmEvent for BlockGrowEvent {
             Event::BlockGrowEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
                 old_block: from_wasm_block_name(&data.old_block),
-                old_state_id: data.old_state_id,
+                old_state_id: BlockStateId::new_or_air(data.old_state_id),
                 new_block: from_wasm_block_name(&data.new_block),
-                new_state_id: data.new_state_id,
+                new_state_id: BlockStateId::new_or_air(data.new_state_id),
                 block_pos: from_wasm_block_position(data.block_pos),
                 cancelled: data.cancelled,
             },

@@ -1,6 +1,7 @@
 use crate::wit::utils::map_type;
 use heck::ToKebabCase;
 use semver::Version;
+use std::collections::HashSet;
 use std::{fs, path::Path};
 use syn::{Fields, Item};
 use wit_encoder::{
@@ -21,19 +22,31 @@ pub fn build() -> String {
 
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();
+    let mut serverbound_cases = HashSet::new();
+    let mut clientbound_cases = HashSet::new();
 
     // Process serverbound packets
-    process_packets(
-        "../pumpkin-protocol/src/java/server/play",
-        &mut interface,
-        &mut serverbound_variant,
-    );
+    let server_states = &["config", "handshake", "login", "play", "status"];
+    for state in server_states {
+        process_packets(
+            &format!("../pumpkin-protocol/src/java/server/{}", state),
+            state,
+            &mut interface,
+            &mut serverbound_variant,
+            &mut serverbound_cases,
+        );
+    }
     // Process clientbound packets
-    process_packets(
-        "../pumpkin-protocol/src/java/client/play",
-        &mut interface,
-        &mut clientbound_variant,
-    );
+    let client_states = &["config", "login", "play", "status"];
+    for state in client_states {
+        process_packets(
+            &format!("../pumpkin-protocol/src/java/client/{}", state),
+            state,
+            &mut interface,
+            &mut clientbound_variant,
+            &mut clientbound_cases,
+        );
+    }
 
     // Add an 'unknown' fallback variant (no payload) — raw payload is carried on the event record
     serverbound_variant.case(VariantCase::empty("unknown"));
@@ -52,7 +65,13 @@ pub fn build() -> String {
     package.to_string()
 }
 
-fn process_packets(dir: &str, interface: &mut Interface, variant: &mut Variant) {
+fn process_packets(
+    dir: &str,
+    state: &str,
+    interface: &mut Interface,
+    variant: &mut Variant,
+    defined_cases: &mut HashSet<String>,
+) {
     let paths = fs::read_dir(dir).expect("Failed to read packet directory");
     let mut sorted_paths: Vec<_> = paths
         .map(|e| e.expect("Failed to read entry").path())
@@ -63,12 +82,18 @@ fn process_packets(dir: &str, interface: &mut Interface, variant: &mut Variant) 
         if path.extension().is_some_and(|ext| ext == "rs")
             && path.file_name().is_some_and(|name| name != "mod.rs")
         {
-            parse_packet_file(&path, interface, variant);
+            parse_packet_file(&path, state, interface, variant, defined_cases);
         }
     }
 }
 
-fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Variant) {
+fn parse_packet_file(
+    path: &Path,
+    state: &str,
+    interface: &mut Interface,
+    variant: &mut Variant,
+    defined_cases: &mut HashSet<String>,
+) {
     let content = fs::read_to_string(path).expect("Failed to read file");
     let file = syn::parse_file(&content).expect("Failed to parse file");
 
@@ -84,6 +109,16 @@ fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Varia
             }
 
             let struct_name = s.ident.to_string();
+            let wit_name = if state == "play" {
+                struct_name.to_kebab_case()
+            } else {
+                format!("{}-{}", state, struct_name.to_kebab_case())
+            };
+
+            if !defined_cases.insert(wit_name.clone()) {
+                continue;
+            }
+
             let mut fields_list = Vec::new();
 
             if let Fields::Named(fields) = s.fields {
@@ -112,7 +147,6 @@ fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Varia
                     fields_list.push(Field::new(field_name, field_type));
                 }
             }
-            let wit_name = struct_name.to_kebab_case();
             if !fields_list.is_empty() {
                 interface.type_def(TypeDef::new(
                     wit_name.clone(),

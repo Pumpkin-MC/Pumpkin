@@ -1,7 +1,8 @@
 /* This file is generated. Do not edit manually. */
+use crate::BlockId;
 #[must_use]
-pub const fn get_potted_item(item_id: u16) -> u16 {
-    match item_id {
+pub const fn get_potted_item(item_id: u16) -> BlockId {
+    let raw_id = match item_id {
         76 => 413,
         77 => 414,
         78 => 415,
@@ -41,5 +42,6 @@ pub const fn get_potted_item(item_id: u16) -> u16 {
         297 => 793,
         368 => 440,
         _ => 0,
-    }
+    };
+    BlockId::new_or_air(raw_id)
 }

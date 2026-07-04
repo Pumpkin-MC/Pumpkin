@@ -1,12 +1,12 @@
 use super::physics;
 use crate::block::fluid::flowing_trait::FlowingFluid;
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::{
     Block, BlockDirection,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use std::sync::Arc;
 
 /// Represents a node in the BFS pathfinding queue for fluid flow calculation.

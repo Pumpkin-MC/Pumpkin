@@ -22,15 +22,21 @@ pub fn build_java_mapping() -> String {
     output.push_str("pub fn serialize_java_packet(packet: &ClientboundPacket, version: JavaMinecraftVersion) -> Option<Bytes> {\n");
     output.push_str("    match packet {\n");
 
-    process_packets(
-        "../pumpkin-protocol/src/java/client/play",
-        &mut output,
-        "java_packet",
-        "ClientboundPacket",
-        "pumpkin_protocol::java::client::play",
-        false,
-        MappingMode::Serialize,
-    );
+    let client_states = &["config", "login", "play", "status"];
+    let server_states = &["config", "handshake", "login", "play", "status"];
+
+    for state in client_states {
+        process_packets(
+            &format!("../pumpkin-protocol/src/java/client/{}", state),
+            state,
+            &mut output,
+            "java_packet",
+            "ClientboundPacket",
+            &format!("pumpkin_protocol::java::client::{}", state),
+            false,
+            MappingMode::Serialize,
+        );
+    }
 
     output.push_str("        _ => None,\n");
     output.push_str("    }\n");
@@ -40,15 +46,18 @@ pub fn build_java_mapping() -> String {
     output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
     output.push_str("    match id {\n");
 
-    process_packets(
-        "../pumpkin-protocol/src/java/server/play",
-        &mut output,
-        "java_packet",
-        "ServerboundPacket",
-        "pumpkin_protocol::java::server::play",
-        false,
-        MappingMode::Deserialize,
-    );
+    for state in server_states {
+        process_packets(
+            &format!("../pumpkin-protocol/src/java/server/{}", state),
+            state,
+            &mut output,
+            "java_packet",
+            "ServerboundPacket",
+            &format!("pumpkin_protocol::java::server::{}", state),
+            false,
+            MappingMode::Deserialize,
+        );
+    }
 
     output.push_str("        _ => None,\n");
     output.push_str("    }\n");
@@ -58,29 +67,35 @@ pub fn build_java_mapping() -> String {
     output.push_str("    fn to_wit(&self) -> ClientboundPacket;\n");
     output.push_str("}\n\n");
 
-    process_packets(
-        "../pumpkin-protocol/src/java/client/play",
-        &mut output,
-        "java_packet",
-        "ClientboundPacket",
-        "pumpkin_protocol::java::client::play",
-        false,
-        MappingMode::ToWit,
-    );
+    for state in client_states {
+        process_packets(
+            &format!("../pumpkin-protocol/src/java/client/{}", state),
+            state,
+            &mut output,
+            "java_packet",
+            "ClientboundPacket",
+            &format!("pumpkin_protocol::java::client::{}", state),
+            false,
+            MappingMode::ToWit,
+        );
+    }
 
     output.push_str("#[must_use]\n");
     output.push_str(
         "pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {\n",
     );
-    process_packets(
-        "../pumpkin-protocol/src/java/client/play",
-        &mut output,
-        "java_packet",
-        "ClientboundPacket",
-        "pumpkin_protocol::java::client::play",
-        false,
-        MappingMode::Downcast,
-    );
+    for state in client_states {
+        process_packets(
+            &format!("../pumpkin-protocol/src/java/client/{}", state),
+            state,
+            &mut output,
+            "java_packet",
+            "ClientboundPacket",
+            &format!("pumpkin_protocol::java::client::{}", state),
+            false,
+            MappingMode::Downcast,
+        );
+    }
     output.push_str("    None\n");
     output.push_str("}\n\n");
 
@@ -98,6 +113,7 @@ pub fn build_bedrock_mapping() -> String {
 
     process_packets(
         "../pumpkin-protocol/src/bedrock/client",
+        "",
         &mut output,
         "packet",
         "BClientboundPacket",
@@ -116,6 +132,7 @@ pub fn build_bedrock_mapping() -> String {
 
     process_packets(
         "../pumpkin-protocol/src/bedrock/server",
+        "",
         &mut output,
         "packet",
         "BServerboundPacket",
@@ -134,6 +151,7 @@ pub fn build_bedrock_mapping() -> String {
 
     process_packets(
         "../pumpkin-protocol/src/bedrock/client",
+        "",
         &mut output,
         "packet",
         "BClientboundPacket",
@@ -148,6 +166,7 @@ pub fn build_bedrock_mapping() -> String {
     );
     process_packets(
         "../pumpkin-protocol/src/bedrock/client",
+        "",
         &mut output,
         "packet",
         "BClientboundPacket",
@@ -171,6 +190,7 @@ enum MappingMode {
 
 fn process_packets(
     dir: &str,
+    state: &str,
     output: &mut String,
     attr_name: &str,
     variant_prefix: &str,
@@ -191,6 +211,7 @@ fn process_packets(
             }
             process_packets(
                 path.to_str().unwrap(),
+                state,
                 output,
                 attr_name,
                 variant_prefix,
@@ -205,6 +226,7 @@ fn process_packets(
         {
             parse_packet_file(
                 &path,
+                state,
                 output,
                 attr_name,
                 variant_prefix,
@@ -217,6 +239,7 @@ fn process_packets(
 
 fn parse_packet_file(
     path: &Path,
+    state: &str,
     output: &mut String,
     attr_name: &str,
     variant_prefix: &str,
@@ -236,7 +259,11 @@ fn parse_packet_file(
             if struct_name == "CHandshake" {
                 continue;
             } // Skip CHandshake (RakNet)
-            let wit_case = struct_name.to_pascal_case();
+            let wit_case = if state == "play" || state.is_empty() {
+                struct_name.to_pascal_case()
+            } else {
+                format!("{}{}", state.to_pascal_case(), struct_name.to_pascal_case())
+            };
             let mut has_lifetime = false;
             if !s.generics.params.is_empty() {
                 has_lifetime = true;
@@ -253,6 +280,10 @@ fn parse_packet_file(
 
             if let Fields::Named(fields) = s.fields {
                 for field in fields.named {
+                    if !matches!(field.vis, syn::Visibility::Public(_)) {
+                        possible = false;
+                        break;
+                    }
                     let mut field_name = field.ident.as_ref().unwrap().to_string();
                     let wit_field = field_name.to_snake_case();
                     let (type_ident, is_ref, is_slice) = get_type_info(&field.ty);
@@ -311,6 +342,75 @@ fn parse_packet_file(
                                     "                {}: self.{}.0.try_into().unwrap(),\n",
                                     wit_field, field_name
                                 ));
+                            }
+                        }
+                        "VarLong" | "VarULong" => {
+                            let is_ulong = type_ident == "VarULong";
+                            let path = if is_ulong {
+                                "pumpkin_protocol::codec::var_ulong::VarULong"
+                            } else {
+                                "pumpkin_protocol::codec::var_long::VarLong"
+                            };
+
+                            if mode == MappingMode::Serialize {
+                                if is_slice {
+                                    prep_code.push_str(&format!(
+                                        "            let vec_{}: Vec<{}> = data.{}.iter().map(|v| {}(*v as _)).collect();\n",
+                                        wit_field, path, wit_field, path
+                                    ));
+                                    if is_ref {
+                                        field_inits.push_str(&format!(
+                                            "                {}: &vec_{},\n",
+                                            field_name, wit_field
+                                        ));
+                                    } else {
+                                        field_inits.push_str(&format!(
+                                            "                {}: vec_{},\n",
+                                            field_name, wit_field
+                                        ));
+                                    }
+                                } else {
+                                    if is_ref {
+                                        prep_code.push_str(&format!(
+                                            "            let var_long_{} = {}(data.{}.try_into().unwrap());\n",
+                                            wit_field, path, wit_field
+                                        ));
+                                        field_inits.push_str(&format!(
+                                            "                {}: &var_long_{},\n",
+                                            field_name, wit_field
+                                        ));
+                                    } else {
+                                        field_inits.push_str(&format!(
+                                            "                {}: {}(data.{}.try_into().unwrap()),\n",
+                                            field_name, path, wit_field
+                                        ));
+                                    }
+                                }
+                            } else if mode == MappingMode::Deserialize {
+                                if is_slice {
+                                    field_inits.push_str(&format!(
+                                        "                {}: p.{}.iter().map(|v| v.0 as _).collect(),\n",
+                                        wit_field, field_name
+                                    ));
+                                } else {
+                                    field_inits.push_str(&format!(
+                                        "                {}: p.{}.0.try_into().unwrap(),\n",
+                                        wit_field, field_name
+                                    ));
+                                }
+                            } else {
+                                // ToWit
+                                if is_slice {
+                                    field_inits.push_str(&format!(
+                                        "                {}: self.{}.iter().map(|v| v.0 as _).collect(),\n",
+                                        wit_field, field_name
+                                    ));
+                                } else {
+                                    field_inits.push_str(&format!(
+                                        "                {}: self.{}.0.try_into().unwrap(),\n",
+                                        wit_field, field_name
+                                    ));
+                                }
                             }
                         }
                         "TextComponent" => {
@@ -431,15 +531,37 @@ fn parse_packet_file(
                                         field_inits.push_str(&format!("                {}: data.{}.iter().map(|v| *v as _).collect(),\n", field_name, wit_field));
                                     }
                                 } else if type_ident == "VarInt" {
-                                    field_inits.push_str(&format!(
-                                        "                {}: VarInt(data.{}),\n",
-                                        field_name, wit_field
-                                    ));
+                                    if is_ref {
+                                        prep_code.push_str(&format!(
+                                            "            let var_int_{} = VarInt(data.{});\n",
+                                            wit_field, wit_field
+                                        ));
+                                        field_inits.push_str(&format!(
+                                            "                {}: &var_int_{},\n",
+                                            field_name, wit_field
+                                        ));
+                                    } else {
+                                        field_inits.push_str(&format!(
+                                            "                {}: VarInt(data.{}),\n",
+                                            field_name, wit_field
+                                        ));
+                                    }
                                 } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: data.{}.try_into().unwrap(),\n",
-                                        field_name, wit_field
-                                    ));
+                                    if is_ref {
+                                        prep_code.push_str(&format!(
+                                            "            let val_{} = data.{}.try_into().unwrap();\n",
+                                            wit_field, wit_field
+                                        ));
+                                        field_inits.push_str(&format!(
+                                            "                {}: &val_{},\n",
+                                            field_name, wit_field
+                                        ));
+                                    } else {
+                                        field_inits.push_str(&format!(
+                                            "                {}: data.{}.try_into().unwrap(),\n",
+                                            field_name, wit_field
+                                        ));
+                                    }
                                 }
                             } else if mode == MappingMode::Deserialize {
                                 if is_slice {

@@ -129,7 +129,7 @@ use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BlockMetadata, GetInsideCollisionShapeArgs,
+    BlockBehaviour, BlockHitResult, BlockMetadata, FluidMetadata, GetInsideCollisionShapeArgs,
     OnEntityCollisionArgs, OnLandedUponArgs, UpdateEntityMovementAfterFallOnArgs,
     stop_vertical_movement_after_fall,
 };
@@ -137,15 +137,15 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -381,7 +381,7 @@ impl BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
+    blocks: FxHashMap<BlockId, Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
 
@@ -395,7 +395,7 @@ impl BlockRegistry {
         }
     }
 
-    pub fn register_fluid<T: FluidBehaviour + BlockMetadata + 'static>(&mut self, fluid: T) {
+    pub fn register_fluid<T: FluidBehaviour + FluidMetadata + 'static>(&mut self, fluid: T) {
         let ids = T::ids();
         let val = Arc::new(fluid);
         self.fluids.reserve(ids.len());
@@ -655,7 +655,7 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        state_id: u16,
+        state_id: BlockStateId,
         position: &BlockPos,
         direction: BlockDirection,
         player: &Player,
@@ -919,7 +919,7 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_block(&self, block: u16) -> Option<&Arc<dyn BlockBehaviour>> {
+    pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
         self.blocks.get(&block)
     }
 
@@ -1022,7 +1022,12 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+    pub fn mirror(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        mirror: Mirror,
+    ) -> &'static BlockState {
         self.get_pumpkin_block(block.id).map_or_else(
             || block.mirror(state_id, mirror),
             |pumpkin_block| pumpkin_block.mirror(block, state_id, mirror),
@@ -1030,7 +1035,12 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+    pub fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
         self.get_pumpkin_block(block.id).map_or_else(
             || block.rotate(state_id, rotation),
             |pumpkin_block| pumpkin_block.rotate(block, state_id, rotation),

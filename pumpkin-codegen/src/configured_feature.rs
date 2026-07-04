@@ -82,7 +82,7 @@ pub fn build() -> TokenStream {
         .collect();
 
     quote! {
-        #[allow(clippy::all, unused_imports, dead_code)]
+        #[allow(clippy::all, unused_imports, dead_code, clippy::large_stack_frames, clippy::too_many_lines)]
         fn build_configured_features() -> std::collections::HashMap<pumpkin_data::configured_feature::ConfiguredFeature, ConfiguredFeature> {
             use crate::generation::block_predicate::{
                 AllOfBlockPredicate, AnyOfBlockPredicate, BlockPredicate,
@@ -201,6 +201,22 @@ pub fn build() -> TokenStream {
             #(#entries)*
             map
         }
+    }
+}
+
+fn value_to_fossil_processor(value: &Value) -> TokenStream {
+    let variant = match value
+        .as_str()
+        .expect("fossil processor names must be strings")
+    {
+        "minecraft:fossil_rot" => format_ident!("FossilRot"),
+        "minecraft:fossil_coal" => format_ident!("Coal"),
+        "minecraft:fossil_diamonds" => format_ident!("Diamonds"),
+        processor => panic!("Unsupported fossil processor: {processor}"),
+    };
+
+    quote! {
+        crate::generation::feature::features::fossil::FossilProcessor::#variant
     }
 }
 
@@ -446,10 +462,10 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let r3 = config["chance_of_spread_radius3"].as_f64().unwrap_or(0.5) as f32;
             quote! {
                 ConfiguredFeature::PointedDripstone(SmallDripstoneFeature {
-                    chance_of_taller_dripstone: #taller,
-                    chance_of_directional_spread: #dir_spread,
-                    chance_of_spread_radius2: #r2,
-                    chance_of_spread_radius3: #r3,
+                    taller_dripstone: #taller,
+                    directional_spread: #dir_spread,
+                    spread_radius2: #r2,
+                    spread_radius3: #r3,
                 })
             }
         }
@@ -668,9 +684,45 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
 
-        // All TODO/empty features
         "minecraft:fossil" => {
-            quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
+            let fossil_structures = config["fossil_structures"]
+                .as_array()
+                .expect("fossil_structures must be an array")
+                .iter()
+                .map(|value| {
+                    let name = value
+                        .as_str()
+                        .expect("fossil structure names must be strings");
+                    quote! { #name }
+                });
+            let overlay_structures = config["overlay_structures"]
+                .as_array()
+                .expect("overlay_structures must be an array")
+                .iter()
+                .map(|value| {
+                    let name = value
+                        .as_str()
+                        .expect("fossil overlay structure names must be strings");
+                    quote! { #name }
+                });
+            let fossil_processor = value_to_fossil_processor(&config["fossil_processors"]);
+            let overlay_processor = value_to_fossil_processor(&config["overlay_processors"]);
+            let max_empty_corners_allowed = config["max_empty_corners_allowed"]
+                .as_u64()
+                .expect("max_empty_corners_allowed must be an unsigned integer")
+                as u8;
+
+            quote! {
+                ConfiguredFeature::Fossil(
+                    crate::generation::feature::features::fossil::FossilFeature {
+                        fossil_structures: vec![#(#fossil_structures),*],
+                        overlay_structures: vec![#(#overlay_structures),*],
+                        fossil_processor: #fossil_processor,
+                        overlay_processor: #overlay_processor,
+                        max_empty_corners_allowed: #max_empty_corners_allowed,
+                    }
+                )
+            }
         }
         "minecraft:lake" => {
             let fluid = value_to_block_state_provider(&config["fluid"]);
@@ -1036,11 +1088,11 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
             let block_ident =
                 quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
-            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::Block::#block_ident }) }
+            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::BlockId::#block_ident }) }
         }
         "minecraft:blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
-            quote! { RuleTest::BlockStateMatch(BlockStateMatchRuleTest { block_state: #state }) }
+            quote! { RuleTest::BlockStateMatch(BlockStateMatchRuleTest { block_state: #state.id }) }
         }
         "minecraft:tag_match" => {
             let tag = v["tag"].as_str().unwrap_or("");
@@ -1052,12 +1104,12 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
             let block_ident =
                 quote::format_ident!("{}", block.to_uppercase().replace([':', '-'], "_"));
-            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::Block::#block_ident, probability: #prob }) }
+            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::BlockId::#block_ident, probability: #prob }) }
         }
         "minecraft:random_blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
-            quote! { RuleTest::RandomBlockStateMatch(RandomBlockStateMatchRuleTest { block_state: #state, probability: #prob }) }
+            quote! { RuleTest::RandomBlockStateMatch(RandomBlockStateMatchRuleTest { block_state: #state.id, probability: #prob }) }
         }
         other => {
             let msg = format!("unknown rule test: {other}");
@@ -1158,7 +1210,7 @@ fn value_to_root_placer(v: &Value) -> TokenStream {
                     above_root_placement: #above,
                     mangrove_root_placement: MangroveRootPlacement {
                         can_grow_through: #can_grow_through,
-                        muddy_roots_in: #muddy_roots_in,
+                        muddy_roots_in: const { #muddy_roots_in },
                         muddy_roots_provider: #muddy_roots_provider,
                         max_root_width: #max_root_width,
                         max_root_length: #max_root_length,
@@ -1189,7 +1241,7 @@ fn value_to_block_list(v: &Value) -> TokenStream {
             if let Some(s) = b.as_str() {
                 let name = s.strip_prefix("minecraft:").unwrap_or(s).to_uppercase();
                 let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-                blocks.push(quote! { pumpkin_data::Block::#ident.id });
+                blocks.push(quote! { pumpkin_data::BlockId::#ident.as_u16() });
             }
         }
     }
@@ -1250,10 +1302,10 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
                 value_to_int_provider(&v["branch_end_offset_from_top"]);
             quote! {
                 TrunkType::Cherry(CherryTrunkPlacer {
-                    branch_count: #branch_count,
-                    branch_horizontal_length: #branch_horizontal_length,
-                    branch_start_offset_from_top: UniformIntProvider { min_inclusive: #min, max_inclusive: #max },
-                    branch_end_offset_from_top: #branch_end_offset_from_top,
+                    count: #branch_count,
+                    horizontal_length: #branch_horizontal_length,
+                    start_offset_from_top: UniformIntProvider { min_inclusive: #min, max_inclusive: #max },
+                    end_offset_from_top: #branch_end_offset_from_top,
                 })
             }
         }
@@ -1632,7 +1684,7 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
             let r = v["noise_to_count_ratio"].as_i64().unwrap_or(0) as i32;
             let f = v["noise_factor"].as_f64().unwrap_or(1.0);
             let o = v["noise_offset"].as_f64().unwrap_or(0.0);
-            quote! { PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier { noise_to_count_ratio: #r, noise_factor: #f, noise_offset: #o }) }
+            quote! { PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier { to_count_ratio: #r, factor: #f, offset: #o }) }
         }
         "minecraft:noise_threshold_count" => {
             let l = v["noise_level"].as_f64().unwrap_or(0.0);

@@ -1,9 +1,9 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
-use pumpkin_data::Block;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 type SkeletonSkullLikeProperties = pumpkin_data::block_properties::SkeletonSkullLikeProperties;
@@ -11,14 +11,14 @@ type SkeletonSkullLikeProperties = pumpkin_data::block_properties::SkeletonSkull
 pub struct SkullBlock;
 
 impl BlockMetadata for SkullBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::SKELETON_SKULL.id,
-            Block::PLAYER_HEAD.id,
-            Block::ZOMBIE_HEAD.id,
-            Block::CREEPER_HEAD.id,
-            Block::PIGLIN_HEAD.id,
-            Block::DRAGON_HEAD.id,
+            BlockId::SKELETON_SKULL,
+            BlockId::PLAYER_HEAD,
+            BlockId::ZOMBIE_HEAD,
+            BlockId::CREEPER_HEAD,
+            BlockId::PIGLIN_HEAD,
+            BlockId::DRAGON_HEAD,
         ]
         .into()
     }

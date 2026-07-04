@@ -92,6 +92,7 @@ impl StructurePieceBase for PortalRoomPiece {
         *has_portal_room = true;
     }
 
+    #[allow(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

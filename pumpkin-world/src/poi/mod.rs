@@ -376,9 +376,9 @@ pub struct PoiStorage {
 
 impl PoiStorage {
     #[must_use]
-    pub fn new(world_folder: &Path) -> Self {
+    pub fn new(poi_folder: PathBuf) -> Self {
         Self {
-            folder: world_folder.join("poi"),
+            folder: poi_folder,
             regions: HashMap::new(),
         }
     }
@@ -532,7 +532,7 @@ mod tests {
         let dir = std::env::temp_dir().join("pumpkin_poi_mca_test");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let mut storage = PoiStorage::new(&dir);
+        let mut storage = PoiStorage::new(dir.join("poi"));
 
         storage.add_portal(BlockPos(Vector3::new(100, 64, 100)));
         storage.add_portal(BlockPos(Vector3::new(110, 64, 100)));
@@ -552,7 +552,7 @@ mod tests {
         assert!(mca_path.exists());
 
         // Reload and verify
-        let mut storage2 = PoiStorage::new(&dir);
+        let mut storage2 = PoiStorage::new(dir.join("poi"));
         let results2 = storage2.get_in_square(
             BlockPos(Vector3::new(105, 64, 100)),
             16,

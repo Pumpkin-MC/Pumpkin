@@ -196,12 +196,13 @@ impl Server {
         let defaultgamemode = Mutex::new(DefaultGamemode {
             gamemode: basic_config.default_gamemode,
         });
+        let players_dir = world_path.join("players");
         let player_data_storage = ServerPlayerData::new(
-            world_path.join("playerdata"),
+            players_dir.join("data"),
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_manager = Arc::new(AdvancementManager::new(world_path.clone(), true));
+        let advancement_manager = Arc::new(AdvancementManager::new(players_dir.clone(), true));
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));

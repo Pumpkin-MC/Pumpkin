@@ -502,15 +502,32 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
     }
 }
 
-pub struct ItemStackTemplate<'a>(pub Cow<'a, ItemStack>);
+pub struct ItemStackTemplateSerializer<'a>(pub Cow<'a, ItemStack>);
 
-impl From<ItemStack> for ItemStackTemplate<'_> {
-    fn from(item: ItemStack) -> Self {
-        ItemStackTemplate(Cow::Owned(item))
+impl ItemStackTemplateSerializer<'_> {
+    pub fn write_with_version(
+        &self,
+        write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
+        let mut network_serializer = serializer::Serializer::new(write);
+        serialize_any_item_stack_with_id(
+            self.0.as_ref(),
+            remapped_item_id,
+            *version >= JavaMinecraftVersion::V_26_1,
+            &mut network_serializer,
+        )
     }
 }
 
-impl Serialize for ItemStackTemplate<'_> {
+impl From<ItemStack> for ItemStackTemplateSerializer<'_> {
+    fn from(item: ItemStack) -> Self {
+        ItemStackTemplateSerializer(Cow::Owned(item))
+    }
+}
+
+impl Serialize for ItemStackTemplateSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

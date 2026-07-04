@@ -1,10 +1,9 @@
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, block_properties::SnowLikeProperties, item::Item, tag};
+use pumpkin_data::{Block, BlockStateId, block_properties::SnowLikeProperties, item::Item, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
-    BlockStateId,
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };

@@ -28,8 +28,8 @@ pub enum RecvChunk {
 /// Checks if a chunk needs relighting based on the current lighting configuration
 /// Returns true if the chunk has uniform lighting (from full/dark mode) but the server
 /// is now running in default mode (which needs proper lighting calculation)
-fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConfig) -> bool {
-    if *config != LightingEngineConfig::Default {
+fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfig) -> bool {
+    if config != LightingEngineConfig::Default {
         return false;
     }
 
@@ -76,20 +76,19 @@ pub async fn io_read_work(
 
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1000);
 
+        let batch_len = batch.len();
         let level_clone = level.clone();
-        let batch_clone = batch.clone();
 
         let fetch_task = tokio::spawn(async move {
             level_clone
                 .chunk_saver
-                .fetch_chunks(&level_clone.level_folder, &batch_clone, t_send)
+                .fetch_chunks(&level_clone.level_folder, &batch, t_send)
                 .await;
         });
 
-        for _ in 0..batch.len() {
-            let data = match t_recv.recv().await {
-                Some(res) => res,
-                None => break,
+        for _ in 0..batch_len {
+            let Some(data) = t_recv.recv().await else {
+                break;
             };
 
             match data {
@@ -97,7 +96,7 @@ pub async fn io_read_work(
                     let pos = ChunkPos::new(chunk.x, chunk.z);
                     if chunk.status == ChunkStatus::Full {
                         // Relighting check
-                        let needs_relight = needs_relighting(&chunk, &level.lighting_config);
+                        let needs_relight = needs_relighting(&chunk, level.lighting_config);
 
                         if needs_relight {
                             debug!(
@@ -169,10 +168,7 @@ pub async fn io_read_work(
 pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
     loop {
         // Don't check cancel_token here (keep saving chunks)
-        let data = match recv.recv().await {
-            Ok(d) => d,
-            Err(_) => break,
-        };
+        let Ok(data) = recv.recv().await else { break };
         // debug!("io write thread receive chunks size {}", data.len());
         let mut vec = Vec::with_capacity(data.len());
         let mut positions = Vec::with_capacity(data.len());
@@ -262,21 +258,19 @@ pub fn run_generation(
 }
 
 pub fn generation_work(
-    recv: crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
-    send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
-    level: Arc<Level>,
+    recv: &crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
+    send: &crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    level: &Arc<Level>,
 ) {
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
 
     loop {
-        let (pos, cache, stage) = if let Ok(data) = recv.recv() {
-            data
-        } else {
+        let Ok((pos, cache, stage)) = recv.recv() else {
             debug!("generation channel closed, exiting");
             break;
         };
 
-        let result = run_generation(pos, cache, stage, &level, settings);
+        let result = run_generation(pos, cache, stage, level, settings);
         if send.send((pos, result)).is_err() {
             break;
         }

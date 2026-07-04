@@ -27,7 +27,7 @@ pub struct SConfigResourcePack {
     #[serde(with = "uuid::serde::compact")]
     pub uuid: uuid::Uuid,
     /// The status code of the operation, mapped to [`ResourcePackResponseResult`].
-    result: VarInt,
+    pub result: VarInt,
 }
 
 impl SConfigResourcePack {

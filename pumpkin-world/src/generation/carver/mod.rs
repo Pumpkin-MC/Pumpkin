@@ -240,7 +240,7 @@ fn get_large_feature_seed(seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
     result as u64
 }
 
-fn new_carver_random(seed: u64, non_vanilla_random: bool) -> RandomGenerator {
+const fn new_carver_random(seed: u64, non_vanilla_random: bool) -> RandomGenerator {
     if non_vanilla_random {
         RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
             seed,
@@ -277,7 +277,7 @@ fn carve_top_material(
 
     let below_y = carved_y - 1;
     let below_state = run.chunk.get_block_state(&Vector3::new(x, below_y, z));
-    if below_state.0 != run.ids.dirt.id {
+    if below_state != run.ids.dirt.id {
         return;
     }
 
