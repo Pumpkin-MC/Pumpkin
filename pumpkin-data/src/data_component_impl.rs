@@ -29,7 +29,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::{
-    collections::{BTreeMap, hash_map::DefaultHasher},
+    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
 
@@ -2346,8 +2346,9 @@ impl DataComponentImpl for ContainerImpl {
     default_impl!(Container);
 }
 #[derive(Clone, Debug)]
+#[allow(clippy::disallowed_types)]
 pub struct BlockStateImpl {
-    pub properties: BTreeMap<String, String>,
+    pub properties: std::collections::HashMap<String, String>,
 }
 impl PartialEq for BlockStateImpl {
     fn eq(&self, other: &Self) -> bool {
@@ -2366,9 +2367,10 @@ impl std::hash::Hash for BlockStateImpl {
     }
 }
 impl BlockStateImpl {
+    #[allow(clippy::disallowed_types)]
     fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
-        let mut properties = BTreeMap::new();
+        let mut properties = std::collections::HashMap::new();
         for (key, val) in compound.child_tags.iter() {
             if let Some(s) = val.extract_string() {
                 properties.insert(key.to_string(), s.to_string());
