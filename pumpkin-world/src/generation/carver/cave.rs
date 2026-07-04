@@ -118,7 +118,7 @@ impl CaveCarver {
         is_nether: bool,
     ) {
         let horizontal_radius =
-            1.5 + (pumpkin_util::math::mth::sin(std::f64::consts::FRAC_PI_2) * thickness) as f64;
+            1.5 + f64::from(pumpkin_util::math::sin(std::f32::consts::FRAC_PI_2) * thickness);
         let vertical_radius = horizontal_radius * y_scale;
         Self::carve_ellipsoid(
             run,
@@ -126,7 +126,7 @@ impl CaveCarver {
             x + 1.0,
             y,
             z,
-            horizontal_radius as f64,
+            horizontal_radius,
             vertical_radius,
             floor_level,
             is_nether,
@@ -160,14 +160,14 @@ impl CaveCarver {
         let mut x_rota = 0.0f32;
 
         for current_step in step..dist {
-            let progress_arg = (PI * current_step as f32 / dist as f32) as f64;
+            let progress_arg = PI * current_step as f32 / dist as f32;
             let horizontal_radius =
-                1.5 + (pumpkin_util::math::mth::sin(progress_arg) * thickness) as f64;
+                1.5 + f64::from(pumpkin_util::math::sin(progress_arg) * thickness);
             let vertical_radius = horizontal_radius * y_scale;
-            let cos_x = pumpkin_util::math::mth::cos(vertical_rotation as f64);
-            x += (pumpkin_util::math::mth::cos(horizontal_rotation as f64) * cos_x) as f64;
-            y += pumpkin_util::math::mth::sin(vertical_rotation as f64) as f64;
-            z += (pumpkin_util::math::mth::sin(horizontal_rotation as f64) * cos_x) as f64;
+            let cos_x = pumpkin_util::math::cos(vertical_rotation);
+            x += f64::from(pumpkin_util::math::cos(horizontal_rotation) * cos_x);
+            y += f64::from(pumpkin_util::math::sin(vertical_rotation));
+            z += f64::from(pumpkin_util::math::sin(horizontal_rotation) * cos_x);
 
             vertical_rotation *= if is_steep { 0.92 } else { 0.7 };
             vertical_rotation += x_rota * 0.1;
