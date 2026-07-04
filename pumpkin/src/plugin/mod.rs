@@ -497,10 +497,9 @@ impl PluginManager {
             }
         }
 
-        let prompt = format!(
-            "\n{} [y/N]: ",
-            "Do you want to allow these permissions and load the plugin?".bold()
-        );
+        // Rustyline's Windows backend calculates prompt width from unstyled
+        // content and rejects embedded ANSI escape sequences.
+        let prompt = "\nDo you want to allow these permissions and load the plugin? [y/N]: ";
 
         let mut rl_taken = if let Some(logger_option) = crate::LOGGER_IMPL.get()
             && let Some((wrapper, _, _)) = logger_option
@@ -512,13 +511,13 @@ impl PluginManager {
         };
 
         let result = if let Some((_, ref mut rl)) = rl_taken {
-            rl.readline(&prompt).is_ok_and(|line| {
+            rl.readline(prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
         } else {
             let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
-            rl.readline(&prompt).is_ok_and(|line| {
+            rl.readline(prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })

@@ -4272,12 +4272,8 @@ impl World {
         // server otherwise healthy. The blocks are already written and queued
         // for clients at this point; lighting converges in the background.
         //
-        // `flush_block_updates` may resend dense columns (`CChunkData`) before
-        // this background relight finishes, baking the pre-relight light arrays
-        // into that packet — clients then render the touched area as solid
-        // black until they reload the chunk. Light can propagate up to 15
-        // blocks, so once relighting converges we resend every touched column
-        // plus its neighbors to push the corrected light data out.
+        // Light can propagate up to 15 blocks, so once relighting converges send
+        // dedicated light updates for every touched column plus its neighbors.
         let mut affected_columns: HashSet<Vector2<i32>> =
             HashSet::with_capacity(lighting_positions.len());
         for position in &lighting_positions {
@@ -4296,16 +4292,14 @@ impl World {
                 .light_engine
                 .update_lighting_bulk(&level, lighting_positions);
 
-            tokio::spawn(async move {
-                for chunk_pos in affected_columns {
-                    if let Some(chunk) = world
-                        .level
-                        .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
-                    {
-                        world.broadcast_chunk_resend(chunk_pos, chunk).await;
-                    }
+            for chunk_pos in affected_columns {
+                if let Some(chunk) = world
+                    .level
+                    .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
+                {
+                    world.broadcast_to_chunk(chunk_pos, &CLightUpdate(&chunk));
                 }
-            });
+            }
         });
     }
 
