@@ -162,10 +162,10 @@ impl StructurePieceBase for NetherFossilPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
+        block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         seed: i64,
-        _chunk_box: &BlockBox,
+        chunk_box: &BlockBox,
     ) {
         // Vanilla column scan: find air above soul sand or solid block
         let Some(placement_y) = self.find_placement_y(chunk) else {
@@ -190,12 +190,12 @@ impl StructurePieceBase for NetherFossilPiece {
             true,
             false,
             &[],
-            Some(_chunk_box),
+            Some(chunk_box),
         );
 
         // Vanilla: 50% chance to place a dried ghast block at the fossil base.
         // Uses a deterministic random seeded from world seed + bounding box center.
-        self.try_place_dried_ghast(chunk, _block_registry, seed);
+        self.try_place_dried_ghast(chunk, block_registry, seed);
     }
 
     fn get_structure_piece(&self) -> &StructurePiece {

@@ -62,14 +62,11 @@ impl PlacedFeature {
                 .expect("Name: {name:?} not found"),
             Feature::Inlined(feature) => feature,
         };
-        match feature {
-            ConfiguredFeature::SculkPatch(feature) => {
-                feature.generate_in_proto_chunk(chunk, random, pos)
-            }
-            _ => {
-                tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
-                false
-            }
+        if let ConfiguredFeature::SculkPatch(feature) = feature {
+            feature.generate_in_proto_chunk(chunk, random, pos)
+        } else {
+            tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
+            false
         }
     }
 
@@ -196,21 +193,19 @@ impl PlacementModifier {
 }
 
 pub struct NoiseBasedCountPlacementModifier {
-    pub noise_to_count_ratio: i32,
-    pub noise_factor: f64,
-    pub noise_offset: f64,
+    pub to_count_ratio: i32,
+    pub factor: f64,
+    pub offset: f64,
 }
 
 impl CountPlacementModifierBase for NoiseBasedCountPlacementModifier {
     fn get_count(&self, _random: &mut RandomGenerator, pos: BlockPos) -> i32 {
-        let noise = FOLIAGE_NOISE
-            .sample(
-                pos.0.x as f64 / self.noise_factor,
-                pos.0.z as f64 / self.noise_factor,
-                false,
-            )
-            .max(0.0); // TODO: max is wrong
-        ((noise + self.noise_offset) * self.noise_to_count_ratio as f64).ceil() as i32
+        let noise = FOLIAGE_NOISE.sample(
+            pos.0.x as f64 / self.factor,
+            pos.0.z as f64 / self.factor,
+            false,
+        );
+        ((noise + self.offset) * self.to_count_ratio as f64).ceil() as i32
     }
 }
 

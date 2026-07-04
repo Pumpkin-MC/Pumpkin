@@ -27,7 +27,13 @@ pub enum BlockStateProvider {
 }
 
 impl BlockStateProvider {
-    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
+    pub fn get<T: GenerationCache>(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+        chunk: &T,
+        block_registry: &dyn WorldPortalExt,
+    ) -> &'static BlockState {
         match self {
             Self::NoiseThreshold(provider) => provider.get(random, pos),
             Self::NoiseProvider(provider) => provider.get(pos),
@@ -35,9 +41,8 @@ impl BlockStateProvider {
             Self::Weighted(provider) => provider.get(random),
             Self::DualNoise(provider) => provider.get(pos),
             Self::Pillar(provider) => provider.get(pos),
-            Self::RandomizedInt(provider) => provider.get(random, pos),
-            // Without chunk context, fall through to fallback (rules cannot be evaluated)
-            Self::Rule(_provider) => todo!(), //provider.get(random, pos),
+            Self::RandomizedInt(provider) => provider.get(random, pos, chunk, block_registry),
+            Self::Rule(provider) => provider.get(block_registry, chunk, random, pos),
         }
     }
 
@@ -50,7 +55,7 @@ impl BlockStateProvider {
     ) -> &'static BlockState {
         match self {
             Self::Rule(provider) => provider.get(block_registry, chunk, random, pos),
-            _ => self.get(random, pos),
+            _ => self.get(random, pos, chunk, block_registry),
         }
     }
 
@@ -63,7 +68,7 @@ impl BlockStateProvider {
     ) -> Option<&'static BlockState> {
         match self {
             Self::Rule(provider) => provider.get_optional(block_registry, chunk, random, pos),
-            _ => Some(self.get(random, pos)),
+            _ => Some(self.get(random, pos, chunk, block_registry)),
         }
     }
 }
@@ -101,7 +106,9 @@ impl RuleBasedBlockStateProvider {
                 );
             }
         }
-        self.fallback.as_ref().map(|f| f.get(random, pos))
+        self.fallback
+            .as_ref()
+            .map(|f| f.get(random, pos, chunk, block_registry))
     }
 }
 
@@ -117,9 +124,15 @@ pub struct RandomizedIntBlockStateProvider {
 }
 
 impl RandomizedIntBlockStateProvider {
-    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
+    pub fn get<T: GenerationCache>(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+        chunk: &T,
+        block_registry: &dyn WorldPortalExt,
+    ) -> &'static BlockState {
         // TODO
-        self.source.get(random, pos)
+        self.source.get(random, pos, chunk, block_registry)
     }
 }
 
@@ -162,10 +175,13 @@ impl DualNoiseBlockStateProvider {
         let mut list = Vec::with_capacity(mapped as usize);
         for i in 0..mapped {
             let value = self.get_slow_noise(i as f64 * 54545.0, 0.0, i as f64 * 34234.0, &sampler);
-            list.push(self.base.get_state_by_value(&self.base.states, value));
+            list.push(NoiseBlockStateProvider::get_state_by_value(
+                &self.base.states,
+                value,
+            ));
         }
         let value = self.base.base.get_noise(pos);
-        self.base.get_state_by_value(&list, value)
+        NoiseBlockStateProvider::get_state_by_value(&list, value)
     }
 
     fn get_slow_noise(&self, x: f64, y: f64, z: f64, sampler: &DoublePerlinNoiseSampler) -> f64 {
@@ -228,14 +244,10 @@ pub struct NoiseBlockStateProvider {
 impl NoiseBlockStateProvider {
     pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
-        self.get_state_by_value(&self.states, value)
+        Self::get_state_by_value(&self.states, value)
     }
 
-    fn get_state_by_value(
-        &self,
-        states: &[&'static BlockState],
-        value: f64,
-    ) -> &'static BlockState {
+    fn get_state_by_value(states: &[&'static BlockState], value: f64) -> &'static BlockState {
         let val = f64::midpoint(1.0, value).clamp(0.0, 0.9999);
         states[(val * states.len() as f64) as usize]
     }

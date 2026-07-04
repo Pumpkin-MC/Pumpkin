@@ -50,9 +50,8 @@ impl BlockStateCodec {
     pub fn get_state_id(&self) -> BlockStateId {
         let block = self.name;
 
-        let properties_map = match &self.properties {
-            Some(map) => map,
-            None => return block.default_state.id,
+        let Some(properties_map) = &self.properties else {
+            return block.default_state.id;
         };
 
         let props_iter = properties_map

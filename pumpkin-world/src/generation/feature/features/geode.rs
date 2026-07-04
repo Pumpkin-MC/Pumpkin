@@ -74,7 +74,6 @@ pub struct GeodeFeature {
 
 impl GeodeFeature {
     fn safe_set_block<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         pos: BlockPos,
         state: &'static BlockState,
@@ -90,18 +89,17 @@ impl GeodeFeature {
         let state = codec.get_state();
         // Obtain the block corresponding to this state id
         let block = Block::from_state_id(state.id);
-        if let Some(props) = block.properties(state.id) {
-            props.to_props().iter().any(|(k, _)| *k == property)
-        } else {
-            false
-        }
+        block
+            .properties(state.id)
+            .is_some_and(|props| props.to_props().iter().any(|(k, _)| *k == property))
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn WorldPortalExt,
+        block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature_name: pumpkin_data::placed_feature::PlacedFeature,
@@ -263,25 +261,35 @@ impl GeodeFeature {
                     && dist_sum_shell < inner_air
                 {
                     // Carve crack
-                    self.safe_set_block(
+                    Self::safe_set_block(
                         chunk,
                         point_inside,
                         BlockStateId::AIR.to_state(),
                         &can_replace_pred,
                     );
                 } else if dist_sum_shell >= inner_air {
-                    let state = self.filling_provider.get(random, point_inside);
-                    self.safe_set_block(chunk, point_inside, state, &can_replace_pred);
+                    let state =
+                        self.filling_provider
+                            .get(random, point_inside, chunk, block_registry);
+                    Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                 } else if dist_sum_shell >= innermost_block_layer {
                     let use_alternate = random.next_f32() < self.use_alternate_layer0_chance as f32;
                     if use_alternate {
-                        let state = self
-                            .alternate_inner_layer_provider
-                            .get(random, point_inside);
-                        self.safe_set_block(chunk, point_inside, state, &can_replace_pred);
+                        let state = self.alternate_inner_layer_provider.get(
+                            random,
+                            point_inside,
+                            chunk,
+                            block_registry,
+                        );
+                        Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                     } else {
-                        let state = self.inner_layer_provider.get(random, point_inside);
-                        self.safe_set_block(chunk, point_inside, state, &can_replace_pred);
+                        let state = self.inner_layer_provider.get(
+                            random,
+                            point_inside,
+                            chunk,
+                            block_registry,
+                        );
+                        Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                     }
                     if (!self.placements_require_layer0_alternate || use_alternate)
                         && random.next_f32() < self.use_potential_placements_chance as f32
@@ -289,11 +297,15 @@ impl GeodeFeature {
                         potential_crystal_placements.push(point_inside);
                     }
                 } else if dist_sum_shell >= inner_crust {
-                    let state = self.middle_layer_provider.get(random, point_inside);
-                    self.safe_set_block(chunk, point_inside, state, &can_replace_pred);
+                    let state =
+                        self.middle_layer_provider
+                            .get(random, point_inside, chunk, block_registry);
+                    Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                 } else if dist_sum_shell >= outer_crust {
-                    let state = self.outer_layer_provider.get(random, point_inside);
-                    self.safe_set_block(chunk, point_inside, state, &can_replace_pred);
+                    let state =
+                        self.outer_layer_provider
+                            .get(random, point_inside, chunk, block_registry);
+                    Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                 }
             }
         }
@@ -344,7 +356,7 @@ impl GeodeFeature {
                         }
 
                         let final_state = final_codec.get_state();
-                        self.safe_set_block(chunk, place_pos, final_state, &can_replace_pred);
+                        Self::safe_set_block(chunk, place_pos, final_state, &can_replace_pred);
 
                         // Only place one crystal per budding block per geode gen
                         break;

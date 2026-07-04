@@ -226,7 +226,9 @@ impl ProtoChunk {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
         proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
-        proto_chunk.blending_data = chunk_data.blending_data.clone();
+        proto_chunk
+            .blending_data
+            .clone_from(&chunk_data.blending_data);
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
@@ -349,10 +351,12 @@ impl ProtoChunk {
     #[must_use]
     pub const fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
+                self.top_block_height_exclusive(x, z)
+            }
+            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
+                self.ocean_floor_height_exclusive(x, z)
+            }
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
@@ -498,6 +502,7 @@ impl ProtoChunk {
         self.stage = StagedChunkEnum::Biomes;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
 
@@ -573,13 +578,10 @@ impl ProtoChunk {
                     // Java only adds to rigids if projection is RIGID
                     if jigsaw_piece.projection == crate::generation::structure::structures::jigsaw::JigsawProjection::Rigid {
                         ground_level_delta = jigsaw_piece.ground_level_delta;
-                        any_piece_bounding_box = match any_piece_bounding_box {
-                            Some(mut b) => {
-                                b.encompass(&bounding_box);
-                                Some(b)
-                            }
-                            None => Some(bounding_box),
-                        };
+                        any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
+                                 b.encompass(&bounding_box);
+                                 Some(b)
+                             });
 
                         beardifier_structures.push(
                             crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
@@ -606,24 +608,18 @@ impl ProtoChunk {
                                     z: j_z,
                                 }
                             );
-                            let junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
-                            any_piece_bounding_box = match any_piece_bounding_box {
-                                Some(mut b) => {
-                                    b.encompass(&junction_box);
-                                    Some(b)
-                                }
-                                None => Some(junction_box),
-                            };
+                            let _junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
+                     any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
+                            b.encompass(&bounding_box);
+                             Some(b)
+                        });
                         }
                     }
                 } else {
-                    any_piece_bounding_box = match any_piece_bounding_box {
-                        Some(mut b) => {
+                        any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
                             b.encompass(&bounding_box);
-                            Some(b)
-                        }
-                        None => Some(bounding_box),
-                    };
+                             Some(b)
+                         });
 
                     beardifier_structures.push(
                         crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
@@ -729,8 +725,7 @@ impl ProtoChunk {
         };
         let base_supplier: &dyn BiomeSupplier = match &active_supplier {
             ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) => s,
-            ActiveSupplier::Overworld(s) => s,
+            ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
         };
         let blender = Blender::empty();
         let biome_supplier = blender.get_biome_supplier(base_supplier);
@@ -873,6 +868,7 @@ impl ProtoChunk {
         Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn build_surface(
         &mut self,
         generator: &super::generator::VanillaGenerator,
@@ -1291,6 +1287,7 @@ impl ProtoChunk {
         false
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
         let random_config = &generator.random_config;
@@ -1316,8 +1313,7 @@ impl ProtoChunk {
 
         let base_supplier: &dyn BiomeSupplier = match &active_supplier {
             ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) => s,
-            ActiveSupplier::Overworld(s) => s,
+            ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
         };
         let blender = Blender::empty();
         let biome_supplier = blender.get_biome_supplier(base_supplier);

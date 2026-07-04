@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
@@ -7,16 +8,32 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("template_embeddings.rs");
 
     let mut code = String::from(
-        "pub fn get_template_bytes(path: &str) -> Option<&'static [u8]> {\n    match path {\n",
+        "
+        #[allow(clippy::too_many_lines)]
+        #[allow(clippy::match_same_arms)]
+        #[must_use]
+        pub fn get_template_bytes(path: &str) -> Option<&'static [u8]> {\n    match path {\n",
     );
     let mut pool_code = String::from(
-        "pub fn get_pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {\n    match pool_id {\n",
+        "
+        #[allow(clippy::too_many_lines)] 
+        #[allow(clippy::match_same_arms)]
+        #[must_use]
+        pub fn get_pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {\n    match pool_id {\n",
     );
     let mut template_pool_json_code = String::from(
-        "pub fn get_template_pool_json(path: &str) -> Option<&'static str> {\n    match path {\n",
+        "
+        #[allow(clippy::too_many_lines)]
+        #[allow(clippy::match_same_arms)]
+        #[must_use]
+        pub fn get_template_pool_json(path: &str) -> Option<&'static str> {\n    match path {\n",
     );
     let mut processor_list_json_code = String::from(
-        "pub fn get_processor_list_json(path: &str) -> Option<&'static str> {\n    match path {\n",
+        "
+        #[allow(clippy::too_many_lines)]
+        #[allow(clippy::match_same_arms)]
+        #[must_use]
+        pub fn get_processor_list_json(path: &str) -> Option<&'static str> {\n    match path {\n",
     );
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -26,11 +43,12 @@ fn main() {
         process_dir(&assets_dir, "", &mut code, &mut pools);
 
         for (pool_id, elements) in pools {
-            pool_code.push_str(&format!(
-                "        \"minecraft:{pool_id}\" | \"{pool_id}\" => Some(&[\n"
-            ));
+            let _ = writeln!(
+                pool_code,
+                "        \"minecraft:{pool_id}\" | \"{pool_id}\" => Some(&["
+            );
             for element in elements {
-                pool_code.push_str(&format!("            \"{element}\",\n"));
+                let _ = writeln!(pool_code, "            \"{element}\",");
             }
             pool_code.push_str("        ]),\n");
         }
@@ -85,14 +103,24 @@ fn process_dir(
                 format!("{prefix}/{name}")
             };
             process_dir(&path, &new_prefix, code, pools);
-        } else if name.ends_with(".nbt") {
-            let template_name = format!("{}/{}", prefix, name.strip_suffix(".nbt").unwrap());
+        } else if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("nbt"))
+        {
+            let stem = path.file_stem().unwrap().to_string_lossy();
+            let template_name = if prefix.is_empty() {
+                stem.to_string()
+            } else {
+                format!("{prefix}/{stem}")
+            };
             let abs_path = path.canonicalize().unwrap();
-            code.push_str(&format!(
-                "        \"{}\" => Some(include_bytes!(r#\"{}\"#)),\n",
-                template_name,
-                abs_path.display()
-            ));
+            let _ = writeln!(
+                code,
+                "        \"{template_name}\" => Some(include_bytes!(r#\"{abs}\"#)),",
+                template_name = template_name,
+                abs = abs_path.display()
+            );
 
             if !prefix.is_empty() {
                 pools
@@ -132,10 +160,12 @@ fn process_json_dir(dir: &Path, prefix: &str, code: &mut String) {
                 format!("{prefix}/{stem}")
             };
             let abs_path = path.canonicalize().unwrap();
-            code.push_str(&format!(
-                "        \"minecraft:{id}\" | \"{id}\" => Some(include_str!(r#\"{}\"#)),\n",
-                abs_path.display()
-            ));
+            let _ = writeln!(
+                code,
+                "        \"minecraft:{id}\" | \"{id}\" => Some(include_str!(r#\"{abs}\"#)),",
+                id = id,
+                abs = abs_path.display()
+            );
         }
     }
 }

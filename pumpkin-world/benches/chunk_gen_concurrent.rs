@@ -54,8 +54,8 @@ impl WorldPortalExt for BlockRegistry {
     }
 }
 
-/// Benchmarks the full pipeline for a GRID_SIZE^2 chunks grid running in parallel
-/// across THREAD_COUNT rayon threads.
+/// Benchmarks the full pipeline for a `GRID_SIZE^2` chunks grid running in parallel
+/// across `THREAD_COUNT` rayon threads.
 fn bench_concurrent_chunk_generation(c: &mut Criterion) {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(THREAD_COUNT)

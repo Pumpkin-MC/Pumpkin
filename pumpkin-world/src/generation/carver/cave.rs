@@ -289,22 +289,22 @@ impl CaveCarver {
         let chunk_min_x = chunk.x << 4;
         let chunk_min_z = chunk.z << 4;
 
-        let min_x_idx = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
-        let max_x_idx = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
+        let x_index_min = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
+        let x_index_max = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
         let min_y = ((y - vertical_radius).floor() as i32 - 1).max(chunk.bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
         let max_y = ((y + vertical_radius).floor() as i32 + 1)
             .min(chunk.bottom_y() as i32 + chunk.height() as i32 - 1 - protected_blocks_on_top);
 
-        let min_z_idx = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
-        let max_z_idx = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
+        let z_index_min = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
+        let z_index_max = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
 
-        for x_index in min_x_idx..=max_x_idx {
+        for x_index in x_index_min..=x_index_max {
             let world_x = chunk_min_x + x_index;
             let xd = (world_x as f64 + 0.5 - x) / horizontal_radius;
 
-            for z_index in min_z_idx..=max_z_idx {
+            for z_index in z_index_min..=z_index_max {
                 let world_z = chunk_min_z + z_index;
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 

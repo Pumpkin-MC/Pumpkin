@@ -6,11 +6,10 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-pub struct IceSpikeFeature {}
+pub struct IceSpikeFeature;
 
 impl IceSpikeFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,

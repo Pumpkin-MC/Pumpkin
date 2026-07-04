@@ -6,11 +6,10 @@ use pumpkin_util::random::RandomGenerator;
 
 const SEA_LEVEL: i32 = 63; // TODO: getSeaLevel() from the worldgen context instead of hardcoding
 
-pub struct FreezeTopLayerFeature {}
+pub struct FreezeTopLayerFeature;
 
 impl FreezeTopLayerFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,

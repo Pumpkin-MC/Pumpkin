@@ -396,7 +396,7 @@ impl ToTokens for BlockPropertyStruct {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
-                    block.states[self.to_index() as usize].id 
+                    block.states[self.to_index() as usize].id
                 }
 
                 fn from_state_id(id: BlockStateId, block: &Block) -> Self {

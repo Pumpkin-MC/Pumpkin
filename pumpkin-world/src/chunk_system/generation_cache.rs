@@ -29,7 +29,7 @@ impl HeightLimitView for Cache {
         let mid = ((self.size * self.size) >> 1) as usize;
         match &self.chunks[mid] {
             Chunk::Proto(chunk) => chunk.height(),
-            _ => panic!(),
+            Chunk::Level(_) => panic!(),
         }
     }
 
@@ -37,7 +37,7 @@ impl HeightLimitView for Cache {
         let mid = ((self.size * self.size) >> 1) as usize;
         match &self.chunks[mid] {
             Chunk::Proto(chunk) => chunk.bottom_y(),
-            _ => panic!(),
+            Chunk::Level(_) => panic!(),
         }
     }
 }
@@ -226,10 +226,12 @@ impl GenerationCache for Cache {
 
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
+                self.top_block_height_exclusive(x, z)
+            }
+            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
+                self.ocean_floor_height_exclusive(x, z)
+            }
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)

@@ -1,3 +1,1 @@
-pub struct BonusChestFeature {
-    // TODO
-}
+pub struct BonusChestFeature; // TODO

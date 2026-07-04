@@ -146,7 +146,7 @@ fn is_air_or_lava_ocean<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
     is_air(state) || (state.to_block_id() == Block::LAVA.id && pos.0.y <= LAVA_SEA_LEVEL)
 }
 
-fn is_cannot_place_on(id: BlockId) -> bool {
+const fn is_cannot_place_on(id: BlockId) -> bool {
     matches!(
         id,
         BlockId::LAVA

@@ -1,3 +1,1 @@
-pub struct HugeBrownMushroomFeature {
-    // TODO
-}
+pub struct HugeBrownMushroomFeature; // TODO

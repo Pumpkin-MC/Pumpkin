@@ -59,6 +59,7 @@ impl TreeFeature {
         for decorator in &self.decorators {
             decorator.generate(
                 chunk,
+                block_registry,
                 random,
                 &root_positions,
                 &log_positions,
@@ -105,7 +106,7 @@ impl TreeFeature {
         }
 
         let root_positions = if let Some(placer) = &self.root_placer {
-            match placer.generate(chunk, random, pos, trunk_start) {
+            match placer.generate(chunk, block_registry, random, pos, trunk_start) {
                 Some(positions) => positions,
                 None => return (vec![], vec![], vec![]),
             }
@@ -113,7 +114,7 @@ impl TreeFeature {
             Vec::new()
         };
 
-        let trunk_state = self.trunk_provider.get(random, pos);
+        let trunk_state = self.trunk_provider.get(random, pos, chunk, block_registry);
 
         let (nodes, logs) = self.trunk_placer.generate(
             block_registry,
@@ -131,7 +132,9 @@ impl TreeFeature {
             .get_random_height(random, height as i32);
         let base_height = height as i32 - foliage_height;
         let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
-        let foliage_state = self.foliage_provider.get(random, pos);
+        let foliage_state = self
+            .foliage_provider
+            .get(random, pos, chunk, block_registry);
         let mut foliage_positions = Vec::new();
         for node in nodes {
             foliage_positions.extend(self.foliage_placer.generate(

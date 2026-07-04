@@ -442,6 +442,7 @@ impl WorldAquiferSampler {
         default_level.block
     }
 
+    #[expect(clippy::too_many_lines)]
     fn apply_internal(
         &mut self,
         router: &mut ChunkNoiseRouter,
@@ -703,6 +704,7 @@ mod random_positions_and_hypot {
         ProtoNoiseRouters::generate(router_ast, &RANDOM_CONFIG)
     });
 
+    #[expect(clippy::unreachable)]
     fn create_aquifer(
         base_router: &'_ ProtoNoiseRouters,
     ) -> (
@@ -711,6 +713,8 @@ mod random_positions_and_hypot {
         SurfaceHeightEstimateSampler<'_>,
         ChunkNoiseFunctionSampleOptions,
     ) {
+        const CHUNK_WIDTH: usize = 16;
+
         let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
         let shape = &surface_config.shape;
         let chunk_x = 7;
@@ -720,7 +724,6 @@ mod random_positions_and_hypot {
             FluidLevel::new(63, &WATER_BLOCK),
             FluidLevel::new(-54, &LAVA_BLOCK),
         );
-        const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
             &base_router.noise,
             &RANDOM_CONFIG,
@@ -771,6 +774,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, clippy::large_stack_arrays)]
     fn get_fluid_block_state() {
         let (_, mut router, _, options) = create_aquifer(&PROTO_ROUTER);
         let level = FluidLevel::new(0, &WATER_BLOCK);
@@ -920,6 +924,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn get_noise_based_fluid_level() {
         let (_, mut router, _, options) = create_aquifer(&PROTO_ROUTER);
 
@@ -1067,6 +1072,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn get_fluid_block_y() {
         let (_, mut router, _, env) = create_aquifer(&PROTO_ROUTER);
         let level = FluidLevel::new(0, &WATER_BLOCK);
@@ -1360,6 +1366,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, clippy::large_stack_arrays)]
     fn get_fluid_level() {
         let (aquifer, mut router, mut height_estimator, env) = create_aquifer(&PROTO_ROUTER);
         let values = [
@@ -1501,12 +1508,13 @@ mod random_positions_and_hypot {
                 &mut height_estimator,
                 &env,
             );
-            assert_eq!(level.max_y, y1, "Failed at x={}, y={}, z={}", x, y, z);
+            assert_eq!(level.max_y, y1, "Failed at x={x}, y={y}, z={z}");
             assert_eq!(level.block, &state);
         }
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn calculate_density() {
         let (_, mut router, _, env) = create_aquifer(&PROTO_ROUTER);
 
@@ -1659,7 +1667,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
-    #[expect(clippy::large_stack_arrays)]
+    #[expect(clippy::too_many_lines, clippy::large_stack_arrays)]
     fn apply() {
         let (mut aquifer, mut router, mut height_estimator, env) = create_aquifer(&PROTO_ROUTER);
         let values = [
@@ -2413,7 +2421,7 @@ mod random_positions_and_hypot {
             let pos = Vector3::new(x, y, z);
             assert_eq!(
                 aquifer.apply_internal(&mut router, &pos, &env, &mut height_estimator, sample),
-                result.map(|r| r.to_state())
+                result.map(pumpkin_data::BlockStateId::to_state)
             );
         }
     }

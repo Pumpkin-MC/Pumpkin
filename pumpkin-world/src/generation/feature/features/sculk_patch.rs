@@ -32,7 +32,7 @@ impl SculkPatchFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        if !self.can_spread_from(chunk, pos) {
+        if !Self::can_spread_from(chunk, pos) {
             return false;
         }
 
@@ -132,7 +132,7 @@ impl SculkPatchFeature {
         true
     }
 
-    fn can_spread_from<T: GenerationCache>(&self, chunk: &T, pos: BlockPos) -> bool {
+    fn can_spread_from<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
         let state = GenerationCache::get_block_state(chunk, &pos.0);
         let block_id = state.to_block_id();
         if is_sculk_behaviour(block_id) {

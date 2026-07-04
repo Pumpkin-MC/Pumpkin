@@ -52,7 +52,7 @@ impl NetherForestVegetationFeature {
                     - random.next_bounded_i32(self.spread_width),
             );
 
-            let nether_state = self.state_provider.get(random, pos);
+            let nether_state = self.state_provider.get(random, pos, chunk, block_registry);
             let nether_block = Block::from_state_id(nether_state.id);
 
             // Only place if the spot is air, above the bottom, and the block can survive here.

@@ -85,8 +85,8 @@ name = "noise_router"
 harness = false
 
 
-# [lints]
-# workspace = true
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["serde_json"]

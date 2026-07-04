@@ -1,5 +1,11 @@
 /* This file is generated. Do not edit manually. */
-#[allow(clippy::all, unused_imports, dead_code)]
+#[allow(
+    clippy::all,
+    unused_imports,
+    dead_code,
+    clippy::large_stack_frames,
+    clippy::too_many_lines
+)]
 fn build_configured_features()
 -> std::collections::HashMap<pumpkin_data::configured_feature::ConfiguredFeature, ConfiguredFeature>
 {
@@ -748,8 +754,8 @@ fn build_configured_features()
             prioritize_tip: true,
         }),
     );
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: Cherry , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 7u8 , height_rand_a : 1u8 , height_rand_b : 0u8 , r#type : TrunkType :: Cherry (CherryTrunkPlacer { branch_count : IntProvider :: Object (NormalIntProvider :: WeightedList (WeightedListIntProvider { distribution : vec ! [WeightedEntry { data : IntProvider :: Constant (1i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (2i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (3i32) , weight : 1i32 }] })) , branch_horizontal_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 2i32 , max_inclusive : 4i32 })) , branch_start_offset_from_top : UniformIntProvider { min_inclusive : - 4i32 , max_inclusive : - 3i32 } , branch_end_offset_from_top : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : - 1i32 , max_inclusive : 0i32 })) , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("distance" . to_string () , "7" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (4i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Cherry (CherryFoliagePlacer { height : IntProvider :: Constant (5i32) , wide_bottom_layer_hole_chance : 0.25f32 , corner_hole_chance : 0.25f32 , hanging_leaves_chance : 0.16666667f32 , hanging_leaves_extension_chance : 0.33333334f32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
-    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: CherryBees005 , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 7u8 , height_rand_a : 1u8 , height_rand_b : 0u8 , r#type : TrunkType :: Cherry (CherryTrunkPlacer { branch_count : IntProvider :: Object (NormalIntProvider :: WeightedList (WeightedListIntProvider { distribution : vec ! [WeightedEntry { data : IntProvider :: Constant (1i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (2i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (3i32) , weight : 1i32 }] })) , branch_horizontal_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 2i32 , max_inclusive : 4i32 })) , branch_start_offset_from_top : UniformIntProvider { min_inclusive : - 4i32 , max_inclusive : - 3i32 } , branch_end_offset_from_top : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : - 1i32 , max_inclusive : 0i32 })) , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("distance" . to_string () , "7" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (4i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Cherry (CherryFoliagePlacer { height : IntProvider :: Constant (5i32) , wide_bottom_layer_hole_chance : 0.25f32 , corner_hole_chance : 0.25f32 , hanging_leaves_chance : 0.16666667f32 , hanging_leaves_extension_chance : 0.33333334f32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: Beehive (BeehiveTreeDecorator { probability : 0.05f32 })] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: Cherry , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 7u8 , height_rand_a : 1u8 , height_rand_b : 0u8 , r#type : TrunkType :: Cherry (CherryTrunkPlacer { count : IntProvider :: Object (NormalIntProvider :: WeightedList (WeightedListIntProvider { distribution : vec ! [WeightedEntry { data : IntProvider :: Constant (1i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (2i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (3i32) , weight : 1i32 }] })) , horizontal_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 2i32 , max_inclusive : 4i32 })) , start_offset_from_top : UniformIntProvider { min_inclusive : - 4i32 , max_inclusive : - 3i32 } , end_offset_from_top : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : - 1i32 , max_inclusive : 0i32 })) , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("distance" . to_string () , "7" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (4i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Cherry (CherryFoliagePlacer { height : IntProvider :: Constant (5i32) , wide_bottom_layer_hole_chance : 0.25f32 , corner_hole_chance : 0.25f32 , hanging_leaves_chance : 0.16666667f32 , hanging_leaves_extension_chance : 0.33333334f32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
+    map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: CherryBees005 , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 7u8 , height_rand_a : 1u8 , height_rand_b : 0u8 , r#type : TrunkType :: Cherry (CherryTrunkPlacer { count : IntProvider :: Object (NormalIntProvider :: WeightedList (WeightedListIntProvider { distribution : vec ! [WeightedEntry { data : IntProvider :: Constant (1i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (2i32) , weight : 1i32 } , WeightedEntry { data : IntProvider :: Constant (3i32) , weight : 1i32 }] })) , horizontal_length : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 2i32 , max_inclusive : 4i32 })) , start_offset_from_top : UniformIntProvider { min_inclusive : - 4i32 , max_inclusive : - 3i32 } , end_offset_from_top : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : - 1i32 , max_inclusive : 0i32 })) , }) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("distance" . to_string () , "7" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: CHERRY_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (4i32) , offset : IntProvider :: Constant (0i32) , r#type : FoliageType :: Cherry (CherryFoliagePlacer { height : IntProvider :: Constant (5i32) , wide_bottom_layer_hole_chance : 0.25f32 , corner_hole_chance : 0.25f32 , hanging_leaves_chance : 0.16666667f32 , hanging_leaves_extension_chance : 0.33333334f32 , }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 1u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [TreeDecorator :: Beehive (BeehiveTreeDecorator { probability : 0.05f32 })] , root_placer : None , }))) ;
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::ChorusPlant,
         ConfiguredFeature::ChorusPlant(
@@ -3629,10 +3635,10 @@ fn build_configured_features()
                 PlacedFeature {
                     feature: Feature::Inlined(Box::new(ConfiguredFeature::PointedDripstone(
                         SmallDripstoneFeature {
-                            chance_of_taller_dripstone: 0.2f32,
-                            chance_of_directional_spread: 0.7f32,
-                            chance_of_spread_radius2: 0.5f32,
-                            chance_of_spread_radius3: 0.5f32,
+                            taller_dripstone: 0.2f32,
+                            directional_spread: 0.7f32,
+                            spread_radius2: 0.5f32,
+                            spread_radius3: 0.5f32,
                         },
                     ))),
                     placement: vec![
@@ -3672,10 +3678,10 @@ fn build_configured_features()
                 PlacedFeature {
                     feature: Feature::Inlined(Box::new(ConfiguredFeature::PointedDripstone(
                         SmallDripstoneFeature {
-                            chance_of_taller_dripstone: 0.2f32,
-                            chance_of_directional_spread: 0.7f32,
-                            chance_of_spread_radius2: 0.5f32,
-                            chance_of_spread_radius3: 0.5f32,
+                            taller_dripstone: 0.2f32,
+                            directional_spread: 0.7f32,
+                            spread_radius2: 0.5f32,
+                            spread_radius3: 0.5f32,
                         },
                     ))),
                     placement: vec![
@@ -4102,10 +4108,10 @@ fn build_configured_features()
                 PlacedFeature {
                     feature: Feature::Inlined(Box::new(ConfiguredFeature::PointedDripstone(
                         SmallDripstoneFeature {
-                            chance_of_taller_dripstone: 0.2f32,
-                            chance_of_directional_spread: 0.7f32,
-                            chance_of_spread_radius2: 0.5f32,
-                            chance_of_spread_radius3: 0.5f32,
+                            taller_dripstone: 0.2f32,
+                            directional_spread: 0.7f32,
+                            spread_radius2: 0.5f32,
+                            spread_radius3: 0.5f32,
                         },
                     ))),
                     placement: vec![
@@ -4145,10 +4151,10 @@ fn build_configured_features()
                 PlacedFeature {
                     feature: Feature::Inlined(Box::new(ConfiguredFeature::PointedDripstone(
                         SmallDripstoneFeature {
-                            chance_of_taller_dripstone: 0.2f32,
-                            chance_of_directional_spread: 0.7f32,
-                            chance_of_spread_radius2: 0.5f32,
-                            chance_of_spread_radius3: 0.5f32,
+                            taller_dripstone: 0.2f32,
+                            directional_spread: 0.7f32,
+                            spread_radius2: 0.5f32,
+                            spread_radius3: 0.5f32,
                         },
                     ))),
                     placement: vec![

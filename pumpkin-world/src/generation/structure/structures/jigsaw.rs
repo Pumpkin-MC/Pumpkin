@@ -39,7 +39,7 @@ pub enum PoolElementKind {
         template: String,
         processors: ProcessorListRef,
     },
-    List(Vec<PoolElementKind>),
+    List(Vec<Self>),
     Feature(pumpkin_data::placed_feature::PlacedFeature),
 }
 
@@ -75,7 +75,7 @@ enum RawPoolElement {
     },
     #[serde(rename = "minecraft:list_pool_element")]
     List {
-        elements: Vec<RawPoolElement>,
+        elements: Vec<Self>,
         projection: RawProjection,
     },
     #[serde(rename = "minecraft:feature_pool_element")]
@@ -208,7 +208,7 @@ impl PoolElement {
     }
 
     #[must_use]
-    pub fn feature(&self) -> Option<pumpkin_data::placed_feature::PlacedFeature> {
+    pub const fn feature(&self) -> Option<pumpkin_data::placed_feature::PlacedFeature> {
         match self.kind {
             PoolElementKind::Feature(feature) => Some(feature),
             _ => None,
@@ -381,7 +381,6 @@ impl JigsawBlock {
         let up_part = parts.next().unwrap_or("up");
 
         let facing = match facing_part {
-            "north" => pumpkin_util::BlockDirection::North,
             "south" => pumpkin_util::BlockDirection::South,
             "east" => pumpkin_util::BlockDirection::East,
             "west" => pumpkin_util::BlockDirection::West,
@@ -395,7 +394,6 @@ impl JigsawBlock {
             "south" => pumpkin_util::BlockDirection::South,
             "east" => pumpkin_util::BlockDirection::East,
             "west" => pumpkin_util::BlockDirection::West,
-            "up" => pumpkin_util::BlockDirection::Up,
             "down" => pumpkin_util::BlockDirection::Down,
             _ => pumpkin_util::BlockDirection::Up,
         };
@@ -575,7 +573,6 @@ impl StructureGenerator for JigsawGenerator {
             structure
                 .and_then(|s| s.liquid_settings)
                 .map_or(LiquidSettings::ApplyWaterlog, |ls| match ls {
-                    "apply_waterlogging" => LiquidSettings::ApplyWaterlog,
                     "ignore_waterlogging" => LiquidSettings::IgnoreWaterlogDone,
                     _ => LiquidSettings::ApplyWaterlog,
                 });
@@ -596,8 +593,8 @@ impl StructureGenerator for JigsawGenerator {
             start_pos,
             self.use_expansion_hack,
             project_start_to_heightmap,
-            MaxDistance::new(max_distance),
-            dimension_padding,
+            &MaxDistance::new(max_distance),
+            &dimension_padding,
             liquid_settings,
             &PoolAliasLookup,
         )

@@ -13,6 +13,7 @@ pub struct LakeFeature {
 }
 
 impl LakeFeature {
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
@@ -92,7 +93,7 @@ impl LakeFeature {
                         let place_pos = origin.add(xx as i32, yyx as i32, zz as i32);
                         let current_state =
                             GenerationCache::get_block_state(chunk, &place_pos.0).to_state();
-                        if self.can_replace_block(current_state) {
+                        if Self::can_replace_block(current_state) {
                             let place_air = yyx >= 4;
                             chunk.set_block_state(
                                 &place_pos.0,
@@ -156,7 +157,7 @@ impl LakeFeature {
                     {
                         let current_state =
                             GenerationCache::get_block_state(chunk, &freeze_pos.0).to_state();
-                        if self.can_replace_block(current_state) {
+                        if Self::can_replace_block(current_state) {
                             chunk.set_block_state(&freeze_pos.0, Block::ICE.default_state);
                         }
                     }
@@ -167,7 +168,7 @@ impl LakeFeature {
         true
     }
 
-    fn can_replace_block(&self, state: &BlockState) -> bool {
+    fn can_replace_block(state: &BlockState) -> bool {
         !state
             .id
             .to_block_id()

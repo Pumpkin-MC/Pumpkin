@@ -82,7 +82,7 @@ pub fn build() -> TokenStream {
         .collect();
 
     quote! {
-        #[allow(clippy::all, unused_imports, dead_code)]
+        #[allow(clippy::all, unused_imports, dead_code, clippy::large_stack_frames, clippy::too_many_lines)]
         fn build_configured_features() -> std::collections::HashMap<pumpkin_data::configured_feature::ConfiguredFeature, ConfiguredFeature> {
             use crate::generation::block_predicate::{
                 AllOfBlockPredicate, AnyOfBlockPredicate, BlockPredicate,
@@ -462,10 +462,10 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let r3 = config["chance_of_spread_radius3"].as_f64().unwrap_or(0.5) as f32;
             quote! {
                 ConfiguredFeature::PointedDripstone(SmallDripstoneFeature {
-                    chance_of_taller_dripstone: #taller,
-                    chance_of_directional_spread: #dir_spread,
-                    chance_of_spread_radius2: #r2,
-                    chance_of_spread_radius3: #r3,
+                    taller_dripstone: #taller,
+                    directional_spread: #dir_spread,
+                    spread_radius2: #r2,
+                    spread_radius3: #r3,
                 })
             }
         }
@@ -1302,10 +1302,10 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
                 value_to_int_provider(&v["branch_end_offset_from_top"]);
             quote! {
                 TrunkType::Cherry(CherryTrunkPlacer {
-                    branch_count: #branch_count,
-                    branch_horizontal_length: #branch_horizontal_length,
-                    branch_start_offset_from_top: UniformIntProvider { min_inclusive: #min, max_inclusive: #max },
-                    branch_end_offset_from_top: #branch_end_offset_from_top,
+                    count: #branch_count,
+                    horizontal_length: #branch_horizontal_length,
+                    start_offset_from_top: UniformIntProvider { min_inclusive: #min, max_inclusive: #max },
+                    end_offset_from_top: #branch_end_offset_from_top,
                 })
             }
         }
@@ -1684,7 +1684,7 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
             let r = v["noise_to_count_ratio"].as_i64().unwrap_or(0) as i32;
             let f = v["noise_factor"].as_f64().unwrap_or(1.0);
             let o = v["noise_offset"].as_f64().unwrap_or(0.0);
-            quote! { PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier { noise_to_count_ratio: #r, noise_factor: #f, noise_offset: #o }) }
+            quote! { PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier { to_count_ratio: #r, factor: #f, offset: #o }) }
         }
         "minecraft:noise_threshold_count" => {
             let l = v["noise_level"].as_f64().unwrap_or(0.0);

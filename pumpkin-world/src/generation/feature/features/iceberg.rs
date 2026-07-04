@@ -15,6 +15,7 @@ pub struct IcebergFeature {
 }
 
 impl IcebergFeature {
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -52,12 +53,12 @@ impl IcebergFeature {
             for zo in -a..a {
                 for y_off in 0..over_water_height {
                     let radius = if is_ellipse {
-                        self.height_dependent_radius_ellipse(y_off, over_water_height, width)
+                        Self::height_dependent_radius_ellipse(y_off, over_water_height, width)
                     } else {
-                        self.height_dependent_radius_round(random, y_off, over_water_height, width)
+                        Self::height_dependent_radius_round(random, y_off, over_water_height, width)
                     };
                     if is_ellipse || xo < radius {
-                        self.generate_iceberg_block(
+                        Self::generate_iceberg_block(
                             chunk,
                             random,
                             &origin,
@@ -78,7 +79,7 @@ impl IcebergFeature {
             }
         }
 
-        self.smooth(
+        Self::smooth(
             chunk,
             &origin,
             width,
@@ -99,14 +100,14 @@ impl IcebergFeature {
                     } else {
                         a
                     };
-                    let radius = self.height_dependent_radius_steep(
+                    let radius = Self::height_dependent_radius_steep(
                         random,
                         -y_off,
                         under_water_height,
                         width,
                     );
                     if xo < radius {
-                        self.generate_iceberg_block(
+                        Self::generate_iceberg_block(
                             chunk,
                             random,
                             &origin,
@@ -133,7 +134,7 @@ impl IcebergFeature {
             random.next_f64() > 0.7
         };
         if do_cut_out {
-            self.generate_cut_out(
+            Self::generate_cut_out(
                 chunk,
                 random,
                 width,
@@ -149,9 +150,8 @@ impl IcebergFeature {
         true
     }
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments, clippy::useless_let_if_seq)]
     fn generate_cut_out<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         width: i32,
@@ -165,16 +165,17 @@ impl IcebergFeature {
         let random_sign_x: i32 = if random.next_bool() { -1 } else { 1 };
         let random_sign_z: i32 = if random.next_bool() { -1 } else { 1 };
 
-        let mut x_off = random.next_bounded_i32((width / 2 - 2).max(1));
-        if random.next_bool() {
-            x_off = width / 2 + 1 - random.next_bounded_i32((width - width / 2 - 1).max(1));
-        }
+        let mut x_off = if random.next_bool() {
+            width / 2 + 1 - random.next_bounded_i32((width - width / 2 - 1).max(1))
+        } else {
+            random.next_bounded_i32((width / 2 - 2).max(1))
+        };
 
-        let mut z_off = random.next_bounded_i32((width / 2 - 2).max(1));
-        if random.next_bool() {
-            z_off = width / 2 + 1 - random.next_bounded_i32((width - width / 2 - 1).max(1));
-        }
-
+        let mut z_off = if random.next_bool() {
+            width / 2 + 1 - random.next_bounded_i32((width - width / 2 - 1).max(1))
+        } else {
+            random.next_bounded_i32((width / 2 - 2).max(1))
+        };
         if is_ellipse {
             let v = random.next_bounded_i32((shape_ellipse_a - 5).max(1));
             x_off = v;
@@ -190,8 +191,8 @@ impl IcebergFeature {
 
         // Above-water carve
         for y_off in 0..(height - 3) {
-            let radius = self.height_dependent_radius_round(random, y_off, height, width);
-            self.carve(
+            let radius = Self::height_dependent_radius_round(random, y_off, height, width);
+            Self::carve(
                 chunk,
                 radius,
                 y_off,
@@ -207,8 +208,8 @@ impl IcebergFeature {
         // Below-water carve
         let mut y_off = -1i32;
         while y_off > -height + random.next_bounded_i32(5) {
-            let radius = self.height_dependent_radius_steep(random, -y_off, height, width);
-            self.carve(
+            let radius = Self::height_dependent_radius_steep(random, -y_off, height, width);
+            Self::carve(
                 chunk,
                 radius,
                 y_off,
@@ -225,7 +226,6 @@ impl IcebergFeature {
 
     #[expect(clippy::too_many_arguments)]
     fn carve<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         radius: i32,
         y_off: i32,
@@ -241,7 +241,7 @@ impl IcebergFeature {
 
         for xo in -a..a {
             for zo in -a..a {
-                let signed_dist = self.signed_distance_ellipse(
+                let signed_dist = Self::signed_distance_ellipse(
                     xo,
                     zo,
                     local_origin.x,
@@ -259,7 +259,7 @@ impl IcebergFeature {
                             chunk.set_block_state(&pos, Block::WATER.default_state);
                         } else {
                             chunk.set_block_state(&pos, Block::AIR.default_state);
-                            self.remove_floating_snow_layer(chunk, &pos);
+                            Self::remove_floating_snow_layer(chunk, &pos);
                         }
                     }
                 }
@@ -267,7 +267,7 @@ impl IcebergFeature {
         }
     }
 
-    fn remove_floating_snow_layer<T: GenerationCache>(&self, chunk: &mut T, pos: &Vector3<i32>) {
+    fn remove_floating_snow_layer<T: GenerationCache>(chunk: &mut T, pos: &Vector3<i32>) {
         let above = pos.add(&Vector3::new(0, 1, 0));
         let raw = GenerationCache::get_block_state(chunk, &above);
         if raw.to_block_id() == Block::SNOW.id {
@@ -277,7 +277,6 @@ impl IcebergFeature {
 
     #[expect(clippy::too_many_arguments)]
     fn generate_iceberg_block<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         origin: &Vector3<i32>,
@@ -294,17 +293,17 @@ impl IcebergFeature {
         main_block: &'static BlockState,
     ) {
         let signed_dist = if is_ellipse {
-            self.signed_distance_ellipse(
+            Self::signed_distance_ellipse(
                 xo,
                 zo,
                 0,
                 0,
                 a,
-                self.get_ellipse_c(y_off, height, shape_ellipse_c),
+                Self::get_ellipse_c(y_off, height, shape_ellipse_c),
                 shape_angle,
             )
         } else {
-            self.signed_distance_circle(xo, zo, 0, 0, radius, random)
+            Self::signed_distance_circle(xo, zo, 0, 0, radius, random)
         };
 
         if signed_dist < 0.0 {
@@ -317,7 +316,7 @@ impl IcebergFeature {
             if signed_dist > compare_val && random.next_f64() > 0.9 {
                 return;
             }
-            self.set_iceberg_block(
+            Self::set_iceberg_block(
                 chunk,
                 random,
                 &pos,
@@ -332,7 +331,6 @@ impl IcebergFeature {
 
     #[expect(clippy::too_many_arguments)]
     fn set_iceberg_block<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: &Vector3<i32>,
@@ -362,7 +360,6 @@ impl IcebergFeature {
     }
 
     fn smooth<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         origin: &Vector3<i32>,
         width: i32,
@@ -413,16 +410,14 @@ impl IcebergFeature {
         }
     }
 
-    const fn get_ellipse_c(&self, y_off: i32, height: i32, shape_ellipse_c: i32) -> i32 {
-        let mut c = shape_ellipse_c;
+    const fn get_ellipse_c(y_off: i32, height: i32, shape_ellipse_c: i32) -> i32 {
         if y_off > 0 && height - y_off <= 3 {
-            c = shape_ellipse_c - (4 - (height - y_off));
+            return shape_ellipse_c - (4 - (height - y_off));
         }
-        c
+        shape_ellipse_c
     }
 
     fn signed_distance_circle(
-        &self,
         xo: i32,
         zo: i32,
         ox: i32,
@@ -435,9 +430,7 @@ impl IcebergFeature {
             - (radius as f64).powi(2)
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn signed_distance_ellipse(
-        &self,
         xo: i32,
         zo: i32,
         ox: i32,
@@ -455,7 +448,6 @@ impl IcebergFeature {
     }
 
     fn height_dependent_radius_round(
-        &self,
         random: &mut RandomGenerator,
         y_off: i32,
         height: i32,
@@ -463,26 +455,27 @@ impl IcebergFeature {
     ) -> i32 {
         let k = 3.5f32 - random.next_f32();
         let y_off_sq = (y_off as f64).powi(2) as f32;
-        let mut scale = (1.0f32 - y_off_sq / (height as f32 * k)) * width as f32;
-        if height > 15 + random.next_bounded_i32(5) {
+        let scale = if height > 15 + random.next_bounded_i32(5) {
             let temp_y_off = if y_off < 3 + random.next_bounded_i32(6) {
                 y_off / 2
             } else {
                 y_off
             };
-            scale = (1.0f32 - temp_y_off as f32 / (height as f32 * k * 0.4f32)) * width as f32;
-        }
+            (1.0f32 - temp_y_off as f32 / (height as f32 * k * 0.4f32)) * width as f32
+        } else {
+            (1.0f32 - y_off_sq / (height as f32 * k)) * width as f32
+        };
+
         (scale / 2.0f32).ceil() as i32
     }
 
-    fn height_dependent_radius_ellipse(&self, y_off: i32, height: i32, width: i32) -> i32 {
+    fn height_dependent_radius_ellipse(y_off: i32, height: i32, width: i32) -> i32 {
         let y_off_sq = (y_off as f64).powi(2) as f32;
         let scale = (1.0f32 - y_off_sq / height as f32) * width as f32;
         (scale / 2.0f32).ceil() as i32
     }
 
     fn height_dependent_radius_steep(
-        &self,
         random: &mut RandomGenerator,
         y_off: i32,
         height: i32,
@@ -493,7 +486,7 @@ impl IcebergFeature {
         (scale / 2.0f32).ceil() as i32
     }
 
-    fn is_iceberg_state(id: BlockId) -> bool {
+    const fn is_iceberg_state(id: BlockId) -> bool {
         matches!(
             id,
             BlockId::PACKED_ICE | BlockId::SNOW_BLOCK | BlockId::BLUE_ICE

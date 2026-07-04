@@ -392,8 +392,8 @@ impl StaticChunkNoiseFunctionComponentImpl for Clamp {
             mapper,
             sample_options,
         );
-        array.iter_mut().for_each(|value| {
+        for value in array.iter_mut() {
             *value = self.data.apply_density(*value);
-        });
+        }
     }
 }

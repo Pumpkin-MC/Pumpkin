@@ -245,6 +245,7 @@ impl DesertPyramidPiece {
         self.piece.add_block(chunk, sand, x, y + 1, z + 4, bb);
     }
 
+    #[expect(clippy::too_many_lines)]
     fn add_cellar_room(&self, chunk: &mut ProtoChunk, bb: &BlockBox, random: &mut RandomGenerator) {
         let (x, y, z) = (16, -4, 13);
         let cut = Block::CUT_SANDSTONE.default_state;

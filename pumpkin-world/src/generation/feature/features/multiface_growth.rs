@@ -1,3 +1,1 @@
-pub struct MultifaceGrowthFeature {
-    // TODO
-}
+pub struct MultifaceGrowthFeature; // TODO

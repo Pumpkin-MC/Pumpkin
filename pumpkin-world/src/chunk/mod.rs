@@ -129,7 +129,7 @@ impl ChunkSections {
             .read()
             .unwrap()
             .iter()
-            .flat_map(|section| section.iter().copied())
+            .flat_map(|section| section.iter())
             .collect()
     }
 
@@ -140,7 +140,7 @@ impl ChunkSections {
             .read()
             .unwrap()
             .iter()
-            .flat_map(|section| section.iter().copied())
+            .flat_map(|section| section.iter())
             .collect()
     }
 }
@@ -815,7 +815,7 @@ mod tests {
             assert_eq!(cache[0].random_ticking_block_count, 1);
             assert_eq!(cache[0].random_ticking_fluid_count, 0);
             assert!(cache[0].is_randomly_ticking());
-        }
+        };
 
         sections.set_block_absolute_y(0, min_y, 0, Block::STONE.default_state.id);
         {
@@ -824,7 +824,7 @@ mod tests {
             assert_eq!(cache[0].random_ticking_block_count, 0);
             assert_eq!(cache[0].random_ticking_fluid_count, 0);
             assert!(!cache[0].is_randomly_ticking());
-        }
+        };
 
         sections.set_block_absolute_y(0, min_y, 0, Block::LAVA.default_state.id);
         {
@@ -836,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn test_heightmap_is_opaque() {
+    fn heightmap_is_opaque() {
         use crate::chunk::ChunkHeightmapType;
 
         let air = Block::AIR.default_state;

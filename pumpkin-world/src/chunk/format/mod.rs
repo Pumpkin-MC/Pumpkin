@@ -45,7 +45,7 @@ impl SingleChunkDataSerializer for ChunkData {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+        Box::pin(async move { self.internal_to_bytes() })
     }
 
     #[inline]
@@ -173,7 +173,14 @@ impl ChunkData {
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+            match light {
+                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                _ => None,
+            }
+        }
+
         let is_light_correct = self
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
@@ -182,13 +189,6 @@ impl ChunkData {
             let entities_guard = self.pending_block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
-
-        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
-            match light {
-                Some(LightContainer::Full(data)) => Some(data.as_ref()),
-                _ => None,
-            }
-        }
 
         let light_lock = self.light_engine.lock().unwrap();
         let heightmap_lock = self.heightmap.lock().unwrap();

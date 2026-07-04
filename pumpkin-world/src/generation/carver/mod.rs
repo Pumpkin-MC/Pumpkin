@@ -39,7 +39,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         &[]
     };
 
-    let _cave_carver = cave::CaveCarver;
+    //let _cave_carver = cave::CaveCarver;
     let canyon_carver = canyon::CanyonCarver;
 
     for dx in -radius..=radius {

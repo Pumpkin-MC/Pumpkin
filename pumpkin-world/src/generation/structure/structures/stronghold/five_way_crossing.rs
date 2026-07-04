@@ -163,6 +163,7 @@ impl StructurePieceBase for FiveWayCrossingPiece {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

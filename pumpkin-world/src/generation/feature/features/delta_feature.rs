@@ -1,3 +1,1 @@
-pub struct DeltaFeatureFeature {
-    // TODO
-}
+pub struct DeltaFeatureFeature; // TODO

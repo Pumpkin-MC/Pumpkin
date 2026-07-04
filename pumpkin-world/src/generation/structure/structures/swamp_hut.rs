@@ -63,6 +63,7 @@ impl StructurePieceBase for SwampHutPiece {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    #[allow(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

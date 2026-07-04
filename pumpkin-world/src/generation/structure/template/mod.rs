@@ -30,6 +30,7 @@ pub mod processor;
 mod structure_template;
 mod template_piece;
 
+use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
@@ -104,7 +105,7 @@ pub fn place_template(
 
         // Resolve block state with rotation applied to directional properties
         let Some(mut state) =
-            BlockStateResolver::resolve(&placed_entry, rotation, Default::default())
+            BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
         else {
             continue;
         };
@@ -138,7 +139,7 @@ pub fn place_template(
         {
             *waterlogged = "true".to_string();
             if let Some(waterlogged_state) =
-                BlockStateResolver::resolve(&placed_entry, rotation, Default::default())
+                BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
             {
                 state = waterlogged_state;
             }
