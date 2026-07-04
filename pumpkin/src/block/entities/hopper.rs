@@ -1,6 +1,7 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
@@ -9,7 +10,6 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
 use std::any::Any;
 use std::array::from_fn;

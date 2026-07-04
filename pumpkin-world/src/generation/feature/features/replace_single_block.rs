@@ -1,3 +1,1 @@
-pub struct ReplaceSingleBlockFeature {
-    // TODO
-}
+pub struct ReplaceSingleBlockFeature; // TODO

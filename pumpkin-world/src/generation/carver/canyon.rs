@@ -3,6 +3,7 @@ use super::cave::get_height;
 use crate::ProtoChunk;
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
+use pumpkin_data::{Block, BlockId};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use std::f32::consts::PI;
@@ -39,7 +40,7 @@ impl Carver for CanyonCarver {
         let distance =
             (max_distance as f32 * canyon_config.shape.distance_factor.get(random)) as i32;
 
-        self.do_carve(
+        Self::do_carve(
             config,
             chunk,
             random.next_i64(),
@@ -60,7 +61,6 @@ impl Carver for CanyonCarver {
 impl CanyonCarver {
     #[allow(clippy::too_many_arguments)]
     fn do_carve(
-        &self,
         config: &CarverConfig,
         chunk: &mut ProtoChunk,
         tunnel_seed: i64,
@@ -85,7 +85,7 @@ impl CanyonCarver {
             ))
         };
         let width_factor_per_height =
-            self.init_width_factors(chunk.height() as usize, config, &mut random);
+            Self::init_width_factors(chunk.height() as usize, config, &mut random);
         let mut y_rota = 0.0f32;
         let mut x_rota = 0.0f32;
 
@@ -101,7 +101,7 @@ impl CanyonCarver {
                 .shape
                 .horizontal_radius_factor
                 .get(&mut random) as f64;
-            vertical_radius = self.update_vertical_radius(
+            vertical_radius = Self::update_vertical_radius(
                 config,
                 &mut random,
                 vertical_radius,
@@ -124,11 +124,11 @@ impl CanyonCarver {
             y_rota += (random.next_f32() - random.next_f32()) * random.next_f32() * 4.0;
 
             if random.next_bounded_i32(4) != 0 {
-                if !self.can_reach(chunk.x, chunk.z, x, z, current_step, distance, thickness) {
+                if !Self::can_reach(chunk.x, chunk.z, x, z, current_step, distance, thickness) {
                     return;
                 }
 
-                self.carve_ellipsoid(
+                Self::carve_ellipsoid(
                     chunk,
                     config,
                     x,
@@ -143,7 +143,6 @@ impl CanyonCarver {
     }
 
     fn init_width_factors(
-        &self,
         depth: usize,
         config: &CarverConfig,
         random: &mut RandomGenerator,
@@ -164,7 +163,6 @@ impl CanyonCarver {
     }
 
     fn update_vertical_radius(
-        &self,
         config: &CarverConfig,
         random: &mut RandomGenerator,
         vertical_radius: f64,
@@ -182,7 +180,6 @@ impl CanyonCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn can_reach(
-        &self,
         chunk_x: i32,
         chunk_z: i32,
         x: f64,
@@ -202,7 +199,6 @@ impl CanyonCarver {
 
     #[allow(clippy::too_many_arguments)]
     fn carve_ellipsoid(
-        &self,
         chunk: &mut ProtoChunk,
         config: &CarverConfig,
         x: f64,
@@ -223,22 +219,22 @@ impl CanyonCarver {
         let chunk_min_x = chunk.x << 4;
         let chunk_min_z = chunk.z << 4;
 
-        let min_x_index = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
-        let max_x_index = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
+        let x_index_min = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
+        let x_index_max = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
         let min_y = ((y - vertical_radius).floor() as i32 - 1).max(chunk.bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
         let max_y = ((y + vertical_radius).floor() as i32 + 1)
             .min(chunk.bottom_y() as i32 + chunk.height() as i32 - 1 - protected_blocks_on_top);
 
-        let min_z_index = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
-        let max_z_index = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
+        let z_index_min = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
+        let z_index_max = ((z + horizontal_radius).floor() as i32 - chunk_min_z).min(15);
 
-        for x_index in min_x_index..=max_x_index {
+        for x_index in x_index_min..=x_index_max {
             let world_x = chunk_min_x + x_index;
             let xd = (world_x as f64 + 0.5 - x) / horizontal_radius;
 
-            for z_index in min_z_index..=max_z_index {
+            for z_index in z_index_min..=z_index_max {
                 let world_z = chunk_min_z + z_index;
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
@@ -246,7 +242,7 @@ impl CanyonCarver {
                     for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
-                        if !self.should_skip(
+                        if !Self::should_skip(
                             width_factor_per_height,
                             xd,
                             yd,
@@ -265,7 +261,6 @@ impl CanyonCarver {
     }
 
     fn should_skip(
-        &self,
         width_factor_per_height: &[f32],
         xd: f64,
         yd: f64,
@@ -283,15 +278,15 @@ impl CanyonCarver {
     fn carve_block(chunk: &mut ProtoChunk, config: &CarverConfig, x: i32, y: i32, z: i32) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
-        let block = pumpkin_data::Block::from_state_id(state_id);
+        let block = Block::from_state_id(state_id);
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
+        if block.id == BlockId::WATER || block.id == BlockId::LAVA {
             return false;
         }
 
-        if config.replaceable.1.contains(&block.id) {
-            let air = BlockState::from_id(pumpkin_data::Block::AIR.default_state.id);
-            let lava = BlockState::from_id(pumpkin_data::Block::LAVA.default_state.id);
+        if block.id.has_tag(config.replaceable) {
+            let air = BlockState::from_id(Block::AIR.default_state.id);
+            let lava = BlockState::from_id(Block::LAVA.default_state.id);
 
             let lava_y = config
                 .lava_level

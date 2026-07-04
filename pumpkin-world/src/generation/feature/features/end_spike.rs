@@ -133,16 +133,16 @@ impl EndSpikeFeature {
                 for dx in -2i32..=2 {
                     for dz in -2i32..=2 {
                         // Only place on perimeter walls and the top frame
-                        let on_x_wall = dx.abs() == 2;
-                        let on_z_wall = dz.abs() == 2;
+                        let x_wall_present = dx.abs() == 2;
+                        let z_wall_present = dz.abs() == 2;
                         let on_top = dy == 3;
-                        if !on_x_wall && !on_z_wall && !on_top {
+                        if !x_wall_present && !z_wall_present && !on_top {
                             continue;
                         }
 
                         // Connectivity rules
-                        let x_edge = on_x_wall || on_top;
-                        let z_edge = on_z_wall || on_top;
+                        let x_edge = x_wall_present || on_top;
+                        let z_edge = z_wall_present || on_top;
 
                         let mut props = OakFenceLikeProperties::default(&Block::IRON_BARS);
                         props.north = x_edge && dz != 2;

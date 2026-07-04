@@ -5,8 +5,8 @@ use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
 };
-use pumpkin_data::Block;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::{Block, BlockId};
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{boundingbox::BoundingBox, vector2::Vector2};
@@ -65,8 +65,6 @@ fn is_water_potion(stack: &ItemStack) -> bool {
 /// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
 async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>) {
     let air_state_id = Block::AIR.default_state.id;
-    let fire_id = Block::FIRE.id;
-    let soul_fire_id = Block::SOUL_FIRE.id;
 
     let neighbors = [
         hit_pos,
@@ -83,8 +81,8 @@ async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>
             p.z.floor() as i32,
         ));
         let state_id = world.get_block_state_id(&pos);
-        let raw_block_id = Block::get_raw_id_from_state_id(state_id);
-        if raw_block_id == fire_id || raw_block_id == soul_fire_id {
+        let raw_block_id = state_id.to_block_id();
+        if raw_block_id == BlockId::FIRE || raw_block_id == BlockId::SOUL_FIRE {
             world
                 .set_block_state(&pos, air_state_id, BlockFlags::NOTIFY_ALL)
                 .await;

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 use alter_ground::AlterGroundTreeDecorator;
 use attached_to_leaves::AttachedToLeavesTreeDecorator;
 use attached_to_logs::AttachedToLogsTreeDecorator;
@@ -42,13 +42,16 @@ impl TreeDecorator {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
         foliage_positions: &[BlockPos],
     ) {
         match self {
-            Self::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
+            Self::TrunkVine(_decorator) => {
+                TrunkVineTreeDecorator::generate(chunk, random, log_positions);
+            }
             Self::LeaveVine(decorator) => decorator.generate(chunk, random, foliage_positions),
             Self::PaleMoss(_decorator) => {}
             Self::CreakingHeart(_decorator) => {}
@@ -56,11 +59,11 @@ impl TreeDecorator {
             Self::Beehive(_decorator) => {}
             Self::AlterGround(_decorator) => {}
             Self::PlaceOnGround(decorator) => {
-                decorator.generate(chunk, random, root_positions, log_positions);
+                decorator.generate(chunk, block_registry, random, root_positions, log_positions);
             }
             Self::AttachedToLeaves(_decorator) => {}
             Self::AttachedToLogs(decorator) => {
-                decorator.generate(chunk, random, log_positions);
+                decorator.generate(chunk, block_registry, random, log_positions);
             }
         }
     }

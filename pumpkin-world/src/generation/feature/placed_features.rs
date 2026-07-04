@@ -1,5 +1,5 @@
 use pumpkin_data::block_properties::is_air;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_util::HeightMap;
 use std::collections::HashMap;
 use std::iter;
@@ -11,7 +11,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
-use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::height_provider::HeightProvider;
 use crate::generation::proto_chunk::GenerationCache;
@@ -49,6 +48,27 @@ pub enum Feature {
 }
 
 impl PlacedFeature {
+    pub fn generate_in_proto_chunk(
+        &self,
+        chunk: &mut crate::ProtoChunk,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> bool {
+        let feature = match &self.feature {
+            Feature::Named(name) => CONFIGURED_FEATURES
+                .get(name)
+                .expect("Name: {name:?} not found"),
+            Feature::Inlined(feature) => feature,
+        };
+        if let ConfiguredFeature::SculkPatch(feature) = feature {
+            feature.generate_in_proto_chunk(chunk, random, pos)
+        } else {
+            tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
+            false
+        }
+    }
+
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
@@ -166,21 +186,19 @@ impl PlacementModifier {
 }
 
 pub struct NoiseBasedCountPlacementModifier {
-    pub noise_to_count_ratio: i32,
-    pub noise_factor: f64,
-    pub noise_offset: f64,
+    pub to_count_ratio: i32,
+    pub factor: f64,
+    pub offset: f64,
 }
 
 impl CountPlacementModifierBase for NoiseBasedCountPlacementModifier {
     fn get_count(&self, _random: &mut RandomGenerator, pos: BlockPos) -> i32 {
-        let noise = FOLIAGE_NOISE
-            .sample(
-                pos.0.x as f64 / self.noise_factor,
-                pos.0.z as f64 / self.noise_factor,
-                false,
-            )
-            .max(0.0); // TODO: max is wrong
-        ((noise + self.noise_offset) * self.noise_to_count_ratio as f64).ceil() as i32
+        let noise = FOLIAGE_NOISE.sample(
+            pos.0.x as f64 / self.factor,
+            pos.0.z as f64 / self.factor,
+            false,
+        );
+        ((noise + self.offset) * self.to_count_ratio as f64).ceil() as i32
     }
 }
 
@@ -311,8 +329,8 @@ impl CountOnEveryLayerPlacementModifier {
             mutable_pos.0.y = j - 1;
             let next_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
 
-            if !Self::blocks_spawn(&next_block_state)
-                && Self::blocks_spawn(&current_block_state)
+            if !Self::blocks_spawn(next_block_state)
+                && Self::blocks_spawn(current_block_state)
                 && next_block_state.to_block_id() != Block::BEDROCK
             {
                 if found_count == target_y {
@@ -325,9 +343,9 @@ impl CountOnEveryLayerPlacementModifier {
         i32::MAX
     }
 
-    fn blocks_spawn(state: &RawBlockState) -> bool {
+    fn blocks_spawn(state: BlockStateId) -> bool {
         let block = state.to_block_id();
-        is_air(state.0) || block == Block::WATER || block == Block::LAVA
+        is_air(state) || block == Block::WATER || block == Block::LAVA
     }
 }
 

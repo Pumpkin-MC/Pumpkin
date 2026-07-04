@@ -92,8 +92,8 @@ impl JigsawBlockEntity {
                 position,
                 false,
                 false,
-                MaxDistance::new(80),
-                DimensionPadding::ZERO,
+                &MaxDistance::new(80),
+                &DimensionPadding::ZERO,
                 LiquidSettings::ApplyWaterlog,
                 &PoolAliasLookup,
             )
@@ -113,28 +113,32 @@ impl JigsawBlockEntity {
         let mut pieces = std::mem::take(&mut structure.collector.lock().unwrap().pieces);
         for piece in &mut pieces {
             if let Some(pool_piece) = piece.as_any().downcast_ref::<PoolElementStructurePiece>() {
-                let template = Arc::clone(&pool_piece.template);
                 let origin = pool_piece.pos;
                 let rotation = pool_piece.rotation;
+                let mut templates = Vec::new();
+                pool_piece
+                    .element
+                    .for_each_template(|_, _, template| templates.push(template));
 
-                for block in &template.blocks {
-                    let palette_entry = &template.palette[block.state as usize];
-                    if palette_entry.name == "minecraft:structure_void" {
-                        continue;
-                    }
+                for template in templates {
+                    for block in &template.blocks {
+                        let palette_entry = &template.palette[block.state as usize];
+                        if palette_entry.name == "minecraft:structure_void" {
+                            continue;
+                        }
 
-                    if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
-                        let final_state_str = block
-                            .nbt
-                            .as_ref()
-                            .and_then(|n| n.get_string("final_state"))
-                            .unwrap_or("minecraft:air");
+                        if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
+                            let final_state_str = block
+                                .nbt
+                                .as_ref()
+                                .and_then(|n| n.get_string("final_state"))
+                                .unwrap_or("minecraft:air");
 
-                        let entry =
+                            let entry =
                             pumpkin_world::generation::structure::template::PaletteEntry::from_string(
                                 final_state_str,
                             );
-                        let final_state =
+                            let final_state =
                             pumpkin_world::generation::structure::template::BlockStateResolver::resolve(
                                 &entry,
                                 rotation,
@@ -142,48 +146,49 @@ impl JigsawBlockEntity {
                             )
                             .unwrap_or(pumpkin_data::Block::AIR.default_state);
 
+                            let local_pos = rotation.transform_pos(block.pos, template.size);
+                            let world_pos = origin.add(local_pos.x, local_pos.y, local_pos.z);
+
+                            world
+                                .set_block_state(
+                                    &world_pos,
+                                    final_state.id,
+                                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                                )
+                                .await;
+                            continue;
+                        }
+
+                        let Some(state) = BlockStateResolver::resolve(
+                            palette_entry,
+                            rotation,
+                            pumpkin_data::Mirror::default(),
+                        ) else {
+                            continue;
+                        };
+
                         let local_pos = rotation.transform_pos(block.pos, template.size);
                         let world_pos = origin.add(local_pos.x, local_pos.y, local_pos.z);
 
                         world
                             .set_block_state(
                                 &world_pos,
-                                final_state.id,
+                                state.id,
                                 pumpkin_world::world::BlockFlags::NOTIFY_ALL,
                             )
                             .await;
-                        continue;
-                    }
 
-                    let Some(state) = BlockStateResolver::resolve(
-                        palette_entry,
-                        rotation,
-                        pumpkin_data::Mirror::default(),
-                    ) else {
-                        continue;
-                    };
-
-                    let local_pos = rotation.transform_pos(block.pos, template.size);
-                    let world_pos = origin.add(local_pos.x, local_pos.y, local_pos.z);
-
-                    world
-                        .set_block_state(
-                            &world_pos,
-                            state.id,
-                            pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-
-                    // Handle block entities
-                    if let Some(nbt) = &block.nbt {
-                        let mut block_entity_nbt = nbt.clone();
-                        block_entity_nbt.put_int("x", world_pos.0.x);
-                        block_entity_nbt.put_int("y", world_pos.0.y);
-                        block_entity_nbt.put_int("z", world_pos.0.z);
-                        if let Some(block_entity) =
-                            crate::block::entities::block_entity_from_nbt(&block_entity_nbt)
-                        {
-                            world.add_block_entity(block_entity);
+                        // Handle block entities
+                        if let Some(nbt) = &block.nbt {
+                            let mut block_entity_nbt = nbt.clone();
+                            block_entity_nbt.put_int("x", world_pos.0.x);
+                            block_entity_nbt.put_int("y", world_pos.0.y);
+                            block_entity_nbt.put_int("z", world_pos.0.z);
+                            if let Some(block_entity) =
+                                crate::block::entities::block_entity_from_nbt(&block_entity_nbt)
+                            {
+                                world.add_block_entity(block_entity);
+                            }
                         }
                     }
                 }

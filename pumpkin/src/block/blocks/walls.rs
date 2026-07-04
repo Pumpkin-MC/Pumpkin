@@ -3,6 +3,7 @@ use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EastWall;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -13,7 +14,6 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 
 use crate::block::BlockBehaviour;
 use crate::world::World;
@@ -50,7 +50,7 @@ pub fn compute_wall_state(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
-) -> u16 {
+) -> BlockStateId {
     let (block_above, block_above_state) = world.get_block_and_state(&block_pos.up());
 
     for direction in HorizontalFacing::all() {

@@ -1,10 +1,11 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::{Block, tracked_data::TrackedData};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
@@ -39,7 +40,9 @@ impl FallingEntity {
 
         let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
         let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
-        entity.data.store(i32::from(block_state), Ordering::Relaxed);
+        entity
+            .data
+            .store(i32::from(block_state.as_u16()), Ordering::Relaxed);
         let entity = Arc::new(Self::new(entity, block_state));
         world.spawn_entity(entity).await;
     }

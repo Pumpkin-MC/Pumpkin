@@ -4,6 +4,7 @@ use crate::block::entities::{
     PropertyDelegate, furnace_like_block_entity::ExperienceContainer, smoker::SmokerBlockEntity,
 };
 use pumpkin_data::{
+    BlockStateId,
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
     translation,
@@ -15,7 +16,7 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{BlockStateId, inventory::Inventory};
+use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
 use crate::{

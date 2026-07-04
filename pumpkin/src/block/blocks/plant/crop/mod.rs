@@ -3,13 +3,11 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
+    BlockStateId,
     block_properties::{BlockProperties, FarmlandLikeProperties, WheatLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
 use crate::{
@@ -39,12 +37,12 @@ trait CropBlockBase: PlantBlockBase {
         7
     }
 
-    fn get_age(&self, state: u16, block: &Block) -> i32 {
+    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
         let props = CropProperties::from_state_id(state, block);
         i32::from(props.age)
     }
 
-    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
+    fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
         let mut props = CropProperties::from_state_id(state, block);
         props.age = age as u8;
         props.to_state_id(block)

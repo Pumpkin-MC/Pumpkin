@@ -11,10 +11,10 @@ use crate::world::WorldPortalExt;
 use pumpkin_data::block_properties::Axis;
 
 pub struct CherryTrunkPlacer {
-    pub branch_count: IntProvider,
-    pub branch_horizontal_length: IntProvider,
-    pub branch_start_offset_from_top: UniformIntProvider,
-    pub branch_end_offset_from_top: IntProvider,
+    pub count: IntProvider,
+    pub horizontal_length: IntProvider,
+    pub start_offset_from_top: UniformIntProvider,
+    pub end_offset_from_top: IntProvider,
 }
 
 impl CherryTrunkPlacer {
@@ -30,7 +30,7 @@ impl CherryTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
@@ -41,10 +41,10 @@ impl CherryTrunkPlacer {
         let mut logs = Vec::new();
 
         let first_branch_offset =
-            (height as i32 - 1 + self.branch_start_offset_from_top.get(random)).max(0);
+            (height as i32 - 1 + self.start_offset_from_top.get(random)).max(0);
         let second_branch_start_offset_from_top = UniformIntProvider::new(
-            self.branch_start_offset_from_top.min_inclusive,
-            self.branch_start_offset_from_top.max_inclusive - 1,
+            self.start_offset_from_top.min_inclusive,
+            self.start_offset_from_top.max_inclusive - 1,
         );
         let mut second_branch_offset =
             (height as i32 - 1 + second_branch_start_offset_from_top.get(random)).max(0);
@@ -53,7 +53,7 @@ impl CherryTrunkPlacer {
             second_branch_offset += 1;
         }
 
-        let branch_count = self.branch_count.get(random);
+        let branch_count = self.count.get(random);
         let has_middle_branch = branch_count == 3;
         let has_both_side_branches = branch_count >= 2;
 
@@ -67,7 +67,7 @@ impl CherryTrunkPlacer {
 
         for y in 0..trunk_height {
             let pos = start_pos.up_height(y as i32);
-            if placer.place(chunk, &pos, trunk_state) {
+            if TrunkPlacer::place(chunk, &pos, trunk_state) {
                 logs.push(pos);
             }
         }
@@ -126,7 +126,7 @@ impl CherryTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     fn generate_branch<T: GenerationCache>(
         &self,
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         tree_height: u32,
         origin: BlockPos,
         chunk: &mut T,
@@ -139,12 +139,11 @@ impl CherryTrunkPlacer {
         let mut logs = Vec::new();
         let mut log_pos = origin.up_height(offset_from_origin);
 
-        let branch_end_pos_offset =
-            tree_height as i32 - 1 + self.branch_end_offset_from_top.get(random);
+        let branch_end_pos_offset = tree_height as i32 - 1 + self.end_offset_from_top.get(random);
         let extend_branch_away_from_trunk =
             middle_continues_upwards || branch_end_pos_offset < offset_from_origin;
         let distance_to_trunk =
-            self.branch_horizontal_length.get(random) + i32::from(extend_branch_away_from_trunk);
+            self.horizontal_length.get(random) + i32::from(extend_branch_away_from_trunk);
 
         let branch_end_pos = origin
             .add(
@@ -161,11 +160,11 @@ impl CherryTrunkPlacer {
         } else {
             Axis::Z
         };
-        let sideways_state = self.get_sideways_state(trunk_state, axis);
+        let sideways_state = Self::get_sideways_state(trunk_state, axis);
 
         for _ in 0..steps_horizontally {
             log_pos = log_pos.add(branch_direction.0.x, 0, branch_direction.0.z);
-            if placer.place(chunk, &log_pos, sideways_state) {
+            if TrunkPlacer::place(chunk, &log_pos, sideways_state) {
                 logs.push(log_pos);
             }
         }
@@ -196,19 +195,19 @@ impl CherryTrunkPlacer {
 
             if grow_vertically {
                 log_pos = log_pos.up_height(vertical_direction);
-                if placer.place(chunk, &log_pos, trunk_state) {
+                if TrunkPlacer::place(chunk, &log_pos, trunk_state) {
                     logs.push(log_pos);
                 }
             } else {
                 log_pos = log_pos.add(branch_direction.0.x, 0, branch_direction.0.z);
-                if placer.place(chunk, &log_pos, sideways_state) {
+                if TrunkPlacer::place(chunk, &log_pos, sideways_state) {
                     logs.push(log_pos);
                 }
             }
         }
     }
 
-    fn get_sideways_state(&self, trunk_state: &BlockState, axis: Axis) -> &'static BlockState {
+    fn get_sideways_state(trunk_state: &BlockState, axis: Axis) -> &'static BlockState {
         let block = Block::from_state_id(trunk_state.id);
         if let Some(props_source) = block.properties(trunk_state.id) {
             let mut props = props_source.to_props();

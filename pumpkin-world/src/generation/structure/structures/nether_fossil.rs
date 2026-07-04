@@ -139,11 +139,11 @@ impl NetherFossilPiece {
             y -= 1;
             let lower = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
 
-            let upper_state = BlockState::from_id(upper.0);
-            let lower_state = BlockState::from_id(lower.0);
+            let upper_state = BlockState::from_id(upper);
+            let lower_state = BlockState::from_id(lower);
 
             if upper_state.is_air()
-                && (Block::from_state_id(lower.0) == &Block::SOUL_SAND
+                && (Block::from_state_id(lower) == &Block::SOUL_SAND
                     || lower_state.is_side_solid(BlockDirection::Up))
             {
                 break;
@@ -162,10 +162,10 @@ impl StructurePieceBase for NetherFossilPiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
+        block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         seed: i64,
-        _chunk_box: &BlockBox,
+        chunk_box: &BlockBox,
     ) {
         // Vanilla column scan: find air above soul sand or solid block
         let Some(placement_y) = self.find_placement_y(chunk) else {
@@ -188,13 +188,14 @@ impl StructurePieceBase for NetherFossilPiece {
             (0, 0),
             self.rotation,
             true,
+            false,
             &[],
-            Some(_chunk_box),
+            Some(chunk_box),
         );
 
         // Vanilla: 50% chance to place a dried ghast block at the fossil base.
         // Uses a deterministic random seeded from world seed + bounding box center.
-        self.try_place_dried_ghast(chunk, _block_registry, seed);
+        self.try_place_dried_ghast(chunk, block_registry, seed);
     }
 
     fn get_structure_piece(&self) -> &StructurePiece {
@@ -243,7 +244,7 @@ impl NetherFossilPiece {
         }
 
         let block_at = chunk.get_block_state(&Vector3::new(x, y, z));
-        if !BlockState::from_id(block_at.0).is_air() {
+        if !BlockState::from_id(block_at).is_air() {
             return;
         }
 

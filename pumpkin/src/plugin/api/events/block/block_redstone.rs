@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 
 use crate::world::World;
 

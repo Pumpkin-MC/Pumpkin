@@ -1,1 +1,1 @@
-pub struct AlterGroundTreeDecorator {}
+pub struct AlterGroundTreeDecorator;

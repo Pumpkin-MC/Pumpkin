@@ -4502,6 +4502,18 @@ impl EntityBase for Player {
         self.gamemode.load() == GameMode::Spectator
     }
 
+    fn set_on_fire_for_ticks(&self, ticks: u32) {
+        let entity = self.get_entity();
+        let ticks = if entity.invulnerable.load(Ordering::Relaxed) {
+            1
+        } else {
+            ticks
+        };
+        if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
+            entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
+        }
+    }
+
     fn is_pushable(&self) -> bool {
         self.gamemode.load() != GameMode::Spectator && self.gamemode.load() != GameMode::Creative
     }

@@ -1,5 +1,5 @@
-use pumpkin_data::Block;
-use pumpkin_world::BlockStateId;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
@@ -9,8 +9,8 @@ use crate::block::{
 pub struct ShortPlantBlock;
 
 impl BlockMetadata for ShortPlantBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::SHORT_GRASS.id, Block::FERN.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::SHORT_GRASS, BlockId::FERN].into()
     }
 }
 

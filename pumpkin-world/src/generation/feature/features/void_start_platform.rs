@@ -1,3 +1,1 @@
-pub struct VoidStartPlatformFeature {
-    // TODO
-}
+pub struct VoidStartPlatformFeature; // TODO

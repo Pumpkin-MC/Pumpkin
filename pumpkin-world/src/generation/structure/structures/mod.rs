@@ -7,7 +7,7 @@ use pumpkin_util::HeightMap;
 use pumpkin_util::{
     BlockDirection,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
-    random::{RandomGenerator, RandomImpl, get_carver_seed, xoroshiro128::Xoroshiro},
+    random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand},
 };
 use tracing::trace;
 
@@ -381,7 +381,7 @@ impl StructurePiece {
         }
     }
 
-    pub fn is_under_sea_level(
+    pub const fn is_under_sea_level(
         &self,
         chunk: &mut ProtoChunk,
         x: i32,
@@ -685,8 +685,13 @@ pub struct StructureGeneratorContext<'a> {
 
 #[must_use]
 pub fn create_chunk_random(seed: i64, chunk_x: i32, chunk_z: i32) -> RandomGenerator {
-    let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
-    RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed))
+    let mut seeder = LegacyRand::from_seed(seed as u64);
+    let x_multiplier = seeder.next_i64();
+    let z_multiplier = seeder.next_i64();
+    let structure_seed = (i64::from(chunk_x).wrapping_mul(x_multiplier))
+        ^ (i64::from(chunk_z).wrapping_mul(z_multiplier))
+        ^ seed;
+    RandomGenerator::Legacy(LegacyRand::from_seed(structure_seed as u64))
 }
 
 pub enum StructureInstance {
@@ -695,4 +700,30 @@ pub enum StructureInstance {
     /// This chunk just contains a piece of a structure starting elsewhere.
     /// Stores the `BlockPos` of the 'Start' so you can look it up.
     Reference(Arc<Mutex<StructurePiecesCollector>>),
+}
+
+#[cfg(test)]
+mod structure_random_tests {
+    use super::*;
+
+    #[test]
+    fn large_feature_seed_matches_java_random() {
+        let mut random = create_chunk_random(123_456_789, -37, 84);
+        assert_eq!(
+            [
+                random.next_i32(),
+                random.next_i32(),
+                random.next_i32(),
+                random.next_i32(),
+                random.next_i32(),
+            ],
+            [
+                -2_113_851_872,
+                -821_770_162,
+                381_681_559,
+                -196_012_664,
+                372_718_864
+            ]
+        );
+    }
 }

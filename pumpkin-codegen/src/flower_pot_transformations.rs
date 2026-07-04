@@ -19,12 +19,15 @@ pub fn build() -> TokenStream {
         })
         .collect();
     quote! {
+        use crate::BlockId;
+
         #[must_use]
-        pub const fn get_potted_item(item_id: u16) -> u16 {
-            match item_id {
+        pub const fn get_potted_item(item_id: u16) -> BlockId {
+            let raw_id = match item_id {
                 #(#match_arms)*
                 _ => 0,
-            }
+            };
+            BlockId::new_or_air(raw_id)
         }
     }
 }

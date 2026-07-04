@@ -22,7 +22,7 @@ impl TwistingVinesFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        if self.is_invalid_location(chunk, &pos) {
+        if Self::is_invalid_location(chunk, &pos) {
             return false;
         }
 
@@ -39,7 +39,7 @@ impl TwistingVinesFeature {
             let mut mutable_pos = pos.add(offset_x, offset_y, offset_z);
 
             if self.find_target_y(chunk, &mut mutable_pos)
-                && !self.is_invalid_location(chunk, &mutable_pos)
+                && !Self::is_invalid_location(chunk, &mutable_pos)
             {
                 let mut height = random.next_bounded_i32(self.max_height) + 1;
                 if random.next_bounded_i32(6) == 0 {
@@ -49,7 +49,7 @@ impl TwistingVinesFeature {
                     height = 1;
                 }
 
-                self.generate_column(chunk, random, &mutable_pos, height);
+                Self::generate_column(chunk, random, &mutable_pos, height);
                 placed = true;
             }
         }
@@ -58,7 +58,6 @@ impl TwistingVinesFeature {
     }
 
     fn generate_column<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: &BlockPos,
@@ -91,7 +90,7 @@ impl TwistingVinesFeature {
         }
     }
 
-    fn is_invalid_location<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
+    fn is_invalid_location<T: GenerationCache>(chunk: &T, pos: &BlockPos) -> bool {
         if !GenerationCache::get_block_state(chunk, &pos.0)
             .to_state()
             .is_air()

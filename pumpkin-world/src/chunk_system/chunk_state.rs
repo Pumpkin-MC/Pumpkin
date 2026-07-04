@@ -1,5 +1,6 @@
 use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
+use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
@@ -38,6 +39,7 @@ pub enum StagedChunkEnum {
     Full,
 }
 
+#[expect(clippy::fallible_impl_from)]
 impl From<u8> for StagedChunkEnum {
     fn from(v: u8) -> Self {
         match v {
@@ -68,14 +70,14 @@ impl From<ChunkStatus> for StagedChunkEnum {
             ChunkStatus::Surface => Self::Surface,
             ChunkStatus::Carvers => Self::Carvers,
             ChunkStatus::Features => Self::Features,
-            ChunkStatus::InitializeLight => Self::Lighting,
-            ChunkStatus::Light => Self::Lighting,
+            ChunkStatus::InitializeLight | ChunkStatus::Light => Self::Lighting,
             ChunkStatus::Spawn => Self::Spawn,
             ChunkStatus::Full => Self::Full,
         }
     }
 }
 
+#[expect(clippy::fallible_impl_from)]
 impl From<StagedChunkEnum> for ChunkStatus {
     fn from(status: StagedChunkEnum) -> Self {
         match status {
@@ -90,7 +92,7 @@ impl From<StagedChunkEnum> for ChunkStatus {
             StagedChunkEnum::Lighting => Self::Light,
             StagedChunkEnum::Spawn => Self::Spawn,
             StagedChunkEnum::Full => Self::Full,
-            _ => panic!(),
+            StagedChunkEnum::None => panic!(),
         }
     }
 }
@@ -130,36 +132,16 @@ impl StagedChunkEnum {
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Empty => 0,
-            Self::StructureStart => 0,
-            Self::StructureReferences => 0,
-            Self::Biomes => 0,
-            Self::Noise => 0,
-            Self::Surface => 0,
-            Self::Carvers => 0,
-            Self::Features => 1,
-            Self::Lighting => 1,
-            Self::Spawn => 1,
-            Self::Full => 1,
-            _ => panic!(),
+            Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
+            _ => 0,
         }
     }
     #[must_use]
     pub const fn get_write_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Empty => 0,
-            Self::StructureStart => 0,
-            Self::StructureReferences => 0,
-            Self::Biomes => 0,
-            Self::Noise => 0,
-            Self::Surface => 0,
-            Self::Carvers => 0,
-            Self::Features => 1,
-            Self::Lighting => 1,
-            Self::Spawn => 1,
-            Self::Full => 0,
-            _ => panic!(),
+            Self::Features | Self::Lighting | Self::Spawn => 1,
+            _ => 0,
         }
     }
     #[must_use]
@@ -229,12 +211,12 @@ impl Chunk {
             self,
             Self::Level(Arc::new(ChunkData {
                 section: ChunkSections::new(0, 0),
-                heightmap: Default::default(),
+                heightmap: Mutex::default(),
                 x: 0,
                 z: 0,
-                block_ticks: Default::default(),
-                fluid_ticks: Default::default(),
-                pending_block_entities: Default::default(),
+                block_ticks: ChunkTickScheduler::default(),
+                fluid_ticks: ChunkTickScheduler::default(),
+                pending_block_entities: Mutex::default(),
                 light_engine: Mutex::new(ChunkLight::default()),
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
@@ -322,12 +304,12 @@ impl Chunk {
             light_engine: Mutex::new(light_data),
             light_populated: AtomicBool::new(is_lit),
             section: sections,
-            heightmap: Default::default(),
+            heightmap: Mutex::default(),
             x: proto_chunk.x,
             z: proto_chunk.z,
             dirty: AtomicBool::new(true),
-            block_ticks: Default::default(),
-            fluid_ticks: Default::default(),
+            block_ticks: ChunkTickScheduler::default(),
+            fluid_ticks: ChunkTickScheduler::default(),
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,

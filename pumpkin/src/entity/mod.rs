@@ -315,6 +315,22 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async { false })
     }
 
+    fn set_on_fire_for(&self, seconds: f32) {
+        let entity = self.get_entity();
+        // Exclude fire-immune entities (ex. certain items) from burn damage
+        if !entity.fire_immune.load(Ordering::Relaxed) {
+            self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
+        }
+    }
+
+    fn set_on_fire_for_ticks(&self, ticks: u32) {
+        let entity = self.get_entity();
+        if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
+            entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
+        }
+        // TODO: defrost
+    }
+
     /// Called when a player collides with a entity
     fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
@@ -2293,20 +2309,6 @@ impl Entity {
     /// Extinguishes this entity.
     pub fn extinguish(&self) {
         self.fire_ticks.store(0, Ordering::Relaxed);
-    }
-
-    pub fn set_on_fire_for(&self, seconds: f32) {
-        // Exclude fire-immune entities (ex. certain items) from burn damage
-        if !self.fire_immune.load(Ordering::Relaxed) {
-            self.set_on_fire_for_ticks((seconds * 20.0).floor() as u32);
-        }
-    }
-
-    pub fn set_on_fire_for_ticks(&self, ticks: u32) {
-        if self.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
-            self.fire_ticks.store(ticks as i32, Ordering::Relaxed);
-        }
-        // TODO: defrost
     }
 
     /// Maximum freeze ticks (7 seconds at 20 tps)

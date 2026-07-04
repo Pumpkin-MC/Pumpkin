@@ -32,7 +32,7 @@ impl PartialEq for TaskHeapNode {
 }
 impl TaskHeapNode {
     #[cfg(test)]
-    pub(crate) fn node_key(&self) -> NodeKey {
+    pub(crate) const fn node_key(&self) -> NodeKey {
         self.1
     }
 }
@@ -129,7 +129,7 @@ impl GenerationSchedule {
                 let handle = thread::Builder::new()
                     .name(format!("Gen-{i}"))
                     .spawn(move || {
-                        generation_work(recv_gen, send_chunk, level_clone);
+                        generation_work(&recv_gen, &send_chunk, &level_clone);
                     })
                     .expect("Failed to spawn Generation Thread");
 
@@ -168,11 +168,11 @@ impl GenerationSchedule {
                     send_chunk,
                     gen_pool,
                     listener,
-                    chunk_map: Default::default(),
+                    chunk_map: HashMap::default(),
                     lighting_config,
                     last_unload: std::time::Instant::now(),
                 };
-                scheduler.work(level_sched);
+                scheduler.work(&level_sched);
             })
             .expect("Failed to spawn Scheduler Thread");
 
@@ -201,7 +201,7 @@ impl GenerationSchedule {
                 }
                 chunk.dirty.store(true, Relaxed);
             }
-            _ => {}
+            LightingEngineConfig::Default => {}
         }
     }
 
@@ -412,6 +412,7 @@ impl GenerationSchedule {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn resort_work(&mut self, new_data: (Option<LevelChange>, Option<Vec<ChunkPos>>)) -> bool {
         if new_data.0.is_none() && new_data.1.is_none() {
             return false;
@@ -719,6 +720,7 @@ impl GenerationSchedule {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
         match data {
             RecvChunk::IO(chunk) => {
@@ -800,10 +802,9 @@ impl GenerationSchedule {
                                 holder.current_stage = StagedChunkEnum::Full;
 
                                 let was_public = holder.public;
-
+                                self.apply_lighting_override(&chunk);
+                                let public_chunk = chunk.clone();
                                 if was_public {
-                                    self.apply_lighting_override(&chunk);
-                                    let public_chunk = chunk.clone();
                                     self.public_chunk_map.insert(new_pos, public_chunk);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
@@ -812,8 +813,6 @@ impl GenerationSchedule {
                                     self.listener.process_new_chunk(new_pos, &chunk);
                                     holder.chunk = Some(Chunk::Level(chunk));
                                 } else {
-                                    self.apply_lighting_override(&chunk);
-                                    let public_chunk = chunk.clone();
                                     holder.chunk = Some(Chunk::Level(chunk));
                                     let result =
                                         self.public_chunk_map.insert(new_pos, public_chunk);
@@ -985,7 +984,8 @@ impl GenerationSchedule {
         self.running_task_count -= 1;
     }
 
-    fn work(mut self, level: Arc<Level>) {
+    #[expect(clippy::too_many_lines)]
+    fn work(mut self, level: &Arc<Level>) {
         debug!(
             "schedule thread start id: {:?} name: {}",
             thread::current().id(),
@@ -1063,6 +1063,31 @@ impl GenerationSchedule {
                     }
                     node.in_flight = true;
                     let node = node.clone();
+
+                    // A chunk can be advanced as part of a neighboring task's write cache.
+                    // In that case its queued node may survive even though the returned
+                    // ProtoChunk has already reached this stage. Dispatching the stale node
+                    // would run the same stage twice and trip ProtoChunk's stage invariant.
+                    let actual_stage = self
+                        .chunk_map
+                        .get(&node.pos)
+                        .and_then(|holder| holder.chunk.as_ref())
+                        .map(Chunk::get_stage_id);
+                    if actual_stage.is_some_and(|stage| stage >= node.stage as u8) {
+                        if let Some(holder) = self.chunk_map.get_mut(&node.pos) {
+                            holder.current_stage = holder
+                                .current_stage
+                                .max(StagedChunkEnum::from(actual_stage.expect("checked above")));
+                            let task_slot = &mut holder.tasks[node.stage as usize];
+                            if *task_slot == task.1 {
+                                *task_slot = NodeKey::null();
+                            }
+                        }
+                        self.waiting_for_chunks.remove(&task.1);
+                        self.drop_node(task.1);
+                        continue;
+                    }
+
                     if node.stage == StagedChunkEnum::Empty {
                         self.running_task_count += 1;
                         let holder = self.chunk_map.get_mut(&node.pos).unwrap();
@@ -1150,12 +1175,11 @@ impl GenerationSchedule {
                                 let holder = self.chunk_map.get_mut(&new_pos).unwrap();
                                 let mut tmp = None;
                                 swap(&mut tmp, &mut holder.chunk);
-                                let tmp = match tmp {
-                                    Some(v) => v,
-                                    None => panic!(
+                                let Some(tmp) = tmp else {
+                                    panic!(
                                         "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
                                         new_pos, node.pos, node.stage
-                                    ),
+                                    )
                                 };
                                 match tmp {
                                     Chunk::Level(chunk) => {
@@ -1243,19 +1267,15 @@ impl GenerationSchedule {
                         }
                         Err(crossfire::compat::RecvTimeoutError::Disconnected) => break,
                     }
-                    if self.queue_dirty {
-                        self.sort_queue();
-                        self.queue_dirty = false;
-                    }
                 } else {
                     // No tasks in flight, wait indefinitely for LevelChannel changes
                     debug_assert!(self.debug_check());
                     debug_assert_eq!(self.running_task_count, 0);
-                    self.resort_work(self.send_level.wait_and_get(&level));
-                    if self.queue_dirty {
-                        self.sort_queue();
-                        self.queue_dirty = false;
-                    }
+                    self.resort_work(self.send_level.wait_and_get(level));
+                }
+                if self.queue_dirty {
+                    self.sort_queue();
+                    self.queue_dirty = false;
                 }
             }
         }

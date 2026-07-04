@@ -7,20 +7,21 @@ use crate::block::OnPlaceArgs;
 use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::AmethystClusterLikeProperties;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::BlockStateId;
 
 pub struct AmethystBlock;
 
 impl BlockMetadata for AmethystBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::SMALL_AMETHYST_BUD.id,
-            Block::MEDIUM_AMETHYST_BUD.id,
-            Block::LARGE_AMETHYST_BUD.id,
-            Block::AMETHYST_CLUSTER.id,
+            BlockId::SMALL_AMETHYST_BUD,
+            BlockId::MEDIUM_AMETHYST_BUD,
+            BlockId::LARGE_AMETHYST_BUD,
+            BlockId::AMETHYST_CLUSTER,
         ]
         .into()
     }

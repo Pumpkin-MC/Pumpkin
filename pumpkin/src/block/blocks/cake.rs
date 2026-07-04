@@ -11,14 +11,13 @@ use crate::{
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::{
-    Block,
+    Block, BlockStateId,
     block_properties::{BlockProperties, CakeLikeProperties},
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{
-    BlockStateId,
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
@@ -33,7 +32,7 @@ impl CakeBlock {
         player: &Player,
         block: &Block,
         location: &BlockPos,
-        state_id: u16,
+        state_id: BlockStateId,
     ) -> BlockActionResult {
         match player.gamemode.load() {
             GameMode::Survival | GameMode::Adventure => {

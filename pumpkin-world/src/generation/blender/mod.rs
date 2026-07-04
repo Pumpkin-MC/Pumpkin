@@ -220,8 +220,8 @@ impl Blender {
     {
         let chunk_x = biome_coords::to_chunk(cell_x);
         let chunk_z = biome_coords::to_chunk(cell_z);
-        let min_x = (cell_x & 3) == 0;
-        let min_z = (cell_z & 3) == 0;
+        let min_x = cell_x.trailing_zeros() >= 2;
+        let min_z = cell_z.trailing_zeros() >= 2;
 
         let mut value = self.get_data_value(&getter, chunk_x, chunk_z, cell_x, cell_y, cell_z);
         if value == f64::MAX {
@@ -259,16 +259,16 @@ impl Blender {
         F: Fn(&BlendingData, i32, i32, i32) -> f64,
     {
         let packed = (chunk_x as u32 as u64) | ((chunk_z as u32 as u64) << 32);
-        if let Some(data) = self.height_and_biome_blending_data.get(&packed) {
-            getter(
-                data,
-                cell_x - biome_coords::from_chunk(chunk_x),
-                cell_y,
-                cell_z - biome_coords::from_chunk(chunk_z),
-            )
-        } else {
-            f64::MAX
-        }
+        self.height_and_biome_blending_data
+            .get(&packed)
+            .map_or(f64::MAX, |data| {
+                getter(
+                    data,
+                    cell_x - biome_coords::from_chunk(chunk_x),
+                    cell_y,
+                    cell_z - biome_coords::from_chunk(chunk_z),
+                )
+            })
     }
 
     #[must_use]
@@ -323,11 +323,9 @@ pub struct BlenderBiomeSupplier<'a> {
 
 impl BiomeSupplier for BlenderBiomeSupplier<'_> {
     fn biome(&self, x: i32, y: i32, z: i32, sampler: &mut MultiNoiseSampler<'_>) -> &'static Biome {
-        if let Some(blended) = self.blender.blend_biome(x, y, z, &self.shift_noise) {
-            blended
-        } else {
-            self.base.biome(x, y, z, sampler)
-        }
+        self.blender
+            .blend_biome(x, y, z, &self.shift_noise)
+            .map_or_else(|| self.base.biome(x, y, z, sampler), |blended| blended)
     }
 }
 

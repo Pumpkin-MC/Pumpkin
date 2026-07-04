@@ -1,5 +1,3 @@
-use std::{collections::HashMap, io::Write};
-
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::remap_item_id_for_version;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,11 +8,11 @@ use pumpkin_data::recipes::{
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
+use std::borrow::Cow;
+use std::{collections::HashMap, io::Write};
 
-use crate::{
-    ClientPacket, VarInt, WritingError, codec::item_stack_seralizer::ItemStackSerializer,
-    ser::NetworkWriteExt,
-};
+use crate::codec::item_stack_seralizer::ItemStackTemplateSerializer;
+use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
 
 // Recipe Display type IDs
 const RECIPE_DISPLAY_SHAPELESS: i32 = 0;
@@ -116,7 +114,7 @@ fn write_item_stack_slot_display(
     write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
     let static_item = Item::from_id(item.id)
         .ok_or_else(|| WritingError::Message(format!("item id {} must exist", item.id)))?;
-    ItemStackSerializer::from(ItemStack::new(count, static_item))
+    ItemStackTemplateSerializer::from(ItemStack::new(count, static_item))
         .write_with_version(write, &version)
 }
 
@@ -454,8 +452,6 @@ fn write_entry(
 
     Ok(false)
 }
-
-use std::borrow::Cow;
 
 #[allow(clippy::too_many_lines)]
 impl ClientPacket for CRecipeBookAdd<'_> {

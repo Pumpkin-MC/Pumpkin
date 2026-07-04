@@ -7,9 +7,7 @@ use crate::world::WorldPortalExt;
 pub struct VinesFeature;
 
 impl VinesFeature {
-    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _block_registry: &dyn WorldPortalExt,
         _min_y: i8,

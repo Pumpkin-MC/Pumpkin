@@ -64,7 +64,7 @@ use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
-    Block,
+    Block, BlockStateId,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
@@ -133,7 +133,7 @@ use pumpkin_util::{
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
-    BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
+    CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -215,7 +215,7 @@ pub struct World {
     pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
-    unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    unsent_block_changes: Mutex<HashMap<BlockPos, BlockStateId>>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
@@ -477,7 +477,7 @@ impl World {
                     event.pos,
                     event.r#type,
                     event.data,
-                    VarInt(i32::from(block.id)),
+                    VarInt(block.id.as_u16() as i32),
                 ),
             );
         }
@@ -1057,7 +1057,7 @@ impl World {
                 let be_block_id = BlockState::to_be_network_id(block_state_id);
                 self.broadcast_to_chunk_editioned_sync(
                     chunk_pos,
-                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                    &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
                     &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         block_pos,
                         be_block_id as u32,
@@ -1369,11 +1369,11 @@ impl World {
                 let mut amplitude = 0.0;
 
                 if neighbor_height == 0.0 {
-                    let block_state_id = self.get_block_state_id(&pos);
-                    let block = Block::get_raw_id_from_state_id(block_state_id);
-                    let block_state = BlockState::from_id(block_state_id);
+                    let state_id = self.get_block_state_id(&pos);
+                    let block_id = state_id.to_block_id();
+                    let block_state = state_id.to_state();
 
-                    let blocks_movement = blocks_movement(block_state, block);
+                    let blocks_movement = blocks_movement(block_state, block_id);
 
                     if !blocks_movement {
                         let down_pos = pos.down();
@@ -4422,7 +4422,7 @@ impl World {
         position: &BlockPos,
         cause: Option<Arc<Player>>,
         flags: BlockFlags,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position);
         if is_air(broken_block_state) {
             return None;
@@ -4466,7 +4466,7 @@ impl World {
                 water_props.falling = Falling::False;
                 water_props.to_state_id(&Fluid::FLOWING_WATER)
             } else {
-                0
+                BlockStateId::AIR
             };
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
@@ -4482,7 +4482,7 @@ impl World {
                 let particles_packet = CWorldEvent::new(
                     WorldEvent::ParticlesDestroyBlock as i32,
                     *position,
-                    broken_state_id.into(),
+                    broken_state_id.as_u16().into(),
                     false,
                 );
                 let chunk_pos = position.chunk_position();
@@ -4785,7 +4785,7 @@ impl World {
     }
 
     /// Gets the Block + state id from the Block Registry, Returns Air if the Block state has not been found
-    pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, u16) {
+    pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, BlockStateId) {
         let id = self.get_block_state_id(position);
         (Block::from_state_id(id), id)
     }
@@ -5360,11 +5360,16 @@ impl WorldPortalExt for WorldPortal {
         )
     }
 
-    fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+    fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
         self.0.block_registry.mirror(block, state_id, mirror)
     }
 
-    fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+    fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
         self.0.block_registry.rotate(block, state_id, rotation)
     }
 

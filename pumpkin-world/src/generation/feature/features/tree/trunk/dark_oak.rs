@@ -19,7 +19,7 @@ impl DarkOakTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         block_registry: &dyn WorldPortalExt,
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
@@ -28,22 +28,22 @@ impl DarkOakTrunkPlacer {
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let below = start_pos.down();
-        placer.set_dirt(block_registry, chunk, random, &below, below_trunk_provider);
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(block_registry, chunk, random, &below, below_trunk_provider);
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.east(),
             below_trunk_provider,
         );
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.south(),
             below_trunk_provider,
         );
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
@@ -75,16 +75,16 @@ impl DarkOakTrunkPlacer {
             // Check if air or leaves at the main 2x2 position
             let state = GenerationCache::get_block_state(chunk, &pos.0);
             if TreeFeature::is_air_or_leaves(state.to_state(), state.to_block_id()) {
-                if placer.try_place(chunk, &pos, trunk_block) {
+                if TrunkPlacer::try_place(chunk, &pos, trunk_block) {
                     trunk_poses.push(pos);
                 }
-                if placer.try_place(chunk, &pos.east(), trunk_block) {
+                if TrunkPlacer::try_place(chunk, &pos.east(), trunk_block) {
                     trunk_poses.push(pos.east());
                 }
-                if placer.try_place(chunk, &pos.south(), trunk_block) {
+                if TrunkPlacer::try_place(chunk, &pos.south(), trunk_block) {
                     trunk_poses.push(pos.south());
                 }
-                if placer.try_place(chunk, &pos.east().south(), trunk_block) {
+                if TrunkPlacer::try_place(chunk, &pos.east().south(), trunk_block) {
                     trunk_poses.push(pos.east().south());
                 }
             }
@@ -110,7 +110,7 @@ impl DarkOakTrunkPlacer {
                             ey - branch_y - 1,
                             start_pos.0.z + oz,
                         );
-                        if placer.try_place(chunk, &pos, trunk_block) {
+                        if TrunkPlacer::try_place(chunk, &pos, trunk_block) {
                             trunk_poses.push(pos);
                         }
                     }

@@ -1,6 +1,7 @@
-use pumpkin_data::tag::{self};
-
-use crate::block::RawBlockState;
+use pumpkin_data::{
+    BlockStateId,
+    tag::{self},
+};
 
 pub struct TagMatchRuleTest {
     pub tag: tag::Tag,
@@ -8,7 +9,7 @@ pub struct TagMatchRuleTest {
 
 impl TagMatchRuleTest {
     #[must_use]
-    pub fn test(&self, state: RawBlockState) -> bool {
-        self.tag.1.contains(&state.to_block_id())
+    pub fn test(&self, state: BlockStateId) -> bool {
+        state.to_block_id().has_tag(self.tag)
     }
 }

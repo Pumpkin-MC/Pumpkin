@@ -28,9 +28,9 @@ impl NetherForestVegetationFeature {
         let origin_pos = pos;
         let below_state = GenerationCache::get_block_state(chunk, &origin_pos.down().0);
 
-        if !tag::Block::MINECRAFT_NYLIUM
-            .1
-            .contains(&below_state.to_block_id())
+        if !below_state
+            .to_block_id()
+            .has_tag(tag::Block::MINECRAFT_NYLIUM)
         {
             return false;
         }
@@ -52,7 +52,7 @@ impl NetherForestVegetationFeature {
                     - random.next_bounded_i32(self.spread_width),
             );
 
-            let nether_state = self.state_provider.get(random, pos);
+            let nether_state = self.state_provider.get(random, pos, chunk, block_registry);
             let nether_block = Block::from_state_id(nether_state.id);
 
             // Only place if the spot is air, above the bottom, and the block can survive here.

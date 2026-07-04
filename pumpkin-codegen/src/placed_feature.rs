@@ -77,7 +77,7 @@ pub fn build() -> TokenStream {
         .collect();
 
     quote! {
-        #[allow(clippy::all, unused_imports, dead_code)]
+        #[allow(clippy::all, unused_imports, dead_code, clippy::too_many_lines)]
         fn build_placed_features() -> std::collections::HashMap<pumpkin_data::placed_feature::PlacedFeature, PlacedFeature> {
             use crate::generation::block_predicate::{
                 AllOfBlockPredicate, AnyOfBlockPredicate, BlockPredicate,
@@ -255,9 +255,9 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
             let offset = v["noise_offset"].as_f64().unwrap_or(0.0);
             quote! {
                 PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier {
-                    noise_to_count_ratio: #ratio,
-                    noise_factor: #factor,
-                    noise_offset: #offset,
+                    to_count_ratio: #ratio,
+                    factor: #factor,
+                    offset: #offset,
                 })
             }
         }

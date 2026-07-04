@@ -1,16 +1,15 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
-use crate::block::RawBlockState;
+use crate::ProtoChunk;
 use crate::chunk::ChunkHeightmapType;
 use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::{BlockAccessor, WorldPortalExt};
-use crate::{BlockStateId, ProtoChunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::fluid::{Fluid, FluidState};
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
@@ -29,7 +28,7 @@ impl HeightLimitView for Cache {
         let mid = ((self.size * self.size) >> 1) as usize;
         match &self.chunks[mid] {
             Chunk::Proto(chunk) => chunk.height(),
-            _ => panic!(),
+            Chunk::Level(_) => panic!(),
         }
     }
 
@@ -37,7 +36,7 @@ impl HeightLimitView for Cache {
         let mid = ((self.size * self.size) >> 1) as usize;
         match &self.chunks[mid] {
             Chunk::Proto(chunk) => chunk.bottom_y(),
-            _ => panic!(),
+            Chunk::Level(_) => panic!(),
         }
     }
 }
@@ -52,12 +51,12 @@ impl BlockAccessor for Cache {
     }
 
     fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        GenerationCache::get_block_state(self, &position.0).0
+        GenerationCache::get_block_state(self, &position.0)
     }
 
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
-        let state = GenerationCache::get_block_state(self, &position.0);
-        (state.to_block(), state.to_state())
+        let id = GenerationCache::get_block_state(self, &position.0);
+        BlockState::from_id_with_block(id)
     }
 }
 
@@ -109,7 +108,7 @@ impl GenerationCache for Cache {
     }
 
     fn get_fluid_and_fluid_state(&self, pos: &Vector3<i32>) -> (Fluid, FluidState) {
-        let id = GenerationCache::get_block_state(self, pos).0;
+        let id = GenerationCache::get_block_state(self, pos);
 
         let Some(fluid) = Fluid::from_state_id(id) else {
             let block = Block::from_state_id(id);
@@ -139,7 +138,7 @@ impl GenerationCache for Cache {
         (fluid.clone(), state)
     }
 
-    fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState {
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
         let dx = (pos.x >> 4) - self.x;
         let dz = (pos.z >> 4) - self.z;
         // debug_assert!(dx < self.size && dz < self.size);
@@ -150,14 +149,14 @@ impl GenerationCache for Cache {
                 "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
                 self.x, self.z, self.size
             );
-            return RawBlockState::AIR;
+            return BlockStateId::AIR;
         }
         match &self.chunks[(dx * self.size + dz) as usize] {
-            Chunk::Level(data) => RawBlockState(
-                data.section
-                    .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
-                    .unwrap_or(0),
-            ),
+            Chunk::Level(data) => data
+                .section
+                .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
+                .unwrap_or(BlockStateId::AIR),
+
             Chunk::Proto(data) => data.get_block_state(pos),
         }
     }
@@ -212,10 +211,12 @@ impl GenerationCache for Cache {
 
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
+                self.top_block_height_exclusive(x, z)
+            }
+            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
+                self.ocean_floor_height_exclusive(x, z)
+            }
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
@@ -326,7 +327,7 @@ impl GenerationCache for Cache {
     }
 
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
-        is_air(GenerationCache::get_block_state(self, local_pos).0)
+        is_air(GenerationCache::get_block_state(self, local_pos))
     }
 }
 

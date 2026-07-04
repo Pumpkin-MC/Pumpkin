@@ -1,10 +1,10 @@
 use crate::entity::EntityBase;
 use pumpkin_data::{
-    Block, BlockDirection, HorizontalFacingExt,
+    Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::{AttachFace, HorizontalFacing},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use pumpkin_world::world::BlockAccessor;
 
 use crate::{
     block::{BlockFuture, GetStateForNeighborUpdateArgs},

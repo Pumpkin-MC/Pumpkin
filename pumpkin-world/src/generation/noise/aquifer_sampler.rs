@@ -442,6 +442,7 @@ impl WorldAquiferSampler {
         default_level.block
     }
 
+    #[expect(clippy::too_many_lines)]
     fn apply_internal(
         &mut self,
         router: &mut ChunkNoiseRouter,
@@ -671,29 +672,26 @@ mod random_positions_and_hypot {
     use std::sync::LazyLock;
 
     use pumpkin_data::{
-        chunk_gen_settings::GenerationSettings, dimension::Dimension,
+        BlockStateId, chunk_gen_settings::GenerationSettings, dimension::Dimension,
         noise_router::OVERWORLD_BASE_NOISE_ROUTER,
     };
     use pumpkin_util::math::vector3::Vector3;
 
-    use crate::{
-        block::RawBlockState,
-        generation::{
-            GlobalRandomConfig, biome_coords,
-            noise::{
-                BlockStateSampler, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK,
-                router::{
-                    chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
-                    chunk_noise_router::ChunkNoiseRouter,
-                    proto_noise_router::ProtoNoiseRouters,
-                    surface_height_sampler::{
-                        SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
-                    },
+    use crate::generation::{
+        GlobalRandomConfig, biome_coords,
+        noise::{
+            BlockStateSampler, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK,
+            router::{
+                chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
+                chunk_noise_router::ChunkNoiseRouter,
+                proto_noise_router::ProtoNoiseRouters,
+                surface_height_sampler::{
+                    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
                 },
             },
-            positions::chunk_pos,
-            proto_chunk::StandardChunkFluidLevelSampler,
         },
+        positions::chunk_pos,
+        proto_chunk::StandardChunkFluidLevelSampler,
     };
 
     use super::{AquiferSampler, FluidLevel, WorldAquiferSampler};
@@ -706,6 +704,7 @@ mod random_positions_and_hypot {
         ProtoNoiseRouters::generate(router_ast, &RANDOM_CONFIG)
     });
 
+    #[expect(clippy::unreachable)]
     fn create_aquifer(
         base_router: &'_ ProtoNoiseRouters,
     ) -> (
@@ -714,6 +713,8 @@ mod random_positions_and_hypot {
         SurfaceHeightEstimateSampler<'_>,
         ChunkNoiseFunctionSampleOptions,
     ) {
+        const CHUNK_WIDTH: usize = 16;
+
         let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
         let shape = &surface_config.shape;
         let chunk_x = 7;
@@ -723,7 +724,6 @@ mod random_positions_and_hypot {
             FluidLevel::new(63, &WATER_BLOCK),
             FluidLevel::new(-54, &LAVA_BLOCK),
         );
-        const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
             &base_router.noise,
             &RANDOM_CONFIG,
@@ -774,6 +774,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, clippy::large_stack_arrays)]
     fn get_fluid_block_state() {
         let (_, mut router, _, options) = create_aquifer(&PROTO_ROUTER);
         let level = FluidLevel::new(0, &WATER_BLOCK);
@@ -923,6 +924,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn get_noise_based_fluid_level() {
         let (_, mut router, _, options) = create_aquifer(&PROTO_ROUTER);
 
@@ -1070,6 +1072,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn get_fluid_block_y() {
         let (_, mut router, _, env) = create_aquifer(&PROTO_ROUTER);
         let level = FluidLevel::new(0, &WATER_BLOCK);
@@ -1363,6 +1366,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, clippy::large_stack_arrays)]
     fn get_fluid_level() {
         let (aquifer, mut router, mut height_estimator, env) = create_aquifer(&PROTO_ROUTER);
         let values = [
@@ -1504,12 +1508,13 @@ mod random_positions_and_hypot {
                 &mut height_estimator,
                 &env,
             );
-            assert_eq!(level.max_y, y1, "Failed at x={}, y={}, z={}", x, y, z);
+            assert_eq!(level.max_y, y1, "Failed at x={x}, y={y}, z={z}");
             assert_eq!(level.block, &state);
         }
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn calculate_density() {
         let (_, mut router, _, env) = create_aquifer(&PROTO_ROUTER);
 
@@ -1662,7 +1667,7 @@ mod random_positions_and_hypot {
     }
 
     #[test]
-    #[expect(clippy::large_stack_arrays)]
+    #[expect(clippy::too_many_lines, clippy::large_stack_arrays)]
     fn apply() {
         let (mut aquifer, mut router, mut height_estimator, env) = create_aquifer(&PROTO_ROUTER);
         let values = [
@@ -1720,45 +1725,18 @@ mod random_positions_and_hypot {
             ((112, 60, 70, 0.1782686032102433), None),
             ((112, 60, 72, 0.18822148746793055), None),
             ((112, 60, 74, 0.20387997189913717), None),
-            (
-                (112, 80, 64, -0.28931054817132484),
-                Some(RawBlockState::AIR),
-            ),
-            ((112, 80, 66, -0.2808098154769529), Some(RawBlockState::AIR)),
-            ((112, 80, 68, -0.2806908647477032), Some(RawBlockState::AIR)),
-            (
-                (112, 80, 70, -0.28068300576359284),
-                Some(RawBlockState::AIR),
-            ),
-            ((112, 80, 72, -0.2805878392398348), Some(RawBlockState::AIR)),
-            (
-                (112, 80, 74, -0.27824504138444317),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (112, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (112, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (112, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (112, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (112, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (112, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((112, 80, 64, -0.28931054817132484), Some(BlockStateId::AIR)),
+            ((112, 80, 66, -0.2808098154769529), Some(BlockStateId::AIR)),
+            ((112, 80, 68, -0.2806908647477032), Some(BlockStateId::AIR)),
+            ((112, 80, 70, -0.28068300576359284), Some(BlockStateId::AIR)),
+            ((112, 80, 72, -0.2805878392398348), Some(BlockStateId::AIR)),
+            ((112, 80, 74, -0.27824504138444317), Some(BlockStateId::AIR)),
+            ((112, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((112, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((112, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((112, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((112, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((112, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((114, -100, 64, 0.037482421875), None),
             ((114, -100, 66, 0.037482421875), None),
             ((114, -100, 68, 0.037482421875), None),
@@ -1791,11 +1769,11 @@ mod random_positions_and_hypot {
             ((114, -20, 74, 0.11770444723497474), None),
             (
                 (114, 0, 64, -0.0026209759846139574),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (114, 0, 66, -0.0011869543056835608),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((114, 0, 68, 3.9347454816496854E-4), None),
             ((114, 0, 70, 0.002068623223791626), None),
@@ -1819,39 +1797,18 @@ mod random_positions_and_hypot {
             ((114, 60, 70, 0.10529675531043547), None),
             ((114, 60, 72, 0.1261191394093652), None),
             ((114, 60, 74, 0.15323465023530602), None),
-            ((114, 80, 64, -0.3135251519473628), Some(RawBlockState::AIR)),
-            ((114, 80, 66, -0.3092766951165722), Some(RawBlockState::AIR)),
-            ((114, 80, 68, -0.3063751991759311), Some(RawBlockState::AIR)),
-            ((114, 80, 70, -0.3004342091280733), Some(RawBlockState::AIR)),
-            (
-                (114, 80, 72, -0.29703745590700253),
-                Some(RawBlockState::AIR),
-            ),
-            ((114, 80, 74, -0.2920638815250855), Some(RawBlockState::AIR)),
-            (
-                (114, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (114, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (114, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (114, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (114, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (114, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((114, 80, 64, -0.3135251519473628), Some(BlockStateId::AIR)),
+            ((114, 80, 66, -0.3092766951165722), Some(BlockStateId::AIR)),
+            ((114, 80, 68, -0.3063751991759311), Some(BlockStateId::AIR)),
+            ((114, 80, 70, -0.3004342091280733), Some(BlockStateId::AIR)),
+            ((114, 80, 72, -0.29703745590700253), Some(BlockStateId::AIR)),
+            ((114, 80, 74, -0.2920638815250855), Some(BlockStateId::AIR)),
+            ((114, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((114, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((114, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((114, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((114, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((114, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((116, -100, 64, 0.037482421875), None),
             ((116, -100, 66, 0.037482421875), None),
             ((116, -100, 68, 0.037482421875), None),
@@ -1884,15 +1841,15 @@ mod random_positions_and_hypot {
             ((116, -20, 74, 0.12214992807094607), None),
             (
                 (116, 0, 64, -0.003764380972543319),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (116, 0, 66, -0.002339168705169207),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (116, 0, 68, -7.530784033722614E-4),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((116, 0, 70, 9.517226455286942E-4), None),
             ((116, 0, 72, 0.0027605740566328273), None),
@@ -1906,11 +1863,11 @@ mod random_positions_and_hypot {
             ((116, 40, 64, -0.009355588931802767), None),
             (
                 (116, 40, 66, -0.006094366713842806),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             (
                 (116, 40, 68, -0.0027537988904787606),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             ((116, 40, 70, 6.165942717199293E-4), None),
             ((116, 40, 72, 0.00396682662711753), None),
@@ -1921,45 +1878,18 @@ mod random_positions_and_hypot {
             ((116, 60, 70, 0.053305618429865455), None),
             ((116, 60, 72, 0.06694547220363958), None),
             ((116, 60, 74, 0.08711813973093903), None),
-            ((116, 80, 64, -0.3326652310213258), Some(RawBlockState::AIR)),
-            (
-                (116, 80, 66, -0.32962834810938174),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 80, 68, -0.32236370014057947),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 80, 70, -0.31670491006554574),
-                Some(RawBlockState::AIR),
-            ),
-            ((116, 80, 72, -0.3130639601887072), Some(RawBlockState::AIR)),
-            ((116, 80, 74, -0.3124769234268471), Some(RawBlockState::AIR)),
-            (
-                (116, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (116, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((116, 80, 64, -0.3326652310213258), Some(BlockStateId::AIR)),
+            ((116, 80, 66, -0.32962834810938174), Some(BlockStateId::AIR)),
+            ((116, 80, 68, -0.32236370014057947), Some(BlockStateId::AIR)),
+            ((116, 80, 70, -0.31670491006554574), Some(BlockStateId::AIR)),
+            ((116, 80, 72, -0.3130639601887072), Some(BlockStateId::AIR)),
+            ((116, 80, 74, -0.3124769234268471), Some(BlockStateId::AIR)),
+            ((116, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((116, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((116, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((116, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((116, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((116, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((118, -100, 64, 0.037482421875), None),
             ((118, -100, 66, 0.037482421875), None),
             ((118, -100, 68, 0.037482421875), None),
@@ -1992,19 +1922,19 @@ mod random_positions_and_hypot {
             ((118, -20, 74, 0.12637678353248477), None),
             (
                 (118, 0, 64, -0.00501589634392619),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (118, 0, 66, -0.003601631485605401),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (118, 0, 68, -0.0020166185756455924),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (118, 0, 70, -2.901294172670075E-4),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((118, 0, 72, 0.0015704124446037308), None),
             ((118, 0, 74, 0.0035605198020311826), None),
@@ -2017,23 +1947,20 @@ mod random_positions_and_hypot {
             ((118, 40, 64, -0.016298811685686653), None),
             (
                 (118, 40, 66, -0.016656636719901533),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
-            (
-                (118, 40, 68, -0.01330299024830442),
-                Some(RawBlockState::AIR),
-            ),
+            ((118, 40, 68, -0.01330299024830442), Some(BlockStateId::AIR)),
             (
                 (118, 40, 70, -0.009864486324034218),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             (
                 (118, 40, 72, -0.006380723268648157),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             (
                 (118, 40, 74, -0.002886835272463701),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             ((118, 60, 64, 0.006086790713922152), None),
             ((118, 60, 66, 0.006014479808113486), None),
@@ -2041,48 +1968,18 @@ mod random_positions_and_hypot {
             ((118, 60, 70, 0.011915636473415587), None),
             ((118, 60, 72, 0.01001192490238903), None),
             ((118, 60, 74, 0.0075500927486281426), None),
-            ((118, 80, 64, -0.3462118919745469), Some(RawBlockState::AIR)),
-            (
-                (118, 80, 66, -0.34419241078645835),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 80, 68, -0.33580861045450133),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 80, 70, -0.33008534054566163),
-                Some(RawBlockState::AIR),
-            ),
-            ((118, 80, 72, -0.333649815109498), Some(RawBlockState::AIR)),
-            (
-                (118, 80, 74, -0.33771329428807284),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (118, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((118, 80, 64, -0.3462118919745469), Some(BlockStateId::AIR)),
+            ((118, 80, 66, -0.34419241078645835), Some(BlockStateId::AIR)),
+            ((118, 80, 68, -0.33580861045450133), Some(BlockStateId::AIR)),
+            ((118, 80, 70, -0.33008534054566163), Some(BlockStateId::AIR)),
+            ((118, 80, 72, -0.333649815109498), Some(BlockStateId::AIR)),
+            ((118, 80, 74, -0.33771329428807284), Some(BlockStateId::AIR)),
+            ((118, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((118, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((118, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((118, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((118, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((118, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((120, -100, 64, 0.037482421875), None),
             ((120, -100, 66, 0.037482421875), None),
             ((120, -100, 68, 0.037482421875), None),
@@ -2115,19 +2012,19 @@ mod random_positions_and_hypot {
             ((120, -20, 74, 0.13039812171785095), None),
             (
                 (120, 0, 64, -0.006329576321547214),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 0, 66, -0.004930192503238298),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 0, 68, -0.003355964670343278),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 0, 70, -0.0016206542469077872),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((120, 0, 72, 2.77535008128212E-4), None),
             ((120, 0, 74, 0.002332419553726638), None),
@@ -2140,84 +2037,57 @@ mod random_positions_and_hypot {
             ((120, 40, 64, -0.017456523705167773), None),
             (
                 (120, 40, 66, -0.020044623482270124),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             (
                 (120, 40, 68, -0.022372181411266172),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             (
                 (120, 40, 70, -0.020228945291907708),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
-            (
-                (120, 40, 72, -0.01664436674077766),
-                Some(RawBlockState::AIR),
-            ),
+            ((120, 40, 72, -0.01664436674077766), Some(BlockStateId::AIR)),
             (
                 (120, 40, 74, -0.013001583733654043),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
             (
                 (120, 60, 64, -0.010805185122555435),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 60, 66, -0.011684313707812422),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 60, 68, -0.007705484690135335),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 60, 70, -0.012326309226980426),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 60, 72, -0.019043795741958334),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (120, 60, 74, -0.023185441889689514),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
-            ((120, 80, 64, -0.3611328625547435), Some(RawBlockState::AIR)),
-            ((120, 80, 66, -0.3586517592327399), Some(RawBlockState::AIR)),
-            ((120, 80, 68, -0.3524534485283812), Some(RawBlockState::AIR)),
-            (
-                (120, 80, 70, -0.35323218454039057),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (120, 80, 72, -0.36213549677301105),
-                Some(RawBlockState::AIR),
-            ),
-            ((120, 80, 74, -0.3684474143996314), Some(RawBlockState::AIR)),
-            (
-                (120, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (120, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (120, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (120, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (120, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (120, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((120, 80, 64, -0.3611328625547435), Some(BlockStateId::AIR)),
+            ((120, 80, 66, -0.3586517592327399), Some(BlockStateId::AIR)),
+            ((120, 80, 68, -0.3524534485283812), Some(BlockStateId::AIR)),
+            ((120, 80, 70, -0.35323218454039057), Some(BlockStateId::AIR)),
+            ((120, 80, 72, -0.36213549677301105), Some(BlockStateId::AIR)),
+            ((120, 80, 74, -0.3684474143996314), Some(BlockStateId::AIR)),
+            ((120, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((120, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((120, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((120, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((120, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((120, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((122, -100, 64, 0.037482421875), None),
             ((122, -100, 66, 0.037482421875), None),
             ((122, -100, 68, 0.037482421875), None),
@@ -2250,23 +2120,23 @@ mod random_positions_and_hypot {
             ((122, -20, 74, 0.13421609155559988), None),
             (
                 (122, 0, 64, -0.007667256303541582),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 0, 66, -0.006288822820341533),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 0, 68, -0.004737470102527975),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 0, 70, -0.0030099389619020873),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 0, 72, -0.0010942861750551764),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((122, 0, 74, 0.001001992078975999), None),
             ((122, 20, 64, 0.05535892661135848), None),
@@ -2278,81 +2148,51 @@ mod random_positions_and_hypot {
             ((122, 40, 64, -0.013498316953033454), None),
             (
                 (122, 40, 66, -0.016896390550754353),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
-            (
-                (122, 40, 68, -0.01994683889106233),
-                Some(RawBlockState::AIR),
-            ),
+            ((122, 40, 68, -0.01994683889106233), Some(BlockStateId::AIR)),
             (
                 (122, 40, 70, -0.022658183924480487),
-                Some(RawBlockState::AIR),
+                Some(BlockStateId::AIR),
             ),
-            (
-                (122, 40, 72, -0.02460705550987633),
-                Some(RawBlockState::AIR),
-            ),
+            ((122, 40, 72, -0.02460705550987633), Some(BlockStateId::AIR)),
             ((122, 40, 74, -0.02133677750482264), None),
             (
                 (122, 60, 64, -0.02580014098083049),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 60, 66, -0.027410062228040422),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 60, 68, -0.02425659570836858),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 60, 70, -0.03261718168256943),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 60, 72, -0.04369665936638442),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (122, 60, 74, -0.04490159197647781),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
-            (
-                (122, 80, 64, -0.37247525946547166),
-                Some(RawBlockState::AIR),
-            ),
-            ((122, 80, 66, -0.3727266378002749), Some(RawBlockState::AIR)),
-            (
-                (122, 80, 68, -0.36804742745663505),
-                Some(RawBlockState::AIR),
-            ),
-            ((122, 80, 70, -0.3736723706537362), Some(RawBlockState::AIR)),
-            ((122, 80, 72, -0.3860951288334311), Some(RawBlockState::AIR)),
-            ((122, 80, 74, -0.3923721309133264), Some(RawBlockState::AIR)),
-            (
-                (122, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (122, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (122, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (122, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (122, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (122, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((122, 80, 64, -0.37247525946547166), Some(BlockStateId::AIR)),
+            ((122, 80, 66, -0.3727266378002749), Some(BlockStateId::AIR)),
+            ((122, 80, 68, -0.36804742745663505), Some(BlockStateId::AIR)),
+            ((122, 80, 70, -0.3736723706537362), Some(BlockStateId::AIR)),
+            ((122, 80, 72, -0.3860951288334311), Some(BlockStateId::AIR)),
+            ((122, 80, 74, -0.3923721309133264), Some(BlockStateId::AIR)),
+            ((122, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((122, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((122, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((122, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((122, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((122, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((124, -100, 64, 0.037482421875), None),
             ((124, -100, 66, 0.037482421875), None),
             ((124, -100, 68, 0.037482421875), None),
@@ -2385,23 +2225,23 @@ mod random_positions_and_hypot {
             ((124, -20, 74, 0.13781110986582973), None),
             (
                 (124, 0, 64, -0.009009809178163559),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 0, 66, -0.007660237459532607),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 0, 68, -0.0061446463166489424),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 0, 70, -0.004442459854201204),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 0, 72, -0.0025318494505197223),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((124, 0, 74, -4.216225767843497E-4), None),
             ((124, 20, 64, 0.06277697412858188), None),
@@ -2415,79 +2255,52 @@ mod random_positions_and_hypot {
             ((124, 40, 68, -0.010851313478373932), None),
             (
                 (124, 40, 70, -0.013513605008223933),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 40, 72, -0.015880866729427373),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 40, 74, -0.017978317799117856),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 60, 64, -0.033729060298063454),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 60, 66, -0.04062740064249005),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 60, 68, -0.03660634922712756),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 60, 70, -0.04106936165998065),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 60, 72, -0.048715160337165046),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (124, 60, 74, -0.053817378732386144),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
-            ((124, 80, 64, -0.378513110274629), Some(RawBlockState::AIR)),
-            (
-                (124, 80, 66, -0.37887533037235366),
-                Some(RawBlockState::AIR),
-            ),
-            ((124, 80, 68, -0.3755672366866089), Some(RawBlockState::AIR)),
-            ((124, 80, 70, -0.3806264904596738), Some(RawBlockState::AIR)),
-            (
-                (124, 80, 72, -0.39139114552312176),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 80, 74, -0.39905004304932734),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (124, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((124, 80, 64, -0.378513110274629), Some(BlockStateId::AIR)),
+            ((124, 80, 66, -0.37887533037235366), Some(BlockStateId::AIR)),
+            ((124, 80, 68, -0.3755672366866089), Some(BlockStateId::AIR)),
+            ((124, 80, 70, -0.3806264904596738), Some(BlockStateId::AIR)),
+            ((124, 80, 72, -0.39139114552312176), Some(BlockStateId::AIR)),
+            ((124, 80, 74, -0.39905004304932734), Some(BlockStateId::AIR)),
+            ((124, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((124, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((124, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((124, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((124, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((124, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
             ((126, -100, 64, 0.037482421875), None),
             ((126, -100, 66, 0.037482421875), None),
             ((126, -100, 68, 0.037482421875), None),
@@ -2520,27 +2333,27 @@ mod random_positions_and_hypot {
             ((126, -20, 74, 0.1411390651002113), None),
             (
                 (126, 0, 64, -0.010355206926252296),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 0, 66, -0.009043874021560911),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 0, 68, -0.007576245457331987),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 0, 70, -0.005915269354878528),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 0, 72, -0.0040306175772153365),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 0, 74, -0.0019328609472880898),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             ((126, 20, 64, 0.0700499260773044), None),
             ((126, 20, 66, 0.06908003164862005), None),
@@ -2552,90 +2365,63 @@ mod random_positions_and_hypot {
             ((126, 40, 66, 0.0013502912778844962), None),
             (
                 (126, 40, 68, -0.0015191728313191184),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 40, 70, -0.0041188588354404134),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 40, 72, -0.006463772144671846),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 40, 74, -0.008581034519921562),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 60, 64, -0.03471424652823008),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 60, 66, -0.04732045558891548),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 60, 68, -0.04568337003176991),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 60, 70, -0.0428377824231183),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 60, 72, -0.04738820166968918),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
             (
                 (126, 60, 74, -0.05663750895047857),
-                Some(RawBlockState(WATER_BLOCK.default_state.id)),
+                Some(WATER_BLOCK.default_state.id),
             ),
-            (
-                (126, 80, 64, -0.37931742687180287),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (126, 80, 66, -0.38265481838544235),
-                Some(RawBlockState::AIR),
-            ),
-            ((126, 80, 68, -0.3808041835281554), Some(RawBlockState::AIR)),
-            (
-                (126, 80, 70, -0.38160238129796925),
-                Some(RawBlockState::AIR),
-            ),
-            ((126, 80, 72, -0.387746448733821), Some(RawBlockState::AIR)),
-            ((126, 80, 74, -0.3990668807989283), Some(RawBlockState::AIR)),
-            (
-                (126, 100, 64, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (126, 100, 66, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (126, 100, 68, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (126, 100, 70, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (126, 100, 72, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
-            (
-                (126, 100, 74, -0.4583333333333333),
-                Some(RawBlockState::AIR),
-            ),
+            ((126, 80, 64, -0.37931742687180287), Some(BlockStateId::AIR)),
+            ((126, 80, 66, -0.38265481838544235), Some(BlockStateId::AIR)),
+            ((126, 80, 68, -0.3808041835281554), Some(BlockStateId::AIR)),
+            ((126, 80, 70, -0.38160238129796925), Some(BlockStateId::AIR)),
+            ((126, 80, 72, -0.387746448733821), Some(BlockStateId::AIR)),
+            ((126, 80, 74, -0.3990668807989283), Some(BlockStateId::AIR)),
+            ((126, 100, 64, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((126, 100, 66, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((126, 100, 68, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((126, 100, 70, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((126, 100, 72, -0.4583333333333333), Some(BlockStateId::AIR)),
+            ((126, 100, 74, -0.4583333333333333), Some(BlockStateId::AIR)),
         ];
 
         for ((x, y, z, sample), result) in values {
             let pos = Vector3::new(x, y, z);
             assert_eq!(
                 aquifer.apply_internal(&mut router, &pos, &env, &mut height_estimator, sample),
-                result.map(|r| r.to_state())
+                result.map(pumpkin_data::BlockStateId::to_state)
             );
         }
     }

@@ -1,3 +1,4 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::PoweredRailLikeProperties;
@@ -7,7 +8,6 @@ use pumpkin_data::block_properties::RailShapeStraight;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 
 use crate::world::World;
 
@@ -178,7 +178,7 @@ impl RailProperties {
         }
     }
 
-    pub fn new(state_id: u16, block: &Block) -> Self {
+    pub fn new(state_id: BlockStateId, block: &Block) -> Self {
         if block == &Block::RAIL {
             Self::Rail(RailLikeProperties::from_state_id(state_id, block))
         } else {

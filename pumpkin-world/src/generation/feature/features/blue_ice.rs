@@ -8,11 +8,10 @@ use crate::generation::proto_chunk::GenerationCache;
 
 const SEA_LEVEL: i32 = 63; // TODO: use getSeaLevel() instead of hardcoding
 
-pub struct BlueIceFeature {}
+pub struct BlueIceFeature;
 
 impl BlueIceFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,

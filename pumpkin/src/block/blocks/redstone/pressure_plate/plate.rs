@@ -1,10 +1,10 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockId, BlockState, BlockStateId,
     block_properties::BlockProperties,
     tag::{self},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
@@ -23,11 +23,11 @@ pub struct PressurePlateBlock;
 type PressurePlateProps = pumpkin_data::block_properties::StonePressurePlateLikeProperties;
 
 impl BlockMetadata for PressurePlateBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         let mut combined = Vec::new();
         combined.extend_from_slice(tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES.1);
         combined.extend_from_slice(tag::Block::MINECRAFT_STONE_PRESSURE_PLATES.1);
-        combined.into_boxed_slice()
+        combined.iter().map(|v| BlockId::new_or_air(*v)).collect()
     }
 }
 
@@ -109,12 +109,7 @@ impl PressurePlate for PressurePlateBlock {
         0
     }
 
-    fn set_redstone_output(
-        &self,
-        block: &Block,
-        state: &BlockState,
-        output: u8,
-    ) -> pumpkin_world::BlockStateId {
+    fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {
         let mut props = PressurePlateProps::from_state_id(state.id, block);
         props.powered = output > 0;
         props.to_state_id(block)

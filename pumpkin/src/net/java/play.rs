@@ -50,7 +50,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection, BlockState, translation};
+use pumpkin_data::{Advancement, Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -73,9 +73,9 @@ use pumpkin_protocol::java::server::play::{
     SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
     SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe,
-    SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock,
-    SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity, STestInstanceBlockAction,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
+    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
+    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -1882,7 +1882,7 @@ impl JavaClient {
                     {
                         self.enqueue_packet(&CBlockUpdate::new(
                             position,
-                            VarInt(i32::from(state.id)),
+                            VarInt(i32::from(state.id.as_u16())),
                         ))
                         .await;
                         self.update_sequence(player, player_action.sequence.0);
@@ -1939,7 +1939,7 @@ impl JavaClient {
                                 player
                                     .increment_stat(
                                         StatisticCategory::Mined,
-                                        broken_state.id as i32,
+                                        broken_state.id.as_u16() as i32,
                                         1,
                                     )
                                     .await;
@@ -2021,7 +2021,7 @@ impl JavaClient {
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
                             .await;
                         player
-                            .increment_stat(StatisticCategory::Mined, state.id as i32, 1)
+                            .increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1)
                             .await;
                     }
 
@@ -2088,7 +2088,7 @@ impl JavaClient {
         let synced_state_id = world.get_block_state_id(&position);
         self.send_packet_now(&CBlockUpdate::new(
             position,
-            VarInt(i32::from(synced_state_id)),
+            VarInt(i32::from(synced_state_id.as_u16())),
         ))
         .await;
     }
@@ -2198,7 +2198,7 @@ impl JavaClient {
             'cancelled: {
                 self.enqueue_packet(&CBlockUpdate::new(
                     position,
-                    VarInt(block.id as i32),
+                    VarInt(block.id.as_u16() as i32),
                 ))
                 .await;
                 return Ok(());
@@ -2923,7 +2923,7 @@ impl JavaClient {
             .await;
         self.send_packet_now(&CBlockUpdate::new(
             final_block_pos,
-            VarInt(i32::from(new_state)),
+            VarInt(i32::from(new_state.as_u16())),
         ))
         .await;
 
@@ -2952,6 +2952,20 @@ impl JavaClient {
             merchant
                 .set_selected_offer(packet.selected_slot.0 as usize)
                 .await;
+        }
+    }
+
+    pub async fn handle_seen_advancement(&self, player: &Arc<Player>, packet: SSeenAdvancement) {
+        if let SSeenAdvancement::OpenTab(tab) = packet {
+            let advancement = Advancement::from_minecraft_name(&tab.to_string());
+            if advancement.is_some() {
+                player
+                    .advancements
+                    .lock()
+                    .await
+                    .set_selected_tab(advancement)
+                    .await;
+            }
         }
     }
 

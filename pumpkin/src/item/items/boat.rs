@@ -103,7 +103,7 @@ impl ItemBehaviour for BoatItem {
                 let state_id = world_inner.get_block_state_id(pos);
 
                 // Air doesn't stop the raycast
-                if state_id == Block::AIR.id {
+                if state_id == Block::AIR.default_state.id {
                     return false;
                 }
 

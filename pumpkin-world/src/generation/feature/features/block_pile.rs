@@ -1,3 +1,1 @@
-pub struct BlockPileFeature {
-    // TODO
-}
+pub struct BlockPileFeature;

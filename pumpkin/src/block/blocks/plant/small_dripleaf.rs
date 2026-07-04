@@ -3,6 +3,7 @@ use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     PlacedArgs,
 };
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, SmallDripleafLikeProperties,
 };
@@ -10,7 +11,6 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 #[pumpkin_block("minecraft:small_dripleaf")]
