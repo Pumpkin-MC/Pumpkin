@@ -47,11 +47,14 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
     }
 }
 
+use crate::bedrock::crypto::BedrockDecryptor;
+
 /// Decoder: Client -> Server
 /// Supports `ZLib` decoding/decompression
-/// Supports Aes128 Encryption
+/// Supports Aes256 Encryption
 pub struct UDPNetworkDecoder {
     compression: Option<CompressionThreshold>,
+    decryptor: Option<BedrockDecryptor>,
 }
 
 impl Default for UDPNetworkDecoder {
@@ -69,18 +72,21 @@ pub struct EncryptionAlreadyEnabledError;
 impl UDPNetworkDecoder {
     #[must_use]
     pub const fn new() -> Self {
-        Self { compression: None }
+        Self {
+            compression: None,
+            decryptor: None,
+        }
     }
 
     pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
-    /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub const fn set_encryption(
-        &mut self,
-        _key: &[u8; 16],
-    ) -> Result<(), EncryptionAlreadyEnabledError> {
+    pub fn set_encryption(&mut self, key: &[u8; 32]) -> Result<(), EncryptionAlreadyEnabledError> {
+        if self.decryptor.is_some() {
+            return Err(EncryptionAlreadyEnabledError);
+        }
+        self.decryptor = Some(BedrockDecryptor::new(key));
         Ok(())
     }
 
@@ -101,25 +107,34 @@ impl UDPNetworkDecoder {
             )));
         }
 
-        // If compression is NOT enabled yet, the payload starts at index 1.
+        let mut data_to_decrypt = full_packet[1..].to_vec();
+        if let Some(decryptor) = &mut self.decryptor {
+            decryptor
+                .decrypt(&mut data_to_decrypt)
+                .map_err(PacketDecodeError::Message)?;
+        }
+
+        let full_packet_payload = data_to_decrypt;
+
+        // If compression is NOT enabled yet, the payload starts at index 0 of full_packet_payload
         if self.compression.is_none() {
-            let payload = &full_packet[1..];
+            let payload = &full_packet_payload[..];
             if payload.len() > MAX_PACKET_DATA_SIZE {
                 return Err(PacketDecodeError::TooLong);
             }
             return Ok(payload.to_vec());
         }
 
-        // If compression IS enabled, Bedrock expects a compression method byte at index 1.
-        let compression_method = *full_packet.get(1).ok_or_else(|| {
+        // If compression IS enabled, Bedrock expects a compression method byte at index 0 of full_packet_payload.
+        let compression_method = full_packet_payload.first().ok_or_else(|| {
             PacketDecodeError::MalformedLength("Missing Bedrock compression method".into())
         })?;
-        let data_start = 2;
+        let data_start = 1;
 
         match compression_method {
             0x00 => {
                 use tokio::io::AsyncReadExt;
-                let compressed_payload = &full_packet[data_start..];
+                let compressed_payload = &full_packet_payload[data_start..];
                 let mut decoder = DeflateDecoder::new(BufReader::new(compressed_payload))
                     .take(MAX_PACKET_DATA_SIZE as u64 + 1);
                 let mut decompressed = Vec::new();
@@ -134,7 +149,7 @@ impl UDPNetworkDecoder {
             }
             0xff => {
                 // None (Compression enabled but this specific packet is raw)
-                let payload = &full_packet[data_start..];
+                let payload = &full_packet_payload[data_start..];
                 if payload.len() > MAX_PACKET_DATA_SIZE {
                     return Err(PacketDecodeError::TooLong);
                 }
@@ -211,7 +226,7 @@ mod tests {
         const PAYLOAD_LEN: usize = 2 * 1024 * 1024 + 1;
         let payload = vec![0x2a; PAYLOAD_LEN];
         let mut wire_buf = Vec::new();
-        let network_encoder = UDPNetworkEncoder::new();
+        let mut network_encoder = UDPNetworkEncoder::new();
         network_encoder
             .write_game_packet(
                 0x01,

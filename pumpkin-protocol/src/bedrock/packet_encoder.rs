@@ -78,12 +78,15 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
     }
 }
 
+use crate::bedrock::crypto::BedrockEncryptor;
+
 /// Encoder: Server -> Client
 /// Supports `ZLib` endecoding/compression
-/// Supports Aes128 Encryption
+/// Supports Aes256 Encryption
 pub struct UDPNetworkEncoder {
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
+    encryptor: Option<BedrockEncryptor>,
 }
 
 impl Default for UDPNetworkEncoder {
@@ -95,7 +98,10 @@ impl Default for UDPNetworkEncoder {
 impl UDPNetworkEncoder {
     #[must_use]
     pub const fn new() -> Self {
-        Self { compression: None }
+        Self {
+            compression: None,
+            encryptor: None,
+        }
     }
 
     pub const fn set_compression(
@@ -105,16 +111,19 @@ impl UDPNetworkEncoder {
         self.compression = Some(compression_info);
     }
 
-    /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub const fn set_encryption(
+    pub fn set_encryption(
         &mut self,
-        _key: &[u8; 16],
+        key: &[u8; 32],
     ) -> Result<(), crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError> {
+        if self.encryptor.is_some() {
+            return Err(crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError);
+        }
+        self.encryptor = Some(BedrockEncryptor::new(key));
         Ok(())
     }
 
     pub fn write_game_packet(
-        &self,
+        &mut self,
         packet_id: u16,
         sub_client_sender: SubClient,
         sub_client_target: SubClient,
@@ -145,20 +154,26 @@ impl UDPNetworkEncoder {
             .write_u8(0xfe)
             .map_err(|e| Error::other(e.to_string()))?; // Bedrock Game Packet Header
 
+        let mut data_to_encrypt = Vec::new();
+
         if let Some((_threshold, level)) = self.compression {
             // Write Compression Method (0x00 for Zlib)
-            writer
-                .write_u8(0x00)
-                .map_err(|e| Error::other(e.to_string()))?;
+            data_to_encrypt.push(0x00);
 
             let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(level));
             encoder.write_all(&inner_buffer)?;
             let compressed_data = encoder.finish()?;
 
-            writer.write_all(&compressed_data)?;
+            data_to_encrypt.extend_from_slice(&compressed_data);
         } else {
-            writer.write_all(&inner_buffer)?;
+            data_to_encrypt.extend_from_slice(&inner_buffer);
         }
+
+        if let Some(encryptor) = &mut self.encryptor {
+            encryptor.encrypt(&mut data_to_encrypt);
+        }
+
+        writer.write_all(&data_to_encrypt)?;
 
         Ok(())
     }

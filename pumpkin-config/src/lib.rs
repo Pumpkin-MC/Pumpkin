@@ -119,6 +119,8 @@ pub struct BasicConfiguration {
     pub bedrock_edition: bool,
     /// Whether Bedrock Edition Clients are Accepted.
     pub bedrock_edition_address: SocketAddr,
+    /// Whether packet encryption is enabled for Bedrock Edition.
+    pub bedrock_encryption: bool,
     /// The seed for the world generation.
     pub seed: Seed,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
@@ -172,6 +174,7 @@ impl Default for BasicConfiguration {
             java_edition_address: "0.0.0.0:25565".parse().unwrap(),
             bedrock_edition: true,
             bedrock_edition_address: "0.0.0.0:19132".parse().unwrap(),
+            bedrock_encryption: true,
             seed: Seed(random::get_seed()),
             max_players: 1000,
             view_distance: NonZeroU8::new(16).unwrap(),
@@ -221,6 +224,10 @@ impl BasicConfiguration {
             assert!(
                 self.encryption,
                 "When online mode is enabled, encryption must be enabled"
+            );
+            assert!(
+                self.bedrock_encryption,
+                "When online mode is enabled, bedrock_encryption must be enabled"
             );
         }
         if self.allow_chat_reports {

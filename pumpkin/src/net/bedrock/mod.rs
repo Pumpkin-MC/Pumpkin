@@ -22,8 +22,11 @@ use pumpkin_protocol::{
         SubClient, UDP_HEADER_SIZE,
         ack::Acknowledge,
         client::{
-            disconnect_player::CDisconnectPlayer, level_chunk::CLevelChunk,
+            disconnect_player::CDisconnectPlayer,
+            level_chunk::CLevelChunk,
+            play_status::CPlayStatus,
             raknet::connection::CConnectionRequestAccepted,
+            resource_packs_info::{CResourcePacksInfo, ResourcePackEntry},
         },
         frame_set::{Frame, FrameSet},
         packet_decoder::UDPNetworkDecoder,
@@ -32,6 +35,7 @@ use pumpkin_protocol::{
             animate::SAnimate,
             block_pick_request::SBlockPickRequest,
             client_cache_status::SClientCacheStatus,
+            client_to_server_handshake::SClientToServerHandshake,
             command_request::SCommandRequest,
             container_close::SContainerClose,
             emote::SEmote,
@@ -79,7 +83,7 @@ pub mod unconnected;
 use crate::{
     entity::player::Player,
     localized_log, localized_log_format,
-    net::{DisconnectReason, PacketHandlerResult},
+    net::{DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig},
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
 };
@@ -158,6 +162,7 @@ pub struct BedrockClient {
     ordered_queues: Mutex<HashMap<u8, BTreeMap<u32, Frame>>>,
     incoming_game_packet_send: Sender<RawPacket>,
     incoming_game_packet_recv: Mutex<Option<Receiver<RawPacket>>>,
+    pending_profile: Mutex<Option<(GameProfile, PlayerConfig)>>,
 }
 
 impl BedrockClient {
@@ -206,6 +211,7 @@ impl BedrockClient {
             //input_sequence_number: AtomicU32::new(0),
             incoming_game_packet_send: incoming_send,
             incoming_game_packet_recv: Mutex::new(Some(incoming_recv)),
+            pending_profile: Mutex::new(None),
         }
     }
 
@@ -284,7 +290,7 @@ impl BedrockClient {
                         }
 
                         if !resend.is_empty() {
-                            let encoder = client.network_writer.read().await;
+                            let encoder = client.network_writer.write().await;
                             for (seq, id, data) in resend {
                                 debug!(
                                     "{}",
@@ -404,7 +410,7 @@ impl BedrockClient {
 
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {
-            let encoder = self.network_writer.read().await;
+            let mut encoder = self.network_writer.write().await;
             for payload in encoded_payloads {
                 let mut packet_buf = Vec::new();
                 match encoder.write_game_packet(
@@ -480,11 +486,10 @@ impl BedrockClient {
         }
 
         {
-            let Ok(network_writer) = self.network_writer.try_read() else {
+            let Ok(mut network_writer) = self.network_writer.try_write() else {
                 debug!(
                     "{}",
                     localized_log("server.log.bedrock_try_enqueue_lock_writer_failed")
-                );
                 return;
             };
 
@@ -574,7 +579,7 @@ impl BedrockClient {
         let mut packet_payload = Vec::new();
         packet.write_packet(&mut packet_payload)?;
 
-        let encoder = self.network_writer.read().await;
+        let mut encoder = self.network_writer.write().await;
         encoder.write_game_packet(
             P::PACKET_ID as u16,
             SubClient::Main,
@@ -1143,12 +1148,66 @@ impl BedrockClient {
                         }
                     };
                     match self.handle_login(packet, server).await {
-                        Ok(result) => return result,
+                        Ok(Some(result)) => return result,
+                        Ok(None) => {} // encryption enabled, wait for handshake
                         Err(err) => {
                             self.kick(DisconnectReason::Unknown, err.to_string()).await;
                             return PacketHandlerResult::Stop;
                         }
                     }
+                }
+                SClientToServerHandshake::PACKET_ID => {
+                    let _packet = match SClientToServerHandshake::read(payload) {
+                        Ok(p) => p,
+                        Err(err) => {
+                            error!("Failed to read SClientToServerHandshake: {err}");
+                            continue;
+                        }
+                    };
+                    let pending = self.pending_profile.lock().await.take();
+                    if let Some((profile, new_config)) = pending {
+                        let mut frame_set = FrameSet::default();
+                        self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
+                            .await;
+                        let br_config = &server.advanced_config.resource_pack.bedrock;
+
+                        let mut entries = Vec::new();
+                        if br_config.enabled {
+                            for pack in &br_config.packs {
+                                entries.push(ResourcePackEntry {
+                                    uuid: pack.uuid,
+                                    version: pack.version.clone(),
+                                    size: pack.size,
+                                    download_url: pack.download_url.clone(),
+                                    content_key: pack.content_key.clone(),
+                                    sub_pack_name: pack.sub_pack_name.clone(),
+                                    content_id: pack.content_id.clone(),
+                                    has_scripts: pack.has_scripts,
+                                    addon_pack: pack.addon_pack,
+                                    rtx_enabled: pack.rtx_enabled,
+                                });
+                            }
+                        }
+
+                        let packs_info = CResourcePacksInfo {
+                            resource_pack_required: br_config.force,
+                            has_addon_packs: false,
+                            has_scripts: false,
+                            is_vibrant_visuals_force_disabled: false,
+                            world_template_id: uuid::Uuid::nil(),
+                            world_template_version: String::new(),
+                            resource_packs: entries,
+                        };
+                        self.write_game_packet_to_set(&packs_info, &mut frame_set)
+                            .await;
+
+                        self.send_frame_set(frame_set, 0x84).await;
+                        return PacketHandlerResult::ReadyToPlay(profile, new_config);
+                    }
+                    error!("Received ClientToServerHandshake but no pending profile was found.");
+                    self.kick(DisconnectReason::BadPacket, "Handshake error".into())
+                        .await;
+                    return PacketHandlerResult::Stop;
                 }
                 _ => {
                     debug!(
