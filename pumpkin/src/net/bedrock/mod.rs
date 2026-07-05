@@ -490,6 +490,7 @@ impl BedrockClient {
                 debug!(
                     "{}",
                     localized_log("server.log.bedrock_try_enqueue_lock_writer_failed")
+                );
                 return;
             };
 
