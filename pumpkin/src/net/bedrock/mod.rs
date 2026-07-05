@@ -1109,6 +1109,7 @@ impl BedrockClient {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_login_sequence(
         self: &Arc<Self>,
         server: &Arc<Server>,
