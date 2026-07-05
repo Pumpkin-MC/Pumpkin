@@ -11,15 +11,17 @@ pub enum Locale {
     ArSa,
     AstEs,
     AzAz,
-    Bar,
     BaRu,
+    Bar,
     BeBy,
+    BeLatn,
     BgBg,
-    Brb,
     BrFr,
+    Brb,
     BsBa,
     CaEs,
     CsCz,
+    CvCu,
     CyGb,
     DaDk,
     DeAt,
@@ -30,13 +32,12 @@ pub enum Locale {
     EnCa,
     EnGb,
     EnNz,
-    Enp,
     EnPt,
     EnUd,
     EnUs,
+    Enp,
     Enws,
     EoUy,
-    Esan,
     EsAr,
     EsCl,
     EsEc,
@@ -44,6 +45,7 @@ pub enum Locale {
     EsMx,
     EsUy,
     EsVe,
+    Esan,
     EtEe,
     EuEs,
     FaIr,
@@ -51,6 +53,7 @@ pub enum Locale {
     FilPh,
     FoFo,
     FrCa,
+    FrCh,
     FrFr,
     FraDe,
     FurIt,
@@ -58,9 +61,12 @@ pub enum Locale {
     GaIe,
     GdGb,
     GlEs,
+    GoFr,
+    HalUa,
     HawUs,
     HeIl,
     HiIn,
+    HnNo,
     HrHr,
     HuHu,
     HyAm,
@@ -78,6 +84,7 @@ pub enum Locale {
     KoKr,
     Ksh,
     KwGb,
+    KyKg,
     LaLa,
     LbLu,
     LiLi,
@@ -100,8 +107,11 @@ pub enum Locale {
     OcFr,
     Ovd,
     PlPl,
+    Pls,
     PtBr,
     PtPt,
+    QcbEs,
+    Qid,
     QyaAa,
     RoRo,
     Rpr,
@@ -120,15 +130,19 @@ pub enum Locale {
     Szl,
     TaIn,
     ThTh,
-    TlhAa,
     TlPh,
+    TlhAa,
     Tok,
     TrTr,
     TtRu,
+    TzoMx,
     UkUa,
+    UzUz,
     ValEs,
     VecIt,
     ViVn,
+    VpVl,
+    Vro,
     YiDe,
     YoNg,
     ZhCn,
@@ -158,15 +172,17 @@ impl FromStr for Locale {
             "ar_sa" => Ok(Self::ArSa),       // Arabic
             "ast_es" => Ok(Self::AstEs),     // Asturian
             "az_az" => Ok(Self::AzAz),       // Azerbaijani
-            "bar" => Ok(Self::Bar),          // Bavarian
             "ba_ru" => Ok(Self::BaRu),       // Bashkir
+            "bar" => Ok(Self::Bar),          // Bavarian
             "be_by" => Ok(Self::BeBy),       // Belarusian
+            "be_latn" => Ok(Self::BeLatn),   // Belarusian (Latin)
             "bg_bg" => Ok(Self::BgBg),       // Bulgarian
-            "brb" => Ok(Self::Brb),          // Brabantian
             "br_fr" => Ok(Self::BrFr),       // Breton
+            "brb" => Ok(Self::Brb),          // Brabantian
             "bs_ba" => Ok(Self::BsBa),       // Bosnian
             "ca_es" => Ok(Self::CaEs),       // Catalan
             "cs_cz" => Ok(Self::CsCz),       // Czech
+            "cv_cu" => Ok(Self::CvCu),       // Chuvash
             "cy_gb" => Ok(Self::CyGb),       // Welsh
             "da_dk" => Ok(Self::DaDk),       // Danish
             "de_at" => Ok(Self::DeAt),       // Austrian German
@@ -177,13 +193,12 @@ impl FromStr for Locale {
             "en_ca" => Ok(Self::EnCa),       // Canadian English
             "en_gb" => Ok(Self::EnGb),       // British English
             "en_nz" => Ok(Self::EnNz),       // New Zealand English
-            "enp" => Ok(Self::Enp),          // Modern English minus borrowed words
             "en_pt" => Ok(Self::EnPt),       // Pirate English
             "en_ud" => Ok(Self::EnUd),       // Upside down British English
             "en_us" => Ok(Self::EnUs),       // English (US)
+            "enp" => Ok(Self::Enp),          // Modern English minus borrowed words
             "enws" => Ok(Self::Enws),        // Early Modern English
             "eo_uy" => Ok(Self::EoUy),       // Esperanto
-            "esan" => Ok(Self::Esan),        // Andalusian
             "es_ar" => Ok(Self::EsAr),       // Argentinian Spanish
             "es_cl" => Ok(Self::EsCl),       // Chilean Spanish
             "es_ec" => Ok(Self::EsEc),       // Ecuadorian Spanish
@@ -191,6 +206,7 @@ impl FromStr for Locale {
             "es_mx" => Ok(Self::EsMx),       // Mexican Spanish
             "es_uy" => Ok(Self::EsUy),       // Uruguayan Spanish
             "es_ve" => Ok(Self::EsVe),       // Venezuelan Spanish
+            "esan" => Ok(Self::Esan),        // Andalusian
             "et_ee" => Ok(Self::EtEe),       // Estonian
             "eu_es" => Ok(Self::EuEs),       // Basque
             "fa_ir" => Ok(Self::FaIr),       // Persian
@@ -198,6 +214,7 @@ impl FromStr for Locale {
             "fil_ph" => Ok(Self::FilPh),     // Filipino
             "fo_fo" => Ok(Self::FoFo),       // Faroese
             "fr_ca" => Ok(Self::FrCa),       // Canadian French
+            "fr_ch" => Ok(Self::FrCh),       // Swiss French
             "fr_fr" => Ok(Self::FrFr),       // European French
             "fra_de" => Ok(Self::FraDe),     // East Franconian
             "fur_it" => Ok(Self::FurIt),     // Friulian
@@ -205,9 +222,12 @@ impl FromStr for Locale {
             "ga_ie" => Ok(Self::GaIe),       // Irish
             "gd_gb" => Ok(Self::GdGb),       // Scottish Gaelic
             "gl_es" => Ok(Self::GlEs),       // Galician
+            "go_fr" => Ok(Self::GoFr),       // Franco-Provençal
+            "hal_ua" => Ok(Self::HalUa),     // Halych
             "haw_us" => Ok(Self::HawUs),     // Hawaiian
             "he_il" => Ok(Self::HeIl),       // Hebrew
             "hi_in" => Ok(Self::HiIn),       // Hindi
+            "hn_no" => Ok(Self::HnNo),       // Høgnorsk
             "hr_hr" => Ok(Self::HrHr),       // Croatian
             "hu_hu" => Ok(Self::HuHu),       // Hungarian
             "hy_am" => Ok(Self::HyAm),       // Armenian
@@ -225,6 +245,7 @@ impl FromStr for Locale {
             "ko_kr" => Ok(Self::KoKr),       // Korean
             "ksh" => Ok(Self::Ksh),          // Kölsch/Ripuarian
             "kw_gb" => Ok(Self::KwGb),       // Cornish
+            "ky_kg" => Ok(Self::KyKg),       // Kyrgyz
             "la_la" => Ok(Self::LaLa),       // Latin
             "lb_lu" => Ok(Self::LbLu),       // Luxembourgish
             "li_li" => Ok(Self::LiLi),       // Limburgish
@@ -247,8 +268,11 @@ impl FromStr for Locale {
             "oc_fr" => Ok(Self::OcFr),       // Occitan
             "ovd" => Ok(Self::Ovd),          // Elfdalian
             "pl_pl" => Ok(Self::PlPl),       // Polish
+            "pls" => Ok(Self::Pls),          // Pseudo-Latin
             "pt_br" => Ok(Self::PtBr),       // Brazilian Portuguese
             "pt_pt" => Ok(Self::PtPt),       // European Portuguese
+            "qcb_es" => Ok(Self::QcbEs),     // Querétaro Otomi
+            "qid" => Ok(Self::Qid),          // Quenya (Sindarin inspired)
             "qya_aa" => Ok(Self::QyaAa),     // Quenya (Form of Elvish from LOTR)
             "ro_ro" => Ok(Self::RoRo),       // Romanian
             "rpr" => Ok(Self::Rpr),          // Russian (Pre-revolutionary)
@@ -267,15 +291,19 @@ impl FromStr for Locale {
             "szl" => Ok(Self::Szl),          // Silesian
             "ta_in" => Ok(Self::TaIn),       // Tamil
             "th_th" => Ok(Self::ThTh),       // Thai
-            "tlh_aa" => Ok(Self::TlhAa),     // Klingon
             "tl_ph" => Ok(Self::TlPh),       // Tagalog
+            "tlh_aa" => Ok(Self::TlhAa),     // Klingon
             "tok" => Ok(Self::Tok),          // Toki Pona
             "tr_tr" => Ok(Self::TrTr),       // Turkish
             "tt_ru" => Ok(Self::TtRu),       // Tatar
+            "tzo_mx" => Ok(Self::TzoMx),     // Tzotzil
             "uk_ua" => Ok(Self::UkUa),       // Ukrainian
+            "uz_uz" => Ok(Self::UzUz),       // Uzbek
             "val_es" => Ok(Self::ValEs),     // Valencian
             "vec_it" => Ok(Self::VecIt),     // Venetian
             "vi_vn" => Ok(Self::ViVn),       // Vietnamese
+            "vp_vl" => Ok(Self::VpVl),       // Võro (South Estonian variant)
+            "vro" => Ok(Self::Vro),          // Võro
             "yi_de" => Ok(Self::YiDe),       // Yiddish
             "yo_ng" => Ok(Self::YoNg),       // Yoruba
             "zh_cn" => Ok(Self::ZhCn),       // Chinese Simplified (China; Mandarin)

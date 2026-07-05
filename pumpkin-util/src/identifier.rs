@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::translation::localized_log_format;
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 
 pub const VANILLA_NAMESPACE: &str = "minecraft";
-pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
 
 /// An immutable structure that identifies a particular resource,
 /// which is possibly heap-allocated.
