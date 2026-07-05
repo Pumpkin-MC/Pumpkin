@@ -283,7 +283,7 @@ impl DynamicLightEngine {
             // position, spinning this loop indefinitely at the border between
             // loaded and unloaded chunks.
             let (neighbor_chunk, _) = neighbor_pos.chunk_and_chunk_relative_position();
-            if level.read_chunk_sync(&neighbor_chunk, |_| ()).is_none() {
+            if !level.is_chunk_loaded(&neighbor_chunk) {
                 continue;
             }
 
@@ -319,7 +319,7 @@ impl DynamicLightEngine {
             // See `propagate_sky_light_increase`: skip unloaded chunks so sky
             // light updates never spin at loaded/unloaded chunk borders.
             let (neighbor_chunk, _) = neighbor_pos.chunk_and_chunk_relative_position();
-            if level.read_chunk_sync(&neighbor_chunk, |_| ()).is_none() {
+            if !level.is_chunk_loaded(&neighbor_chunk) {
                 continue;
             }
 
