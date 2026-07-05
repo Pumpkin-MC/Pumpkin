@@ -12,7 +12,7 @@ use pumpkin_protocol::bedrock::server::{
     raknet::{
         connection::SConnectionRequest,
         open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
-        unconnected_ping::SUnconnectedPing,
+        unconnected_ping::{SUnconnectedPing, SUnconnectedPingOpenConnections},
     },
     request_chunk_radius::SRequestChunkRadius,
     request_network_settings::SRequestNetworkSettings,
@@ -60,6 +60,8 @@ fn fuzz_serverbound_packets(payload: &[u8]) {
     let _ = SOpenConnectionRequest2::read(&mut cursor);
     cursor.set_position(0);
     let _ = SUnconnectedPing::read(&mut cursor);
+    cursor.set_position(0);
+    let _ = SUnconnectedPingOpenConnections::read(&mut cursor);
 }
 
 // ---------------------------------------------------------------------------

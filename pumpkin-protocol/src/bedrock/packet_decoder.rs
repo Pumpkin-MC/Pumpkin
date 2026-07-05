@@ -226,7 +226,7 @@ mod tests {
         const PAYLOAD_LEN: usize = 2 * 1024 * 1024 + 1;
         let payload = vec![0x2a; PAYLOAD_LEN];
         let mut wire_buf = Vec::new();
-        let mut network_encoder = UDPNetworkEncoder::new();
+        let network_encoder = UDPNetworkEncoder::new();
         network_encoder
             .write_game_packet(
                 0x01,

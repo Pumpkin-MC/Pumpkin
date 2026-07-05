@@ -646,7 +646,7 @@ impl PumpkinServer {
                             };
 
                             let id = udp_buf[0];
-                            let is_online = id & 128 != 0;
+                            let is_online = id & pumpkin_protocol::bedrock::RAKNET_VALID != 0;
 
                             if is_online {
                                 let be_clients = bedrock_clients.clone();

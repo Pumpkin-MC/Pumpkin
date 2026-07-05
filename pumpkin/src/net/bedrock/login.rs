@@ -13,7 +13,6 @@ use pumpkin_protocol::bedrock::{
         resource_pack_stack::CResourcePackStackPacket, resource_packs_info::CResourcePacksInfo,
         start_game::Experiments,
     },
-    frame_set::FrameSet,
     server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
 };
 use pumpkin_protocol::bedrock::{
@@ -257,9 +256,7 @@ impl BedrockClient {
             return Ok(None);
         }
 
-        let mut frame_set = FrameSet::default();
-
-        self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
+        self.enqueue_packet_internal(&CPlayStatus::LoginSuccess)
             .await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
@@ -290,10 +287,7 @@ impl BedrockClient {
             world_template_version: String::new(),
             resource_packs: entries,
         };
-        self.write_game_packet_to_set(&packs_info, &mut frame_set)
-            .await;
-
-        self.send_frame_set(frame_set, 0x84).await;
+        self.enqueue_packet_internal(&packs_info).await;
 
         let new_config = PlayerConfig {
             locale: client_data.language_code.clone(),
@@ -333,14 +327,8 @@ impl BedrockClient {
                 // TODO: send packs
             }
             SResourcePackResponse::STATUS_HAVE_ALL_PACKS => {
-                debug!(
-                    "{}",
-                    localized_log("server.log.bedrock_resource_pack_have_all_packs")
-                );
-                let mut frame_set = FrameSet::default();
-
+                debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
                 let br_config = &server.advanced_config.resource_pack.bedrock;
-
                 // Convert your config packs into protocol stack entries
                 let resource_packs = if br_config.enabled {
                     br_config
@@ -356,22 +344,17 @@ impl BedrockClient {
                     Vec::new()
                 };
 
-                self.write_game_packet_to_set(
-                    &CResourcePackStackPacket::new(
-                        br_config.force,
-                        resource_packs,
-                        CURRENT_BEDROCK_MC_VERSION.to_string(),
-                        Experiments {
-                            names_size: 0,
-                            experiments_ever_toggled: false,
-                        },
-                        false,
-                    ),
-                    &mut frame_set,
-                )
+                self.enqueue_packet_internal(&CResourcePackStackPacket::new(
+                    br_config.force,
+                    resource_packs,
+                    CURRENT_BEDROCK_MC_VERSION.to_string(),
+                    Experiments {
+                        names_size: 0,
+                        experiments_ever_toggled: false,
+                    },
+                    false,
+                ))
                 .await;
-
-                self.send_frame_set(frame_set, 0x84).await;
             }
             SResourcePackResponse::STATUS_COMPLETED => {
                 debug!(

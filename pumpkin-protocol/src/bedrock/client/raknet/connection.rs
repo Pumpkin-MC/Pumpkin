@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use pumpkin_macros::packet;
 
-use crate::serial::PacketWrite;
+use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
 #[derive(PacketWrite)]
 #[packet(0x03)]
 pub struct CConnectedPong {
@@ -46,3 +46,75 @@ impl CConnectionRequestAccepted {
         }
     }
 }
+
+#[derive(PacketWrite)]
+#[packet(0x12)]
+pub struct CAlreadyConnected {
+    magic: [u8; 16],
+    server_guid: u64,
+}
+
+impl CAlreadyConnected {
+    #[must_use]
+    pub const fn new(server_guid: u64) -> Self {
+        Self {
+            magic: RAKNET_MAGIC,
+            server_guid,
+        }
+    }
+}
+
+#[derive(PacketWrite)]
+#[packet(0x14)]
+pub struct CNoFreeIncomingConnections {
+    magic: [u8; 16],
+    server_guid: u64,
+}
+
+impl CNoFreeIncomingConnections {
+    #[must_use]
+    pub const fn new(server_guid: u64) -> Self {
+        Self {
+            magic: RAKNET_MAGIC,
+            server_guid,
+        }
+    }
+}
+
+#[derive(PacketWrite)]
+#[packet(0x17)]
+pub struct CConnectionBanned {
+    magic: [u8; 16],
+    server_guid: u64,
+}
+
+impl CConnectionBanned {
+    #[must_use]
+    pub const fn new(server_guid: u64) -> Self {
+        Self {
+            magic: RAKNET_MAGIC,
+            server_guid,
+        }
+    }
+}
+
+#[derive(PacketWrite)]
+#[packet(0x1A)]
+pub struct CIpRecentlyConnected {
+    magic: [u8; 16],
+    server_guid: u64,
+}
+
+impl CIpRecentlyConnected {
+    #[must_use]
+    pub const fn new(server_guid: u64) -> Self {
+        Self {
+            magic: RAKNET_MAGIC,
+            server_guid,
+        }
+    }
+}
+
+#[derive(PacketWrite)]
+#[packet(0x15)]
+pub struct CDisconnect;

@@ -122,8 +122,12 @@ impl UDPNetworkEncoder {
         Ok(())
     }
 
+    pub const fn encryptor_mut(&mut self) -> Option<&mut BedrockEncryptor> {
+        self.encryptor.as_mut()
+    }
+
     pub fn write_game_packet(
-        &mut self,
+        &self,
         packet_id: u16,
         sub_client_sender: SubClient,
         sub_client_target: SubClient,
@@ -154,26 +158,22 @@ impl UDPNetworkEncoder {
             .write_u8(0xfe)
             .map_err(|e| Error::other(e.to_string()))?; // Bedrock Game Packet Header
 
-        let mut data_to_encrypt = Vec::new();
+        let mut data_to_write = Vec::new();
 
         if let Some((_threshold, level)) = self.compression {
             // Write Compression Method (0x00 for Zlib)
-            data_to_encrypt.push(0x00);
+            data_to_write.push(0x00);
 
             let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(level));
             encoder.write_all(&inner_buffer)?;
             let compressed_data = encoder.finish()?;
 
-            data_to_encrypt.extend_from_slice(&compressed_data);
+            data_to_write.extend_from_slice(&compressed_data);
         } else {
-            data_to_encrypt.extend_from_slice(&inner_buffer);
+            data_to_write.extend_from_slice(&inner_buffer);
         }
 
-        if let Some(encryptor) = &mut self.encryptor {
-            encryptor.encrypt(&mut data_to_encrypt);
-        }
-
-        writer.write_all(&data_to_encrypt)?;
+        writer.write_all(&data_to_write)?;
 
         Ok(())
     }

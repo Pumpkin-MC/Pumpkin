@@ -80,7 +80,6 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
-use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
     CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
@@ -2228,79 +2227,74 @@ impl World {
                 .await;
         };
 
-        let mut frame_set = FrameSet::default();
         client
-            .write_game_packet_to_set(
-                &CUpdateAttributes {
-                    runtime_id: VarULong(runtime_id),
-                    attributes: vec![
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 3.402_823_5E38,
-                            current_value: 0.1,
-                            default_min_value: 0.0,
-                            default_max_value: 3.402_823_5E38,
-                            default_value: 0.1,
-                            name: "minecraft:movement".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 3.402_823_5E38,
-                            current_value: 0.02,
-                            default_min_value: 0.0,
-                            default_max_value: 3.402_823_5E38,
-                            default_value: 0.02,
-                            name: "minecraft:underwater_movement".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 1.0,
-                            current_value: 0.08,
-                            default_min_value: 0.0,
-                            default_max_value: 1.0,
-                            default_value: 0.08,
-                            name: "minecraft:gravity".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 400.0,
-                            current_value: 400.0,
-                            default_min_value: 0.0,
-                            default_max_value: 400.0,
-                            default_value: 400.0,
-                            name: "minecraft:air".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 20.0,
-                            current_value: 20.0,
-                            default_min_value: 0.0,
-                            default_max_value: 20.0,
-                            default_value: 20.0,
-                            name: "minecraft:health".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 20.0,
-                            current_value: 20.0,
-                            default_min_value: 0.0,
-                            default_max_value: 20.0,
-                            default_value: 20.0,
-                            name: "minecraft:player.hunger".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                    ],
-                    player_tick: VarULong(0),
-                },
-                &mut frame_set,
-            )
+            .enqueue_packet_internal(&CUpdateAttributes {
+                runtime_id: VarULong(runtime_id),
+                attributes: vec![
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 3.402_823_5E38,
+                        current_value: 0.1,
+                        default_min_value: 0.0,
+                        default_max_value: 3.402_823_5E38,
+                        default_value: 0.1,
+                        name: "minecraft:movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 3.402_823_5E38,
+                        current_value: 0.02,
+                        default_min_value: 0.0,
+                        default_max_value: 3.402_823_5E38,
+                        default_value: 0.02,
+                        name: "minecraft:underwater_movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 1.0,
+                        current_value: 0.08,
+                        default_min_value: 0.0,
+                        default_max_value: 1.0,
+                        default_value: 0.08,
+                        name: "minecraft:gravity".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 400.0,
+                        current_value: 400.0,
+                        default_min_value: 0.0,
+                        default_max_value: 400.0,
+                        default_value: 400.0,
+                        name: "minecraft:air".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 20.0,
+                        current_value: 20.0,
+                        default_min_value: 0.0,
+                        default_max_value: 20.0,
+                        default_value: 20.0,
+                        name: "minecraft:health".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 20.0,
+                        current_value: 20.0,
+                        default_min_value: 0.0,
+                        default_max_value: 20.0,
+                        default_value: 20.0,
+                        name: "minecraft:player.hunger".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                ],
+                player_tick: VarULong(0),
+            })
             .await;
-        client.send_frame_set(frame_set, 0x84).await;
 
         // --- MULTIPLAYER BROADCASTING ---
 

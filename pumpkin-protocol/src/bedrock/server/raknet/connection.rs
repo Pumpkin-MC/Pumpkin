@@ -35,3 +35,6 @@ pub struct SNewIncomingConnection {
 
 #[packet(0x15)]
 pub struct SDisconnect;
+
+#[packet(0x16)]
+pub struct SConnectionLost;
