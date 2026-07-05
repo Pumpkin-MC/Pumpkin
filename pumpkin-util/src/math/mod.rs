@@ -1,4 +1,5 @@
 use num_traits::{Float, One, PrimInt, Zero};
+use std::sync::LazyLock;
 
 pub mod atomic_f32;
 pub mod bit_storage;
@@ -14,6 +15,25 @@ pub mod position;
 pub mod vector2;
 pub mod vector3;
 pub mod vertical_surface_type;
+
+const SIN_SCALE: f32 = 10430.378; // 65536 / 2P
+const SIN_MASK: i32 = 65535;
+
+static SIN: LazyLock<[f32; 65536]> = LazyLock::new(|| {
+    std::array::from_fn(|i| (f64::from(i as u32) / 10430.378350470453).sin() as f32)
+});
+
+/// Returns the vanilla sine table value for an angle in radians.
+#[must_use]
+pub fn sin(value: f32) -> f32 {
+    SIN[((value * SIN_SCALE) as i32 & SIN_MASK) as usize]
+}
+
+/// Returns the vanilla cosine table value for an angle in radians.
+#[must_use]
+pub fn cos(value: f32) -> f32 {
+    SIN[((value * SIN_SCALE + 16384.0) as i32 & SIN_MASK) as usize]
+}
 
 /// Wraps an angle in degrees to the range [-180, 180).
 ///

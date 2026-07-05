@@ -57,6 +57,8 @@ use crate::{
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::tick::{ScheduledTick, TickPriority};
+
 enum ActiveSupplier {
     Overworld(MultiNoiseBiomeSupplier),
     Nether(MultiNoiseBiomeSupplier),
@@ -142,6 +144,7 @@ pub struct ProtoChunk {
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
+    pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
 pub struct TerrainCache {
@@ -215,6 +218,7 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            fluid_ticks: Vec::new(),
         }
     }
 
@@ -326,6 +330,15 @@ impl ProtoChunk {
 
     pub fn take_pending_block_entities(&mut self) -> Vec<NbtCompound> {
         std::mem::take(&mut self.pending_block_entities)
+    }
+
+    pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {
+        self.fluid_ticks.push(ScheduledTick {
+            delay: 0,
+            priority: TickPriority::Normal,
+            position: BlockPos::new(x, y, z),
+            value: fluid,
+        });
     }
 
     fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
@@ -834,6 +847,9 @@ impl ProtoChunk {
 
     pub fn spawn_mobs<T: GenerationCache>(cache: &mut T, block_registry: &dyn WorldPortalExt) {
         let chunk = cache.get_center_chunk();
+        if chunk.stage >= StagedChunkEnum::Spawn {
+            return;
+        }
         debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
 
         let biome = chunk.get_terrain_gen_biome(

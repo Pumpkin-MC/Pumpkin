@@ -16,7 +16,7 @@ fn main() {
     );
     let mut pool_code = String::from(
         "
-        #[allow(clippy::too_many_lines)] 
+        #[allow(clippy::too_many_lines)]
         #[allow(clippy::match_same_arms)]
         #[must_use]
         pub fn get_pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {\n    match pool_id {\n",

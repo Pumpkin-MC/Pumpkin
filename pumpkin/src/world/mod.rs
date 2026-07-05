@@ -2584,11 +2584,6 @@ impl World {
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
 
-        // Spawn in initial chunks
-        // This is made before the player teleport so that the player doesn't glitch out when spawning
-        chunker::update_position(player).await;
-
-        // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
             let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
@@ -2610,7 +2605,22 @@ impl World {
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
-        let velocity = player.get_entity().velocity.load();
+        // Load chunks around the real spawn position before teleporting the client there.
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
+        player.living_entity.entity.last_pos.store(position);
+        chunker::update_position(player).await;
+
+        let center_chunk = player.living_entity.entity.chunk_pos.load();
+        let chunk = self
+            .level
+            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
+            .await;
+        client.send_packet_now(&CChunkBatchStart).await;
+        client.send_packet_now(&CChunkData(&chunk)).await;
+        client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+
+        let velocity = player.living_entity.entity.velocity.load();
 
         debug!(
             "{}",
@@ -2620,8 +2630,6 @@ impl World {
             )
         );
         player.request_teleport(position, yaw, pitch).await;
-
-        player.get_entity().last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
         let bedrock_player_list = CPlayerList {

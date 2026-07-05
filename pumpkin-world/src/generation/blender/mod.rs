@@ -325,7 +325,7 @@ impl BiomeSupplier for BlenderBiomeSupplier<'_> {
     fn biome(&self, x: i32, y: i32, z: i32, sampler: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         self.blender
             .blend_biome(x, y, z, &self.shift_noise)
-            .map_or_else(|| self.base.biome(x, y, z, sampler), |blended| blended)
+            .unwrap_or_else(|| self.base.biome(x, y, z, sampler))
     }
 }
 

@@ -37,12 +37,14 @@ pub mod chunk;
 pub mod lighting;
 pub mod op;
 
+mod advancement;
 mod player_data;
 mod pvp;
 mod server_links;
 pub mod whitelist;
 pub mod world;
 
+use advancement::AdvancementConfig;
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
@@ -103,6 +105,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Locale and language resolution configuration.
     pub locale: LocaleConfig,
+    /// Advancement configuration
+    pub advancement: AdvancementConfig,
 }
 
 /// Basic configuration for core server settings.
