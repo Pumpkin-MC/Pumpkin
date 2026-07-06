@@ -1,3 +1,4 @@
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use std::path::Path;
 
 use pumpkin_util::{
@@ -9,7 +10,6 @@ use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
     dispatcher::CommandError,
-    translate_component,
     tree::{
         CommandTree,
         builder::{argument, literal, require},
@@ -38,11 +38,12 @@ impl CommandExecutor for ListExecutor {
             let locale = sender.get_locale();
 
             let mut message = if plugins.is_empty() {
-                translate_component("commands.plugin.no_plugins", locale, [])
+                TextComponent::custom(PUMPKIN_NAMESPACE, "commands.plugin.no_plugins", locale, [])
             } else if plugins.len() == 1 {
-                translate_component("commands.plugin.one_plugin", locale, [])
+                TextComponent::custom(PUMPKIN_NAMESPACE, "commands.plugin.one_plugin", locale, [])
             } else {
-                translate_component(
+                TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.plugin.multiple_plugins",
                     locale,
                     [TextComponent::text(plugins.len().to_string())],
@@ -52,7 +53,8 @@ impl CommandExecutor for ListExecutor {
             for (i, metadata) in plugins.iter().enumerate() {
                 let mut component = TextComponent::text(metadata.name.clone())
                     .color_named(NamedColor::Green)
-                    .hover_event(HoverEvent::show_text(translate_component(
+                    .hover_event(HoverEvent::show_text(TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
                         "commands.plugin.hover_text",
                         locale,
                         [
@@ -62,7 +64,8 @@ impl CommandExecutor for ListExecutor {
                         ],
                     )));
                 if i != plugins.len() - 1 {
-                    component = component.add_child(translate_component(
+                    component = component.add_child(TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
                         "commands.plugin.list.separator",
                         locale,
                         [],
@@ -95,7 +98,8 @@ impl CommandExecutor for LoadExecutor {
             let locale = sender.get_locale();
 
             if server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(translate_component(
+                return Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.plugin.already_loaded",
                     locale,
                     [TextComponent::text(plugin_name.to_string())],
@@ -111,7 +115,8 @@ impl CommandExecutor for LoadExecutor {
                 Ok(()) => {
                     sender
                         .send_message(
-                            translate_component(
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
                                 "commands.plugin.loaded_successfully",
                                 locale,
                                 [TextComponent::text(plugin_name.to_string())],
@@ -121,7 +126,8 @@ impl CommandExecutor for LoadExecutor {
                         .await;
                     Ok(1)
                 }
-                Err(e) => Err(CommandError::CommandFailed(translate_component(
+                Err(e) => Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.plugin.failed_to_load",
                     locale,
                     [
@@ -150,7 +156,8 @@ impl CommandExecutor for UnloadExecutor {
             let locale = sender.get_locale();
 
             if !server.plugin_manager.is_plugin_active(plugin_name).await {
-                return Err(CommandError::CommandFailed(translate_component(
+                return Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.plugin.not_loaded",
                     locale,
                     [TextComponent::text(plugin_name.to_string())],
@@ -163,7 +170,8 @@ impl CommandExecutor for UnloadExecutor {
                 Ok(()) => {
                     sender
                         .send_message(
-                            translate_component(
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
                                 "commands.plugin.unloaded_successfully",
                                 locale,
                                 [TextComponent::text(plugin_name.to_string())],
@@ -174,7 +182,8 @@ impl CommandExecutor for UnloadExecutor {
 
                     Ok(1)
                 }
-                Err(e) => Err(CommandError::CommandFailed(translate_component(
+                Err(e) => Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.plugin.failed_to_unload",
                     locale,
                     [
@@ -202,7 +211,8 @@ impl CommandExecutor for HotReloadExecutor {
 
             if enabled {
                 if let Err(e) = server.plugin_manager.start_watcher().await {
-                    return Err(CommandError::CommandFailed(translate_component(
+                    return Err(CommandError::CommandFailed(TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
                         "commands.plugin.failed_to_start_watcher",
                         locale,
                         [TextComponent::text(e.to_string())],
@@ -211,14 +221,24 @@ impl CommandExecutor for HotReloadExecutor {
 
                 sender
                     .send_message(
-                        translate_component("commands.plugin.hotreload_enabled", locale, [])
-                            .color_named(NamedColor::Green),
+                        TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
+                            "commands.plugin.hotreload_enabled",
+                            locale,
+                            [],
+                        )
+                        .color_named(NamedColor::Green),
                     )
                     .await;
                 sender
                     .send_message(
-                        translate_component("commands.plugin.hotreload_warning", locale, [])
-                            .color_named(NamedColor::Red),
+                        TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
+                            "commands.plugin.hotreload_warning",
+                            locale,
+                            [],
+                        )
+                        .color_named(NamedColor::Red),
                     )
                     .await;
             } else {
@@ -226,8 +246,13 @@ impl CommandExecutor for HotReloadExecutor {
 
                 sender
                     .send_message(
-                        translate_component("commands.plugin.hotreload_disabled", locale, [])
-                            .color_named(NamedColor::Green),
+                        TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
+                            "commands.plugin.hotreload_disabled",
+                            locale,
+                            [],
+                        )
+                        .color_named(NamedColor::Green),
                     )
                     .await;
             }

@@ -1,10 +1,11 @@
 use pumpkin_data::entity::EntityType;
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use pumpkin_i18n::server_command_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
 use crate::{
-    command::{args::ConsumeResult, dispatcher::CommandError, translate_component},
+    command::{args::ConsumeResult, dispatcher::CommandError},
     server::Server,
 };
 
@@ -55,7 +56,8 @@ impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
             Some(Arg::Block(name)) => {
                 EntityType::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::CommandFailed(translate_component(
+                        Err(CommandError::CommandFailed(TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
                             "commands.args.summonable_entities.not_found",
                             server_command_locale(),
                             [TextComponent::text(name.to_string())],

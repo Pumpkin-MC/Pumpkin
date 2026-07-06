@@ -4,12 +4,12 @@ use crate::command::tree::builder::literal;
 use crate::command::{
     CommandError, CommandExecutor, CommandSender,
     args::{Arg, ConsumedArgs},
-    translate_component,
     tree::{CommandTree, builder::argument},
 };
 use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use pumpkin_i18n::server_command_locale;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -48,7 +48,8 @@ impl CommandExecutor for GetEntityDataExecutor {
 pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, TextComponent> {
     let folded = TextComponent::text("<...>").color_named(NamedColor::Gray);
     match tag {
-        NbtTag::End => Err(translate_component(
+        NbtTag::End => Err(TextComponent::custom(
+            PUMPKIN_NAMESPACE,
             "commands.data.error.unexpected_end_tag",
             server_command_locale(),
             [],
@@ -133,7 +134,8 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                 for (index, item) in value.iter().take(128).enumerate() {
                     let item_display =
                         snbt_colorful_display(item, depth + 1).map_err(|message| {
-                            translate_component(
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
                                 "commands.data.error.display_item",
                                 server_command_locale(),
                                 [TextComponent::text(index.to_string()), message],
@@ -167,7 +169,8 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                 for (index, (key, item)) in value.child_tags.iter().take(128).enumerate() {
                     let item_display =
                         snbt_colorful_display(item, depth + 1).map_err(|message| {
-                            translate_component(
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
                                 "commands.data.error.display_item_key",
                                 server_command_locale(),
                                 [TextComponent::text(key.to_string()), message],

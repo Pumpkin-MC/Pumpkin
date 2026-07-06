@@ -1,4 +1,5 @@
 use core::f64;
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -9,7 +10,7 @@ use pumpkin_util::text::TextComponent;
 use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
-use crate::command::{CommandSender, translate_component, translate_plain};
+use crate::command::{CommandSender, translate_plain};
 use crate::server::Server;
 
 use super::super::args::ArgumentConsumer;
@@ -89,20 +90,22 @@ impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
         let locale = server_command_locale();
         match value {
-            NotInBounds::LowerBound(val, min) => Self::CommandFailed(translate_component(
+            NotInBounds::LowerBound(val, min) => Self::CommandFailed(TextComponent::custom(
+                PUMPKIN_NAMESPACE,
                 "commands.args.bounded_num.must_not_be_less",
                 locale,
                 [
-                    translate_component(val.qualifier_key(), locale, []),
+                    TextComponent::custom(PUMPKIN_NAMESPACE, val.qualifier_key(), locale, []),
                     TextComponent::text(min.to_string()),
                     TextComponent::text(val.to_string()),
                 ],
             )),
-            NotInBounds::UpperBound(val, max) => Self::CommandFailed(translate_component(
+            NotInBounds::UpperBound(val, max) => Self::CommandFailed(TextComponent::custom(
+                PUMPKIN_NAMESPACE,
                 "commands.args.bounded_num.must_not_be_more",
                 locale,
                 [
-                    translate_component(val.qualifier_key(), locale, []),
+                    TextComponent::custom(PUMPKIN_NAMESPACE, val.qualifier_key(), locale, []),
                     TextComponent::text(max.to_string()),
                     TextComponent::text(val.to_string()),
                 ],

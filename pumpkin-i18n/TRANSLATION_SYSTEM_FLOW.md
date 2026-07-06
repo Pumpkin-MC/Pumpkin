@@ -79,12 +79,6 @@ cargo build
   │
   └─► pumpkin-i18n/build.rs
         │
-        ├─ Scan assets/translations/pumpkin/*.json (128 files)
-        │   └─► Generate generated_locale_codes.rs
-        │        fn locale_code(idx: usize) -> &'static str
-        │        Enum index → locale code string mapping
-        │        e.g. AfZa → "af_za", ZhCn → "zh_cn"
-        │
         └─ Only embed 3 en_us files → generated_store.rs
               │
               ├─ pumpkin/en_us.json
@@ -104,7 +98,7 @@ cargo build
 ```rust
 // generated_store.rs output structure
 pub(crate) fn load_all_translations()
-    -> [HashMap<String, String>; Locale::COUNT]  // 128 slots
+    -> [HashMap<String, String>; Locale::COUNT]  // 142 slots
 {
     let mut array: [HashMap; 128] = std::array::from_fn(|_| HashMap::new());
 
@@ -684,8 +678,8 @@ translation_cache_dir = "data/translation"
 
 | File                              | Responsibility                                                                                                |
 |-----------------------------------|---------------------------------------------------------------------------------------------------------------|
-| `pumpkin-i18n/build.rs`           | Compile-time embedding of en_us (pumpkin + java_minecraft + bedrock_minecraft), generate locale_code mapping  |
-| `pumpkin-i18n/src/locale.rs`      | 128-variant Locale enum, from_str/to_code/normalize                                                           |
+| `pumpkin-i18n/build.rs`           | Compile-time embedding of en_us (pumpkin + java_minecraft + bedrock_minecraft)                                |
+| `pumpkin-i18n/src/locale.rs`      | 142-variant Locale enum, from_str/to_code (hardcoded LOCALE_CODES array), normalize                           |
 | `pumpkin-i18n/src/server.rs`      | Server locale global state, server_command_locale, system language detection                                  |
 | `pumpkin-i18n/src/client.rs`      | Player UUID→Locale cache, client locale resolution, try_player_locale                                         |
 | `pumpkin-i18n/src/store.rs`       | Global TRANSLATIONS, translation_engine, resolve_translation, dynamic injection API                           |

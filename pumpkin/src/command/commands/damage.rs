@@ -1,4 +1,5 @@
 use pumpkin_data::{damage::DamageType, translation};
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
@@ -9,7 +10,6 @@ use crate::command::{
         resource::damage_type::DamageTypeArgumentConsumer,
     },
     dispatcher::CommandError,
-    translate_component,
     tree::{
         CommandTree,
         builder::{argument, literal},
@@ -70,7 +70,8 @@ impl CommandExecutor for LocationExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(CommandError::CommandFailed(translate_component(
+                return Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.damage.invalid_amount",
                     sender.get_locale(),
                     [],
@@ -107,7 +108,8 @@ impl CommandExecutor for EntityExecutor {
 
             let Ok(Ok(amount)) = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_AMOUNT)
             else {
-                return Err(CommandError::CommandFailed(translate_component(
+                return Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.damage.invalid_amount",
                     sender.get_locale(),
                     [],

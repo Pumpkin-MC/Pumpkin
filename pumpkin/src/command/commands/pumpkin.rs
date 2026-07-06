@@ -1,5 +1,5 @@
 use pumpkin_data::packet::CURRENT_MC_VERSION;
-use pumpkin_i18n::{Locale, pumpkin_translation_key};
+use pumpkin_i18n::{Locale, PUMPKIN_NAMESPACE, pumpkin_translation_key};
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::translation::get_translation_text;
@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
-use crate::command::{CommandResult, translate_component, translate_format, translate_plain};
+use crate::command::{CommandResult, translate_format, translate_plain};
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 
@@ -108,7 +108,8 @@ impl CommandExecutor for Executor {
                         vec![TextComponent::text(version_string.clone())],
                     )
                     .hover_event(HoverEvent::show_text(
-                        translate_component(
+                        TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
                             "commands.pumpkin.commit_hover",
                             locale,
                             [TextComponent::text(GIT_HASH_FULL.to_owned())],
@@ -212,21 +213,24 @@ impl CommandExecutor for Executor {
                     // Spacing
                     .add_child(TextComponent::text("  "))
                     .add_child(
-                        translate_component("commands.pumpkin.donate", locale, [])
-                            .click_event(ClickEvent::OpenUrl {
-                                url: Cow::Owned(translate_plain(
-                                    "commands.pumpkin.donate_url",
-                                    locale,
-                                )),
-                            })
-                            .hover_event(HoverEvent::show_text(translate_component(
-                                "commands.pumpkin.donate.hover",
-                                locale,
-                                [],
-                            )))
-                            .rainbow()
-                            .bold()
-                            .underlined(),
+                        TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
+                            "commands.pumpkin.donate",
+                            locale,
+                            [],
+                        )
+                        .click_event(ClickEvent::OpenUrl {
+                            url: Cow::Owned(translate_plain("commands.pumpkin.donate_url", locale)),
+                        })
+                        .hover_event(HoverEvent::show_text(TextComponent::custom(
+                            PUMPKIN_NAMESPACE,
+                            "commands.pumpkin.donate.hover",
+                            locale,
+                            [],
+                        )))
+                        .rainbow()
+                        .bold()
+                        .underlined(),
                     )
                     // Spacing
                     .add_child(TextComponent::text("  "))

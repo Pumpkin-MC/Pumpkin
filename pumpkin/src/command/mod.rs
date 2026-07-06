@@ -47,14 +47,6 @@ pub mod tree;
 pub(crate) use pumpkin_util::text::translation::{translate_format, translate_plain};
 
 #[must_use]
-pub(crate) fn translate_component<W>(key: &'static str, locale: Locale, with: W) -> TextComponent
-where
-    W: Into<Vec<TextComponent>>,
-{
-    TextComponent::custom(PUMPKIN_NAMESPACE, key, locale, with)
-}
-
-#[must_use]
 pub(crate) fn localized_description(description: &str, locale: Locale) -> TextComponent {
     if is_builtin_translation_key(description, locale) {
         TextComponent::custom(
@@ -342,7 +334,7 @@ impl CommandSender {
                     spawn_point,
                     Vector2::new(0.0, 0.0),
                     translate_plain("commands.sender.rcon", locale),
-                    translate_component("commands.sender.rcon", locale, []),
+                    TextComponent::custom(PUMPKIN_NAMESPACE, "commands.sender.rcon", locale, []),
                     server.clone(),
                 )
             }
@@ -356,7 +348,7 @@ impl CommandSender {
                     spawn_point,
                     Vector2::new(0.0, 0.0),
                     translate_plain("commands.sender.console", locale),
-                    translate_component("commands.sender.console", locale, []),
+                    TextComponent::custom(PUMPKIN_NAMESPACE, "commands.sender.console", locale, []),
                     server.clone(),
                 )
             }
@@ -386,7 +378,8 @@ impl CommandSender {
                 };
 
                 // TODO: when command blocks get custom names, add a check for it
-                let name = translate_component(
+                let name = TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.sender.command_block",
                     server_command_locale(),
                     [],

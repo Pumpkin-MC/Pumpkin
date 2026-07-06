@@ -1,3 +1,4 @@
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use std::sync::Arc;
 
 use crate::command::CommandResult;
@@ -9,7 +10,6 @@ use crate::command::{
         rotation::RotationArgumentConsumer,
     },
     dispatcher::CommandError,
-    translate_component,
     tree::{CommandTree, builder::argument},
 };
 use crate::plugin::world::spawn_change::SpawnChangeEvent;
@@ -38,13 +38,15 @@ impl CommandExecutor for NoArgsWorldSpawnExecutor {
         Box::pin(async move {
             let Some(player) = sender.as_player() else {
                 if sender.is_console() {
-                    return Err(CommandError::CommandFailed(translate_component(
+                    return Err(CommandError::CommandFailed(TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
                         "commands.setworldspawn.error.require_position",
                         sender.get_locale(),
                         [],
                     )));
                 }
-                return Err(CommandError::CommandFailed(translate_component(
+                return Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.setworldspawn.error.sender_not_player",
                     sender.get_locale(),
                     [],
@@ -108,7 +110,8 @@ async fn setworldspawn(
     pitch: f32,
 ) -> Result<i32, CommandError> {
     let Some(world) = sender.world() else {
-        return Err(CommandError::CommandFailed(translate_component(
+        return Err(CommandError::CommandFailed(TextComponent::custom(
+            PUMPKIN_NAMESPACE,
             "commands.setworldspawn.error.world_not_found",
             sender.get_locale(),
             [],

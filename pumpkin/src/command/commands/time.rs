@@ -1,4 +1,5 @@
 use pumpkin_data::translation;
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
@@ -6,8 +7,7 @@ use crate::command::args::{FindArg, time::TimeArgumentConsumer};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{
-    CommandExecutor, CommandSender, ConsumedArgs, translate_component, translate_plain,
-    tree::CommandTree,
+    CommandExecutor, CommandSender, ConsumedArgs, translate_plain, tree::CommandTree,
 };
 use pumpkin_i18n::server_command_locale;
 
@@ -103,7 +103,8 @@ impl CommandExecutor for ChangeExecutor {
             } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
                 ticks
             } else {
-                return Err(CommandError::CommandFailed(translate_component(
+                return Err(CommandError::CommandFailed(TextComponent::custom(
+                    PUMPKIN_NAMESPACE,
                     "commands.time.invalid",
                     sender.get_locale(),
                     [],

@@ -43,7 +43,7 @@ where
     K: AsRef<str>,
     V: Into<String>,
 {
-    let namespaced_key = namespaced_key(namespace.as_ref(), key.as_ref());
+    let namespaced_key = crate::namespaced_key(namespace.as_ref(), key.as_ref());
     let translation = translation.into();
 
     translation_engine().add_translation(locale as usize, &namespaced_key, &translation);
@@ -79,7 +79,12 @@ where
     let namespace = namespace.as_ref();
     let entries = translations_map
         .into_iter()
-        .map(|(key, translation)| (namespaced_key(namespace, &key), translation))
+        .map(|(key, translation)| {
+            (
+                crate::namespaced_key(namespace, &key).to_ascii_lowercase(),
+                translation,
+            )
+        })
         .collect::<Vec<_>>();
 
     translation_engine().add_translations(locale as usize, entries);
@@ -123,14 +128,6 @@ pub fn format_translation(key: &str, locale: Locale, args: &[String]) -> String 
     let mut output = String::with_capacity(resolved.as_str().len());
     resolved.write_to(args, &mut output);
     output
-}
-
-fn namespaced_key(namespace: &str, key: &str) -> String {
-    let mut namespaced = String::with_capacity(namespace.len() + key.len() + 1);
-    namespaced.push_str(namespace);
-    namespaced.push(':');
-    namespaced.push_str(key);
-    namespaced.to_ascii_lowercase()
 }
 
 #[cfg(test)]

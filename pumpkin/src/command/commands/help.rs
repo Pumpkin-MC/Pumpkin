@@ -7,9 +7,8 @@ use crate::command::errors::error_types::{CommandErrorType, INTEGER_TOO_HIGH, IN
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
-use crate::command::{
-    localized_description, translate_component, translate_format, translate_plain,
-};
+use crate::command::{localized_description, translate_format, translate_plain};
+use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use pumpkin_protocol::java::client::play::StringProtoArgBehavior;
 use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
@@ -125,7 +124,12 @@ impl HelpCommandExecutor {
             if commands_available == 0 {
                 return Err(CommandSyntaxError::create_without_context(
                     &FAILED_ERROR_TYPE,
-                    translate_component("commands.help.no_commands", locale, []),
+                    TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
+                        "commands.help.no_commands",
+                        locale,
+                        [],
+                    ),
                 ));
             }
 
@@ -144,7 +148,7 @@ impl HelpCommandExecutor {
                     locale,
                 )
             } else {
-                translate_component("commands.help.previous_page", locale, [])
+                TextComponent::custom(PUMPKIN_NAMESPACE, "commands.help.previous_page", locale, [])
                     .color(Color::Named(NamedColor::Gray))
             };
 
@@ -155,7 +159,7 @@ impl HelpCommandExecutor {
                     locale,
                 )
             } else {
-                translate_component("commands.help.next_page", locale, [])
+                TextComponent::custom(PUMPKIN_NAMESPACE, "commands.help.next_page", locale, [])
                     .color(Color::Named(NamedColor::Gray))
             };
 
@@ -185,8 +189,13 @@ impl HelpCommandExecutor {
                     TextComponent::text(command_declaration.clone())
                         .color_named(NamedColor::Gold)
                         .add_child(
-                            translate_component("commands.help.separator", locale, [])
-                                .color_named(NamedColor::Yellow),
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
+                                "commands.help.separator",
+                                locale,
+                                [],
+                            )
+                            .color_named(NamedColor::Yellow),
                         )
                         .add_child(
                             localized_description(description, locale)
@@ -194,8 +203,13 @@ impl HelpCommandExecutor {
                                 .color_named(NamedColor::White),
                         )
                         .add_child(
-                            translate_component("commands.help.usage_indent", locale, [])
-                                .color_named(NamedColor::Yellow),
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
+                                "commands.help.usage_indent",
+                                locale,
+                                [],
+                            )
+                            .color_named(NamedColor::Yellow),
                         )
                         .add_child(
                             TextComponent::text(usage.into_string()).color_named(NamedColor::White),
@@ -261,37 +275,50 @@ impl HelpCommandExecutor {
                         .color_named(NamedColor::Yellow),
                 )
                 .add_child(
-                    translate_component("commands.help.command_label", locale, [])
-                        .color_named(NamedColor::Aqua)
-                        .add_child(
-                            TextComponent::text(command_with_slash.clone())
-                                .color_named(NamedColor::Gold)
-                                .bold(),
-                        )
-                        .add_child(TextComponent::text("\n").color_named(NamedColor::White))
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: command_with_slash.clone().into(),
-                        }),
+                    TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
+                        "commands.help.command_label",
+                        locale,
+                        [],
+                    )
+                    .color_named(NamedColor::Aqua)
+                    .add_child(
+                        TextComponent::text(command_with_slash.clone())
+                            .color_named(NamedColor::Gold)
+                            .bold(),
+                    )
+                    .add_child(TextComponent::text("\n").color_named(NamedColor::White))
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: command_with_slash.clone().into(),
+                    }),
                 )
                 .add_child(
-                    translate_component("commands.help.description_label", locale, [])
-                        .color_named(NamedColor::Aqua)
-                        .add_child(
-                            localized_description(description, locale)
-                                .color_named(NamedColor::White),
-                        )
-                        .add_child(TextComponent::text("\n").color_named(NamedColor::White)),
+                    TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
+                        "commands.help.description_label",
+                        locale,
+                        [],
+                    )
+                    .color_named(NamedColor::Aqua)
+                    .add_child(
+                        localized_description(description, locale).color_named(NamedColor::White),
+                    )
+                    .add_child(TextComponent::text("\n").color_named(NamedColor::White)),
                 )
                 .add_child(
-                    translate_component("commands.help.usage_label", locale, [])
-                        .color_named(NamedColor::Aqua)
-                        .add_child(
-                            TextComponent::text(format!("{usage}\n"))
-                                .color_named(NamedColor::White),
-                        )
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: command_with_slash.into(),
-                        }),
+                    TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
+                        "commands.help.usage_label",
+                        locale,
+                        [],
+                    )
+                    .color_named(NamedColor::Aqua)
+                    .add_child(
+                        TextComponent::text(format!("{usage}\n")).color_named(NamedColor::White),
+                    )
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: command_with_slash.into(),
+                    }),
                 );
 
             message = message
@@ -315,7 +342,12 @@ impl HelpCommandExecutor {
             if commands.is_empty() {
                 return Err(CommandSyntaxError::create_without_context(
                     &FAILED_ERROR_TYPE,
-                    translate_component("commands.help.plugin_not_found", locale, []),
+                    TextComponent::custom(
+                        PUMPKIN_NAMESPACE,
+                        "commands.help.plugin_not_found",
+                        locale,
+                        [],
+                    ),
                 ));
             }
 
@@ -343,8 +375,13 @@ impl HelpCommandExecutor {
                     TextComponent::text(command_declaration.clone())
                         .color_named(NamedColor::Gold)
                         .add_child(
-                            translate_component("commands.help.separator", locale, [])
-                                .color_named(NamedColor::Yellow),
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
+                                "commands.help.separator",
+                                locale,
+                                [],
+                            )
+                            .color_named(NamedColor::Yellow),
                         )
                         .add_child(
                             localized_description(description, locale)
@@ -352,8 +389,13 @@ impl HelpCommandExecutor {
                                 .color_named(NamedColor::White),
                         )
                         .add_child(
-                            translate_component("commands.help.usage_indent", locale, [])
-                                .color_named(NamedColor::Yellow),
+                            TextComponent::custom(
+                                PUMPKIN_NAMESPACE,
+                                "commands.help.usage_indent",
+                                locale,
+                                [],
+                            )
+                            .color_named(NamedColor::Yellow),
                         )
                         .add_child(
                             TextComponent::text(usage.into_string()).color_named(NamedColor::White),

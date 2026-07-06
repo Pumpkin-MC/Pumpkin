@@ -285,7 +285,15 @@ fn is_identifier(value: &str) -> bool {
 }
 
 fn is_backslash_escaped(bytes: &[u8], idx: usize) -> bool {
-    idx > 0 && bytes[idx - 1] == b'\\'
+    let mut count = 0;
+    let mut pos = idx;
+    while pos > 0 && bytes[pos - 1] == b'\\' {
+        count += 1;
+        pos -= 1;
+    }
+    // Only escaped when preceded by an odd number of backslashes.
+    // e.g. \% → escaped (1 backslash), \\% → not escaped (2 backslashes = literal \)
+    count % 2 == 1
 }
 
 fn push_text(template: &str, tokens: &mut Vec<Token>, start: usize, end: usize) {

@@ -40,12 +40,23 @@ pub const BEDROCK_NAMESPACE: &str = "bedrock_minecraft";
 
 /// Build a fully qualified translation key under the pumpkin namespace.
 ///
-/// Equivalent to `format!("pumpkin:{key}")` with pre-allocated capacity.
+/// Equivalent to calling [`namespaced_key`] with `PUMPKIN_NAMESPACE`.
 #[must_use]
 #[inline]
 pub fn pumpkin_translation_key(key: &str) -> String {
-    let mut out = String::with_capacity(PUMPKIN_NAMESPACE.len() + key.len() + 1);
-    out.push_str(PUMPKIN_NAMESPACE);
+    namespaced_key(PUMPKIN_NAMESPACE, key)
+}
+
+/// Build a namespaced translation key in the form `"namespace:key"`.
+///
+/// The resulting key is **not** lowercased — callers that need
+/// case-insensitive lookups should lower-case the result themselves
+/// (e.g. via [`str::to_ascii_lowercase`]).
+#[must_use]
+#[inline]
+pub fn namespaced_key(namespace: &str, key: &str) -> String {
+    let mut out = String::with_capacity(namespace.len() + key.len() + 1);
+    out.push_str(namespace);
     out.push(':');
     out.push_str(key);
     out
