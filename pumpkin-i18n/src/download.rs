@@ -30,7 +30,7 @@ fn create_agent(timeout: Duration) -> ureq::Agent {
 
 /// Default remote translation repository when no mirror URL is configured.
 const DEFAULT_MIRROR: &str =
-    "https://raw.githubusercontent.com/Q2297045667/Pumpkin/refactor_i18n/assets/translations";
+    "https://raw.githubusercontent.com/Q2297045667/Pumpkin/i18n-assets/assets/translations";
 
 /// Holds downloaded translations for a single locale, organised by namespace.
 #[derive(Debug, Default)]
