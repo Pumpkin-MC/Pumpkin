@@ -228,6 +228,7 @@ impl BedrockClient {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn start_outgoing_packet_task(self: &Arc<Self>) {
         let client = self.clone();
         self.spawn_task(async move {
