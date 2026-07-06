@@ -16,14 +16,14 @@ use crate::plugin::{
                 InteractAction as WasmInteractAction, InventoryClickEventData,
                 InventoryCloseEventData, PlayerChangeWorldEventData,
                 PlayerChangedMainHandEventData, PlayerChatEventData, PlayerCommandSendEventData,
-                PlayerCustomPayloadEventData, PlayerEggThrowEventData, PlayerExpChangeEventData,
-                PlayerFishEventData, PlayerFishState as WasmPlayerFishState,
-                PlayerGamemodeChangeEventData, PlayerInteractEventData,
-                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
-                PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
-                PlayerPermissionCheckEventData, PlayerRespawnEventData, PlayerTeleportEventData,
-                PlayerToggleFlightEventData, PlayerToggleSneakEventData,
-                PlayerToggleSprintEventData,
+                PlayerCustomPayloadEventData, PlayerDropItemEventData, PlayerEggThrowEventData,
+                PlayerExpChangeEventData, PlayerFishEventData,
+                PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
+                PlayerInteractEventData, PlayerInteractUnknownEntityEventData,
+                PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
+                PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
+                PlayerRespawnEventData, PlayerTeleportEventData, PlayerToggleFlightEventData,
+                PlayerToggleSneakEventData, PlayerToggleSprintEventData,
             },
             pumpkin::plugin::uuid::Uuid as WitUuid,
             uuid::UuidExt,
@@ -42,6 +42,7 @@ use crate::plugin::{
         player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
+        player_drop_item::PlayerDropItemEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
@@ -504,6 +505,41 @@ impl ToFromWasmEvent for PlayerItemHeldEvent {
                 player: consume_player(state, &data.player),
                 previous_slot: data.previous_slot,
                 new_slot: data.new_slot,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerDropItemEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+        let item_stack = state
+            .add_item_stack(Arc::new(Mutex::new(self.item_stack.clone())))
+            .expect("failed to add item stack resource");
+
+        Event::PlayerDropItemEvent(PlayerDropItemEventData {
+            player,
+            item_stack,
+            drop_full_stack: self.drop_full_stack,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerDropItemEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                item_stack: state
+                    .get_item_stack(&data.item_stack)
+                    .expect("failed to get item stack resource")
+                    .try_lock()
+                    .expect("failed to lock item stack resource")
+                    .clone(),
+                drop_full_stack: data.drop_full_stack,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

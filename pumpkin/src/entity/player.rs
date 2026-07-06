@@ -101,6 +101,7 @@ use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_drop_item::PlayerDropItemEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -3049,7 +3050,17 @@ impl Player {
         }
     }
 
-    pub async fn drop_item(&self, item_stack: ItemStack) {
+    async fn fire_player_drop_item(
+        self: &Arc<Self>,
+        item_stack: ItemStack,
+        drop_full_stack: bool,
+    ) -> Option<PlayerDropItemEvent> {
+        let server = self.world().server.upgrade()?;
+        let event = PlayerDropItemEvent::new(self.clone(), item_stack, drop_full_stack);
+        Some(server.plugin_manager.fire(event).await)
+    }
+
+    async fn spawn_dropped_item(&self, item_stack: ItemStack) {
         self.increment_stat(
             statistics::StatisticCategory::Dropped,
             item_stack.item.id as i32,
@@ -3089,9 +3100,32 @@ impl Player {
         self.world().spawn_entity(item_entity).await;
     }
 
-    pub async fn drop_held_item(&self, drop_stack: bool) {
+    pub async fn drop_item(&self, item_stack: ItemStack) {
+        self.spawn_dropped_item(item_stack).await;
+    }
+
+    pub async fn drop_held_item(self: &Arc<Self>, drop_stack: bool) {
+        let dropped_stack = {
+            let binding = self.inventory.held_item();
+            let item_stack = binding.lock().await;
+
+            if item_stack.is_empty() {
+                return;
+            }
+
+            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+            item_stack.copy_with_count(drop_amount)
+        };
+
+        let Some(event) = self.fire_player_drop_item(dropped_stack, drop_stack).await else {
+            return;
+        };
+        if event.cancelled {
+            return;
+        }
+
         // Do not hold both item stack and screen handler locks at the same time.
-        let (dropped_stack, updated_stack, selected_slot) = {
+        let (updated_stack, selected_slot) = {
             let binding = self.inventory.held_item();
             let mut item_stack = binding.lock().await;
 
@@ -3099,16 +3133,15 @@ impl Player {
                 return;
             }
 
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            let dropped_stack = item_stack.copy_with_count(drop_amount);
+            let drop_amount = event.item_stack.item_count.min(item_stack.item_count);
             item_stack.decrement(drop_amount);
             let updated_stack = item_stack.clone();
             let selected_slot = self.inventory.get_selected_slot();
 
-            (dropped_stack, updated_stack, selected_slot)
+            (updated_stack, selected_slot)
         };
 
-        self.drop_item(dropped_stack).await;
+        self.spawn_dropped_item(event.item_stack).await;
 
         let inv: Arc<dyn Inventory> = self.inventory.clone();
         let screen_binding = self.current_screen_handler.lock().await;
@@ -4864,7 +4897,7 @@ impl InventoryPlayer for Player {
 
     fn drop_item(&self, item: ItemStack, _retain_ownership: bool) -> PlayerFuture<'_, ()> {
         Box::pin(async move {
-            self.drop_item(item).await;
+            self.spawn_dropped_item(item).await;
         })
     }
 
