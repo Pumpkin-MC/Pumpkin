@@ -329,10 +329,7 @@ impl HostEntity for PluginHostState {
             )
             .map_err(|_| wasmtime::Error::msg("invalid text component resource handle"))?;
         let text = text_res.provider.clone();
-        entity_base
-            .get_entity()
-            .custom_name
-            .store(std::sync::Arc::new(Some(text)));
+        entity_base.get_entity().set_custom_name(text);
         Ok(())
     }
 
@@ -357,10 +354,7 @@ impl HostEntity for PluginHostState {
         visible: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity
-            .get_entity()
-            .custom_name_visible
-            .store(visible, std::sync::atomic::Ordering::Relaxed);
+        entity.get_entity().set_custom_name_visible(visible);
         Ok(())
     }
 

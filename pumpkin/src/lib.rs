@@ -478,11 +478,15 @@ impl PumpkinServer {
                                      .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                           .await
                                 {
+                                    // Set the player on the client BEFORE spawning so that chunk
+                                    // sends during spawn_java_player don't get silently dropped.
+                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                        *client.player.lock().await = Some(player.clone());
+                                    }
                                     world
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        *client.player.lock().await = Some(player.clone());
                                         client.progress_player_packets(&player, &server_clone).await;
 
                                         // Close when done
