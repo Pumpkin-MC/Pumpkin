@@ -82,7 +82,7 @@ impl HexColorArgumentType {
         slice: &str,
         index: usize,
     ) -> Result<u8, CommandSyntaxError> {
-        // This should be fine as `read_unquoted_string` parses only ASCII digits.
+        // This should be fine as `read_unquoted_string` parses only ASCII characters.
         let b = slice.as_bytes()[index];
         match b {
             b'0' => Ok(0x0),

@@ -20,12 +20,10 @@ impl ArgumentType for TeamColorArgumentType {
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let id = reader.read_unquoted_string();
 
-        if let Ok(color) = (&*id).try_into() {
-            Ok(color)
-        } else {
-            Err(INVALID_VALUE_ERROR_TYPE
-                .create(reader, TextComponent::text(id)))
-        }
+        (&*id).try_into().map_or_else(
+            |()| Err(INVALID_VALUE_ERROR_TYPE.create(reader, TextComponent::text(id))),
+            Ok,
+        )
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {
@@ -55,7 +53,7 @@ impl ArgumentType for TeamColorArgumentType {
                     "red",
                     "light_purple",
                     "yellow",
-                    "white"
+                    "white",
                 ])
                 .build()
         })
