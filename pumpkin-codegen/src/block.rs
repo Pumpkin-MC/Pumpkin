@@ -843,6 +843,13 @@ pub fn build() -> TokenStream {
     let mut be_blocks_cursor = Cursor::new(be_blocks_data);
     let be_blocks = get_be_data_from_nbt(&mut be_blocks_cursor);
 
+    let geyser_blocks_data = fs::read("../assets/bedrock/blocks.nbt").unwrap();
+    let geyser_nbt_compound =
+        pumpkin_nbt::nbt_compress::read_gzip_compound_tag(Cursor::new(geyser_blocks_data)).unwrap();
+    let bedrock_mappings_list = geyser_nbt_compound
+        .get_list("bedrock_mappings")
+        .expect("Missing bedrock_mappings list in Geyser blocks.nbt");
+
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
@@ -956,22 +963,6 @@ pub fn build() -> TokenStream {
             #name_str => Block::#const_ident,
         });
 
-        let be_name = match block.name.as_str() {
-            "dead_bush" => "deadbush",
-            "tripwire" => "trip_wire",
-            "note_block" => "noteblock",
-            "powered_rail" => "golden_rail",
-            "cobweb" => "web",
-            "tall_seagrass" => "seagrass",
-            "wall_torch" => "torch",
-            "spawner" => "mob_spawner",
-            "snow" => "snow_layer",
-            "snow_block" => "snow",
-            name => name,
-        };
-
-        let be_state_list = be_blocks.get(be_name);
-
         for (i, state) in block.states.iter().enumerate() {
             if state.has_random_ticks() {
                 let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
@@ -988,56 +979,26 @@ pub fn build() -> TokenStream {
 
             let mut matched_be_id = 1;
 
-            if let Some(be_variants) = be_state_list {
-                let mut temp_index = i as u16;
-                let mut java_props_for_this_state = BTreeMap::new();
+            if let Some(geyser_entry) = bedrock_mappings_list.get(state.id.0 as usize) {
+                let (bedrock_name, bedrock_props) = parse_geyser_entry(geyser_entry, &block.name);
 
-                for mapping in property_mapping.iter().rev() {
-                    match &mapping.property_type {
-                        PropertyType::Bool => {
-                            let val = temp_index % 2;
-                            temp_index /= 2;
-                            java_props_for_this_state.insert(
-                                mapping.original_name.clone(),
-                                if val == 0 { "true" } else { "false" }.to_string(),
-                            );
-                        }
-                        PropertyType::Int { min, max } => {
-                            let count = (*max - *min + 1) as u16;
-                            let val = (temp_index % count) as u8;
-                            temp_index /= count;
-                            java_props_for_this_state
-                                .insert(mapping.original_name.clone(), (val + *min).to_string());
-                        }
-                        PropertyType::Enum { name } => {
-                            let enum_info = property_enums.get(name).unwrap();
-                            let count = enum_info.values.len() as u16;
-                            let val_idx = temp_index % count;
-                            temp_index /= count;
-
-                            let raw_val = &enum_info.values[val_idx as usize];
-                            let val_str = if raw_val.starts_with('L') {
-                                raw_val.strip_prefix('L').unwrap().to_string()
-                            } else {
-                                raw_val.clone()
-                            };
-                            java_props_for_this_state
-                                .insert(mapping.original_name.clone(), val_str);
-                        }
-                    }
+                if let Some(be_variants) = be_blocks.get(&bedrock_name) {
+                    matched_be_id = be_variants
+                        .iter()
+                        .find(|(_, be_props)| {
+                            bedrock_props
+                                .iter()
+                                .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
+                        })
+                        .map_or_else(
+                            || be_variants.first().map_or(1, |(id, _)| *id),
+                            |(id, _)| *id,
+                        );
+                } else if let Some(be_variants) = be_blocks.get(&block.name) {
+                    matched_be_id = be_variants.first().map_or(1, |(id, _)| *id);
                 }
-
-                matched_be_id = be_variants
-                    .iter()
-                    .find(|(_, be_props)| {
-                        java_props_for_this_state
-                            .iter()
-                            .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
-                    })
-                    .map_or_else(
-                        || be_variants.first().map_or(1, |(id, _)| *id),
-                        |(id, _)| *id,
-                    );
+            } else if let Some(be_variants) = be_blocks.get(&block.name) {
+                matched_be_id = be_variants.first().map_or(1, |(id, _)| *id);
             }
 
             block_state_to_bedrock.push((state.id.0, matched_be_id));
@@ -1549,3 +1510,46 @@ fn get_be_data_from_nbt<R: Read + Seek>(
 
     block_data
 }
+
+fn parse_geyser_entry(
+    entry: &pumpkin_nbt::tag::NbtTag,
+    java_block_name: &str,
+) -> (String, BTreeMap<String, String>) {
+    let compound = match entry {
+        pumpkin_nbt::tag::NbtTag::Compound(c) => c,
+        _ => panic!("Expected NbtCompound in Geyser bedrock_mappings list"),
+    };
+
+    let bedrock_identifier = compound
+        .get_string("bedrock_identifier")
+        .unwrap_or(java_block_name)
+        .strip_prefix("minecraft:")
+        .unwrap_or_else(|| {
+            compound.get_string("bedrock_identifier").unwrap_or(java_block_name)
+        })
+        .to_string();
+
+    let mut properties = BTreeMap::new();
+    if let Some(state_comp) = compound.get_compound("state") {
+        for (key, val) in state_comp.clone() {
+            let unpacked = match val {
+                pumpkin_nbt::tag::NbtTag::Byte(v) => {
+                    if v == 1 {
+                        "true".to_string()
+                    } else {
+                        "false".to_string()
+                    }
+                }
+                pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
+                pumpkin_nbt::tag::NbtTag::String(v) => v.to_string(),
+                _ => {
+                    panic!("Unexpected NBT type in Geyser state tag for {}. Value: {:?}", key, val);
+                }
+            };
+            properties.insert(key.to_string(), unpacked);
+        }
+    }
+
+    (bedrock_identifier, properties)
+}
+

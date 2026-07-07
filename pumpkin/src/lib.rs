@@ -10,6 +10,7 @@ use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
+use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_i18n::{ensure_locale_translations, remove_player_locale, set_player_locale};
 use pumpkin_macros::send_cancellable;
@@ -405,6 +406,12 @@ impl PumpkinServer {
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
+
+        let _ = self
+            .server
+            .plugin_manager
+            .fire(ServerLoadEvent::new(LoadType::Startup))
+            .await;
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
