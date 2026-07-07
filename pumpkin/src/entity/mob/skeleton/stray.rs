@@ -11,7 +11,7 @@ pub struct StraySkeletonEntity {
 
 impl StraySkeletonEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity);
+        let entity = SkeletonEntityBase::new(entity, true);
         let stray = Self { entity };
         Arc::new(stray)
     }

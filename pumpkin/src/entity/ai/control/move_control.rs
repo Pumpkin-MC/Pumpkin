@@ -103,6 +103,13 @@ impl MoveControlTrait for MoveControl {
                 .store(Vector3::new(0.0, 0.0, 0.0));
         }
     }
+
+    fn strafe(&mut self, forwards: f32, right: f32) {
+        self.operation = Operation::Strafe;
+        self.strafe_forwards = forwards;
+        self.strafe_right = right;
+        self.speed_modifier = 0.25;
+    }
 }
 
 impl MoveControl {
@@ -124,12 +131,5 @@ impl MoveControl {
         if self.operation != Operation::Jumping {
             self.operation = Operation::MoveTo;
         }
-    }
-
-    pub const fn strafe(&mut self, forwards: f32, right: f32) {
-        self.operation = Operation::Strafe;
-        self.strafe_forwards = forwards;
-        self.strafe_right = right;
-        self.speed_modifier = 0.25;
     }
 }

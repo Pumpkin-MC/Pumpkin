@@ -14,4 +14,9 @@ pub trait Control: Send + Sync {
 
 pub trait MoveControlTrait: Control {
     fn tick(&mut self, mob: &dyn Mob);
+
+    /// Strafe relative to the mob's facing direction. `forwards` and `right` are
+    /// roughly in `[-1.0, 1.0]`. Move controls that don't support strafing keep
+    /// the default no-op.
+    fn strafe(&mut self, _forwards: f32, _right: f32) {}
 }

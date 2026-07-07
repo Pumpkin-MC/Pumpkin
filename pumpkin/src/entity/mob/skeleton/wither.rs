@@ -11,7 +11,7 @@ pub struct WitherSkeletonEntity {
 
 impl WitherSkeletonEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity);
+        let entity = SkeletonEntityBase::new(entity, false);
         let skeleton = Self { entity };
         Arc::new(skeleton)
     }
