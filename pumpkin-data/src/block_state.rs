@@ -2,7 +2,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
-use crate::{Block, BlockDirection};
+use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
 ///
@@ -12,7 +12,7 @@ use crate::{Block, BlockDirection};
 #[derive(Debug)]
 pub struct BlockState {
     /// The global palette ID used for network serialization and chunk storage.
-    pub id: u16,
+    pub id: BlockStateId,
     /// Bit-flags representing boolean or enum properties (e.g., `waterlogged`, `lit`, `facing`).
     pub state_flags: u16,
     /// Cached flags for each of the 6 sides to speed up ambient occlusion and face culling.
@@ -36,11 +36,11 @@ pub struct BlockState {
     pub block_entity_type: u16,
 }
 
-impl PartialEq for BlockState {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
+/// Helper struct to ensure the validity of BlockStateIds parsed from external sources.
+/// Every [`BlockStateId`] is guaranteed to correspond to a valid [`BlockState`].
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct BlockStateId(u16);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -51,6 +51,26 @@ pub enum PistonBehavior {
     Ignore,
     PushOnly,
 }
+
+impl PartialEq<BlockStateId> for BlockState {
+    fn eq(&self, other: &BlockStateId) -> bool {
+        self.id == *other
+    }
+}
+
+impl PartialEq<BlockState> for BlockStateId {
+    fn eq(&self, other: &BlockState) -> bool {
+        *self == other.id
+    }
+}
+
+impl PartialEq for BlockState {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for BlockState {}
 
 impl BlockState {
     #[must_use]
@@ -172,10 +192,72 @@ impl BlockState {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct BlockStateRef {
-    pub id: u16,
-    pub state_idx: u16,
+impl BlockStateId {
+    // depends on generated impl:
+    // pub(crate) const STATE_COUNT: u16;
+
+    // SAFETY: There must never be a BlockStateId where self.0 >= BlockStateId::STATE_COUNT
+
+    #[inline]
+    #[must_use]
+    pub const fn new(inner: u16) -> Option<Self> {
+        if inner < Self::STATE_COUNT {
+            return Some(Self(inner));
+        }
+        None
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn new_or_air(inner: u16) -> Self {
+        if inner < Self::STATE_COUNT {
+            return Self(inner);
+        }
+        Self::AIR
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn as_u16(self) -> u16 {
+        self.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn to_state(self) -> &'static BlockState {
+        BlockState::from_id(self)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn to_block_id(self) -> BlockId {
+        BlockId::from_state_id(self)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn to_block(self) -> &'static Block {
+        Block::from_state_id(self)
+    }
+}
+
+impl Default for BlockStateId {
+    #[inline]
+    fn default() -> Self {
+        Self::AIR
+    }
+}
+
+impl std::fmt::Display for BlockStateId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use std::fmt::Write;
+        write!(
+            f,
+            "BlockStateId({} = \"{}\")",
+            self.0,
+            Block::from_state_id(*self).name
+        )
+    }
 }
 
 //This is the Layout of state_props in the right order

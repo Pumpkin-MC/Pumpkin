@@ -79,12 +79,10 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
         if Arc::strong_count(loader) > 1 {
             return false;
         }
-        match loader.internal.get() {
-            // The loader holds 1 strong count; anything above that means
-            // a read/write guard is still live somewhere.
-            Some(arc) => Arc::strong_count(arc) == 1,
-            None => true,
-        }
+        loader
+            .internal
+            .get()
+            .is_none_or(|arc| Arc::strong_count(arc) == 1)
     }
 
     /// Returns the serializer, initialising it from disk on the first call.

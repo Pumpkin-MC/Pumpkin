@@ -12,7 +12,7 @@ proc-macro = true
 proc-macro-error2.workspace = true
 pumpkin-data = { workspace = true, features = ["block", "tag"] }
 
-
+heck.workspace = true
 quote.workspace = true
 syn.workspace = true
 

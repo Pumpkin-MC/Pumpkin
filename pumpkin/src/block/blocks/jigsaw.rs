@@ -2,18 +2,17 @@ use std::sync::Arc;
 
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::registry::BlockActionResult;
-use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-};
+use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, PlacedArgs};
 use crate::entity::EntityBase;
-use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BlockProperties, Facing, HorizontalFacing, JigsawLikeProperties, Orientation,
 };
 use pumpkin_data::block_rotation::{Mirror, Rotation};
+use pumpkin_macros::pumpkin_block;
 use pumpkin_util::{BlockDirection, GameMode, PermissionLvl};
-use pumpkin_world::BlockStateId;
 
+#[pumpkin_block("minecraft:jigsaw")]
 pub struct JigsawBlock;
 
 impl JigsawBlock {
@@ -49,12 +48,6 @@ impl JigsawBlock {
             Orientation::NorthUp => (BlockDirection::North, BlockDirection::Up),
             Orientation::SouthUp => (BlockDirection::South, BlockDirection::Up),
         }
-    }
-}
-
-impl BlockMetadata for JigsawBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::JIGSAW.id].into()
     }
 }
 
@@ -102,7 +95,7 @@ impl BlockBehaviour for JigsawBlock {
     fn mirror(
         &self,
         block: &pumpkin_data::Block,
-        state_id: u16,
+        state_id: BlockStateId,
         mirror: Mirror,
     ) -> &'static pumpkin_data::BlockState {
         if mirror == Mirror::None {
@@ -121,7 +114,7 @@ impl BlockBehaviour for JigsawBlock {
     fn rotate(
         &self,
         block: &pumpkin_data::Block,
-        state_id: u16,
+        state_id: BlockStateId,
         rotation: Rotation,
     ) -> &'static pumpkin_data::BlockState {
         if rotation == Rotation::None {

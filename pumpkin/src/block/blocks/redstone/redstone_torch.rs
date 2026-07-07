@@ -14,12 +14,13 @@ use crate::block::PlacedArgs;
 use crate::entity::EntityBase;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::FacingExt;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
@@ -35,8 +36,8 @@ use super::get_redstone_power;
 pub struct RedstoneTorchBlock;
 
 impl BlockMetadata for RedstoneTorchBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::REDSTONE_TORCH.id, Block::REDSTONE_WALL_TORCH.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::REDSTONE_TORCH, BlockId::REDSTONE_WALL_TORCH].into()
     }
 }
 
@@ -88,7 +89,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
             if support_block.is_center_solid(BlockDirection::Up) {
                 block.default_state.id
             } else {
-                0
+                BlockStateId::AIR
             }
         })
     }
@@ -120,12 +121,12 @@ impl BlockBehaviour for RedstoneTorchBlock {
                         props.facing.to_block_direction().opposite(),
                     )
                 {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             } else if args.direction == BlockDirection::Down {
                 let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             }
             args.state_id

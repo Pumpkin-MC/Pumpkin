@@ -43,8 +43,8 @@ use crate::{
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{
-            player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
-            player_respawn::PlayerRespawnEvent,
+            player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
         },
     },
     server::Server,
@@ -64,7 +64,7 @@ use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
-    Block,
+    Block, BlockStateId,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
@@ -79,7 +79,6 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
-use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
     CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
@@ -133,7 +132,7 @@ use pumpkin_util::{
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
-    BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
+    CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -215,7 +214,7 @@ pub struct World {
     pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
-    unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    unsent_block_changes: Mutex<HashMap<BlockPos, BlockStateId>>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
@@ -477,7 +476,7 @@ impl World {
                     event.pos,
                     event.r#type,
                     event.data,
-                    VarInt(i32::from(block.id)),
+                    VarInt(block.id.as_u16() as i32),
                 ),
             );
         }
@@ -1057,7 +1056,7 @@ impl World {
                 let be_block_id = BlockState::to_be_network_id(block_state_id);
                 self.broadcast_to_chunk_editioned_sync(
                     chunk_pos,
-                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                    &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
                     &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         block_pos,
                         be_block_id as u32,
@@ -1369,11 +1368,11 @@ impl World {
                 let mut amplitude = 0.0;
 
                 if neighbor_height == 0.0 {
-                    let block_state_id = self.get_block_state_id(&pos);
-                    let block = Block::get_raw_id_from_state_id(block_state_id);
-                    let block_state = BlockState::from_id(block_state_id);
+                    let state_id = self.get_block_state_id(&pos);
+                    let block_id = state_id.to_block_id();
+                    let block_state = state_id.to_state();
 
-                    let blocks_movement = blocks_movement(block_state, block);
+                    let blocks_movement = blocks_movement(block_state, block_id);
 
                     if !blocks_movement {
                         let down_pos = pos.down();
@@ -2222,79 +2221,74 @@ impl World {
                 .await;
         };
 
-        let mut frame_set = FrameSet::default();
         client
-            .write_game_packet_to_set(
-                &CUpdateAttributes {
-                    runtime_id: VarULong(runtime_id),
-                    attributes: vec![
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 3.402_823_5E38,
-                            current_value: 0.1,
-                            default_min_value: 0.0,
-                            default_max_value: 3.402_823_5E38,
-                            default_value: 0.1,
-                            name: "minecraft:movement".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 3.402_823_5E38,
-                            current_value: 0.02,
-                            default_min_value: 0.0,
-                            default_max_value: 3.402_823_5E38,
-                            default_value: 0.02,
-                            name: "minecraft:underwater_movement".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 1.0,
-                            current_value: 0.08,
-                            default_min_value: 0.0,
-                            default_max_value: 1.0,
-                            default_value: 0.08,
-                            name: "minecraft:gravity".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 400.0,
-                            current_value: 400.0,
-                            default_min_value: 0.0,
-                            default_max_value: 400.0,
-                            default_value: 400.0,
-                            name: "minecraft:air".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 20.0,
-                            current_value: 20.0,
-                            default_min_value: 0.0,
-                            default_max_value: 20.0,
-                            default_value: 20.0,
-                            name: "minecraft:health".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                        Attribute {
-                            min_value: 0.0,
-                            max_value: 20.0,
-                            current_value: 20.0,
-                            default_min_value: 0.0,
-                            default_max_value: 20.0,
-                            default_value: 20.0,
-                            name: "minecraft:player.hunger".to_string(),
-                            modifiers_list_size: VarUInt(0),
-                        },
-                    ],
-                    player_tick: VarULong(0),
-                },
-                &mut frame_set,
-            )
+            .enqueue_packet_internal(&CUpdateAttributes {
+                runtime_id: VarULong(runtime_id),
+                attributes: vec![
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 3.402_823_5E38,
+                        current_value: 0.1,
+                        default_min_value: 0.0,
+                        default_max_value: 3.402_823_5E38,
+                        default_value: 0.1,
+                        name: "minecraft:movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 3.402_823_5E38,
+                        current_value: 0.02,
+                        default_min_value: 0.0,
+                        default_max_value: 3.402_823_5E38,
+                        default_value: 0.02,
+                        name: "minecraft:underwater_movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 1.0,
+                        current_value: 0.08,
+                        default_min_value: 0.0,
+                        default_max_value: 1.0,
+                        default_value: 0.08,
+                        name: "minecraft:gravity".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 400.0,
+                        current_value: 400.0,
+                        default_min_value: 0.0,
+                        default_max_value: 400.0,
+                        default_value: 400.0,
+                        name: "minecraft:air".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 20.0,
+                        current_value: 20.0,
+                        default_min_value: 0.0,
+                        default_max_value: 20.0,
+                        default_value: 20.0,
+                        name: "minecraft:health".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                    Attribute {
+                        min_value: 0.0,
+                        max_value: 20.0,
+                        current_value: 20.0,
+                        default_min_value: 0.0,
+                        default_max_value: 20.0,
+                        default_value: 20.0,
+                        name: "minecraft:player.hunger".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    },
+                ],
+                player_tick: VarULong(0),
+            })
             .await;
-        client.send_frame_set(frame_set, 0x84).await;
 
         // --- MULTIPLAYER BROADCASTING ---
 
@@ -2579,11 +2573,6 @@ impl World {
             client_suggestions::send_c_commands_packet(player, server, &command_dispatcher).await;
         };
 
-        // Spawn in initial chunks
-        // This is made before the player teleport so that the player doesn't glitch out when spawning
-        chunker::update_position(player).await;
-
-        // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
             let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
@@ -2605,12 +2594,25 @@ impl World {
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
-        let velocity = player.get_entity().velocity.load();
+        // Load chunks around the real spawn position before teleporting the client there.
+        player.living_entity.entity.set_pos(position);
+        player.living_entity.entity.set_rotation(yaw, pitch);
+        player.living_entity.entity.last_pos.store(position);
+        chunker::update_position(player).await;
+
+        let center_chunk = player.living_entity.entity.chunk_pos.load();
+        let chunk = self
+            .level
+            .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
+            .await;
+        client.send_packet_now(&CChunkBatchStart).await;
+        client.send_packet_now(&CChunkData(&chunk)).await;
+        client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
+
+        let velocity = player.living_entity.entity.velocity.load();
 
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;
-
-        player.get_entity().last_pos.store(position);
 
         let gameprofile = &player.gameprofile;
         let bedrock_player_list = CPlayerList {
@@ -3292,11 +3294,10 @@ impl World {
                 )
             };
 
-        // Get target world (may be different from current world for cross-dimension respawn)
-        let target_world = if respawn_dimension == self.dimension {
+        // Candidate destination world for a cross-dimension respawn.
+        let candidate_world = if respawn_dimension == self.dimension {
             None
         } else {
-            // Cross-dimension respawn: get target world from server
             self.server.upgrade().map_or_else(
                 || {
                     warn!("Could not get server for cross-dimension respawn");
@@ -3312,38 +3313,76 @@ impl World {
             )
         };
 
-        // Handle cross-dimension transfer if we found a different target world
-        let (target_world, position) = if let Some(ref new_world) = target_world {
-            debug!(
-                "Cross-dimension respawn: {} -> {}",
-                self.dimension.minecraft_name, new_world.dimension.minecraft_name
-            );
+        // Fire PlayerChangeWorldEvent (cancellable) before the transfer; it runs before
+        // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
+        let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
+            if let Some(server) = self.server.upgrade() {
+                let event = server
+                    .plugin_manager
+                    .fire(PlayerChangeWorldEvent {
+                        player: player.clone(),
+                        previous_world: self.clone(),
+                        new_world: new_world.clone(),
+                        position,
+                        yaw,
+                        pitch,
+                        cancelled: false,
+                    })
+                    .await;
 
-            // Remove player from current world
-            self.remove_player(player, false).await;
-            new_world.players.rcu(|current_list| {
-                let mut new_list = (**current_list).clone();
-                new_list.push(player.clone());
-                new_list
-            });
+                if event.cancelled {
+                    (None, position, yaw, pitch)
+                } else {
+                    let destination = event.new_world;
+                    let position = event.position;
+                    let yaw = event.yaw;
+                    let pitch = event.pitch;
 
-            // Update chunk manager to target world
-            player
-                .chunk_manager
-                .lock()
-                .await
-                .change_world(&self.level, new_world.clone());
+                    // Skip the transfer if redirected back to the current world.
+                    if destination.uuid != self.uuid {
+                        debug!(
+                            "Cross-dimension respawn: {} -> {}",
+                            self.dimension.minecraft_name, destination.dimension.minecraft_name
+                        );
 
-            // Unload watched chunks from current world
-            player.unload_watched_chunks(self).await;
+                        // Detach from the old world before publishing into the new one, so no
+                        // observer sees the player in a world whose chunk manager doesn't match.
+                        self.remove_player(player, false).await;
+                        player.unload_watched_chunks(self).await;
+                        player
+                            .chunk_manager
+                            .lock()
+                            .await
+                            .change_world(&self.level, destination.clone());
+                        player.living_entity.entity.set_world(destination.clone());
+                        destination.players.rcu(|current_list| {
+                            let mut new_list = (**current_list).clone();
+                            new_list.push(player.clone());
+                            new_list
+                        });
+                    }
 
-            (new_world.clone(), position)
+                    (Some(destination), position, yaw, pitch)
+                }
+            } else {
+                warn!("Server dropped during cross-dimension respawn");
+                (None, position, yaw, pitch)
+            }
+        } else {
+            if respawn_dimension != self.dimension {
+                warn!(
+                    "Target world {:?} not found, using world spawn in {:?}",
+                    respawn_dimension, self.dimension
+                );
+            }
+            (None, position, yaw, pitch)
+        };
+
+        // Cancelled or unresolved cross-dimension respawns fall back to the current
+        // world's spawn below; otherwise the resolved values from the event apply.
+        let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
+            (new_world.clone(), position, yaw, pitch)
         } else if respawn_dimension != self.dimension {
-            // Cross-dimension failed - fall back to current world's spawn
-            warn!(
-                "Target world {:?} not found, using world spawn in {:?}",
-                respawn_dimension, self.dimension
-            );
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
             let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
@@ -3354,9 +3393,9 @@ impl World {
                 (top + 1).into(),
                 f64::from(spawn_z) + 0.5,
             );
-            (self.clone(), fallback_pos)
+            (self.clone(), fallback_pos, spawn_yaw, spawn_pitch)
         } else {
-            (self.clone(), position)
+            (self.clone(), position, yaw, pitch)
         };
 
         // Notify plugins that the player has respawned (non-cancellable).
@@ -4422,7 +4461,7 @@ impl World {
         position: &BlockPos,
         cause: Option<Arc<Player>>,
         flags: BlockFlags,
-    ) -> Option<u16> {
+    ) -> Option<BlockStateId> {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position);
         if is_air(broken_block_state) {
             return None;
@@ -4466,7 +4505,7 @@ impl World {
                 water_props.falling = Falling::False;
                 water_props.to_state_id(&Fluid::FLOWING_WATER)
             } else {
-                0
+                BlockStateId::AIR
             };
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
@@ -4482,7 +4521,7 @@ impl World {
                 let particles_packet = CWorldEvent::new(
                     WorldEvent::ParticlesDestroyBlock as i32,
                     *position,
-                    broken_state_id.into(),
+                    broken_state_id.as_u16().into(),
                     false,
                 );
                 let chunk_pos = position.chunk_position();
@@ -4785,7 +4824,7 @@ impl World {
     }
 
     /// Gets the Block + state id from the Block Registry, Returns Air if the Block state has not been found
-    pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, u16) {
+    pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, BlockStateId) {
         let id = self.get_block_state_id(position);
         (Block::from_state_id(id), id)
     }
@@ -5360,11 +5399,16 @@ impl WorldPortalExt for WorldPortal {
         )
     }
 
-    fn mirror(&self, block: &Block, state_id: u16, mirror: Mirror) -> &'static BlockState {
+    fn mirror(&self, block: &Block, state_id: BlockStateId, mirror: Mirror) -> &'static BlockState {
         self.0.block_registry.mirror(block, state_id, mirror)
     }
 
-    fn rotate(&self, block: &Block, state_id: u16, rotation: Rotation) -> &'static BlockState {
+    fn rotate(
+        &self,
+        block: &Block,
+        state_id: BlockStateId,
+        rotation: Rotation,
+    ) -> &'static BlockState {
         self.0.block_registry.rotate(block, state_id, rotation)
     }
 

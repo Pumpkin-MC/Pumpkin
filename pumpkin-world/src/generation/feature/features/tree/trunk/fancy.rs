@@ -25,7 +25,7 @@ impl FancyTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         block_registry: &dyn WorldPortalExt,
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
@@ -36,7 +36,7 @@ impl FancyTrunkPlacer {
         let j = height as i32 + 2;
         let k = ((j as f64) * 0.618).floor() as i32;
 
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,

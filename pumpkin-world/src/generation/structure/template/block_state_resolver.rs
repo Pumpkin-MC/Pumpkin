@@ -33,9 +33,7 @@ impl BlockStateResolver {
         // Find the block
         let block = Block::from_name(&entry.name).or_else(|| Block::from_registry_key(block_name));
 
-        let block = if let Some(b) = block {
-            b
-        } else {
+        let Some(block) = block else {
             warn!("Unknown block in template: {}", entry.name);
             return None;
         };
@@ -46,17 +44,26 @@ impl BlockStateResolver {
         }
 
         // Transform properties for rotation/mirror
-        let transformed_props: Vec<(&str, &str)> = entry
+        let transformed_props: Vec<(String, String)> = entry
             .properties
             .iter()
             .map(|(key, value)| {
+                let transformed_key = match key.as_str() {
+                    "north" | "south" | "east" | "west" => rotation
+                        .rotate_facing(mirror.mirror_facing(key))
+                        .to_string(),
+                    _ => key.clone(),
+                };
                 let new_value = Self::transform_property(key, value, rotation, mirror);
-                (key.as_str(), new_value)
+                (transformed_key, new_value)
             })
             .collect();
 
         // Convert to the format expected by from_properties
-        let props_slice: Vec<(&str, &str)> = transformed_props;
+        let props_slice = transformed_props
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect::<Vec<_>>();
 
         // Get the state ID from properties
         let props_box = block.from_properties(&props_slice);
@@ -72,44 +79,36 @@ impl BlockStateResolver {
     }
 
     /// Transforms a property value based on rotation and mirror.
-    fn transform_property(
-        key: &str,
-        value: &str,
-        rotation: Rotation,
-        mirror: Mirror,
-    ) -> &'static str {
+    fn transform_property(key: &str, value: &str, rotation: Rotation, mirror: Mirror) -> String {
         match key {
             // Horizontal facing properties
             "facing" => {
                 let mirrored = mirror.mirror_facing(value);
-                rotation.rotate_facing(mirrored)
+                rotation.rotate_facing(mirrored).to_string()
             }
 
             // Axis properties (for logs, pillars, etc.)
-            "axis" => rotation.rotate_axis(value),
+            "axis" => rotation.rotate_axis(value).to_string(),
 
             // Block rotation (signs, banners - 0-15 value)
-            "rotation" => {
-                if let Ok(rot_value) = value.parse::<i32>() {
+            "rotation" => value.parse::<i32>().map_or_else(
+                |_| value.to_string(),
+                |rot_value| {
                     let mirrored = mirror.mirror_block_rotation(rot_value);
                     let rotated = rotation.rotate_block_rotation(mirrored);
-                    // Use static strings for the 16 possible rotation values
-                    Self::rotation_to_str(rotated)
-                } else {
-                    Self::leak_str(value)
-                }
-            }
+                    Self::rotation_to_str(rotated).to_string()
+                },
+            ),
 
             // Half properties don't need rotation (top/bottom stays the same)
             // Shape, mode, and most other properties don't need transformation either
-            _ => Self::leak_str(value),
+            _ => value.to_string(),
         }
     }
 
     /// Converts a rotation value (0-15) to a static string.
     const fn rotation_to_str(rotation: i32) -> &'static str {
         match rotation % 16 {
-            0 => "0",
             1 => "1",
             2 => "2",
             3 => "3",
@@ -128,56 +127,6 @@ impl BlockStateResolver {
             _ => "0",
         }
     }
-
-    /// Converts a string to a 'static str by leaking it.
-    /// This is necessary for returning transformed property values.
-    fn leak_str(s: &str) -> &'static str {
-        // For common values, return static strings to avoid leaking
-        match s {
-            "north" => "north",
-            "south" => "south",
-            "east" => "east",
-            "west" => "west",
-            "up" => "up",
-            "down" => "down",
-            "x" => "x",
-            "y" => "y",
-            "z" => "z",
-            "true" => "true",
-            "false" => "false",
-            "top" => "top",
-            "bottom" => "bottom",
-            "upper" => "upper",
-            "lower" => "lower",
-            "straight" => "straight",
-            "inner_left" => "inner_left",
-            "inner_right" => "inner_right",
-            "outer_left" => "outer_left",
-            "outer_right" => "outer_right",
-            "0" => "0",
-            "1" => "1",
-            "2" => "2",
-            "3" => "3",
-            "4" => "4",
-            "5" => "5",
-            "6" => "6",
-            "7" => "7",
-            "8" => "8",
-            "9" => "9",
-            "10" => "10",
-            "11" => "11",
-            "12" => "12",
-            "13" => "13",
-            "14" => "14",
-            "15" => "15",
-            "head" => "head",
-            "foot" => "foot",
-            "single" => "single",
-            "left" => "left",
-            "right" => "right",
-            _ => s.to_string().leak(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -185,14 +134,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_simple_block() {
+    fn resolve_simple_block() {
         let entry = PaletteEntry::new("minecraft:stone".to_string());
         let state = BlockStateResolver::resolve_simple(&entry);
         assert!(state.is_some());
     }
 
     #[test]
-    fn test_resolve_with_properties() {
+    fn resolve_with_properties() {
         let entry = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
@@ -207,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rotation_transforms_facing() {
+    fn rotation_transforms_facing() {
         let entry = PaletteEntry::with_properties(
             "minecraft:furnace".to_string(),
             vec![
@@ -226,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_block_returns_none() {
+    fn unknown_block_returns_none() {
         let entry = PaletteEntry::new("minecraft:nonexistent_block".to_string());
         let state = BlockStateResolver::resolve_simple(&entry);
         assert!(state.is_none());

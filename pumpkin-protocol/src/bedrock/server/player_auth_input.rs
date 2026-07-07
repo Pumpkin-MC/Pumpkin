@@ -27,6 +27,8 @@ pub struct SPlayerAuthInput {
     pub tick: VarULong,
     pub delta: Vector3<f32>,
     pub block_actions: Option<Vec<PlayerBlockAction>>,
+    pub item_interaction: Option<PlayerInventoryAction>,
+    pub item_stack_request: Option<crate::bedrock::server::item_stack_request::ItemStackRequest>,
     pub vehicle_rotation: Option<Vector2<f32>>,
     pub vehicle_unique_id: Option<VarLong>,
     pub analog_move: Vector2<f32>,
@@ -52,22 +54,18 @@ impl PacketRead for SPlayerAuthInput {
         let delta = Vector3::<f32>::read(reader)?;
 
         // 1. Perform Item Interaction
-        if input_data.get(InputData::PerformItemInteraction as usize) {
-            // protocol.UseItemTransactionData (Simplified skip)
-            let _action_type = VarUInt::read(reader)?;
-            let action_count = VarUInt::read(reader)?.0;
-            for _ in 0..action_count {
-                let _type = VarUInt::read(reader)?;
-                let _pos = BlockPos::read(reader)?;
-                let _face = VarInt::read(reader)?;
-            }
-        }
+        let item_interaction = if input_data.get(InputData::PerformItemInteraction as usize) {
+            Some(PlayerInventoryAction::read(reader)?)
+        } else {
+            None
+        };
 
         // 2. Item Stack Request
-        if input_data.get(InputData::PerformItemStackRequest as usize) {
-            // protocol.Single ItemStackRequest
-            return Err(Error::other("ItemStackRequest decoding not implemented"));
-        }
+        let item_stack_request = if input_data.get(InputData::PerformItemStackRequest as usize) {
+            Some(crate::bedrock::server::item_stack_request::ItemStackRequest::read(reader)?)
+        } else {
+            None
+        };
 
         // 3. Block Actions
         let block_actions = if input_data.get(InputData::PerformBlockActions as usize) {
@@ -109,11 +107,50 @@ impl PacketRead for SPlayerAuthInput {
             tick,
             delta,
             block_actions,
+            item_interaction,
+            item_stack_request,
             vehicle_rotation,
             vehicle_unique_id,
             analog_move,
             camera_orientation,
             raw_move,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct PlayerInventoryAction {
+    pub legacy_request_id: VarInt,
+    pub legacy_slots: Vec<crate::bedrock::server::inventory_transaction::LegacySetItemSlot>,
+    pub actions: Vec<crate::bedrock::server::inventory_transaction::InventoryAction>,
+    pub transaction: crate::bedrock::server::inventory_transaction::UseItemTransactionData,
+}
+
+impl PacketRead for PlayerInventoryAction {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        let legacy_request_id = VarInt::read(buf)?;
+        let mut legacy_slots = Vec::new();
+        if legacy_request_id.0 < -1 && (legacy_request_id.0 & 1) == 0 {
+            let slots_len = VarUInt::read(buf)?.0;
+            for _ in 0..slots_len {
+                legacy_slots.push(
+                    crate::bedrock::server::inventory_transaction::LegacySetItemSlot::read(buf)?,
+                );
+            }
+        }
+        let actions_len = VarUInt::read(buf)?.0;
+        let mut actions = Vec::with_capacity(actions_len as usize);
+        for _ in 0..actions_len {
+            actions
+                .push(crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?);
+        }
+        let transaction =
+            crate::bedrock::server::inventory_transaction::UseItemTransactionData::read(buf)?;
+        Ok(Self {
+            legacy_request_id,
+            legacy_slots,
+            actions,
+            transaction,
         })
     }
 }

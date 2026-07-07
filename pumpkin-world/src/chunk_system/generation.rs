@@ -67,6 +67,7 @@ mod tests {
     use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
+    use pumpkin_data::BlockStateId;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
@@ -86,7 +87,7 @@ mod tests {
         fn mirror(
             &self,
             block: &pumpkin_data::Block,
-            state_id: u16,
+            state_id: BlockStateId,
             mirror: pumpkin_data::Mirror,
         ) -> &'static pumpkin_data::BlockState {
             block.mirror(state_id, mirror)
@@ -95,7 +96,7 @@ mod tests {
         fn rotate(
             &self,
             block: &pumpkin_data::Block,
-            state_id: u16,
+            state_id: BlockStateId,
             rotation: pumpkin_data::Rotation,
         ) -> &'static pumpkin_data::BlockState {
             block.rotate(state_id, rotation)
@@ -128,5 +129,58 @@ mod tests {
             0,
             StagedChunkEnum::Full,
         );
+    }
+
+    #[test]
+    fn configured_seed_generates_vanilla_ancient_city_chunk() {
+        let dimension = Dimension::OVERWORLD;
+        let seed = Seed(1_782_124_772_053_846_960);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone());
+        let biome_mixer_seed = hash_seed(world_gen.random_config.seed);
+
+        let chunk = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            31,
+            -12,
+            StagedChunkEnum::Features,
+        );
+        let super::Chunk::Proto(chunk) = chunk else {
+            panic!("features stage should return a proto chunk");
+        };
+
+        let mut city_blocks = 0;
+        let mut jigsaw_blocks = 0;
+        for x in 496..512 {
+            for z in -192..-176 {
+                for y in -64..320 {
+                    let block = chunk
+                        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z))
+                        .to_block_id();
+                    if [
+                        pumpkin_data::Block::DEEPSLATE_BRICKS.id,
+                        pumpkin_data::Block::POLISHED_DEEPSLATE.id,
+                        pumpkin_data::Block::REINFORCED_DEEPSLATE.id,
+                        pumpkin_data::Block::SCULK.id,
+                    ]
+                    .contains(&block)
+                    {
+                        city_blocks += 1;
+                    }
+                    if block == pumpkin_data::Block::JIGSAW.id {
+                        jigsaw_blocks += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            city_blocks > 0,
+            "reference chunk contains no Ancient City blocks"
+        );
+        assert_eq!(jigsaw_blocks, 0, "jigsaw blocks were not replaced");
     }
 }

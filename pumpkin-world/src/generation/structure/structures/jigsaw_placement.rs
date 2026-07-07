@@ -11,8 +11,8 @@ use std::collections::BinaryHeap;
 use std::sync::Arc;
 
 use super::jigsaw::{
-    JigsawBlock, JigsawJointType, JigsawJunction, JigsawProjection, PoolElementStructurePiece,
-    TemplatePool,
+    JigsawBlock, JigsawJointType, JigsawJunction, JigsawProjection, PoolElement, PoolElementKind,
+    PoolElementStructurePiece, TemplatePool,
 };
 
 pub struct JigsawPlacement;
@@ -65,6 +65,7 @@ impl PoolAliasLookup {
 
 impl JigsawPlacement {
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub fn add_pieces(
         context: &mut StructureGeneratorContext,
         start_pool_id: &str,
@@ -73,8 +74,8 @@ impl JigsawPlacement {
         position: BlockPos,
         do_expansion_hack: bool,
         project_start_to_heightmap: bool,
-        max_distance_from_center: MaxDistance,
-        dimension_padding: DimensionPadding,
+        max_distance_from_center: &MaxDistance,
+        dimension_padding: &DimensionPadding,
         liquid_settings: LiquidSettings,
         pool_alias_lookup: &PoolAliasLookup,
     ) -> Option<StructurePosition> {
@@ -86,8 +87,8 @@ impl JigsawPlacement {
 
         let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id);
         let pool = TemplatePool::discover(actual_start_pool_id)?;
-        let element = pool.get_random_element(&mut context.random);
-        let template = get_template(element.template)?;
+        let element = pool.get_random_element(&mut context.random).clone();
+        let template = element.first_template()?;
 
         let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
 
@@ -183,7 +184,7 @@ impl JigsawPlacement {
                 box_,
                 0,
             ),
-            template: Arc::clone(&template),
+            element: element.clone(),
             pos: BlockPos::new(adjusted_position.0.x, bottom_y, adjusted_position.0.z),
             rotation,
             mirror: Mirror::None,
@@ -236,41 +237,30 @@ impl JigsawPlacement {
                     }
 
                     let target_pool_id = pool_alias_lookup.lookup(raw_pool_id);
-                    let target_pool = match TemplatePool::discover(target_pool_id) {
-                        Some(p) => p,
-                        None => continue,
+                    let Some(target_pool) = TemplatePool::discover(target_pool_id) else {
+                        continue;
                     };
 
                     let mut target_elements = Vec::new();
                     if depth < max_depth {
-                        let mut main_elements = target_pool.elements.clone();
-                        for i in (1..main_elements.len()).rev() {
-                            let j = context.random.next_bounded_i32(i as i32 + 1) as usize;
-                            main_elements.swap(i, j);
-                        }
-                        target_elements.extend(main_elements);
+                        target_elements
+                            .extend(target_pool.get_shuffled_elements(&mut context.random));
                     }
 
                     let fallback_pool_id = pool_alias_lookup.lookup(&target_pool.fallback);
                     if let Some(fallback_pool) = TemplatePool::discover(fallback_pool_id) {
-                        let mut fallback_elements = fallback_pool.elements.clone();
-                        for i in (1..fallback_elements.len()).rev() {
-                            let j = context.random.next_bounded_i32(i as i32 + 1) as usize;
-                            fallback_elements.swap(i, j);
-                        }
-                        target_elements.extend(fallback_elements);
+                        target_elements
+                            .extend(fallback_pool.get_shuffled_elements(&mut context.random));
                     }
 
                     for element in target_elements {
-                        if element.template == "minecraft:empty" {
+                        if element.is_empty() {
                             break;
                         }
 
-                        let target_template_arc = match get_template(element.template) {
-                            Some(t) => t,
-                            None => continue,
+                        let Some(target_size) = get_element_size(&element) else {
+                            continue;
                         };
-                        let target_template = target_template_arc.as_ref();
                         let target_projection = element.projection;
                         let target_rigid = target_projection == JigsawProjection::Rigid;
 
@@ -287,7 +277,7 @@ impl JigsawPlacement {
                         }
 
                         for target_rotation in rotations {
-                            let target_jigsaws = get_jigsaw_blocks(target_template);
+                            let target_jigsaws = get_element_jigsaw_blocks(&element);
 
                             let mut target_jigsaws_shuffled = target_jigsaws.clone();
                             for i in (1..target_jigsaws_shuffled.len()).rev() {
@@ -310,8 +300,8 @@ impl JigsawPlacement {
 
                                 let source_jigsaw_local_y =
                                     source_jigsaw_pos.0.y - source_box.min.y;
-                                let target_jigsaw_local_pos = target_rotation
-                                    .transform_pos(target_jigsaw.pos.0, target_template.size);
+                                let target_jigsaw_local_pos =
+                                    target_rotation.transform_pos(target_jigsaw.pos.0, target_size);
                                 let target_jigsaw_local_y = target_jigsaw_local_pos.y;
 
                                 let delta_y = source_jigsaw_local_y - target_jigsaw_local_y
@@ -354,7 +344,7 @@ impl JigsawPlacement {
                                 target_pos.0.y += y_offset;
 
                                 let rotated_target_size =
-                                    target_rotation.transform_size(target_template.size);
+                                    target_rotation.transform_size(target_size);
                                 let mut target_box = BlockBox::new(
                                     target_pos.0.x,
                                     target_pos.0.y,
@@ -371,13 +361,13 @@ impl JigsawPlacement {
                                     for tj in &target_jigsaws {
                                         let tj_facing =
                                             rotate_direction(tj.facing, target_rotation);
-                                        let rotated_tj_pos = target_rotation
-                                            .transform_pos(tj.pos.0, target_template.size);
+                                        let rotated_tj_pos =
+                                            target_rotation.transform_pos(tj.pos.0, target_size);
                                         let rotated_tj_target_pos =
                                             rotated_tj_pos.add(&tj_facing.to_vector());
 
                                         let rotated_size =
-                                            target_rotation.transform_size(target_template.size);
+                                            target_rotation.transform_size(target_size);
                                         let hack_box = BlockBox::new(
                                             0,
                                             0,
@@ -396,13 +386,15 @@ impl JigsawPlacement {
                                             let child_pool_max_y =
                                                 get_pool_max_y_size(child_pool_id);
 
-                                            let mut child_fallback_max_y = 0;
-                                            if let Some(cp) = TemplatePool::discover(child_pool_id)
+                                            let child_fallback_max_y = if let Some(cp) =
+                                                TemplatePool::discover(child_pool_id)
                                             {
-                                                child_fallback_max_y = get_pool_max_y_size(
+                                                get_pool_max_y_size(
                                                     pool_alias_lookup.lookup(&cp.fallback),
-                                                );
-                                            }
+                                                )
+                                            } else {
+                                                0
+                                            };
 
                                             expand_to = expand_to
                                                 .max(child_pool_max_y)
@@ -423,23 +415,17 @@ impl JigsawPlacement {
 
                                 if !intersects_any(&pieces, &target_box) {
                                     let mut child_jigsaw_blocks = Vec::new();
-                                    for block in &target_template.blocks {
-                                        if let Some(mut cj) = JigsawBlock::from_template_block(
-                                            block,
-                                            &target_template.palette[block.state as usize],
-                                        ) {
-                                            let rotated_pos = target_rotation
-                                                .transform_pos(cj.pos.0, target_template.size);
-                                            cj.pos = BlockPos(rotated_pos).add(
-                                                target_pos.0.x,
-                                                target_pos.0.y,
-                                                target_pos.0.z,
-                                            );
-                                            cj.facing =
-                                                rotate_direction(cj.facing, target_rotation);
-                                            cj.up = rotate_direction(cj.up, target_rotation);
-                                            child_jigsaw_blocks.push(cj);
-                                        }
+                                    for mut cj in get_element_jigsaw_blocks(&element) {
+                                        let rotated_pos =
+                                            target_rotation.transform_pos(cj.pos.0, target_size);
+                                        cj.pos = BlockPos(rotated_pos).add(
+                                            target_pos.0.x,
+                                            target_pos.0.y,
+                                            target_pos.0.z,
+                                        );
+                                        cj.facing = rotate_direction(cj.facing, target_rotation);
+                                        cj.up = rotate_direction(cj.up, target_rotation);
+                                        child_jigsaw_blocks.push(cj);
                                     }
 
                                     let source_ground_level_delta =
@@ -456,7 +442,7 @@ impl JigsawPlacement {
                                             target_box,
                                             depth as u32 + 1,
                                         ),
-                                        template: target_template_arc.clone(),
+                                        element: element.clone(),
                                         pos: target_pos,
                                         rotation: target_rotation,
                                         mirror: Mirror::None,
@@ -552,11 +538,11 @@ fn get_pool_max_y_size(pool_id: &str) -> i32 {
 
     let mut max_y = 0;
     for element in &pool.elements {
-        if element.template == "minecraft:empty" {
+        if element.is_empty() {
             continue;
         }
-        if let Some(template) = get_template(element.template) {
-            max_y = max_y.max(template.size.y);
+        if let Some(size) = get_element_size(element) {
+            max_y = max_y.max(size.y);
         }
     }
     max_y
@@ -629,8 +615,60 @@ fn get_jigsaw_blocks(template: &StructureTemplate) -> Vec<JigsawBlock> {
     jigsaws
 }
 
+fn get_element_size(element: &PoolElement) -> Option<pumpkin_util::math::vector3::Vector3<i32>> {
+    fn size_for_kind(kind: &PoolElementKind) -> Option<pumpkin_util::math::vector3::Vector3<i32>> {
+        use pumpkin_util::math::vector3::Vector3;
+
+        match kind {
+            PoolElementKind::Empty => None,
+            PoolElementKind::Feature(_) => Some(Vector3::new(1, 1, 1)),
+            PoolElementKind::Single { template, .. } => get_template(template).map(|t| t.size),
+            PoolElementKind::List(elements) => {
+                let mut result = Vector3::new(0, 0, 0);
+                let mut found = false;
+                for size in elements.iter().filter_map(size_for_kind) {
+                    result.x = result.x.max(size.x);
+                    result.y = result.y.max(size.y);
+                    result.z = result.z.max(size.z);
+                    found = true;
+                }
+                found.then_some(result)
+            }
+        }
+    }
+
+    size_for_kind(&element.kind)
+}
+
+fn get_element_jigsaw_blocks(element: &PoolElement) -> Vec<JigsawBlock> {
+    fn jigsaws_for_kind(kind: &PoolElementKind) -> Vec<JigsawBlock> {
+        match kind {
+            PoolElementKind::Single { template, .. } => get_template(template)
+                .map_or_else(Vec::new, |template| get_jigsaw_blocks(&template)),
+            PoolElementKind::List(elements) => {
+                elements.first().map_or_else(Vec::new, jigsaws_for_kind)
+            }
+            PoolElementKind::Feature(_) => vec![JigsawBlock {
+                pos: BlockPos::new(0, 0, 0),
+                name: "minecraft:bottom".to_string(),
+                target: "minecraft:empty".to_string(),
+                pool: "minecraft:empty".to_string(),
+                final_state: "minecraft:air".to_string(),
+                joint: JigsawJointType::Rollable,
+                facing: pumpkin_util::BlockDirection::Down,
+                up: pumpkin_util::BlockDirection::South,
+                selection_priority: 0,
+                placement_priority: 0,
+            }],
+            PoolElementKind::Empty => Vec::new(),
+        }
+    }
+
+    jigsaws_for_kind(&element.kind)
+}
+
 fn can_attach(source: &JigsawBlock, target: &JigsawBlock, target_rotation: Rotation) -> bool {
-    if source.target != target.name || target.target != source.name {
+    if source.target != target.name {
         return false;
     }
     let rotated_target_facing = rotate_direction(target.facing, target_rotation);
@@ -638,11 +676,7 @@ fn can_attach(source: &JigsawBlock, target: &JigsawBlock, target_rotation: Rotat
         return false;
     }
 
-    // Joint alignment for vertical connections
-    if (source.joint == JigsawJointType::Aligned || target.joint == JigsawJointType::Aligned)
-        && (source.facing == pumpkin_util::BlockDirection::Up
-            || source.facing == pumpkin_util::BlockDirection::Down)
-    {
+    if source.joint == JigsawJointType::Aligned {
         let rotated_target_up = rotate_direction(target.up, target_rotation);
         return source.up == rotated_target_up;
     }

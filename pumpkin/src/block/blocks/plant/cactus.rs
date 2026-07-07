@@ -1,10 +1,10 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, CactusLikeProperties};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;

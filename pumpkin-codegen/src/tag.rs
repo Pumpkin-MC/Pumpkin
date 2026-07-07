@@ -136,7 +136,7 @@ pub(crate) fn build() -> TokenStream {
     let block_id_map: BTreeMap<String, u16> = blocks_assets
         .blocks
         .iter()
-        .map(|b| (b.name.clone(), b.id))
+        .map(|b| (b.name.clone(), b.id.0))
         .collect();
     let fluid_id_map: BTreeMap<String, u16> =
         fluids.iter().map(|f| (f.name.clone(), f.id)).collect();

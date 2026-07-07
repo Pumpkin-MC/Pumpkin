@@ -1,7 +1,7 @@
 use crate::block::{BlockBehaviour, BlockFuture, OnPlaceArgs};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 
 #[pumpkin_block("minecraft:conduit")]
 pub struct ConduitBlock;

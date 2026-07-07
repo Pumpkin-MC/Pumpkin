@@ -2,30 +2,24 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, CanPlaceAtArgs,
-        GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
+        BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+        OnPlaceArgs, PlacedArgs,
     },
     entity::player::Player,
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockStateId,
     block_properties::{
         BlockProperties, PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection,
     },
 };
+use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
-pub struct DripstoneBlock;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-impl BlockMetadata for DripstoneBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::POINTED_DRIPSTONE.id].into()
-    }
-}
+#[pumpkin_block("minecraft:pointed_dripstone")]
+pub struct DripstoneBlock;
 
 impl BlockBehaviour for DripstoneBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -47,7 +41,7 @@ impl BlockBehaviour for DripstoneBlock {
                 Some(args.player),
             ) else {
                 //this shouldn't happen
-                return Block::AIR.id;
+                return Block::AIR.default_state.id;
             };
 
             dripstone_props.vertical_direction = flip_dir(support_block_ver_dir);

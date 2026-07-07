@@ -1,10 +1,10 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, GrassBlockLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 
 use crate::block::{BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs};
 

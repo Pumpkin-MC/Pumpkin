@@ -1,21 +1,16 @@
-use pumpkin_data::{Block, BlockDirection, entity::EntityType, world::WorldEvent};
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_data::{Block, BlockDirection, BlockStateId, entity::EntityType, world::WorldEvent};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs, PlacedArgs,
-        blocks::skull_block::SkullBlock,
+        BlockBehaviour, BlockFuture, OnPlaceArgs, PlacedArgs, blocks::skull_block::SkullBlock,
     },
     entity::{Entity, boss::wither::WitherEntity},
 };
 
+#[pumpkin_block("wither_skeleton_skull")]
 pub struct WitherSkeletonSkullBlock;
-
-impl BlockMetadata for WitherSkeletonSkullBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::WITHER_SKELETON_SKULL.id].into()
-    }
-}
 
 impl BlockBehaviour for WitherSkeletonSkullBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -80,7 +75,7 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                             world.sync_world_event(
                                 WorldEvent::ParticlesDestroyBlock,
                                 p,
-                                Block::SOUL_SAND.default_state.id.into(),
+                                Block::SOUL_SAND.default_state.id.as_u16().into(),
                             );
                         }
 

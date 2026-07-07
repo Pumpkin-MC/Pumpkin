@@ -1,5 +1,5 @@
-use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::clientbound::PLAY_SECTION_BLOCKS_UPDATE;
+use pumpkin_data::{BlockStateId, block_state_remap::remap_block_state_for_version};
 use pumpkin_util::math::{
     position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section},
     vector3::{self},
@@ -30,7 +30,7 @@ pub struct CMultiBlockUpdate {
 
 impl CMultiBlockUpdate {
     #[must_use]
-    pub fn new(updates: &[(BlockPos, u16)]) -> Self {
+    pub fn new(updates: &[(BlockPos, BlockStateId)]) -> Self {
         let first_pos = updates[0].0;
 
         let chunk_section_vec = chunk_section_from_pos(&first_pos);
@@ -40,7 +40,7 @@ impl CMultiBlockUpdate {
             .iter()
             .map(|(pos, state_id)| {
                 let local_pos = pack_local_chunk_section(pos) as u64;
-                let packed = (u64::from(*state_id) << 12) | (local_pos & 0xFFF);
+                let packed = (u64::from(state_id.as_u16()) << 12) | (local_pos & 0xFFF);
                 VarLong(packed as i64)
             })
             .collect();

@@ -1,14 +1,10 @@
 pub mod entities;
-pub mod state;
 pub mod viewer;
 
 use std::collections::HashMap;
 
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-pub use state::RawBlockState;
-
-use crate::BlockStateId;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
@@ -54,9 +50,8 @@ impl BlockStateCodec {
     pub fn get_state_id(&self) -> BlockStateId {
         let block = self.name;
 
-        let properties_map = match &self.properties {
-            Some(map) => map,
-            None => return block.default_state.id,
+        let Some(properties_map) = &self.properties else {
+            return block.default_state.id;
         };
 
         let props_iter = properties_map
@@ -71,7 +66,7 @@ impl BlockStateCodec {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::Block;
+    use pumpkin_data::BlockStateId;
 
     use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
 
@@ -79,7 +74,7 @@ mod test {
     fn proper_network_bits_per_entry() {
         let id_to_test = 1 << BLOCK_NETWORK_MAX_BITS;
         assert!(
-            Block::from_state_id(id_to_test) == &Block::AIR,
+            BlockStateId::new_or_air(id_to_test) == BlockStateId::AIR,
             "We need to update our constants!"
         );
     }

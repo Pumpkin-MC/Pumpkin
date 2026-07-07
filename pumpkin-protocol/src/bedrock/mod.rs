@@ -1,5 +1,6 @@
 pub mod ack;
 pub mod client;
+pub mod crypto;
 pub mod frame_set;
 pub mod network_item;
 pub mod packet_decoder;

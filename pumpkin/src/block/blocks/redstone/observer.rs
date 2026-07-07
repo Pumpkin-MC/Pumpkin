@@ -6,12 +6,12 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use pumpkin_data::{
-    Block, FacingExt,
+    Block, BlockStateId, FacingExt,
     block_properties::{BlockProperties, ObserverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{block::BlockBehaviour, world::World};
 

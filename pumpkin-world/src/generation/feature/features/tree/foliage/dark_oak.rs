@@ -25,18 +25,18 @@ impl DarkOakFoliagePlacer {
         let mut foliage_positions = Vec::new();
         let pos = node.center.up_height(offset);
         let is_giant = node.giant_trunk;
+        FoliagePlacer::generate_square(
+            &mut foliage_positions,
+            self,
+            chunk,
+            random,
+            pos,
+            radius + 2,
+            -1,
+            node.giant_trunk,
+            foliage_provider,
+        );
         if is_giant {
-            FoliagePlacer::generate_square(
-                &mut foliage_positions,
-                self,
-                chunk,
-                random,
-                pos,
-                radius + 2,
-                -1,
-                node.giant_trunk,
-                foliage_provider,
-            );
             FoliagePlacer::generate_square(
                 &mut foliage_positions,
                 self,
@@ -79,17 +79,6 @@ impl DarkOakFoliagePlacer {
                 chunk,
                 random,
                 pos,
-                radius + 2,
-                -1,
-                node.giant_trunk,
-                foliage_provider,
-            );
-            FoliagePlacer::generate_square(
-                &mut foliage_positions,
-                self,
-                chunk,
-                random,
-                pos,
                 radius + 1,
                 0,
                 node.giant_trunk,
@@ -99,7 +88,7 @@ impl DarkOakFoliagePlacer {
         foliage_positions
     }
 
-    pub const fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {
+    pub const fn get_random_height(_random: &mut RandomGenerator) -> i32 {
         4
     }
 }

@@ -1,8 +1,9 @@
+use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
-use pumpkin_data::Block;
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use quote::quote;
+use pumpkin_data::{Block, BlockId};
+use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
 use syn::{Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
@@ -237,7 +238,7 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
             .to_compile_error()
             .into();
     };
-    let block_id = block.id;
+    let const_ident = format_ident!("{}", block.name.to_shouty_snake_case());
 
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
@@ -245,8 +246,8 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let generated = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
-            fn ids() -> Box<[u16]> {
-                [#block_id].into()
+            fn ids() -> Box<[pumpkin_data::BlockId]> {
+                [pumpkin_data::BlockId::#const_ident].into()
             }
         }
     };
@@ -279,11 +280,18 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
             .to_compile_error()
             .into();
     };
+    let const_values: Vec<_> = values
+        .iter()
+        .map(|v| {
+            let block = BlockId::new_or_air(*v).to_block();
+            format_ident!("{}", block.name.to_shouty_snake_case())
+        })
+        .collect();
 
     let expanded = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
-            fn ids() -> Box<[u16]> {
-                Box::new([ #(#values),* ])
+            fn ids() -> Box<[pumpkin_data::BlockId]> {
+                Box::new([ #(pumpkin_data::BlockId::#const_values),* ])
             }
         }
     };

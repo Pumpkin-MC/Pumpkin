@@ -10,6 +10,7 @@ use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
+use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
@@ -355,6 +356,12 @@ impl PumpkinServer {
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
 
+        let _ = self
+            .server
+            .plugin_manager
+            .fire(ServerLoadEvent::new(LoadType::Startup))
+            .await;
+
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
                 .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients)
@@ -517,7 +524,7 @@ impl PumpkinServer {
                             };
 
                             let id = udp_buf[0];
-                            let is_online = id & 128 != 0;
+                            let is_online = id & pumpkin_protocol::bedrock::RAKNET_VALID != 0;
 
                             if is_online {
                                 let be_clients = bedrock_clients.clone();

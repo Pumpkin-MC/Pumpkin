@@ -132,11 +132,9 @@ impl TemplatePiece {
             }
 
             // Resolve the block state with rotation/mirror
-            let state = if let Some(s) =
+            let Some(state) =
                 BlockStateResolver::resolve(palette_entry, self.rotation, self.mirror)
-            {
-                s
-            } else {
+            else {
                 debug!("Failed to resolve block: {}", palette_entry.name);
                 continue;
             };

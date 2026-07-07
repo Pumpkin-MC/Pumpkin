@@ -94,7 +94,7 @@ impl EntityBase for TNTEntity {
                 Metadata::new(
                     TrackedData::BLOCK_STATE_ID,
                     MetaDataType::BLOCK_STATE,
-                    VarInt(i32::from(Block::TNT.default_state.id)),
+                    VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
                 ),
             ]);
         })

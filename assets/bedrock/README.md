@@ -5,6 +5,9 @@ This directory contains a number of different data files used to help support co
 - `block_states.nbt`
     - mined from BDS (file hosted at [pmmp/BedrockData](https://github.com/pmmp/BedrockData/blob/master/canonical_block_states.nbt), `canonical_block_states.nbt`)
     - Provides a listing of all blocks and block states that exist in Bedrock. Used to build a mapping from Java block states to Bedrock ones by matching (string) identifiers and data components.
+- `blocks.nbt`
+    - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings)
+    - Defines the exact Bedrock block identifier and property mappings for every Java Edition block state ID. Used in code generation to translate Java block states to Bedrock counterparts.
 - `item_components.nbt`
     - mined from BDS (file hosted at [CloudburstMC/Data](https://github.com/CloudburstMC/Data))
 - `runtime_item_states.nbt`

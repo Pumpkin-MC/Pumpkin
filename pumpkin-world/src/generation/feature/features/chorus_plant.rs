@@ -13,11 +13,10 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-pub struct ChorusPlantFeature {}
+pub struct ChorusPlantFeature;
 
 impl ChorusPlantFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
@@ -33,10 +32,7 @@ impl ChorusPlantFeature {
         }
         let below = pos.down().0;
         let below_id = GenerationCache::get_block_state(chunk, &below).to_block_id();
-        if !tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT
-            .1
-            .contains(&below_id)
-        {
+        if !below_id.has_tag(tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT) {
             return false;
         }
 
@@ -84,10 +80,10 @@ fn set_chorus_plant<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) {
 
     let plant_id = Block::CHORUS_PLANT.id;
     let flower_id = Block::CHORUS_FLOWER.id;
-    let supports = tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT.1;
+    let supports = tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT;
 
     let props = BrownMushroomBlockLikeProperties {
-        down: down_id == plant_id || down_id == flower_id || supports.contains(&down_id),
+        down: down_id == plant_id || down_id == flower_id || down_id.has_tag(supports),
         up: up_id == plant_id || up_id == flower_id,
         north: north_id == plant_id || north_id == flower_id,
         east: east_id == plant_id || east_id == flower_id,

@@ -6,7 +6,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
-use pumpkin_world::BlockStateId;
+use pumpkin_data::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 
 pub mod barrel;

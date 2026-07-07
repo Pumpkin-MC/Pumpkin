@@ -13,6 +13,7 @@ use crate::entity::{Entity, EntityBase};
 
 use crate::block::entities::dropper::DropperBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
@@ -25,7 +26,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;

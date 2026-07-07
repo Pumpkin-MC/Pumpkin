@@ -5,10 +5,11 @@ use crate::generation::structure::structures::{
     StructureGenerator, StructureGeneratorContext, StructurePieceBase, StructurePosition,
 };
 use crate::generation::structure::template::{
-    BlockMirror, BlockRotation, BlockStateResolver, PaletteEntry, StructureTemplate,
+    BlockMirror, BlockRotation, PaletteEntry, StructureTemplate,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomImpl;
+use serde::Deserialize;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -26,9 +27,193 @@ pub struct TemplatePool {
 
 #[derive(Clone)]
 pub struct PoolElement {
-    pub template: &'static str,
     pub weight: u32,
     pub projection: JigsawProjection,
+    pub kind: PoolElementKind,
+}
+
+#[derive(Clone)]
+pub enum PoolElementKind {
+    Empty,
+    Single {
+        template: String,
+        processors: ProcessorListRef,
+    },
+    List(Vec<Self>),
+    Feature(pumpkin_data::placed_feature::PlacedFeature),
+}
+
+#[derive(Clone, Default)]
+pub enum ProcessorListRef {
+    Named(String),
+    #[default]
+    Empty,
+}
+
+#[derive(Deserialize)]
+struct RawTemplatePool {
+    fallback: String,
+    elements: Vec<RawWeightedPoolElement>,
+}
+
+#[derive(Deserialize)]
+struct RawWeightedPoolElement {
+    element: RawPoolElement,
+    weight: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "element_type")]
+enum RawPoolElement {
+    #[serde(rename = "minecraft:empty_pool_element")]
+    Empty,
+    #[serde(rename = "minecraft:single_pool_element")]
+    Single {
+        location: String,
+        processors: RawProcessorList,
+        projection: RawProjection,
+    },
+    #[serde(rename = "minecraft:list_pool_element")]
+    List {
+        elements: Vec<Self>,
+        projection: RawProjection,
+    },
+    #[serde(rename = "minecraft:feature_pool_element")]
+    Feature {
+        feature: String,
+        projection: RawProjection,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawProcessorList {
+    Named(String),
+    Inline { processors: Vec<serde_json::Value> },
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RawProjection {
+    Rigid,
+    TerrainMatching,
+}
+
+impl From<RawProjection> for JigsawProjection {
+    fn from(value: RawProjection) -> Self {
+        match value {
+            RawProjection::Rigid => Self::Rigid,
+            RawProjection::TerrainMatching => Self::TerrainMatching,
+        }
+    }
+}
+
+impl RawPoolElement {
+    fn into_element(self) -> Option<(PoolElementKind, JigsawProjection)> {
+        match self {
+            Self::Empty => Some((PoolElementKind::Empty, JigsawProjection::Rigid)),
+            Self::Single {
+                location,
+                processors,
+                projection,
+            } => {
+                let processors = match processors {
+                    RawProcessorList::Named(name) => ProcessorListRef::Named(name),
+                    RawProcessorList::Inline { processors } => {
+                        debug_assert!(processors.is_empty());
+                        ProcessorListRef::Empty
+                    }
+                };
+                Some((
+                    PoolElementKind::Single {
+                        template: location,
+                        processors,
+                    },
+                    projection.into(),
+                ))
+            }
+            Self::List {
+                elements,
+                projection,
+            } => {
+                let projection = projection.into();
+                let elements = elements
+                    .into_iter()
+                    .filter_map(|element| element.into_element().map(|(kind, _)| kind))
+                    .collect();
+                Some((PoolElementKind::List(elements), projection))
+            }
+            Self::Feature {
+                feature,
+                projection,
+            } => {
+                let feature = feature.strip_prefix("minecraft:").unwrap_or(&feature);
+                pumpkin_data::placed_feature::PlacedFeature::from_name(feature)
+                    .map(|feature| (PoolElementKind::Feature(feature), projection.into()))
+            }
+        }
+    }
+}
+
+impl PoolElement {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        matches!(self.kind, PoolElementKind::Empty)
+    }
+
+    #[must_use]
+    pub fn first_template(&self) -> Option<Arc<StructureTemplate>> {
+        fn find(kind: &PoolElementKind) -> Option<Arc<StructureTemplate>> {
+            match kind {
+                PoolElementKind::Single { template, .. } => {
+                    crate::generation::structure::template::get_template(template)
+                }
+                PoolElementKind::List(elements) => elements.iter().find_map(find),
+                PoolElementKind::Empty | PoolElementKind::Feature(_) => None,
+            }
+        }
+
+        find(&self.kind)
+    }
+
+    pub fn for_each_template(
+        &self,
+        mut consumer: impl FnMut(&str, &ProcessorListRef, Arc<StructureTemplate>),
+    ) {
+        fn visit(
+            kind: &PoolElementKind,
+            consumer: &mut impl FnMut(&str, &ProcessorListRef, Arc<StructureTemplate>),
+        ) {
+            match kind {
+                PoolElementKind::Single {
+                    template,
+                    processors,
+                } => {
+                    if let Some(structure_template) =
+                        crate::generation::structure::template::get_template(template)
+                    {
+                        consumer(template, processors, structure_template);
+                    }
+                }
+                PoolElementKind::List(elements) => {
+                    for element in elements {
+                        visit(element, consumer);
+                    }
+                }
+                PoolElementKind::Empty | PoolElementKind::Feature(_) => {}
+            }
+        }
+
+        visit(&self.kind, &mut consumer);
+    }
+
+    #[must_use]
+    pub const fn feature(&self) -> Option<pumpkin_data::placed_feature::PlacedFeature> {
+        match self.kind {
+            PoolElementKind::Feature(feature) => Some(feature),
+            _ => None,
+        }
+    }
 }
 
 impl TemplatePool {
@@ -53,27 +238,91 @@ impl TemplatePool {
     /// Discovers a pool from the filesystem/embedded assets.
     #[must_use]
     pub fn discover(id: &str) -> Option<Self> {
-        let elements = crate::generation::structure::template::get_pool_elements(id)?;
+        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, TemplatePool>> =
+            std::sync::LazyLock::new(dashmap::DashMap::new);
 
-        // Heuristic: roads and streets are usually TerrainMatching
-        let projection = if id.contains("streets") {
-            JigsawProjection::TerrainMatching
-        } else {
-            JigsawProjection::Rigid
-        };
+        if let Some(pool) = CACHE.get(id) {
+            return Some(pool.clone());
+        }
 
-        Some(Self {
-            id: id.to_string(),
-            fallback: "minecraft:empty".to_string(),
-            elements: elements
-                .iter()
-                .map(|e| PoolElement {
-                    template: e,
-                    weight: 1,
-                    projection,
+        let pool = if id == "minecraft:empty" || id == "empty" {
+            Self {
+                id: "minecraft:empty".to_string(),
+                fallback: "minecraft:empty".to_string(),
+                elements: Vec::new(),
+            }
+        } else if let Some(json) =
+            crate::generation::structure::template::get_template_pool_json(id)
+        {
+            let raw: RawTemplatePool = match serde_json::from_str(json) {
+                Ok(pool) => pool,
+                Err(error) => {
+                    tracing::error!("Failed to parse template pool {id}: {error}");
+                    return None;
+                }
+            };
+            let elements = raw
+                .elements
+                .into_iter()
+                .filter_map(|weighted| {
+                    weighted
+                        .element
+                        .into_element()
+                        .map(|(kind, projection)| PoolElement {
+                            weight: weighted.weight,
+                            projection,
+                            kind,
+                        })
                 })
-                .collect(),
-        })
+                .collect();
+            Self {
+                id: id.to_string(),
+                fallback: raw.fallback,
+                elements,
+            }
+        } else {
+            let elements = crate::generation::structure::template::get_pool_elements(id)?;
+            let projection = if id.contains("streets") {
+                JigsawProjection::TerrainMatching
+            } else {
+                JigsawProjection::Rigid
+            };
+
+            Self {
+                id: id.to_string(),
+                fallback: "minecraft:empty".to_string(),
+                elements: elements
+                    .iter()
+                    .map(|e| PoolElement {
+                        weight: 1,
+                        projection,
+                        kind: PoolElementKind::Single {
+                            template: (*e).to_string(),
+                            processors: ProcessorListRef::Empty,
+                        },
+                    })
+                    .collect(),
+            }
+        };
+        CACHE.insert(id.to_owned(), pool.clone());
+        Some(pool)
+    }
+
+    #[must_use]
+    pub fn get_shuffled_elements(
+        &self,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> Vec<PoolElement> {
+        let mut elements = self
+            .elements
+            .iter()
+            .flat_map(|element| std::iter::repeat_n(element.clone(), element.weight as usize))
+            .collect::<Vec<_>>();
+        for index in (1..elements.len()).rev() {
+            let other = random.next_bounded_i32(index as i32 + 1) as usize;
+            elements.swap(index, other);
+        }
+        elements
     }
 }
 
@@ -132,7 +381,6 @@ impl JigsawBlock {
         let up_part = parts.next().unwrap_or("up");
 
         let facing = match facing_part {
-            "north" => pumpkin_util::BlockDirection::North,
             "south" => pumpkin_util::BlockDirection::South,
             "east" => pumpkin_util::BlockDirection::East,
             "west" => pumpkin_util::BlockDirection::West,
@@ -146,7 +394,6 @@ impl JigsawBlock {
             "south" => pumpkin_util::BlockDirection::South,
             "east" => pumpkin_util::BlockDirection::East,
             "west" => pumpkin_util::BlockDirection::West,
-            "up" => pumpkin_util::BlockDirection::Up,
             "down" => pumpkin_util::BlockDirection::Down,
             _ => pumpkin_util::BlockDirection::Up,
         };
@@ -189,7 +436,7 @@ pub struct JigsawJunction {
 
 pub struct PoolElementStructurePiece {
     pub piece: crate::generation::structure::structures::StructurePiece,
-    pub template: Arc<StructureTemplate>,
+    pub element: PoolElement,
     pub pos: BlockPos,
     pub rotation: BlockRotation,
     pub mirror: BlockMirror,
@@ -218,55 +465,39 @@ impl StructurePieceBase for PoolElementStructurePiece {
         &mut self,
         chunk: &mut crate::ProtoChunk,
         _block_registry: &dyn crate::world::WorldPortalExt,
-        _random: &mut pumpkin_util::random::RandomGenerator,
+        random: &mut pumpkin_util::random::RandomGenerator,
         _seed: i64,
         chunk_box: &pumpkin_util::math::block_box::BlockBox,
     ) {
         let origin =
             pumpkin_util::math::vector3::Vector3::new(self.pos.0.x, self.pos.0.y, self.pos.0.z);
 
-        let processors: Vec<Box<dyn crate::generation::structure::template::StructureProcessor>> =
-            vec![Box::new(
-                crate::generation::structure::template::processor::GravityProcessor {
-                    heightmap: pumpkin_util::HeightMap::WorldSurfaceWg,
-                    offset: -1,
-                },
-            )];
+        self.element
+            .for_each_template(|_name, processor_list, template| {
+                let processors = match processor_list {
+                    ProcessorListRef::Named(name) => {
+                        crate::generation::structure::template::processor::load_processor_list(name)
+                    }
+                    ProcessorListRef::Empty => Arc::from([]),
+                };
+                crate::generation::structure::template::place_template(
+                    chunk,
+                    &template,
+                    origin,
+                    (0, 0),
+                    self.rotation,
+                    false,
+                    self.liquid_settings == LiquidSettings::ApplyWaterlog,
+                    processors.as_ref(),
+                    Some(chunk_box),
+                );
+            });
 
-        crate::generation::structure::template::place_template(
-            chunk,
-            &self.template,
-            origin,
-            (0, 0),
-            self.rotation,
-            false,
-            &processors,
-            Some(chunk_box),
-        );
-
-        // Post-process: replace jigsaw blocks with their final_state
-        for jigsaw in &self.jigsaw_blocks {
-            let wx = jigsaw.pos.0.x;
-            let wy = jigsaw.pos.0.y;
-            let wz = jigsaw.pos.0.z;
-            if wx < chunk_box.min.x
-                || wx > chunk_box.max.x
-                || wy < chunk_box.min.y
-                || wy > chunk_box.max.y
-                || wz < chunk_box.min.z
-                || wz > chunk_box.max.z
-            {
-                continue;
-            }
-            if jigsaw.final_state == "minecraft:air" || jigsaw.final_state == "air" {
-                chunk.set_block_state(wx, wy, wz, pumpkin_data::Block::AIR.default_state);
-                continue;
-            }
-
-            let entry = PaletteEntry::from_string(&jigsaw.final_state);
-            if let Some(state) = BlockStateResolver::resolve(&entry, self.rotation, self.mirror) {
-                chunk.set_block_state(wx, wy, wz, state);
-            }
+        if let Some(feature) = self.element.feature()
+            && let Some(placed_feature) =
+                crate::generation::feature::placed_features::PLACED_FEATURES.get(&feature)
+        {
+            placed_feature.generate_in_proto_chunk(chunk, feature, random, self.pos);
         }
     }
 }
@@ -342,7 +573,6 @@ impl StructureGenerator for JigsawGenerator {
             structure
                 .and_then(|s| s.liquid_settings)
                 .map_or(LiquidSettings::ApplyWaterlog, |ls| match ls {
-                    "apply_waterlogging" => LiquidSettings::ApplyWaterlog,
                     "ignore_waterlogging" => LiquidSettings::IgnoreWaterlogDone,
                     _ => LiquidSettings::ApplyWaterlog,
                 });
@@ -363,13 +593,123 @@ impl StructureGenerator for JigsawGenerator {
             start_pos,
             self.use_expansion_hack,
             project_start_to_heightmap,
-            MaxDistance {
-                horizontal: max_distance,
-                vertical: max_distance,
-            },
-            dimension_padding,
+            &MaxDistance::new(max_distance),
+            &dimension_padding,
             liquid_settings,
             &PoolAliasLookup,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ancient_city_pools_match_vanilla_weights() {
+        let expected = [
+            ("minecraft:ancient_city/city_center", 3, 3),
+            ("minecraft:ancient_city/sculk", 2, 7),
+            ("minecraft:ancient_city/structures", 20, 46),
+            ("minecraft:ancient_city/walls", 16, 27),
+            ("minecraft:ancient_city/city/entrance", 6, 6),
+            ("minecraft:ancient_city/city_center/walls", 10, 10),
+            ("minecraft:ancient_city/walls/no_corners", 8, 8),
+        ];
+
+        for (id, element_count, total_weight) in expected {
+            let pool = TemplatePool::discover(id).unwrap_or_else(|| panic!("missing pool {id}"));
+            assert_eq!(pool.elements.len(), element_count, "{id}");
+            assert_eq!(
+                pool.elements
+                    .iter()
+                    .map(|element| element.weight)
+                    .sum::<u32>(),
+                total_weight,
+                "{id}"
+            );
+            assert_eq!(pool.fallback, "minecraft:empty", "{id}");
+        }
+    }
+
+    #[test]
+    fn ancient_city_start_templates_and_anchor_exist() {
+        let pool = TemplatePool::discover("minecraft:ancient_city/city_center").unwrap();
+        for element in pool.elements {
+            let template = element.first_template().expect("missing start template");
+            assert!(
+                template.blocks.iter().any(|block| {
+                    JigsawBlock::from_template_block(block, &template.palette[block.state as usize])
+                        .is_some_and(|jigsaw| jigsaw.name == "minecraft:city_anchor")
+                }),
+                "start template has no city_anchor"
+            );
+        }
+    }
+
+    #[test]
+    fn ancient_city_pool_templates_are_embedded() {
+        fn check(kind: &PoolElementKind) {
+            match kind {
+                PoolElementKind::Single { template, .. } => {
+                    // This entry exists in vanilla's pool data but has no corresponding
+                    // template in the vanilla server jar.
+                    if template == "minecraft:ancient_city/walls/intact_horizontal_wall_stairs_5" {
+                        assert!(
+                            crate::generation::structure::template::get_template(template)
+                                .is_none()
+                        );
+                    } else {
+                        assert!(
+                            crate::generation::structure::template::get_template(template)
+                                .is_some(),
+                            "missing template {template}"
+                        );
+                    }
+                }
+                PoolElementKind::List(elements) => elements.iter().for_each(check),
+                PoolElementKind::Empty | PoolElementKind::Feature(_) => {}
+            }
+        }
+
+        for id in [
+            "minecraft:ancient_city/city_center",
+            "minecraft:ancient_city/structures",
+            "minecraft:ancient_city/walls",
+            "minecraft:ancient_city/city/entrance",
+            "minecraft:ancient_city/city_center/walls",
+            "minecraft:ancient_city/walls/no_corners",
+        ] {
+            for element in TemplatePool::discover(id).unwrap().elements {
+                check(&element.kind);
+            }
+        }
+    }
+
+    #[test]
+    fn ancient_city_builds_a_multi_piece_graph() {
+        let generator = JigsawGenerator::new("minecraft:ancient_city/city_center", 7)
+            .with_start_jigsaw("minecraft:city_anchor");
+        let context = StructureGeneratorContext {
+            seed: 0,
+            chunk_x: 0,
+            chunk_z: 0,
+            random: super::super::create_chunk_random(0, 0, 0),
+            sea_level: 63,
+            min_y: -64,
+            height_sampler: None,
+            structure_key: Some(pumpkin_data::structures::StructureKeys::AncientCity),
+        };
+
+        let position = generator
+            .get_structure_position(context)
+            .expect("ancient city graph should generate");
+        let collector = position.collector.lock().unwrap();
+        assert!(
+            collector.pieces.len() > 10,
+            "ancient city generated only {} pieces",
+            collector.pieces.len()
+        );
+        assert_eq!(position.start_pos.0.y, -27);
     }
 }

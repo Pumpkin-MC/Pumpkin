@@ -1223,6 +1223,9 @@ pub trait ScreenHandler: Send + Sync {
             } else if action_type == SlotActionType::Swap && (0..9).contains(&button)
                 || button == 40
             {
+                if slot_index < 0 {
+                    return;
+                }
                 let mut button_stack = player
                     .get_inventory()
                     .get_stack(button as usize)

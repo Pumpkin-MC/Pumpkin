@@ -4,8 +4,6 @@ use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, Level
 use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
-    BlockStateId,
-    block::RawBlockState,
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::anvil::AnvilChunkFile,
@@ -21,7 +19,7 @@ use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_data::{Block, BlockStateId, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashSet;
@@ -696,7 +694,7 @@ impl Level {
         }
     }
 
-    pub fn get_block_state(&self, position: &BlockPos) -> RawBlockState {
+    pub fn get_block_state(&self, position: &BlockPos) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let id = self
             .read_chunk_sync(&chunk_coordinate, |chunk| {
@@ -707,7 +705,8 @@ impl Level {
                 )
             })
             .flatten();
-        RawBlockState(id.unwrap_or(Block::VOID_AIR.default_state.id))
+
+        id.unwrap_or(Block::VOID_AIR.default_state.id)
     }
 
     pub fn set_block_state(

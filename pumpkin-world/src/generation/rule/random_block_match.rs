@@ -1,15 +1,13 @@
-use pumpkin_data::Block;
+use pumpkin_data::{BlockId, BlockStateId};
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
-use crate::block::RawBlockState;
-
 pub struct RandomBlockMatchRuleTest {
-    pub block: Block,
+    pub block: BlockId,
     pub probability: f32,
 }
 
 impl RandomBlockMatchRuleTest {
-    pub fn test(&self, state: RawBlockState, random: &mut RandomGenerator) -> bool {
-        state.to_block().name == self.block.name && random.next_f32() < self.probability
+    pub fn test(&self, state: BlockStateId, random: &mut RandomGenerator) -> bool {
+        self.block.as_u16() == state.as_u16() && random.next_f32() < self.probability
     }
 }

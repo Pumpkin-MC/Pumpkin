@@ -4,8 +4,8 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::block_state_provider::BlockStateProvider, world::WorldPortalExt};
 
 pub struct AttachedToLogsTreeDecorator {
     pub probability: f32,
@@ -17,6 +17,7 @@ impl AttachedToLogsTreeDecorator {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         log_positions: &[BlockPos],
     ) {
@@ -31,7 +32,10 @@ impl AttachedToLogsTreeDecorator {
             {
                 continue;
             }
-            chunk.set_block_state(&pos.0, self.block_provider.get(random, pos));
+            chunk.set_block_state(
+                &pos.0,
+                self.block_provider.get(random, pos, chunk, block_registry),
+            );
         }
     }
 }

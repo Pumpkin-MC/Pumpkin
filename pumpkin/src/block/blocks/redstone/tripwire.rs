@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use pumpkin_data::item::Item;
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockStateId,
     block_properties::{BlockProperties, HorizontalFacing},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::block::BlockFuture;
 use crate::{

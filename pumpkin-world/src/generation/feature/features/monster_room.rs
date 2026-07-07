@@ -17,12 +17,12 @@ const DUNGEON_MOBS: [&str; 4] = [
     "minecraft:spider",
 ];
 
-pub struct DungeonFeature {}
+pub struct DungeonFeature;
 
 impl DungeonFeature {
     /// Generate a monster room (dungeon) at `pos`.
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
@@ -143,7 +143,7 @@ impl DungeonFeature {
                         .copied();
 
                     // Build the chest state: face away from the wall.
-                    let chest_state = if let Some(dir) = facing_dir {
+                    let chest_state = facing_dir.map_or(Block::CHEST.default_state, |dir| {
                         use pumpkin_data::block_properties::{
                             BlockProperties, ChestLikeProperties,
                         };
@@ -151,9 +151,7 @@ impl DungeonFeature {
                         props.facing = dir.opposite();
                         let state_id = props.to_state_id(&Block::CHEST);
                         pumpkin_data::BlockState::from_id(state_id)
-                    } else {
-                        Block::CHEST.default_state
-                    };
+                    });
 
                     chunk.set_block_state(&chest_pos, chest_state);
 

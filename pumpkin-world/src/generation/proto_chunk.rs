@@ -7,9 +7,9 @@ use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::structures::{
     Structure, StructureKeys, StructurePlacementType, StructureSet, WeightedEntry,
 };
-use pumpkin_data::tag;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
+use pumpkin_data::{BlockId, BlockStateId, tag};
 use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
 use pumpkin_util::random::{RandomImpl, get_carver_seed};
 use pumpkin_util::{
@@ -50,14 +50,14 @@ use crate::generation::structure::structures::{
 use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
-    BlockStateId,
-    block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
     world::{BlockAccessor, WorldPortalExt},
 };
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
+
+use crate::tick::{ScheduledTick, TickPriority};
 
 enum ActiveSupplier {
     Overworld(MultiNoiseBiomeSupplier),
@@ -74,7 +74,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 
     fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk>;
 
-    fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
     fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound);
@@ -144,6 +144,7 @@ pub struct ProtoChunk {
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
+    pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
 pub struct TerrainCache {
@@ -186,7 +187,8 @@ impl ProtoChunk {
             z,
             default_block: generator.default_block,
             biome_mixer_seed: generator.biome_mixer_seed,
-            flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
+            flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
+                .into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
                 biome_coords::from_block(CHUNK_DIM as i32) as usize
@@ -216,6 +218,7 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            fluid_ticks: Vec::new(),
         }
     }
 
@@ -227,7 +230,9 @@ impl ProtoChunk {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
         proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
-        proto_chunk.blending_data = chunk_data.blending_data.clone();
+        proto_chunk
+            .blending_data
+            .clone_from(&chunk_data.blending_data);
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
@@ -327,6 +332,15 @@ impl ProtoChunk {
         std::mem::take(&mut self.pending_block_entities)
     }
 
+    pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {
+        self.fluid_ticks.push(ScheduledTick {
+            delay: 0,
+            priority: TickPriority::Normal,
+            position: BlockPos::new(x, y, z),
+            value: fluid,
+        });
+    }
+
     fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_surface_height_map[index];
         self.flat_surface_height_map[index] = current_height.max(y) as _;
@@ -350,10 +364,12 @@ impl ProtoChunk {
     #[must_use]
     pub const fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
+                self.top_block_height_exclusive(x, z)
+            }
+            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
+                self.ocean_floor_height_exclusive(x, z)
+            }
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
@@ -413,24 +429,24 @@ impl ProtoChunk {
     #[inline]
     #[must_use]
     pub fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
-        is_air(self.get_block_state(local_pos).0)
+        is_air(self.get_block_state(local_pos))
     }
 
     #[inline]
     #[must_use]
-    pub fn get_block_state_raw(&self, x: i32, y: i32, z: i32) -> u16 {
+    pub fn get_block_state_raw(&self, x: i32, y: i32, z: i32) -> BlockStateId {
         let index = self.local_pos_to_block_index(x, y, z);
         self.flat_block_map[index]
     }
 
     #[inline]
     #[must_use]
-    pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> RawBlockState {
+    pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> BlockStateId {
         let local_y = local_pos.y - self.bottom_y() as i32;
         if local_y < 0 || local_y >= self.height() as i32 {
-            return RawBlockState(Block::VOID_AIR.default_state.id);
+            return Block::VOID_AIR.default_state.id;
         }
-        RawBlockState(self.get_block_state_raw(local_pos.x & 15, local_y, local_pos.z & 15))
+        self.get_block_state_raw(local_pos.x & 15, local_y, local_pos.z & 15)
     }
 
     pub fn set_block_state(&mut self, x: i32, y: i32, z: i32, block_state: &BlockState) {
@@ -445,7 +461,7 @@ impl ProtoChunk {
             let index = Self::local_position_to_height_map_index(local_x, local_z);
             let y = y as i16;
             self.maybe_update_surface_height_map(index, y);
-            let block = Block::get_raw_id_from_state_id(block_state.id);
+            let block = BlockId::from_state_id(block_state.id);
 
             let blocks_movement = blocks_movement(block_state, block);
             if blocks_movement {
@@ -453,7 +469,7 @@ impl ProtoChunk {
             }
             if blocks_movement || block_state.is_liquid() {
                 self.maybe_update_motion_blocking_height_map(index, y);
-                if !tag::Block::MINECRAFT_LEAVES.1.contains(&block) {
+                if !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
                     {
                         self.maybe_update_motion_blocking_no_leaves_height_map(index, y);
                     }
@@ -499,6 +515,7 @@ impl ProtoChunk {
         self.stage = StagedChunkEnum::Biomes;
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
 
@@ -574,13 +591,10 @@ impl ProtoChunk {
                     // Java only adds to rigids if projection is RIGID
                     if jigsaw_piece.projection == crate::generation::structure::structures::jigsaw::JigsawProjection::Rigid {
                         ground_level_delta = jigsaw_piece.ground_level_delta;
-                        any_piece_bounding_box = match any_piece_bounding_box {
-                            Some(mut b) => {
-                                b.encompass(&bounding_box);
-                                Some(b)
-                            }
-                            None => Some(bounding_box),
-                        };
+                        any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
+                                 b.encompass(&bounding_box);
+                                 Some(b)
+                             });
 
                         beardifier_structures.push(
                             crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
@@ -607,24 +621,18 @@ impl ProtoChunk {
                                     z: j_z,
                                 }
                             );
-                            let junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
-                            any_piece_bounding_box = match any_piece_bounding_box {
-                                Some(mut b) => {
-                                    b.encompass(&junction_box);
-                                    Some(b)
-                                }
-                                None => Some(junction_box),
-                            };
+                            let _junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
+                     any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
+                            b.encompass(&bounding_box);
+                             Some(b)
+                        });
                         }
                     }
                 } else {
-                    any_piece_bounding_box = match any_piece_bounding_box {
-                        Some(mut b) => {
+                        any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
                             b.encompass(&bounding_box);
-                            Some(b)
-                        }
-                        None => Some(bounding_box),
-                    };
+                             Some(b)
+                         });
 
                     beardifier_structures.push(
                         crate::generation::noise::router::density_function::beardifier::BeardifierStructure {
@@ -730,8 +738,7 @@ impl ProtoChunk {
         };
         let base_supplier: &dyn BiomeSupplier = match &active_supplier {
             ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) => s,
-            ActiveSupplier::Overworld(s) => s,
+            ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
         };
         let blender = Blender::empty();
         let biome_supplier = blender.get_biome_supplier(base_supplier);
@@ -840,6 +847,9 @@ impl ProtoChunk {
 
     pub fn spawn_mobs<T: GenerationCache>(cache: &mut T, block_registry: &dyn WorldPortalExt) {
         let chunk = cache.get_center_chunk();
+        if chunk.stage >= StagedChunkEnum::Spawn {
+            return;
+        }
         debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
 
         let biome = chunk.get_terrain_gen_biome(
@@ -874,6 +884,7 @@ impl ProtoChunk {
         Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn build_surface(
         &mut self,
         generator: &super::generator::VanillaGenerator,
@@ -948,11 +959,13 @@ impl ProtoChunk {
                                 break;
                             }
 
-                            let state = self
+                            let block_id = self
                                 .get_block_state(&Vector3::new(local_x, search_y, local_z))
                                 .to_block_id();
 
-                            if !(state != AIR_BLOCK && state != WATER_BLOCK && state != LAVA_BLOCK)
+                            if !(block_id != AIR_BLOCK
+                                && block_id != WATER_BLOCK
+                                && block_id != LAVA_BLOCK)
                             {
                                 min = search_y + 1;
                                 break;
@@ -1290,6 +1303,7 @@ impl ProtoChunk {
         false
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
         let random_config = &generator.random_config;
@@ -1315,8 +1329,7 @@ impl ProtoChunk {
 
         let base_supplier: &dyn BiomeSupplier = match &active_supplier {
             ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) => s,
-            ActiveSupplier::Overworld(s) => s,
+            ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
         };
         let blender = Blender::empty();
         let biome_supplier = blender.get_biome_supplier(base_supplier);
@@ -1448,11 +1461,11 @@ impl BlockAccessor for ProtoChunk {
     }
 
     fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
-        self.get_block_state(&position.0).0
+        self.get_block_state(&position.0)
     }
 
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
-        BlockState::from_id_with_block(id.0)
+        BlockState::from_id_with_block(id)
     }
 }

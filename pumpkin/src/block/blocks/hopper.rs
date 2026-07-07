@@ -9,6 +9,7 @@ use crate::block::{
 use crate::world::World;
 
 use crate::block::entities::hopper::HopperBlockEntity;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper};
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_hopper;
@@ -19,7 +20,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;

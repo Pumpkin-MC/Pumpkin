@@ -13,6 +13,7 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::node::Coordinate;
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BigDripleafLikeProperties, BlockProperties, HorizontalFacing, Tilt,
 };
@@ -22,7 +23,6 @@ use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 

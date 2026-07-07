@@ -1,35 +1,19 @@
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, OnScheduledTickArgs,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs,
 };
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{BlockDirection, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
+#[pumpkin_block_from_tag("minecraft:lanterns")]
 pub struct LanternBlock;
-
-impl BlockMetadata for LanternBlock {
-    fn ids() -> Box<[u16]> {
-        [
-            Block::LANTERN.id,
-            Block::SOUL_LANTERN.id,
-            Block::COPPER_LANTERN.id,
-            Block::EXPOSED_COPPER_LANTERN.id,
-            Block::WEATHERED_COPPER_LANTERN.id,
-            Block::OXIDIZED_COPPER_LANTERN.id,
-            Block::WAXED_COPPER_LANTERN.id,
-            Block::WAXED_EXPOSED_COPPER_LANTERN.id,
-            Block::WAXED_WEATHERED_COPPER_LANTERN.id,
-            Block::WAXED_OXIDIZED_COPPER_LANTERN.id,
-        ]
-        .into()
-    }
-}
 
 impl BlockBehaviour for LanternBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {

@@ -7,7 +7,7 @@ use crate::{
     entity::EntityBase,
 };
 use pumpkin_data::{
-    Block, BlockDirection, FacingExt, HorizontalFacingExt,
+    Block, BlockDirection, BlockId, BlockStateId, FacingExt, HorizontalFacingExt,
     block_properties::{
         BlockProperties, Facing, HorizontalFacing, LadderLikeProperties,
         MangroveRootsLikeProperties,
@@ -15,29 +15,33 @@ use pumpkin_data::{
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 pub struct CoralFanBlock;
 
 impl BlockMetadata for CoralFanBlock {
-    fn ids() -> Box<[u16]> {
-        let alive_wall_fans = tag::Block::MINECRAFT_WALL_CORALS.1;
-        let alive_coral_fans: &[u16] = &[
-            Block::BRAIN_CORAL_FAN.id,
-            Block::BUBBLE_CORAL_FAN.id,
-            Block::FIRE_CORAL_FAN.id,
-            Block::HORN_CORAL_FAN.id,
-            Block::TUBE_CORAL_FAN.id,
+    fn ids() -> Box<[BlockId]> {
+        let alive_wall_fans: Vec<BlockId> = tag::Block::MINECRAFT_WALL_CORALS
+            .1
+            .iter()
+            .map(|v| BlockId::new_or_air(*v))
+            .collect();
+        let alive_coral_fans: &[BlockId] = &[
+            BlockId::BRAIN_CORAL_FAN,
+            BlockId::BUBBLE_CORAL_FAN,
+            BlockId::FIRE_CORAL_FAN,
+            BlockId::HORN_CORAL_FAN,
+            BlockId::TUBE_CORAL_FAN,
         ];
-        let alive_fans = [alive_wall_fans, alive_coral_fans].concat();
+        let alive_fans = [alive_wall_fans.as_slice(), alive_coral_fans].concat();
         let mut plants = Vec::new();
         for alive_fan_id in alive_fans {
-            let clone = alive_fan_id;
-            plants.push(clone);
-            plants.push(get_dead_type(Block::from_id(clone)).id);
+            plants.push(alive_fan_id);
+            plants.push(
+                get_dead_type(alive_fan_id)
+                    .expect("not a coral fan block")
+                    .id,
+            );
         }
         plants.into()
     }
@@ -90,13 +94,13 @@ impl BlockBehaviour for CoralFanBlock {
                         dir.to_horizontal_facing().unwrap(),
                     )
                 {
-                    let Some(wall_block) = get_corresponding_wall_fan_type(args.block) else {
-                        return 0;
+                    let Some(wall_block) = get_corresponding_wall_fan_type(args.block.id) else {
+                        return BlockStateId::AIR;
                     };
-                    let mut coral_wall_fan_props = CoralWallFanLikeProperties::default(&wall_block);
+                    let mut coral_wall_fan_props = CoralWallFanLikeProperties::default(wall_block);
                     coral_wall_fan_props.waterlogged = args.replacing.water_source();
                     coral_wall_fan_props.facing = dir.opposite().to_horizontal_facing().unwrap();
-                    return coral_wall_fan_props.to_state_id(&wall_block);
+                    return coral_wall_fan_props.to_state_id(wall_block);
                 }
             }
 
@@ -104,7 +108,7 @@ impl BlockBehaviour for CoralFanBlock {
             if support_block.is_center_solid(BlockDirection::Up) {
                 return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
             }
-            0
+            BlockStateId::AIR
         })
     }
 
@@ -126,12 +130,12 @@ impl BlockBehaviour for CoralFanBlock {
                     let mut props =
                         CoralWallFanLikeProperties::from_state_id(current_state.id, args.block);
                     props.waterlogged = false;
-                    props.to_state_id(&get_dead_type(args.block))
+                    props.to_state_id(get_dead_type(args.block.id).expect("not a coral block"))
                 } else {
                     let mut props =
                         CoralFanLikeProperties::from_state_id(current_state.id, args.block);
                     props.waterlogged = false;
-                    props.to_state_id(&get_dead_type(args.block))
+                    props.to_state_id(get_dead_type(args.block.id).expect("not a coral block"))
                 };
 
                 args.world
@@ -164,12 +168,12 @@ impl BlockBehaviour for CoralFanBlock {
                 if props.facing.to_block_direction().opposite() == args.direction
                     && !can_place_at(args.world, args.position, props.facing.opposite())
                 {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             } else if args.direction == BlockDirection::Down {
                 let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             }
 
@@ -193,53 +197,35 @@ fn is_wall_fan(block: &Block) -> bool {
         || block == &Block::DEAD_TUBE_CORAL_WALL_FAN
 }
 
-fn get_dead_type(block: &Block) -> Block {
-    if block == &Block::BRAIN_CORAL_FAN {
-        Block::DEAD_BRAIN_CORAL_FAN
-    } else if block == &Block::BRAIN_CORAL_WALL_FAN {
-        Block::DEAD_BRAIN_CORAL_WALL_FAN
-    } else if block == &Block::BUBBLE_CORAL_FAN {
-        Block::DEAD_BUBBLE_CORAL_FAN
-    } else if block == &Block::BUBBLE_CORAL_WALL_FAN {
-        Block::DEAD_BUBBLE_CORAL_WALL_FAN
-    } else if block == &Block::FIRE_CORAL_FAN {
-        Block::DEAD_FIRE_CORAL_FAN
-    } else if block == &Block::FIRE_CORAL_WALL_FAN {
-        Block::DEAD_FIRE_CORAL_WALL_FAN
-    } else if block == &Block::HORN_CORAL_FAN {
-        Block::DEAD_HORN_CORAL_FAN
-    } else if block == &Block::HORN_CORAL_WALL_FAN {
-        Block::DEAD_HORN_CORAL_WALL_FAN
-    } else if block == &Block::TUBE_CORAL_FAN {
-        Block::DEAD_TUBE_CORAL_FAN
-    } else {
-        Block::DEAD_TUBE_CORAL_WALL_FAN
+const fn get_dead_type(id: BlockId) -> Option<&'static Block> {
+    match id {
+        BlockId::BRAIN_CORAL_FAN => Some(&Block::DEAD_BRAIN_CORAL_FAN),
+        BlockId::BRAIN_CORAL_WALL_FAN => Some(&Block::DEAD_BRAIN_CORAL_WALL_FAN),
+        BlockId::BUBBLE_CORAL_FAN => Some(&Block::DEAD_BUBBLE_CORAL_FAN),
+        BlockId::BUBBLE_CORAL_WALL_FAN => Some(&Block::DEAD_BUBBLE_CORAL_WALL_FAN),
+        BlockId::FIRE_CORAL_FAN => Some(&Block::DEAD_FIRE_CORAL_FAN),
+        BlockId::FIRE_CORAL_WALL_FAN => Some(&Block::DEAD_FIRE_CORAL_WALL_FAN),
+        BlockId::HORN_CORAL_FAN => Some(&Block::DEAD_HORN_CORAL_FAN),
+        BlockId::HORN_CORAL_WALL_FAN => Some(&Block::DEAD_HORN_CORAL_WALL_FAN),
+        BlockId::TUBE_CORAL_FAN => Some(&Block::DEAD_TUBE_CORAL_FAN),
+        BlockId::TUBE_CORAL_WALL_FAN => Some(&Block::DEAD_TUBE_CORAL_WALL_FAN),
+        _ => None,
     }
 }
 
-fn get_corresponding_wall_fan_type(block: &Block) -> Option<Block> {
-    if block == &Block::TUBE_CORAL_FAN {
-        Some(Block::TUBE_CORAL_WALL_FAN)
-    } else if block == &Block::BRAIN_CORAL_FAN {
-        Some(Block::BRAIN_CORAL_WALL_FAN)
-    } else if block == &Block::BUBBLE_CORAL_FAN {
-        Some(Block::BUBBLE_CORAL_WALL_FAN)
-    } else if block == &Block::FIRE_CORAL_FAN {
-        Some(Block::FIRE_CORAL_WALL_FAN)
-    } else if block == &Block::HORN_CORAL_FAN {
-        Some(Block::HORN_CORAL_WALL_FAN)
-    } else if block == &Block::DEAD_TUBE_CORAL_FAN {
-        Some(Block::DEAD_TUBE_CORAL_WALL_FAN)
-    } else if block == &Block::DEAD_BRAIN_CORAL_FAN {
-        Some(Block::DEAD_BRAIN_CORAL_WALL_FAN)
-    } else if block == &Block::DEAD_BUBBLE_CORAL_FAN {
-        Some(Block::DEAD_BUBBLE_CORAL_WALL_FAN)
-    } else if block == &Block::DEAD_FIRE_CORAL_FAN {
-        Some(Block::DEAD_FIRE_CORAL_WALL_FAN)
-    } else if block == &Block::DEAD_HORN_CORAL_FAN {
-        Some(Block::DEAD_HORN_CORAL_WALL_FAN)
-    } else {
-        None
+const fn get_corresponding_wall_fan_type(id: BlockId) -> Option<&'static Block> {
+    match id {
+        BlockId::TUBE_CORAL_FAN => Some(&Block::TUBE_CORAL_WALL_FAN),
+        BlockId::BRAIN_CORAL_FAN => Some(&Block::BRAIN_CORAL_WALL_FAN),
+        BlockId::BUBBLE_CORAL_FAN => Some(&Block::BUBBLE_CORAL_WALL_FAN),
+        BlockId::FIRE_CORAL_FAN => Some(&Block::FIRE_CORAL_WALL_FAN),
+        BlockId::HORN_CORAL_FAN => Some(&Block::HORN_CORAL_WALL_FAN),
+        BlockId::DEAD_TUBE_CORAL_FAN => Some(&Block::DEAD_TUBE_CORAL_WALL_FAN),
+        BlockId::DEAD_BRAIN_CORAL_FAN => Some(&Block::DEAD_BRAIN_CORAL_WALL_FAN),
+        BlockId::DEAD_BUBBLE_CORAL_FAN => Some(&Block::DEAD_BUBBLE_CORAL_WALL_FAN),
+        BlockId::DEAD_FIRE_CORAL_FAN => Some(&Block::DEAD_FIRE_CORAL_WALL_FAN),
+        BlockId::DEAD_HORN_CORAL_FAN => Some(&Block::DEAD_HORN_CORAL_WALL_FAN),
+        _ => None,
     }
 }
 

@@ -5,7 +5,7 @@ use std::sync::{
 
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use pumpkin_data::attributes::Attributes;
+use pumpkin_data::{BlockStateId, attributes::Attributes};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
@@ -58,7 +58,7 @@ fn is_projectile_damage(dt: DamageType) -> bool {
 
 pub struct EndermanEntity {
     pub mob_entity: MobEntity,
-    carried_block: AtomicCell<Option<u16>>,
+    carried_block: AtomicCell<Option<BlockStateId>>,
     angry: AtomicBool,
     provoked: AtomicBool,
     speed_boosted: AtomicBool,
@@ -308,9 +308,9 @@ impl EndermanEntity {
             )]);
     }
 
-    pub fn set_carried_block(&self, block_state: Option<u16>) {
+    pub fn set_carried_block(&self, block_state: Option<BlockStateId>) {
         self.carried_block.store(block_state);
-        let value = block_state.map_or(VarInt(0), |id| VarInt(id as i32));
+        let value = block_state.map_or(VarInt(0), |id| VarInt(id.as_u16() as i32));
         self.mob_entity
             .living_entity
             .entity
@@ -321,7 +321,7 @@ impl EndermanEntity {
             )]);
     }
 
-    pub fn get_carried_block(&self) -> Option<u16> {
+    pub fn get_carried_block(&self) -> Option<BlockStateId> {
         self.carried_block.load()
     }
 
@@ -393,7 +393,7 @@ impl NBTStorage for EndermanEntity {
         Box::pin(async {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             if let Some(block_state) = self.carried_block.load() {
-                nbt.put_int("carriedBlockState", block_state as i32);
+                nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
             }
         })
     }
@@ -402,7 +402,7 @@ impl NBTStorage for EndermanEntity {
         Box::pin(async {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(block_state) = nbt.get_int("carriedBlockState") {
-                self.set_carried_block(Some(block_state as u16));
+                self.set_carried_block(BlockStateId::new(block_state as u16));
             }
         })
     }

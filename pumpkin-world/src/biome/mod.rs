@@ -79,10 +79,12 @@ mod test {
 
     #[test]
     fn wide_area_surface() {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
         use crate::generation::{biome_coords, positions::chunk_pos};
+        use pumpkin_util::world_seed::Seed;
         #[derive(Deserialize)]
         struct BiomeData {
             x: i32,
@@ -94,8 +96,6 @@ mod test {
             read_data_from_file!("../../assets/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
-        use pumpkin_util::world_seed::Seed;
         let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
         for data in expected_data {

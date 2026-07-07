@@ -1,22 +1,16 @@
+use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::{Block, tag};
-use pumpkin_world::BlockStateId;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-};
+use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
 use crate::block::RandomTickArgs;
 
+#[pumpkin_block_from_tag("minecraft:small_flowers")]
 pub struct FlowerBlock;
-
-impl BlockMetadata for FlowerBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::MINECRAFT_SMALL_FLOWERS.1.into()
-    }
-}
 
 impl BlockBehaviour for FlowerBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {

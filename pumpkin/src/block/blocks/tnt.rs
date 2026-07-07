@@ -8,6 +8,7 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::tnt::TNTEntity;
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
@@ -33,7 +34,7 @@ impl TNTBlock {
             &pos,
         );
         world
-            .set_block_state(location, 0, BlockFlags::NOTIFY_ALL)
+            .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
             .await;
     }
 }

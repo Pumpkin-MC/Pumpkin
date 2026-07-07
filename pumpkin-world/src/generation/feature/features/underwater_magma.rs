@@ -47,7 +47,7 @@ impl UnderwaterMagmaFeature {
     }
 
     /// Check if a block can host magma
-    fn is_valid_placement<T: GenerationCache>(&self, chunk: &T, target: &BlockPos) -> bool {
+    fn is_valid_placement<T: GenerationCache>(chunk: &T, target: &BlockPos) -> bool {
         // Reject water/air or unsupported blocks
         let target_id = GenerationCache::get_block_state(chunk, &target.0).to_block_id();
         if target_id == Block::WATER || target_id == Block::AIR {
@@ -84,9 +84,8 @@ impl UnderwaterMagmaFeature {
         pos: BlockPos,
     ) -> bool {
         // Locate floor; abort if none
-        let floor_y = match self.get_floor_y(chunk, pos) {
-            Some(y) => y,
-            None => return false,
+        let Some(floor_y) = self.get_floor_y(chunk, pos) else {
+            return false;
         };
 
         let floor_pos = BlockPos::new(pos.0.x, floor_y, pos.0.z);
@@ -105,7 +104,7 @@ impl UnderwaterMagmaFeature {
                     let target_pos =
                         BlockPos::new(floor_pos.0.x + dx, floor_pos.0.y + dy, floor_pos.0.z + dz);
 
-                    if !self.is_valid_placement(chunk, &target_pos) {
+                    if !Self::is_valid_placement(chunk, &target_pos) {
                         continue;
                     }
 

@@ -1,4 +1,4 @@
-use crate::codec::item_stack_seralizer::ItemStackTemplate;
+use crate::codec::item_stack_seralizer::ItemStackTemplateSerializer;
 use crate::codec::var_int::VarInt;
 use pumpkin_data::Advancement;
 use pumpkin_data::advancement_data::{AdvancementDisplay, AdvancementProgressData};
@@ -53,7 +53,10 @@ impl Serialize for DisplaySerializer<'_> {
 
         state.serialize_field("title", &display.get_title())?;
         state.serialize_field("description", &display.get_description())?;
-        state.serialize_field("icon", &ItemStackTemplate::from(display.item_icon.clone()))?;
+        state.serialize_field(
+            "icon",
+            &ItemStackTemplateSerializer::from(display.item_icon.clone()),
+        )?;
         state.serialize_field("frame_type", &VarInt(display.frame_type as i32))?;
         let flags = (display.has_background() as i32)
             | ((display.show_toast as i32) << 1)
