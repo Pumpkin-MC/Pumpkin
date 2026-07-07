@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use pumpkin_util::math::vector3::Vector3;
 
@@ -12,7 +12,7 @@ use crate::entity::ai::pathfinder::node::{Coordinate, Node};
 #[derive(Debug, Clone)]
 pub struct BinaryHeap {
     heap: Vec<Option<Node>>,
-    position_map: HashMap<Vector3<i32>, usize>,
+    position_map: FxHashMap<Vector3<i32>, usize>,
     size: usize,
 }
 
@@ -24,7 +24,7 @@ impl BinaryHeap {
 
         Self {
             heap,
-            position_map: HashMap::new(),
+            position_map: FxHashMap::default(),
             size: 0,
         }
     }
@@ -36,7 +36,7 @@ impl BinaryHeap {
 
         Self {
             heap,
-            position_map: HashMap::with_capacity(capacity),
+            position_map: FxHashMap::with_capacity_and_hasher(capacity, FxBuildHasher),
             size: 0,
         }
     }
