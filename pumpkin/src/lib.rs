@@ -52,31 +52,6 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-#[must_use]
-pub const fn level_filter_directive(level: LevelFilter) -> &'static str {
-    match level {
-        LevelFilter::OFF => "off",
-        LevelFilter::ERROR => "error",
-        LevelFilter::WARN => "warn",
-        LevelFilter::INFO => "info",
-        LevelFilter::DEBUG => "debug",
-        LevelFilter::TRACE => "trace",
-    }
-}
-
-#[must_use]
-pub fn localized_level_filter(level: LevelFilter) -> String {
-    let key = match level {
-        LevelFilter::OFF => "server.log.level_filter.off",
-        LevelFilter::ERROR => "server.log.level_filter.error",
-        LevelFilter::WARN => "server.log.level_filter.warn",
-        LevelFilter::INFO => "server.log.level_filter.info",
-        LevelFilter::DEBUG => "server.log.level_filter.debug",
-        LevelFilter::TRACE => "server.log.level_filter.trace",
-    };
-    localized_log(key)
-}
-
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
@@ -100,8 +75,17 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::INFO);
 
-        let env_filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new(level_filter_directive(level)));
+        let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            let level_str = match level {
+                LevelFilter::OFF => "off",
+                LevelFilter::ERROR => "error",
+                LevelFilter::WARN => "warn",
+                LevelFilter::INFO => "info",
+                LevelFilter::DEBUG => "debug",
+                LevelFilter::TRACE => "trace",
+            };
+            EnvFilter::new(level_str)
+        });
 
         let file_logger: Option<GzipRollingLogger> = if advanced_config.logging.file.is_empty() {
             None
