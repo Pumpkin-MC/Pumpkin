@@ -15,7 +15,10 @@ use crate::{
         BoxFuture, EventHandler, Payload,
         loader::wasm::wasm_host::{
             PluginInstance, WasmPlugin,
-            state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
+            state::{
+                ChunkResource, EntityResource, PlayerResource, PluginHostState,
+                TextComponentResource, WorldResource,
+            },
             wit::{self, v0_1::pumpkin},
         },
     },
@@ -183,6 +186,17 @@ pub(super) fn consume_player(
         .provider
 }
 
+pub(super) fn consume_entity(
+    state: &mut PluginHostState,
+    entity: &Resource<pumpkin::plugin::world::Entity>,
+) -> Arc<dyn crate::entity::EntityBase> {
+    state
+        .resource_table
+        .delete::<EntityResource>(Resource::new_own(entity.rep()))
+        .expect("invalid entity resource handle")
+        .provider
+}
+
 pub(super) fn consume_text_component(
     state: &mut PluginHostState,
     text_component: &Resource<pumpkin::plugin::text::TextComponent>,
@@ -203,6 +217,21 @@ pub(super) fn consume_world(
         .delete::<WorldResource>(Resource::new_own(world.rep()))
         .expect("invalid world resource handle")
         .provider
+}
+
+pub(super) fn consume_chunk(
+    state: &mut PluginHostState,
+    chunk: &Resource<pumpkin::plugin::world::Chunk>,
+) -> (Arc<World>, Arc<pumpkin_world::chunk::ChunkData>) {
+    let (world, chunk) = state
+        .resource_table
+        .delete::<ChunkResource>(Resource::new_own(chunk.rep()))
+        .expect("invalid chunk resource handle")
+        .provider;
+    (
+        world,
+        chunk.upgrade().expect("chunk was unloaded during event"),
+    )
 }
 
 impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {

@@ -4,12 +4,12 @@ use crate::plugin::{
         state::PluginHostState,
         wit::v0_1::{
             events::{
-                ToFromWasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_block_name, from_wasm_block_position, from_wasm_click_type,
-                from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
-                from_wasm_hand, from_wasm_position, to_wasm_block_position, to_wasm_click_type,
-                to_wasm_entity_interaction_action, to_wasm_entity_type, to_wasm_game_mode,
-                to_wasm_hand, to_wasm_position,
+                ToFromWasmEvent, consume_entity, consume_player, consume_text_component,
+                consume_world, from_wasm_block_name, from_wasm_block_position,
+                from_wasm_click_type, from_wasm_entity_interaction_action, from_wasm_entity_type,
+                from_wasm_game_mode, from_wasm_hand, from_wasm_position, to_wasm_block_position,
+                to_wasm_click_type, to_wasm_entity_interaction_action, to_wasm_entity_type,
+                to_wasm_game_mode, to_wasm_hand, to_wasm_position,
             },
             pumpkin::plugin::event::{
                 BedrockFormResponseEventData, CustomClickActionEventData, Event,
@@ -18,12 +18,12 @@ use crate::plugin::{
                 PlayerChangedMainHandEventData, PlayerChatEventData, PlayerCommandSendEventData,
                 PlayerCustomPayloadEventData, PlayerEggThrowEventData, PlayerExpChangeEventData,
                 PlayerFishEventData, PlayerFishState as WasmPlayerFishState,
-                PlayerGamemodeChangeEventData, PlayerInteractEventData,
-                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
-                PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
-                PlayerPermissionCheckEventData, PlayerRespawnEventData, PlayerTeleportEventData,
-                PlayerToggleFlightEventData, PlayerToggleSneakEventData,
-                PlayerToggleSprintEventData,
+                PlayerGamemodeChangeEventData, PlayerInteractEntityEventData,
+                PlayerInteractEventData, PlayerInteractUnknownEntityEventData,
+                PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
+                PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
+                PlayerRespawnEventData, PlayerTeleportEventData, PlayerToggleFlightEventData,
+                PlayerToggleSneakEventData, PlayerToggleSprintEventData,
             },
             pumpkin::plugin::uuid::Uuid as WitUuid,
             uuid::UuidExt,
@@ -43,6 +43,7 @@ use crate::plugin::{
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent,
@@ -672,6 +673,40 @@ impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
                 player: consume_player(state, &data.player),
                 entity_id: data.entity_id,
                 action: from_wasm_entity_interaction_action(data.action),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerInteractEntityEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+        let target = state
+            .add_entity(self.target.clone())
+            .expect("failed to add entity resource");
+
+        Event::PlayerInteractEntityEvent(PlayerInteractEntityEventData {
+            player,
+            target,
+            action: to_wasm_entity_interaction_action(&self.action),
+            target_position: self.target_position.map(to_wasm_position),
+            sneaking: self.sneaking,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerInteractEntityEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                target: consume_entity(state, &data.target),
+                action: from_wasm_entity_interaction_action(data.action),
+                target_position: data.target_position.map(from_wasm_position),
+                sneaking: data.sneaking,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
