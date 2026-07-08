@@ -790,6 +790,7 @@
   "world.level.chunk_listener_dropped": "Chunk listener dropped without sending chunk",
   "world.level.create_entities_folder_failed": "Failed to create Entities folder",
   "world.level.create_region_folder_failed": "Failed to create Region folder",
+  "world.level.entity_gen_thread": "Entity Gen %s",
   "world.level.entity_generation_worker_dropped": "Entity generation worker dropped",
   "world.level.failed_write_chunk": "Failed writing Chunk to disk %s",
   "world.level.flushing_data": "Flushing data to disk for %s...",

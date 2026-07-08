@@ -262,7 +262,7 @@ impl Level {
             // Fallback to spawning a new thread if no pool is available (should not happen in production)
             let level_clone = level;
             thread::Builder::new()
-                .name(format!("Entity Gen {pos:?}"))
+                .name(localized_log_format("world.level.entity_gen_thread", &[format!("{pos:?}")]))
                 .spawn(move || {
                     let arc_chunk = Arc::new(ChunkEntityData {
                         x: pos.x,
