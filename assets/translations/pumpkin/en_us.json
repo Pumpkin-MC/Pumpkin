@@ -793,6 +793,7 @@
   "world.level.entity_generation_worker_dropped": "Entity generation worker dropped",
   "world.level.failed_write_chunk": "Failed writing Chunk to disk %s",
   "world.level.flushing_data": "Flushing data to disk for %s...",
+  "world.level.flushing_entity_data": "Flushing entity data to disk for %s...",
   "world.level.joining_threads": "Joining %s threads for %s...",
   "world.level.saving": "Saving level (%s)...",
   "world.level.sending_chunks_to_chunk_io": "Sending chunks to ChunkIO %s",

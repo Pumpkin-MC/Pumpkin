@@ -377,7 +377,10 @@ impl Level {
             localized_log_format("world.level.flushing_data", &[world_id.to_string()])
         );
         self.chunk_saver.block_and_await_ongoing_tasks().await;
-        info!("Flushing entity data to disk for {}...", world_id);
+        info!(
+            "{}",
+            localized_log_format("world.level.flushing_entity_data", &[world_id.to_string()])
+        );
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
