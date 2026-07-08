@@ -153,8 +153,11 @@ impl GenerationCache for Cache {
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
             debug!(
-                "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x, self.z, self.size
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.illegal_get_block_state",
+                    &[format!("{pos:?}"), self.x.to_string(), self.z.to_string(), self.size.to_string()]
+                )
             );
             return BlockStateId::AIR;
         }
@@ -175,8 +178,11 @@ impl GenerationCache for Cache {
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
             debug!(
-                "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x, self.z, self.size
+                "{}",
+                localized_log_format(
+                    "world.chunk_system.illegal_set_block_state",
+                    &[format!("{pos:?}"), self.x.to_string(), self.z.to_string(), self.size.to_string()]
+                )
             );
             return;
         }

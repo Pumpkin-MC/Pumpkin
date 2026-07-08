@@ -82,7 +82,12 @@ impl TemplateCache {
 
         // Try to load the template
         let bytes = Self::load_template_bytes(name)
-            .ok_or(TemplateError::MissingField("template file not found"))?;
+            .ok_or_else(|| {
+                TemplateError::TemplateNotFound(localized_log_format(
+                    "world.structure.template.not_found",
+                    &[name.to_string()],
+                ))
+            })?;
 
         let template = StructureTemplate::from_nbt_bytes(bytes)?;
         let arc = Arc::new(template);

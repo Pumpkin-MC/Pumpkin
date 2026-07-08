@@ -7,6 +7,7 @@ use pumpkin_data::{
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
+    translation::localized_log,
 };
 
 pub mod coral_claw;
@@ -111,7 +112,9 @@ impl CoralFeature {
     ) -> &'static Block {
         let values = tag.1;
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
-        let id = BlockId::new(value).expect("Invalid block id in tag");
+        let id = BlockId::new(value).unwrap_or_else(|| {
+            panic!("{}", localized_log("world.gen.coral.invalid_block_id_in_tag"))
+        });
         id.to_block()
     }
 }

@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::sync::{Arc, LazyLock};
 
 use crate::ProtoChunk;
+use pumpkin_util::translation::localized_log_format;
 
 #[derive(Clone)]
 pub enum StructureProcessor {
@@ -126,13 +127,22 @@ pub fn load_processor_list(name: &str) -> Arc<[StructureProcessor]> {
     }
 
     let Some(json) = super::cache::get_processor_list_json(name) else {
-        tracing::warn!("Unknown structure processor list: {name}");
+        tracing::warn!(
+            "{}",
+            localized_log_format("world.structure.processor.unknown_list", &[name.to_string()])
+        );
         return Arc::from([]);
     };
     let raw: RawProcessorList = match serde_json::from_str(json) {
         Ok(raw) => raw,
         Err(error) => {
-            tracing::error!("Failed to parse structure processor list {name}: {error}");
+            tracing::error!(
+                "{}",
+                localized_log_format(
+                    "world.structure.processor.parse_failed",
+                    &[name.to_string(), error.to_string()]
+                )
+            );
             return Arc::from([]);
         }
     };

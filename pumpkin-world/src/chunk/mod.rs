@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
-use thiserror::Error;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use tokio::sync::Mutex;
 
 pub mod format;
@@ -26,45 +26,84 @@ pub const CHUNK_AREA: usize = CHUNK_WIDTH * CHUNK_WIDTH;
 pub const BIOME_VOLUME: usize = BiomePalette::VOLUME;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_WIDTH;
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ChunkReadingError {
-    #[error("Io error: {0}")]
     IoError(std::io::Error),
-    #[error("Invalid header")]
     InvalidHeader,
-    #[error("Region is invalid")]
     RegionIsInvalid,
-    #[error("Compression error {0}")]
     Compression(CompressionError),
-    #[error("Tried to read chunk which does not exist")]
     ChunkNotExist,
-    #[error("Failed to parse chunk from bytes: {0}")]
     ParsingError(ChunkParsingError),
 }
 
-#[derive(Error, Debug)]
+impl std::fmt::Display for ChunkReadingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IoError(e) => write!(
+                f, "{}",
+                localized_log_format("chunk.reading.error.io", &[e.to_string()])
+            ),
+            Self::InvalidHeader => write!(f, "{}", localized_log("chunk.reading.error.invalid_header")),
+            Self::RegionIsInvalid => write!(f, "{}", localized_log("chunk.reading.error.region_invalid")),
+            Self::Compression(e) => write!(f, "{}", localized_log_format("chunk.reading.error.compression", &[e.to_string()])),
+            Self::ChunkNotExist => write!(f, "{}", localized_log("chunk.reading.error.not_exist")),
+            Self::ParsingError(e) => write!(f, "{}", localized_log_format("chunk.reading.error.parsing", &[e.to_string()])),
+        }
+    }
+}
+
+impl std::error::Error for ChunkReadingError {}
+
+#[derive(Debug)]
 pub enum ChunkWritingError {
-    #[error("Io error: {0}")]
     IoError(std::io::Error),
-    #[error("Compression error {0}")]
     Compression(CompressionError),
-    #[error("Chunk serializing error: {0}")]
     ChunkSerializingError(String),
 }
 
-#[derive(Error, Debug)]
+impl std::fmt::Display for ChunkWritingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IoError(e) => write!(
+                f, "{}",
+                localized_log_format("chunk.writing.error.io", &[e.to_string()])
+            ),
+            Self::Compression(e) => write!(
+                f, "{}",
+                localized_log_format("chunk.writing.error.compression", &[e.to_string()])
+            ),
+            Self::ChunkSerializingError(msg) => write!(
+                f, "{}",
+                localized_log_format("chunk.writing.error.serializing", &[msg.clone()])
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ChunkWritingError {}
+
+#[derive(Debug)]
 pub enum CompressionError {
-    #[error("Compression scheme not recognised")]
     UnknownCompression,
-    #[error("Error while working with zlib compression: {0}")]
     ZlibError(std::io::Error),
-    #[error("Error while working with Gzip compression: {0}")]
     GZipError(std::io::Error),
-    #[error("Error while working with LZ4 compression: {0}")]
     LZ4Error(std::io::Error),
-    #[error("Error while working with zstd compression: {0}")]
     ZstdError(std::io::Error),
 }
+
+impl std::fmt::Display for CompressionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownCompression => write!(f, "{}", localized_log("chunk.compression.error.unknown")),
+            Self::ZlibError(e) => write!(f, "{}", localized_log_format("chunk.compression.error.zlib", &[e.to_string()])),
+            Self::GZipError(e) => write!(f, "{}", localized_log_format("chunk.compression.error.gzip", &[e.to_string()])),
+            Self::LZ4Error(e) => write!(f, "{}", localized_log_format("chunk.compression.error.lz4", &[e.to_string()])),
+            Self::ZstdError(e) => write!(f, "{}", localized_log_format("chunk.compression.error.zstd", &[e.to_string()])),
+        }
+    }
+}
+
+impl std::error::Error for CompressionError {}
 
 // Clone here cause we want to clone a snapshot of the chunk so we don't block writing for too long
 pub struct ChunkData {
@@ -158,14 +197,14 @@ pub enum ChunkHeightmapType {
     MotionBlockingNoLeaves = 2,
 }
 impl TryFrom<usize> for ChunkHeightmapType {
-    type Error = &'static str;
+    type Error = String;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::WorldSurface),
             1 => Ok(Self::MotionBlocking),
             2 => Ok(Self::MotionBlockingNoLeaves),
-            _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~2."),
+            _ => Err(localized_log("chunk.heightmap.invalid_type")),
         }
     }
 }
@@ -753,21 +792,48 @@ impl ChunkData {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ChunkParsingError {
-    #[error("Failed reading chunk status {0}")]
     FailedReadStatus(pumpkin_nbt::Error),
-    #[error("The chunk isn't generated yet")]
     ChunkNotGenerated,
-    #[error("Error deserializing chunk: {0}")]
     ErrorDeserializingChunk(String),
 }
 
-#[derive(Error, Debug)]
+impl std::fmt::Display for ChunkParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FailedReadStatus(e) => write!(
+                f, "{}",
+                localized_log_format("chunk.parsing.error.read_status", &[e.to_string()])
+            ),
+            Self::ChunkNotGenerated => write!(f, "{}", localized_log("chunk.parsing.error.not_generated")),
+            Self::ErrorDeserializingChunk(msg) => write!(
+                f, "{}",
+                localized_log_format("chunk.parsing.error.deserializing", &[msg.clone()])
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ChunkParsingError {}
+
+#[derive(Debug)]
 pub enum ChunkSerializingError {
-    #[error("Error serializing chunk: {0}")]
     ErrorSerializingChunk(pumpkin_nbt::Error),
 }
+
+impl std::fmt::Display for ChunkSerializingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ErrorSerializingChunk(e) => write!(
+                f, "{}",
+                localized_log_format("chunk.serializing.error", &[e.to_string()])
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ChunkSerializingError {}
 
 #[cfg(test)]
 mod tests {

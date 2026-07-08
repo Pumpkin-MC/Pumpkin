@@ -59,13 +59,27 @@ impl PlacedFeature {
         let feature = match &self.feature {
             Feature::Named(name) => CONFIGURED_FEATURES
                 .get(name)
-                .expect("Name: {name:?} not found"),
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        localized_log_format(
+                            "world.generation.feature_name_not_found",
+                            &[format!("{name:?}")],
+                        )
+                    )
+                }),
             Feature::Inlined(feature) => feature,
         };
         if let ConfiguredFeature::SculkPatch(feature) = feature {
             feature.generate_in_proto_chunk(chunk, random, pos)
         } else {
-            tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
+            tracing::warn!(
+                "{}",
+                localized_log_format(
+                    "world.generation.unsupported_jigsaw_feature",
+                    &[format!("{feature_name:?}")]
+                )
+            );
             false
         }
     }

@@ -17,12 +17,35 @@ pub struct PlayerDataStorage {
     save_enabled: bool,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum PlayerDataError {
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
-    #[error("NBT error: {0}")]
+    Io(io::Error),
     Nbt(String),
+}
+
+impl std::fmt::Display for PlayerDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(
+                f,
+                "{}",
+                localized_log_format("world.player_data.error.io", &[e.to_string()])
+            ),
+            Self::Nbt(msg) => write!(
+                f,
+                "{}",
+                localized_log_format("world.player_data.error.nbt", &[msg.clone()])
+            ),
+        }
+    }
+}
+
+impl std::error::Error for PlayerDataError {}
+
+impl From<io::Error> for PlayerDataError {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
 }
 
 impl PlayerDataStorage {
@@ -33,8 +56,11 @@ impl PlayerDataStorage {
             && let Err(e) = create_dir_all(&path)
         {
             error!(
-                "Failed to create player data directory at {}: {e}",
-                path.display()
+                "{}",
+                localized_log_format(
+                    "world.player_data.create_dir_failed",
+                    &[path.display().to_string(), e.to_string()]
+                )
             );
         }
 

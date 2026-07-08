@@ -7,22 +7,48 @@ use std::io::Cursor;
 
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
 use pumpkin_util::math::vector3::Vector3;
-use thiserror::Error;
+use pumpkin_util::translation::localized_log_format;
 
 /// Errors that can occur when loading a structure template.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum TemplateError {
-    #[error("Failed to decompress NBT: {0}")]
-    NbtError(#[from] pumpkin_nbt::Error),
-
-    #[error("Missing required field: {0}")]
+    NbtError(pumpkin_nbt::Error),
     MissingField(&'static str),
-
-    #[error("Invalid field type for {0}")]
     InvalidFieldType(&'static str),
-
-    #[error("Invalid palette index: {0}")]
     InvalidPaletteIndex(u32),
+    TemplateNotFound(String),
+}
+
+impl std::fmt::Display for TemplateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NbtError(e) => write!(
+                f, "{}",
+                localized_log_format("world.structure.template.error.nbt", &[e.to_string()])
+            ),
+            Self::MissingField(field) => write!(
+                f, "{}",
+                localized_log_format("world.structure.template.error.missing_field", &[(*field).to_string()])
+            ),
+            Self::InvalidFieldType(field) => write!(
+                f, "{}",
+                localized_log_format("world.structure.template.error.invalid_field_type", &[(*field).to_string()])
+            ),
+            Self::InvalidPaletteIndex(idx) => write!(
+                f, "{}",
+                localized_log_format("world.structure.template.error.invalid_palette_index", &[idx.to_string()])
+            ),
+            Self::TemplateNotFound(msg) => write!(f, "{msg}"),
+        }
+    }
+}
+
+impl std::error::Error for TemplateError {}
+
+impl From<pumpkin_nbt::Error> for TemplateError {
+    fn from(e: pumpkin_nbt::Error) -> Self {
+        Self::NbtError(e)
+    }
 }
 
 /// A loaded structure template from an NBT file.

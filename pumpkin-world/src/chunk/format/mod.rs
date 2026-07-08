@@ -10,6 +10,7 @@ use std::{
 use bytes::Bytes;
 use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
+use pumpkin_util::translation::localized_log_format;
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
 
@@ -83,10 +84,17 @@ impl ChunkData {
                 .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
-            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
-                "Expected data for chunk {},{} but got it for {},{}!",
-                position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
-            )));
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                localized_log_format(
+                    "chunk.format.position_mismatch",
+                    &[
+                        position.x.to_string(),
+                        position.y.to_string(),
+                        chunk_data.x_pos.to_string(),
+                        chunk_data.z_pos.to_string(),
+                    ],
+                ),
+            ));
         }
         let min_y_section = chunk_data.min_y_section;
         let max_y_section = chunk_data
@@ -279,13 +287,17 @@ impl ChunkEntityData {
         if chunk_entity_data.position[0] != position.x
             || chunk_entity_data.position[1] != position.y
         {
-            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
-                "Expected data for entity chunk {},{} but got it for {},{}!",
-                position.x,
-                position.y,
-                chunk_entity_data.position[0],
-                chunk_entity_data.position[1],
-            )));
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                localized_log_format(
+                    "chunk.format.entity_position_mismatch",
+                    &[
+                        position.x.to_string(),
+                        position.y.to_string(),
+                        chunk_entity_data.position[0].to_string(),
+                        chunk_entity_data.position[1].to_string(),
+                    ],
+                ),
+            ));
         }
 
         Ok(Self {

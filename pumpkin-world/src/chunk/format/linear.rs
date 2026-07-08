@@ -289,8 +289,11 @@ impl BucketChunkEntry {
         }
         if buf.remaining() < size {
             warn!(
-                "Linear v2: not enough bytes for chunk (need {size}, have {})",
-                buf.remaining()
+                "{}",
+                localized_log_format(
+                    "world.chunk.linear.insufficient_bytes",
+                    &[size.to_string(), buf.remaining().to_string()]
+                )
             );
             return Err(ChunkReadingError::IoError(std::io::Error::from(
                 ErrorKind::UnexpectedEof,
@@ -534,9 +537,15 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
             let actual_hash = xxh64(&buf[..compressed_size], 0);
             if actual_hash != entry.xxhash {
                 error!(
-                    "Linear v2: xxhash mismatch for bucket {bucket_idx} \
-                     (expected {:#x}, got {:#x})",
-                    entry.xxhash, actual_hash
+                    "{}",
+                    localized_log_format(
+                        "world.chunk.linear.xxhash_mismatch",
+                        &[
+                            bucket_idx.to_string(),
+                            format!("{:#x}", entry.xxhash),
+                            format!("{:#x}", actual_hash),
+                        ]
+                    )
                 );
                 // Skip the corrupted bucket rather than aborting the whole
                 // file — the remaining buckets may be intact.

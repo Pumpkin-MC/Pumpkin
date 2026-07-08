@@ -128,7 +128,7 @@ impl GenerationSchedule {
                 let level_clone = level.clone();
 
                 let handle = thread::Builder::new()
-                    .name(format!("Gen-{i}"))
+                    .name(localized_log_format("world.chunk_system.thread_name.gen", &[i.to_string()]))
                     .spawn(move || {
                         generation_work(&recv_gen, &send_chunk, &level_clone);
                     })
@@ -1417,7 +1417,13 @@ impl GenerationSchedule {
                         &self.waiting_for_chunks,
                     );
                     if restored > 0 {
-                        warn!("Restored {restored} stranded ready chunk tasks to generation queue");
+                        warn!(
+                            "{}",
+                            localized_log_format(
+                                "world.chunk_system.restored_stranded_tasks",
+                                &[restored.to_string()]
+                            )
+                        );
                         continue;
                     }
                     debug_assert!(self.debug_check());

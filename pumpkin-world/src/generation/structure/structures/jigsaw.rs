@@ -9,6 +9,7 @@ use crate::generation::structure::template::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomImpl;
+use pumpkin_util::translation::localized_log_format;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -257,7 +258,13 @@ impl TemplatePool {
             let raw: RawTemplatePool = match serde_json::from_str(json) {
                 Ok(pool) => pool,
                 Err(error) => {
-                    tracing::error!("Failed to parse template pool {id}: {error}");
+                    tracing::error!(
+                        "{}",
+                        localized_log_format(
+                            "world.structure.failed_parse_template_pool",
+                            &[id.to_string(), error.to_string()]
+                        )
+                    );
                     return None;
                 }
             };

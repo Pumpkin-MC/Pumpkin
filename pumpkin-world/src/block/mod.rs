@@ -4,6 +4,7 @@ pub mod viewer;
 use std::collections::HashMap;
 
 use pumpkin_data::{Block, BlockState, BlockStateId};
+use pumpkin_util::translation::localized_log;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -25,7 +26,8 @@ fn parse_block_name<'de, D: Deserializer<'de>>(
 ) -> Result<&'static Block, D::Error> {
     let s = String::deserialize(deserializer)?;
     let block =
-        Block::from_name(s.as_str()).ok_or(serde::de::Error::custom("Invalid block name"))?;
+        Block::from_name(s.as_str())
+            .ok_or_else(|| serde::de::Error::custom(localized_log("block.error.invalid_block_name")))?;
     Ok(block)
 }
 
