@@ -5,7 +5,7 @@ use crate::CURRENT_MC_VERSION;
 use pumpkin_data::game_rules::GameRuleRegistry;
 use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 
 pub mod anvil;
 
@@ -337,19 +337,44 @@ impl LevelData {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum WorldInfoError {
-    #[error("Io error: {0}")]
     IoError(std::io::ErrorKind),
-    #[error("Info not found!")]
     InfoNotFound,
-    #[error("Deserialization error: {0}")]
     DeserializationError(String),
-    #[error("Unsupported world data version: {0}")]
     UnsupportedDataVersion(i32),
-    #[error("Unsupported world level version: {0}")]
     UnsupportedLevelVersion(i32),
 }
+
+impl std::fmt::Display for WorldInfoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IoError(kind) => write!(
+                f,
+                "{}",
+                localized_log_format("world.info.error.io", &[kind.to_string()])
+            ),
+            Self::InfoNotFound => write!(f, "{}", localized_log("world.info.error.not_found")),
+            Self::DeserializationError(msg) => write!(
+                f,
+                "{}",
+                localized_log_format("world.info.error.deserialization", &[msg.clone()])
+            ),
+            Self::UnsupportedDataVersion(version) => write!(
+                f,
+                "{}",
+                localized_log_format("world.info.error.unsupported_data_version", &[version.to_string()])
+            ),
+            Self::UnsupportedLevelVersion(version) => write!(
+                f,
+                "{}",
+                localized_log_format("world.info.error.unsupported_level_version", &[version.to_string()])
+            ),
+        }
+    }
+}
+
+impl std::error::Error for WorldInfoError {}
 
 impl From<std::io::Error> for WorldInfoError {
     fn from(value: std::io::Error) -> Self {
