@@ -1,6 +1,6 @@
 # 🏷️ Pumpkin Translation Key Naming Convention
 
-> **Last Updated**: 2026-06-30
+> **Last Updated**: 2026-07-08
 > **Rust Edition**: 2024 | **MSRV**: 1.95
 >
 > Related docs: [Translation System Flow](./TRANSLATION_SYSTEM_FLOW.md) | [API Reference](./API_REFERENCE.md)
@@ -38,7 +38,7 @@ The project uses two categories of namespaces:
 
 | Namespace Prefix     | Source                         | Description                                                                                   |
 |----------------------|--------------------------------|-----------------------------------------------------------------------------------------------|
-| `pumpkin:`           | `assets/translations/pumpkin/` | 1122 server-side translation keys covering all modules; auto-prepended by code                |
+| `pumpkin:`           | `assets/translations/pumpkin/` | 829 server-side translation keys covering all modules; auto-prepended by code                 |
 | `java_minecraft:`    | `assets/translations/vanilla/` | Minecraft Java Edition native translation keys (e.g. `chat.type.text`); injected on download  |
 | `bedrock_minecraft:` | `assets/translations/vanilla/` | Minecraft Bedrock Edition native translation keys; en_us only, embedded at compile time       |
 | `minecraft:`         | Client-side only               | `TextComponent::translate()` client translations; does not go through the pumpkin-i18n engine |
@@ -89,26 +89,25 @@ server.log.starting_server
 
 ## 4. Current Namespaces
 
-**1122 translation keys** total, distributed across 16 namespaces:
+**829 translation keys** total, distributed across 15 namespaces:
 
 | Namespace     | Keys | Purpose                                     |
 |---------------|------|---------------------------------------------|
-| `server`      | 330  | Server logging, startup, shutdown           |
-| `world`       | 276  | World generation, chunks, structures        |
-| `commands`    | 162  | Command system (descriptions, errors, args) |
-| `debug`       | 127  | Debug assertions, expects, and panics       |
+| `server`      | 301  | Server logging, startup, shutdown           |
+| `world`       | 123  | World generation, chunks, structures        |
+| `debug`       | 119  | Debug assertions, expects, and panics       |
+| `commands`    | 99   | Command system (descriptions, errors, args) |
 | `permissions` | 42   | Permission node descriptions                |
-| `crash`       | 37   | Crash report generation and labels          |
-| `auth`        | 35   | JWT/OIDC authentication messages            |
-| `util`        | 27   | General utility messages                    |
+| `crash`       | 34   | Crash report generation and labels          |
+| `auth`        | 26   | JWT/OIDC authentication messages            |
 | `protocol`    | 20   | Protocol validation and error messages      |
 | `plugin`      | 13   | Plugin loading and dependency messages      |
-| `network`     | 12   | Networking authentication URLs              |
+| `network`     | 10   | Networking authentication URLs              |
 | `config`      | 10   | Configuration file loading messages         |
 | `proxy`       | 9    | Proxy/reverse-proxy messages (Velocity)     |
 | `client`      | 8    | Client disconnect and error messages        |
 | `inventory`   | 8    | Inventory and screen handler messages       |
-| `text`        | 6    | Text component color parsing errors         |
+| `util`        | 7    | General utility messages                    |
 
 ---
 
@@ -151,12 +150,12 @@ For `localized_text`, arguments are `TextComponent` arrays that retain original 
 
 ```
 assets/translations/
-├── pumpkin/                       ← Pumpkin server translations (128 files)
+├── pumpkin/                       ← Pumpkin server translations (142 files)
 │   ├── en_us.json                 ← Canonical reference file (embedded in binary at compile time)
 │   ├── zh_cn.json                 ← Downloaded on demand at runtime
 │   ├── ja_jp.json
 │   ├── de_de.json
-│   └── ...                        ← 128 locale files total
+│   └── ...                        ← 142 locale files total
 │
 └── vanilla/                       ← Minecraft native translations
     ├── en_us_java.json            ← Java Edition (embedded at compile time)
@@ -166,10 +165,10 @@ assets/translations/
 
 **Key Constraints**:
 
-- All 128 `pumpkin/*.json` files **must** have the exact same set of keys
+- All 142 `pumpkin/*.json` files **must** have the exact same set of keys
 - `en_us.json` is the canonical reference — always add new keys here first
 - Keys are sorted **alphabetically** within each file for easier maintenance
-- Only `en_us.json` is embedded in the binary at compile time; the remaining 127 languages are downloaded on demand at
+- Only `en_us.json` is embedded in the binary at compile time; the remaining 141 languages are downloaded on demand at
   runtime
 
 ### JSON File Format
@@ -197,7 +196,7 @@ Complete workflow for adding a new translation key:
 
 1. **Add English key**: Insert the new key-value pair in alphabetical order in `en_us.json`. Follow the naming format of
    existing keys in the same category.
-2. **Sync all locale files**: Add the new key (an English placeholder value is acceptable) to all 127 other language
+2. **Sync all locale files**: Add the new key (an English placeholder value is acceptable) to all 141 other language
    files.
 3. **Verify consistency**: Ensure all translation files contain the exact same set of keys; `en_us.json` is the
    canonical source.

@@ -1,6 +1,6 @@
 # 📚 Pumpkin i18n & Text API Documentation Index
 
-> **Last Updated**: 2026-06-30
+> **Last Updated**: 2026-07-08
 
 The documentation in this directory has been reorganized into three specialized files, divided by functional domain:
 
@@ -42,7 +42,7 @@ Naming rules, placeholder formats, and file structure specifications for transla
 - Basic naming rules (dot-separated, all lowercase, underscores)
 - Hierarchy structure explanation
 - Format quick reference (recommended formats for 17 message types)
-- 16 namespace details (complete distribution of 1122 keys)
+- 15 namespace details (complete distribution of 829 keys)
 - 8 placeholder formats and argument mapping
 - Translation file directory structure and JSON format
 - Complete workflow for adding new translations

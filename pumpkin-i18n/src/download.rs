@@ -145,8 +145,9 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 /// Bedrock Edition translations are **not** loaded at runtime; the
 /// compile-time embedded `en_us` Bedrock strings are always used.
 ///
-/// This function calls [`crate::store::add_translation_file`] for each
-/// namespace that has entries.
+/// Feeds translation maps directly into [`TranslationEngine::add_translations`],
+/// avoiding a serialize‑to‑JSON → parse‑from‑JSON round‑trip through
+/// `add_translation_file`.
 ///
 /// Emits a single consolidated log line summarising translation coverage.
 /// Empty namespaces in non‑English locales produce a [`warn!`]; otherwise

@@ -1,6 +1,6 @@
 # 🌐 Pumpkin Translation System Complete Workflow
 
-> **Last Updated**: 2026-06-30
+> **Last Updated**: 2026-07-08
 > **Rust Edition**: 2024 | **MSRV**: 1.95
 
 ---
@@ -25,9 +25,9 @@
 
 `pumpkin-i18n` is the core internationalization (i18n) library for the Pumpkin Minecraft server, responsible for:
 
-- Storage and retrieval of translation key-values across **128 languages** (located under
+- Storage and retrieval of translation key-values across **142 languages** (located under
   `assets/translations/pumpkin/`)
-- **1122 translation keys** covering all modules including server logs, command system, world generation, and
+- **829 translation keys** covering all modules including server logs, command system, world generation, and
   authentication
 - Server log language resolution (system environment detection / config file override)
 - Player language cache (UUID → Locale mapping)
@@ -100,15 +100,15 @@ cargo build
 pub(crate) fn load_all_translations()
     -> [HashMap<String, String>; Locale::COUNT]  // 142 slots
 {
-    let mut array: [HashMap; 128] = std::array::from_fn(|_| HashMap::new());
+  let mut array: [HashMap; Locale::COUNT] = std::array::from_fn(|_| HashMap::new());
 
     // ✅ EnUs slot: inject pumpkin: + java_minecraft: + bedrock_minecraft: entries
-    // ❌ Remaining 127 slots: empty HashMap, populated dynamically at runtime
+  // ❌ Remaining 141 slots: empty HashMap, populated dynamically at runtime
 }
 ```
 
 **Key Design**: Only `en_us` (English) translation files across the three namespaces (pumpkin, java_minecraft,
-bedrock_minecraft) are embedded at build time. The remaining 127 languages are downloaded on demand at runtime (only
+bedrock_minecraft) are embedded at build time. The remaining 141 languages are downloaded on demand at runtime (only
 pumpkin and java_minecraft are downloaded; bedrock is not downloaded). Other language files in the
 `assets/translations/` directory serve only as source data for remote mirrors and are not included in the binary.
 
@@ -134,7 +134,6 @@ set_server_global_locale(locale)  // Store in OnceLock<Locale>
 
 - `set_server_global_locale()` **only takes effect on first call** (`OnceLock`); subsequent calls are silently ignored
 - `server_global_locale()` falls back to `EnUs` when not initialized
-- `server_command_locale()` is a semantic alias, equivalent to `server_global_locale()`
 
 ### 3.2 Config File Integration
 
@@ -190,8 +189,8 @@ spawn_blocking {  // Non-blocking for tokio runtime
   │  partial failure is tolerable                          │
   │  SHA256 hash verification (.sha256 file):              │
   │    ├─ Checksum file exists + hash matches → Accept ✅  │
-  │    ├─ Checksum file exists + hash mismatch → Reject ❌ │
-  │    └─ Checksum file missing → Degraded accept ⚠️        │
+  │    ├─ Checksum file exists + hash mismatch → Reject ❌  │
+  │    └─ Checksum file missing → Degraded accept ⚠️       │
   └────────────────────────────────────────────────────────┘
                         ↓
   ┌─ Step 3: Save to disk ─────────────────────────────────┐
@@ -218,15 +217,15 @@ Each HTTP request has an independent timeout (default 10000ms, configurable via 
 ```
 load_downloaded(&downloaded, locale)
   │
-  ├─ pumpkin entries → add_translation_file("pumpkin", json, locale)
-  └─ java entries    → add_translation_file("java_minecraft", json, locale)
+  ├─ pumpkin entries → engine.add_translations(locale_idx, namespaced_entries("pumpkin", ...))
+  └─ java entries    → engine.add_translations(locale_idx, namespaced_entries("java_minecraft", ...))
   (bedrock is not downloaded; always uses compile-time embedded en_us)
 
 ↓ Inside the translation engine
 
 TranslationEngine {
-    stores: ArcSwap<Box<[FstLocaleStore; 128]>>   // FST immutable lookup
-    overrides: Box<[DashMap; 128]>                // Runtime dynamic injection
+    stores: ArcSwap<Box<[FstLocaleStore]>>         // FST immutable lookup (one per locale)
+    overrides: Box<[DashMap]>                      // Runtime dynamic injection (one per locale)
     cache: DashMap                                // Lock-free cache
     fallback_log_once / missing_log_once          // Release build log deduplication
 }
@@ -467,7 +466,7 @@ pub fn format_tokens(tokens: &[Token], args: &[String], buf: &mut String);
 
 ### 7.1 Design Purpose
 
-Only `en_us` (English) translations are embedded at compile time; the remaining 127 languages are downloaded on demand
+Only `en_us` (English) translations are embedded at compile time; the remaining 141 languages are downloaded on demand
 at runtime. The server downloads the language corresponding to `server_global_locale` at startup, and loads each
 player's client language in the background when they join.
 
@@ -607,8 +606,8 @@ translation_cache_dir = "data/translation"
 │    │ assets/translations/pumpkin/en_us.json ───── include_str! ───────┐  │
 │    │ assets/translations/vanilla/en_us_java.json ── include_str! ──┐  │  │
 │    │ assets/translations/vanilla/en_us_bedrock.lang ─ include_str! │  │  │
-│    ▼                                                               ▼  ▼  │
-│  generated_store.rs: load_all_translations() → [HashMap; 128]            │
+│    ▼                                                              ▼  ▼ │
+│  generated_store.rs: load_all_translations() → [HashMap; 142]            │
 │  (Only EnUs slot has data)                                               │
 └──────────────────────────────────┬───────────────────────────────────────┘
                                    │ LazyLock deferred initialization
@@ -680,9 +679,9 @@ translation_cache_dir = "data/translation"
 |-----------------------------------|---------------------------------------------------------------------------------------------------------------|
 | `pumpkin-i18n/build.rs`           | Compile-time embedding of en_us (pumpkin + java_minecraft + bedrock_minecraft)                                |
 | `pumpkin-i18n/src/locale.rs`      | 142-variant Locale enum, from_str/to_code (hardcoded LOCALE_CODES array), normalize                           |
-| `pumpkin-i18n/src/server.rs`      | Server locale global state, server_command_locale, system language detection                                  |
+| `pumpkin-i18n/src/server.rs`      | Server locale global state, set_server_global_locale, system language detection                               |
 | `pumpkin-i18n/src/client.rs`      | Player UUID→Locale cache, client locale resolution, try_player_locale                                         |
-| `pumpkin-i18n/src/store.rs`       | Global TRANSLATIONS, translation_engine, resolve_translation, dynamic injection API                           |
+| `pumpkin-i18n/src/store.rs`       | Global ENGINE (LazyLock<TranslationEngine>), translation_engine, resolve_translation, dynamic injection API   |
 | `pumpkin-i18n/src/engine.rs`      | FST build/lookup, DashMap cache, override layer, pre-compiled Token, value_or_raw fallback, log rate limiting |
 | `pumpkin-i18n/src/token.rs`       | `%s` / `{name}` / `{}` placeholder parsing, pre-compiled TokenStream                                          |
 | `pumpkin-i18n/src/download.rs`    | HTTP download, SHA256 verification, disk cache, background loader, mark_locale_loaded dedup                   |

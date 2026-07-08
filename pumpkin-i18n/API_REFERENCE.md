@@ -1,6 +1,6 @@
 # 📖 Pumpkin Translation & Text API Reference
 
-> **Last Updated**: 2026-06-30
+> **Last Updated**: 2026-07-08
 > **Rust Edition**: 2024 | **MSRV**: 1.95
 > **Version**: 0.1.0-dev+26.3
 
@@ -163,141 +163,156 @@ localized_text("k", [c])      → TextComponent::custom → .to_pretty()     →
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Locale {
-    // 128 variants, in alphabetical order:
-    AfZa,
-    ArSa,
-    AstEs,
-    AzAz,
-    Bar,
-    BaRu,
-    BeBy,
-    BgBg,
-    Brb,
-    BrFr,
-    BsBa,
-    CaEs,
-    CsCz,
-    CyGb,
-    DaDk,
-    DeAt,
-    DeCh,
-    DeDe,
-    ElGr,
-    EnAu,
-    EnCa,
-    EnGb,
-    EnNz,
-    Enp,
-    EnPt,
-    EnUd,
-    EnUs,  // ← EnUs is the default fallback
-    Enws,
-    EoUy,
-    Esan,
-    EsAr,
-    EsCl,
-    EsEc,
-    EsEs,
-    EsMx,
-    EsUy,
-    EsVe,
-    EtEe,
-    EuEs,
-    FaIr,
-    FiFi,
-    FilPh,
-    FoFo,
-    FrCa,
-    FrFr,
-    FraDe,
-    FurIt,
-    FyNl,
-    GaIe,
-    GdGb,
-    GlEs,
-    HawUs,
-    HeIl,
-    HiIn,
-    HrHr,
-    HuHu,
-    HyAm,
-    IdId,
-    IgNg,
-    IoEn,
-    IsIs,
-    Isv,
-    ItIt,
-    JaJp,
-    JboEn,
-    KaGe,
-    KkKz,
-    KnIn,
-    KoKr,
-    Ksh,
-    KwGb,
-    LaLa,
-    LbLu,
-    LiLi,
-    Lmo,
-    LoLa,
-    LolUs,
-    LtLt,
-    LvLv,
-    Lzh,
-    MkMk,
-    MnMn,
-    MsMy,
-    MtMt,
-    Nah,
-    NdsDe,
-    NlBe,
-    NlNl,
-    NnNo,
-    NoNo,
-    OcFr,
-    Ovd,
-    PlPl,
-    PtBr,
-    PtPt,
-    QyaAa,
-    RoRo,
-    Rpr,
-    RuRu,
-    RyUa,
-    SahSah,
-    SeNo,
-    SkSk,
-    SlSi,
-    SoSo,
-    SqAl,
-    SrCs,
-    SrSp,
-    SvSe,
-    Sxu,
-    Szl,
-    TaIn,
-    ThTh,
-    TlhAa,
-    TlPh,
-    Tok,
-    TrTr,
-    TtRu,
-    UkUa,
-    ValEs,
-    VecIt,
-    ViVn,
-    YiDe,
-    YoNg,
-    ZhCn,
-    ZhHk,
-    ZhTw,
-    ZlmArab,
+  // 142 variants, in alphabetical order (see pumpkin-i18n/src/locale.rs for the full list):
+  AfZa,
+  ArSa,
+  AstEs,
+  AzAz,
+  BaRu,
+  Bar,
+  BeBy,
+  BeLatn,
+  BgBg,
+  BrFr,
+  Brb,
+  BsBa,
+  CaEs,
+  CsCz,
+  CvCu,
+  CyGb,
+  DaDk,
+  DeAt,
+  DeCh,
+  DeDe,
+  ElGr,
+  EnAu,
+  EnCa,
+  EnGb,
+  EnNz,
+  EnPt,
+  EnUd,
+  EnUs,
+  Enp,
+  Enws,
+  EoUy,
+  EsAr,
+  EsCl,
+  EsEc,
+  EsEs,
+  EsMx,
+  EsUy,
+  EsVe,
+  Esan,
+  EtEe,
+  EuEs,
+  FaIr,
+  FiFi,
+  FilPh,
+  FoFo,
+  FrCa,
+  FrCh,
+  FrFr,
+  FraDe,
+  FurIt,
+  FyNl,
+  GaIe,
+  GdGb,
+  GlEs,
+  GoFr,
+  HalUa,
+  HawUs,
+  HeIl,
+  HiIn,
+  HnNo,
+  HrHr,
+  HuHu,
+  HyAm,
+  IdId,
+  IgNg,
+  IoEn,
+  IsIs,
+  Isv,
+  ItIt,
+  JaJp,
+  JboEn,
+  KaGe,
+  KkKz,
+  KnIn,
+  KoKr,
+  Ksh,
+  KwGb,
+  KyKg,
+  LaLa,
+  LbLu,
+  LiLi,
+  Lmo,
+  LoLa,
+  LolUs,
+  LtLt,
+  LvLv,
+  Lzh,
+  MkMk,
+  MnMn,
+  MsMy,
+  MtMt,
+  Nah,
+  NdsDe,
+  NlBe,
+  NlNl,
+  NnNo,
+  NoNo,
+  OcFr,
+  Ovd,
+  PlPl,
+  Pls,
+  PtBr,
+  PtPt,
+  QcbEs,
+  Qid,
+  QyaAa,
+  RoRo,
+  Rpr,
+  RuRu,
+  RyUa,
+  SahSah,
+  SeNo,
+  SkSk,
+  SlSi,
+  SoSo,
+  SqAl,
+  SrCs,
+  SrSp,
+  SvSe,
+  Sxu,
+  Szl,
+  TaIn,
+  ThTh,
+  TlPh,
+  TlhAa,
+  Tok,
+  TrTr,
+  TtRu,
+  TzoMx,
+  UkUa,
+  UzUz,
+  ValEs,
+  VecIt,
+  ViVn,
+  VpVl,
+  Vro,
+  YiDe,
+  YoNg,
+  ZhCn,
+  ZhHk,
+  ZhTw,
+  ZlmArab,  // ← ZlmArab is the last variant
 }
 ```
 
-| Method  | Signature                | Description                |
-|---------|--------------------------|----------------------------|
-| `COUNT` | `pub const COUNT: usize` | Total language count (128) |
+| Method    | Signature                                    | Description                                                          |
+|-----------|----------------------------------------------|----------------------------------------------------------------------|
+| `to_code` | `pub const fn to_code(self) -> &'static str` | Returns the locale code string (e.g. `"en_us"`, `"zh_cn"`)           |
+| `COUNT`   | `pub const COUNT: usize`                     | Total language count (142, computed as `Self::ZlmArab as usize + 1`) |
 
 **FromStr Implementation**:
 
@@ -322,9 +337,6 @@ impl FromStr for Locale {
 // Get the current server log language
 pub fn server_global_locale() -> Locale;
 
-// Get the language for command output (semantic alias, same as server_global_locale)
-pub fn server_command_locale() -> Locale;
-
 // Set the server log language (called by the pumpkin server crate at startup)
 pub fn set_server_global_locale(locale: Locale);
 
@@ -337,8 +349,7 @@ pub fn resolve_server_locale(config_value: &str) -> Locale;
 
 | Function                     | Behavior                                                                                                                                                                         |
 |------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `server_global_locale()`     | Returns the language stored in `OnceLock`; falls back to `EnUs` when not initialized                                                                                             |
-| `server_command_locale()`    | Semantic alias for `server_global_locale()`; using this name in the command module is clearer                                                                                    |
+
 | `set_server_global_locale()` | **Only takes effect on first call** (`OnceLock`); subsequent calls are silently ignored                                                                                          |
 | `detect_system_locale()`     | **Linux/macOS**: reads `LANG` → `LC_ALL` → `LC_MESSAGES` environment variables<br>**Windows**: calls `GetUserDefaultLocaleName` API<br>**Other platforms**: falls back to `EnUs` |
 | `resolve_server_locale(cfg)` | If `cfg == "auto"`, calls `detect_system_locale()`; otherwise parses the config value                                                                                            |
@@ -364,9 +375,6 @@ pub fn remove_player_locale(uuid: &str);
 
 // Pure function: compute the final language from config and client-reported value
 pub fn resolve_client_locale(player_locale: &str, config_value: &str) -> Locale;
-
-// Convert a Locale to a log string (e.g. "en_us")
-pub fn locale_to_log_string(locale: Locale) -> String;
 ```
 
 **Internal Structure**:
@@ -391,9 +399,6 @@ config_value == "auto" ?
 **File**: `pumpkin-i18n/src/store.rs`
 
 ```rust
-// Global store
-pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]>>;
-
 // Get the global translation engine (FST + DashMap cache, high-performance reads)
 pub fn translation_engine() -> &'static TranslationEngine;
 
@@ -444,10 +449,10 @@ Locale::DeDe,
 );
 ```
 
-- `add_translation()`: Inserts a single key-value pair; the key is auto-joined as `"namespace:key"`, written to both the
-  engine override and the TRANSLATIONS map
+- `add_translation()`: Inserts a single key-value pair; the key is auto-joined as `"namespace:key"`, written directly to
+  the engine override layer
 - `add_translation_file()`: Parses a `HashMap` from a JSON string and bulk-inserts; emits a `warn!` log when the JSON is
-  empty or parsing fails; writes to both the engine override (clearing the DashMap cache) and the TRANSLATIONS map
+  empty or parsing fails; writes via `TranslationEngine::add_translations` (clearing the locale's DashMap cache)
 - `format_translation()`: First looks up via `resolve_translation`, then writes the token stream + args into a buffer
 
 ---
@@ -583,7 +588,7 @@ pub struct SubstitutionRange {
 }
 impl SubstitutionRange {
     pub const fn len(&self) -> usize;      // (end - start) + 1
-    pub const fn is_empty(&self) -> bool;  // start == end
+  pub const fn is_empty(&self) -> bool;  // end < start (true for uninitialized default)
 }
 ```
 
