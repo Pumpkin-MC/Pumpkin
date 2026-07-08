@@ -9,7 +9,7 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::command::translate_format;
 use pumpkin_data::translation;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
@@ -285,7 +285,7 @@ impl EntitySelectorOption {
                     "{}",
                     translate_format(
                         "server.log.entity_selector_unimplemented",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[format!("{self:?}")],
                     )
                 );

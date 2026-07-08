@@ -1,4 +1,4 @@
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::{math::vector2::Vector2, text::TextComponent};
 
 use crate::command::{
@@ -59,7 +59,7 @@ impl CommandExecutor for GetExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -96,7 +96,7 @@ impl CommandExecutor for SetExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -150,7 +150,7 @@ impl CommandExecutor for SetTimeExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -230,7 +230,7 @@ impl CommandExecutor for AddExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -284,7 +284,7 @@ impl CommandExecutor for AddTimeExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -364,7 +364,7 @@ impl CommandExecutor for CenterExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -405,7 +405,7 @@ impl CommandExecutor for DamageAmountExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -458,7 +458,7 @@ impl CommandExecutor for DamageBufferExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -510,7 +510,7 @@ impl CommandExecutor for WarningDistanceExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -561,7 +561,7 @@ impl CommandExecutor for WarningTimeExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });

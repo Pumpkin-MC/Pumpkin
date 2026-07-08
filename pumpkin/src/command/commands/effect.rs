@@ -10,7 +10,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender, translate_plain};
 use crate::entity::EntityBase;
 use pumpkin_data::potion::Effect;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 
 const NAMES: [&str; 1] = ["effect"];
 
@@ -100,7 +100,7 @@ impl CommandExecutor for GiveExecutor {
                                 "{}",
                                 translate_plain(
                                     "debug.expect.effect_should_exist",
-                                    server_command_locale(),
+                                    server_global_locale(),
                                 )
                             )
                         })

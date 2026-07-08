@@ -7,7 +7,7 @@ use crate::command::tree::RawArgs;
 use crate::command::{CommandSender, translate_format};
 use crate::entity::EntityBase;
 use crate::server::Server;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use tracing::debug;
 
@@ -55,7 +55,7 @@ impl ArgumentConsumer for EntityArgumentConsumer {
                     "{}",
                     translate_format(
                         "server.log.failed_parse_target_selector",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[s.to_string(), e],
                     )
                 );
@@ -68,7 +68,7 @@ impl ArgumentConsumer for EntityArgumentConsumer {
                 "{}",
                 translate_format(
                     "server.log.target_selector_limit_gt_one",
-                    server_command_locale(),
+                    server_global_locale(),
                     &[s.to_string()],
                 )
             );

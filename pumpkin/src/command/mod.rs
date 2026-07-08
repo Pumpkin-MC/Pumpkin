@@ -19,8 +19,8 @@ use pumpkin_data::{
     dimension::Dimension,
 };
 use pumpkin_i18n::{
-    Locale, PUMPKIN_NAMESPACE, pumpkin_translation_key, resolve_translation, server_command_locale,
-    server_global_locale, try_player_locale,
+    Locale, PUMPKIN_NAMESPACE, pumpkin_translation_key, resolve_translation, server_global_locale,
+    try_player_locale,
 };
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
@@ -109,16 +109,16 @@ impl fmt::Display for CommandSender {
         match self {
             Self::Console => f.write_str(&translate_plain(
                 "commands.sender.console",
-                server_command_locale(),
+                server_global_locale(),
             )),
             Self::Rcon(_) => f.write_str(&translate_plain(
                 "commands.sender.rcon",
-                server_command_locale(),
+                server_global_locale(),
             )),
             Self::Player(p) => f.write_str(&p.gameprofile.name),
             Self::CommandBlock(..) => f.write_str(&translate_plain(
                 "commands.sender.command_block",
-                server_command_locale(),
+                server_global_locale(),
             )),
             Self::Dummy => f.write_str(""),
         }
@@ -131,13 +131,13 @@ impl CommandSender {
             #[allow(clippy::print_stdout)]
             Self::Console => println!(
                 "{}",
-                text.to_pretty_console_with_locale(server_command_locale())
+                text.to_pretty_console_with_locale(server_global_locale())
             ),
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s
                 .lock()
                 .await
-                .push(text.to_pretty_console_with_locale(server_command_locale())),
+                .push(text.to_pretty_console_with_locale(server_global_locale())),
             Self::CommandBlock(block_entity, _) => {
                 let mut last_output = block_entity.last_output.lock().await;
 
@@ -148,7 +148,7 @@ impl CommandSender {
                         "{}",
                         translate_plain(
                             "debug.expect.failed_format_timestamp",
-                            server_command_locale(),
+                            server_global_locale(),
                         )
                     )
                 });
@@ -156,7 +156,7 @@ impl CommandSender {
                 *last_output = format!(
                     "[{}] {}",
                     timestamp,
-                    text.0.clone().get_text(server_command_locale())
+                    text.0.clone().get_text(server_global_locale())
                 );
             }
             Self::Dummy => {}
@@ -274,7 +274,7 @@ impl CommandSender {
     pub fn get_locale(&self) -> Locale {
         match self {
             Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => {
-                server_command_locale()
+                server_global_locale()
             }
             Self::Player(player) => try_player_locale(&player.gameprofile.id.to_string())
                 .unwrap_or_else(|| {
@@ -326,7 +326,7 @@ impl CommandSender {
         match self {
             Self::Rcon(rcon) => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
-                let locale = server_command_locale();
+                let locale = server_global_locale();
                 CommandSource::new(
                     Self::Rcon(rcon),
                     world,
@@ -340,7 +340,7 @@ impl CommandSender {
             }
             Self::Console => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
-                let locale = server_command_locale();
+                let locale = server_global_locale();
                 CommandSource::new(
                     Self::Console,
                     world,
@@ -381,7 +381,7 @@ impl CommandSender {
                 let name = TextComponent::custom(
                     PUMPKIN_NAMESPACE,
                     "commands.sender.command_block",
-                    server_command_locale(),
+                    server_global_locale(),
                     [],
                 );
 

@@ -1,7 +1,7 @@
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::translate_plain;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
@@ -184,7 +184,7 @@ fn register_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -197,7 +197,7 @@ fn translated_permission(
 ) -> Permission {
     Permission::new(
         node,
-        &translate_plain(description_key, server_command_locale()),
+        &translate_plain(description_key, server_global_locale()),
         default,
     )
 }
@@ -215,7 +215,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -230,7 +230,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -245,7 +245,7 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -265,7 +265,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -280,7 +280,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -295,7 +295,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -310,7 +310,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -325,7 +325,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -340,7 +340,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -355,7 +355,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -370,7 +370,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -385,7 +385,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -400,7 +400,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -415,7 +415,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -430,7 +430,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -445,7 +445,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -460,7 +460,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -475,7 +475,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -490,7 +490,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -505,7 +505,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -520,7 +520,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -535,7 +535,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -550,7 +550,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -565,7 +565,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -580,7 +580,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -595,7 +595,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -610,7 +610,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -625,7 +625,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -640,7 +640,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -655,7 +655,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -675,7 +675,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -690,7 +690,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -705,7 +705,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -720,7 +720,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -735,7 +735,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -750,7 +750,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -765,7 +765,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -780,7 +780,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -795,7 +795,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -810,7 +810,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -825,7 +825,7 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
                 "{}",
                 translate_plain(
                     "debug.expect.permission_already_registered",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });

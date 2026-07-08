@@ -3,7 +3,7 @@ use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::command::{CommandSender, translate_format};
 use crate::server::Server;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 use tracing::debug;
@@ -68,7 +68,7 @@ fn parse_text_component(input: &str) -> Option<TextComponent> {
                 "{}",
                 translate_format(
                     "server.log.failed_parse_text_component",
-                    server_command_locale(),
+                    server_global_locale(),
                     &[e.to_string()],
                 )
             );

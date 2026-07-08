@@ -12,15 +12,6 @@ pub fn server_global_locale() -> Locale {
     *SERVER_GLOBAL_LOCALE.get().unwrap_or(&Locale::EnUs)
 }
 
-/// Returns the locale for console/backend command output.
-///
-/// Kept as a semantic alias so command code does not need to know that command
-/// output and logs now share [`server_global_locale`].
-#[must_use]
-pub fn server_command_locale() -> Locale {
-    server_global_locale()
-}
-
 /// Sets the server global locale. Called from the pumpkin server crate during
 /// initialization.
 pub fn set_server_global_locale(locale: Locale) {

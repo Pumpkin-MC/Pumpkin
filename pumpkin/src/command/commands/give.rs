@@ -15,7 +15,7 @@ use crate::command::{
     CommandExecutor, CommandResult, CommandSender, translate_format, translate_plain,
 };
 use crate::entity::EntityBase;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 
 const NAMES: [&str; 1] = ["give"];
 
@@ -77,7 +77,7 @@ impl CommandExecutor for Executor {
                                 "{}",
                                 translate_plain(
                                     "debug.expect.item_missing_max_stack_size",
-                                    server_command_locale(),
+                                    server_global_locale(),
                                 )
                             )
                         }),

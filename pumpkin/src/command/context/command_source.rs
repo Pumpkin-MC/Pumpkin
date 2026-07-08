@@ -7,7 +7,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::translation;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
@@ -370,7 +370,7 @@ impl CommandSource {
         self.world.as_ref().unwrap_or_else(|| {
             panic!(
                 "{}",
-                translate_plain("debug.expect.world_should_exist", server_command_locale(),)
+                translate_plain("debug.expect.world_should_exist", server_global_locale(),)
             )
         })
     }
@@ -384,7 +384,7 @@ impl CommandSource {
         self.server.as_ref().unwrap_or_else(|| {
             panic!(
                 "{}",
-                translate_plain("debug.expect.server_should_exist", server_command_locale(),)
+                translate_plain("debug.expect.server_should_exist", server_global_locale(),)
             )
         })
     }

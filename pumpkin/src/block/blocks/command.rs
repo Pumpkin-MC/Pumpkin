@@ -17,7 +17,7 @@ use pumpkin_data::{
     Block, BlockId, BlockStateId, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::tick::TickPriority;
 use tracing::warn;
@@ -64,7 +64,7 @@ impl CommandBlock {
                 "{}",
                 translate_plain(
                     "server.log.command_block_no_matching_entity",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             );
             return false;
@@ -75,7 +75,7 @@ impl CommandBlock {
                 "{}",
                 translate_format(
                     "server.log.command_not_a_command_block",
-                    server_command_locale(),
+                    server_global_locale(),
                     &[before.0.to_string()],
                 )
             );
@@ -118,7 +118,7 @@ impl CommandBlock {
                 "{}",
                 translate_format(
                     "server.log.command_block_missing_matching_entity",
-                    server_command_locale(),
+                    server_global_locale(),
                     &[behind.0.to_string()],
                 )
             );
@@ -128,7 +128,7 @@ impl CommandBlock {
             behind_entity.as_any().downcast_ref().unwrap_or_else(|| {
                 panic!(
                     "{}",
-                    translate_plain("debug.expect.command_block_behind", server_command_locale())
+                    translate_plain("debug.expect.command_block_behind", server_global_locale())
                 )
             });
 
@@ -153,7 +153,7 @@ impl CommandBlock {
                 "{}",
                 translate_plain(
                     "server.log.failed_downcast_command_block",
-                    server_command_locale()
+                    server_global_locale()
                 )
             );
             return;
@@ -199,7 +199,7 @@ impl CommandBlock {
                     "{}",
                     translate_plain(
                         "server.log.missing_command_block_entity",
-                        server_command_locale()
+                        server_global_locale()
                     )
                 );
                 break;
@@ -211,7 +211,7 @@ impl CommandBlock {
                     "{}",
                     translate_format(
                         "server.log.command_not_a_command_block",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[pos.to_string()],
                     )
                 );
@@ -231,7 +231,7 @@ impl CommandBlock {
                             "{}",
                             translate_plain(
                                 "server.log.command_block_disappeared",
-                                server_command_locale(),
+                                server_global_locale(),
                             )
                         );
                         break;
@@ -250,7 +250,7 @@ impl CommandBlock {
                     "{}",
                     translate_format(
                         "server.log.command_block_chain_max_executed",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[u16::MAX.to_string()],
                     )
                 );
@@ -310,7 +310,7 @@ impl BlockBehaviour for CommandBlock {
                         "{}",
                         translate_format(
                             "server.log.command_not_a_command_block",
-                            server_command_locale(),
+                            server_global_locale(),
                             &[args.position.to_string()],
                         )
                     );
@@ -348,7 +348,7 @@ impl BlockBehaviour for CommandBlock {
                     "{}",
                     translate_format(
                         "server.log.command_not_a_command_block",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[args.position.to_string()],
                     )
                 );
@@ -426,10 +426,7 @@ impl BlockBehaviour for CommandBlock {
                 || {
                     warn!(
                         "{}",
-                        translate_plain(
-                            "server.log.command_block_missing",
-                            server_command_locale(),
-                        )
+                        translate_plain("server.log.command_block_missing", server_global_locale(),)
                     );
                     None
                 },
@@ -440,7 +437,7 @@ impl BlockBehaviour for CommandBlock {
                                 "{}",
                                 translate_plain(
                                     "debug.expect.command_block_position_matching_entity",
-                                    server_command_locale(),
+                                    server_global_locale(),
                                 )
                             )
                         });

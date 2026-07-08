@@ -9,7 +9,7 @@ use crate::command::node::{Command, RedirectModifier};
 use crate::command::translate_plain;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
 use std::any::Any;
@@ -277,7 +277,7 @@ impl<'a> ContextChain<'a> {
         let mut result = match &executable.command {
             None => panic!(
                 "{}",
-                translate_plain("debug.expect.executable_expected", server_command_locale())
+                translate_plain("debug.expect.executable_expected", server_global_locale())
             ),
             Some(command) => command.execute(&context_to_use).await,
         };
@@ -554,7 +554,7 @@ impl<'a> CommandContextBuilder<'a> {
 mod test {
     use std::sync::Arc;
 
-    use pumpkin_i18n::server_command_locale;
+    use pumpkin_i18n::server_global_locale;
 
     use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder};
     use crate::command::context::command_context::{
@@ -634,7 +634,7 @@ mod test {
                 "{}",
                 translate_plain(
                     "debug.expect.command_context_flattened",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -662,7 +662,7 @@ mod test {
                 "{}",
                 translate_plain(
                     "debug.expect.command_context_flattened",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -687,7 +687,7 @@ mod test {
                 "{}",
                 translate_plain(
                     "debug.expect.command_context_flattened",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -717,7 +717,7 @@ mod test {
                 "{}",
                 translate_plain(
                     "debug.expect.command_context_flattened",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -728,7 +728,7 @@ mod test {
                 "{}",
                 translate_plain(
                     "debug.expect.command_context_next_stage",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -739,7 +739,7 @@ mod test {
                 "{}",
                 translate_plain(
                     "debug.expect.command_context_next_stage",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });

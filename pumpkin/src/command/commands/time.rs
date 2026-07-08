@@ -9,7 +9,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{
     CommandExecutor, CommandSender, ConsumedArgs, translate_plain, tree::CommandTree,
 };
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 
 const NAMES: [&str; 1] = ["time"];
 const DESCRIPTION: &str = "commands.time.description";
@@ -65,7 +65,7 @@ impl CommandExecutor for QueryExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -119,7 +119,7 @@ impl CommandExecutor for ChangeExecutor {
                     "{}",
                     translate_plain(
                         "debug.expect.there_should_always_be_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });

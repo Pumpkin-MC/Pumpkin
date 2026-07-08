@@ -16,7 +16,7 @@ use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::translate_format;
 use pumpkin_codecs::Number;
 use pumpkin_data::translation;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
@@ -25,7 +25,7 @@ fn tr_snbt_plain(key: &str) -> String {
 }
 
 fn translate_snbt_format(key: &str, args: &[String]) -> String {
-    translate_format(key, server_command_locale(), args)
+    translate_format(key, server_global_locale(), args)
 }
 
 pub const NUMBER_PARSE_FAILURE: CommandErrorType<1> = CommandErrorType::new(
@@ -114,7 +114,7 @@ impl SnbtParser<'_, '_> {
                     "{}",
                     translate_format(
                         "server.log.failed_parse_snbt",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[reader.string().to_string()],
                     )
                 );

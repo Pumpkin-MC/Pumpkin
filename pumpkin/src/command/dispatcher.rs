@@ -1,6 +1,6 @@
 use pumpkin_data::translation;
 use pumpkin_i18n::PUMPKIN_NAMESPACE;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
@@ -47,7 +47,7 @@ impl CommandError {
                     "{}",
                     translate_format(
                         "commands.dispatcher.log.invalid_consumption",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[cmd.to_owned(), format!("{s:?}")]
                     )
                 );
@@ -63,7 +63,7 @@ impl CommandError {
                     "{}",
                     translate_format(
                         "commands.dispatcher.log.invalid_requirement",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[cmd.to_owned()]
                     )
                 );
@@ -79,7 +79,7 @@ impl CommandError {
                     "{}",
                     translate_format(
                         "commands.dispatcher.log.permission_denied",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[cmd.to_owned()]
                     )
                 );
@@ -334,7 +334,7 @@ impl CommandDispatcher {
                         "{}",
                         translate_format(
                             "commands.dispatcher.log.invalid_consumption",
-                            server_command_locale(),
+                            server_global_locale(),
                             &[cmd.to_owned(), format!("{s:?}")],
                         )
                     );
@@ -345,7 +345,7 @@ impl CommandDispatcher {
                         "{}",
                         translate_format(
                             "commands.dispatcher.log.invalid_requirement",
-                            server_command_locale(),
+                            server_global_locale(),
                             &[cmd.to_owned()],
                         )
                     );
@@ -356,7 +356,7 @@ impl CommandDispatcher {
                         "{}",
                         translate_format(
                             "commands.dispatcher.log.permission_denied",
-                            server_command_locale(),
+                            server_global_locale(),
                             &[cmd.to_owned()],
                         )
                     );
@@ -365,7 +365,7 @@ impl CommandDispatcher {
                 Err(CommandFailed(_)) => {
                     debug!(
                         "{}",
-                        translate_plain("server.log.command_failed", server_command_locale())
+                        translate_plain("server.log.command_failed", server_global_locale())
                     );
                     return Vec::new();
                 }
@@ -378,7 +378,7 @@ impl CommandDispatcher {
                 Ok(None) => {
                     debug!(
                         "{}",
-                        translate_plain("server.log.command_none", server_command_locale())
+                        translate_plain("server.log.command_none", server_global_locale())
                     );
                 }
             }
@@ -395,7 +395,7 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.empty_command",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )));
         }
@@ -424,7 +424,7 @@ impl CommandDispatcher {
                         return Err(CommandFailed(TextComponent::custom(
                             PUMPKIN_NAMESPACE,
                             "commands.dispatcher.unmatched_braces",
-                            server_command_locale(),
+                            server_global_locale(),
                             [],
                         )));
                     }
@@ -438,7 +438,7 @@ impl CommandDispatcher {
                         return Err(CommandFailed(TextComponent::custom(
                             PUMPKIN_NAMESPACE,
                             "commands.dispatcher.unmatched_brackets",
-                            server_command_locale(),
+                            server_global_locale(),
                             [],
                         )));
                     }
@@ -480,7 +480,7 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.unmatched_quotes",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )));
         }
@@ -488,7 +488,7 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.unmatched_braces_end",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )));
         }
@@ -496,7 +496,7 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.unmatched_brackets_end",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )));
         }
@@ -504,7 +504,7 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.empty_command",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )));
         }
@@ -529,7 +529,7 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.permission_not_found",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )));
         };
@@ -563,7 +563,7 @@ impl CommandDispatcher {
             .ok_or(CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
                 "commands.dispatcher.command_not_found",
-                server_command_locale(),
+                server_global_locale(),
                 [],
             )))?;
 
@@ -577,7 +577,7 @@ impl CommandDispatcher {
                     return Err(CommandFailed(TextComponent::custom(
                         PUMPKIN_NAMESPACE,
                         "commands.dispatcher.internal_error",
-                        server_command_locale(),
+                        server_global_locale(),
                         [],
                     )));
                 };
@@ -634,7 +634,7 @@ impl CommandDispatcher {
                             "{}",
                             translate_format(
                                 "server.log.command_expected_argument",
-                                server_command_locale(),
+                                server_global_locale(),
                                 &[format!("{raw_args:?}"), string.clone()],
                             )
                         );
@@ -660,7 +660,7 @@ impl CommandDispatcher {
                                 "{}",
                                 translate_format(
                                     "server.log.command_cannot_parse_argument",
-                                    server_command_locale(),
+                                    server_global_locale(),
                                     &[format!("{raw_args:?}"), name.clone()],
                                 )
                             );
@@ -689,7 +689,7 @@ impl CommandDispatcher {
                             "{}",
                             translate_format(
                                 "server.log.command_requirement_not_met",
-                                server_command_locale(),
+                                server_global_locale(),
                                 &[format!("{raw_args:?}")],
                             )
                         );
@@ -710,7 +710,7 @@ impl CommandDispatcher {
             "{}",
             translate_format(
                 "server.log.command_unconsumed_args",
-                server_command_locale(),
+                server_global_locale(),
                 &[format!("{raw_args:?}")],
             )
         );
@@ -778,10 +778,7 @@ impl CommandDispatcher {
         let primary_name = names.next().unwrap_or_else(|| {
             panic!(
                 "{}",
-                translate_plain(
-                    "debug.expect.name_must_be_provided",
-                    server_command_locale(),
-                )
+                translate_plain("debug.expect.name_must_be_provided", server_global_locale(),)
             )
         });
 

@@ -18,7 +18,7 @@ use crate::command::tree::Command;
 use crate::command::{translate_format, translate_plain};
 use futures::future;
 use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
@@ -235,7 +235,7 @@ impl CommandDispatcher {
                             "{}",
                             translate_plain(
                                 "debug.expect.node_errors_next",
-                                server_command_locale(),
+                                server_global_locale(),
                             )
                         )
                     })
@@ -378,7 +378,7 @@ impl CommandDispatcher {
                         "{}",
                         translate_plain(
                             "debug.expect.node_potentials_not_empty",
-                            server_command_locale(),
+                            server_global_locale(),
                         )
                     )
                 })
@@ -659,7 +659,7 @@ impl CommandDispatcher {
                         "{}",
                         translate_format(
                             "commands.dispatcher.warn.no_permission",
-                            server_command_locale(),
+                            server_global_locale(),
                             &[command_tree.names[0].clone()],
                         )
                     );
@@ -931,7 +931,7 @@ impl CommandDispatcher {
                                         "{}",
                                         translate_plain(
                                             "debug.expect.node_child_usages_next",
-                                            server_command_locale(),
+                                            server_global_locale(),
                                         )
                                     )
                                 });

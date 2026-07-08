@@ -10,7 +10,7 @@ use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
 use pumpkin_i18n::PUMPKIN_NAMESPACE;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
@@ -51,7 +51,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
         NbtTag::End => Err(TextComponent::custom(
             PUMPKIN_NAMESPACE,
             "commands.data.error.unexpected_end_tag",
-            server_command_locale(),
+            server_global_locale(),
             [],
         )),
         NbtTag::Byte(value) => {
@@ -137,7 +137,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                             TextComponent::custom(
                                 PUMPKIN_NAMESPACE,
                                 "commands.data.error.display_item",
-                                server_command_locale(),
+                                server_global_locale(),
                                 [TextComponent::text(index.to_string()), message],
                             )
                         })?;
@@ -172,7 +172,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                             TextComponent::custom(
                                 PUMPKIN_NAMESPACE,
                                 "commands.data.error.display_item_key",
-                                server_command_locale(),
+                                server_global_locale(),
                                 [TextComponent::text(key.to_string()), message],
                             )
                         })?;

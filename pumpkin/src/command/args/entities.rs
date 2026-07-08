@@ -10,7 +10,7 @@ use crate::command::{CommandSender, translate_format, translate_plain};
 use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::{entity::EntityType, translation};
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::GameMode;
@@ -85,13 +85,13 @@ impl FromStr for EntityFilter {
         let key = parts.next().ok_or_else(|| {
             translate_plain(
                 "commands.selector.error.missing_key",
-                server_command_locale(),
+                server_global_locale(),
             )
         })?;
         let mut value = parts.next().ok_or_else(|| {
             translate_plain(
                 "commands.selector.error.missing_value",
-                server_command_locale(),
+                server_global_locale(),
             )
         })?;
         let negate = value.starts_with('!');
@@ -104,7 +104,7 @@ impl FromStr for EntityFilter {
                 let entity_type = EntityType::from_name(value).ok_or_else(|| {
                     translate_format(
                         "commands.selector.error.invalid_entity_type",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[value.to_owned()],
                     )
                 })?;
@@ -118,13 +118,13 @@ impl FromStr for EntityFilter {
                 let limit = value.parse::<usize>().map_err(|_| {
                     translate_plain(
                         "commands.selector.error.invalid_limit",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 })?;
                 if negate {
                     return Err(translate_plain(
                         "commands.selector.error.limit_negation",
-                        server_command_locale(),
+                        server_global_locale(),
                     ));
                 }
                 Ok(Self::Limit(limit))
@@ -138,7 +138,7 @@ impl FromStr for EntityFilter {
                     _ => {
                         return Err(translate_format(
                             "commands.selector.error.invalid_sort",
-                            server_command_locale(),
+                            server_global_locale(),
                             &[value.to_owned()],
                         ));
                     }
@@ -146,14 +146,14 @@ impl FromStr for EntityFilter {
                 if negate {
                     return Err(translate_plain(
                         "commands.selector.error.sort_negation",
-                        server_command_locale(),
+                        server_global_locale(),
                     ));
                 }
                 Ok(Self::Sort(sort))
             }
             _ => Err(translate_format(
                 "commands.selector.error.unimplemented_key",
-                server_command_locale(),
+                server_global_locale(),
                 &[key.to_owned()],
             )),
         }
@@ -207,7 +207,7 @@ impl TargetSelector {
                 "{}",
                 translate_plain(
                     "debug.expect.entity_type_player_must_exist",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         });
@@ -292,7 +292,7 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
             return Err(TargetSelectorParseError {
                 message: translate_format(
                     "commands.selector.error.invalid_selector_type",
-                    server_command_locale(),
+                    server_global_locale(),
                     &[type_str.to_owned()],
                 ),
                 cursor: selector_type_end.saturating_sub(1),
@@ -309,7 +309,7 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
         return Err(TargetSelectorParseError {
             message: translate_plain(
                 "commands.selector.error.missing_bracket",
-                server_command_locale(),
+                server_global_locale(),
             ),
             cursor: arg.len(),
         });
@@ -397,7 +397,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
                     "{}",
                     translate_format(
                         "server.log.failed_parse_target_selector",
-                        server_command_locale(),
+                        server_global_locale(),
                         &[s.to_string(), e],
                     )
                 );

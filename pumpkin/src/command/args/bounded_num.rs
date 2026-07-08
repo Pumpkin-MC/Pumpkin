@@ -3,7 +3,7 @@ use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_protocol::java::client::play::ArgumentType;
 use pumpkin_util::text::TextComponent;
 
@@ -88,7 +88,7 @@ pub enum NotInBounds {
 
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
-        let locale = server_command_locale();
+        let locale = server_global_locale();
         match value {
             NotInBounds::LowerBound(val, min) => Self::CommandFailed(TextComponent::custom(
                 PUMPKIN_NAMESPACE,
@@ -306,7 +306,7 @@ where
                 "{}",
                 translate_plain(
                     "debug.expect.bounded_num_requires_name",
-                    server_command_locale(),
+                    server_global_locale(),
                 )
             )
         })

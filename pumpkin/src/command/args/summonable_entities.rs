@@ -1,6 +1,6 @@
 use pumpkin_data::entity::EntityType;
 use pumpkin_i18n::PUMPKIN_NAMESPACE;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
@@ -59,7 +59,7 @@ impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
                         Err(CommandError::CommandFailed(TextComponent::custom(
                             PUMPKIN_NAMESPACE,
                             "commands.args.summonable_entities.not_found",
-                            server_command_locale(),
+                            server_global_locale(),
                             [TextComponent::text(name.to_string())],
                         )))
                     },

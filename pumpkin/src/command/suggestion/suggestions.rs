@@ -1,7 +1,7 @@
 use crate::command::context::string_range::StringRange;
 use crate::command::suggestion::{Suggestion, SuggestionText};
 use crate::command::translate_plain;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 use pumpkin_util::text::TextComponent;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -342,7 +342,7 @@ impl Suggestions {
                     "{}",
                     translate_plain(
                         "debug.expect.suggestions_range_exists",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             });
@@ -415,7 +415,7 @@ impl Suggestions {
                             "{}",
                             translate_plain(
                                 "server.log.duplicate_suggestion_found",
-                                server_command_locale(),
+                                server_global_locale(),
                             )
                         );
                         PushSide::Text

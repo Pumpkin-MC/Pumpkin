@@ -16,7 +16,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender, translate_plain};
 use crate::entity::EntityBase;
 use crate::world::World;
-use pumpkin_i18n::server_command_locale;
+use pumpkin_i18n::server_global_locale;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
 const DESCRIPTION: &str = "commands.teleport.description"; // todo
@@ -68,7 +68,7 @@ fn resolve_sender_world(
                     "{}",
                     translate_plain(
                         "debug.expect.server_needs_one_world",
-                        server_command_locale(),
+                        server_global_locale(),
                     )
                 )
             })
