@@ -101,11 +101,7 @@ pub(crate) fn resolve_translation_components(
             Token::Text(_) => {}
             Token::Var(idx) => {
                 writing_parent = false;
-                let component = with.get(*idx).cloned().unwrap_or_else(|| {
-                    // Out-of-range Var: use the raw placeholder text so the
-                    // mismatch is visible instead of silently dropping content.
-                    text_component(&format!("%{}", idx + 1))
-                });
+                let component = with.get(*idx).cloned().unwrap_or_else(empty_text_component);
                 extra.push(component);
             }
         }

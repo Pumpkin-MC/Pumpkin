@@ -112,6 +112,12 @@ pub fn format_tokens(tokens: &[Token], args: &[String], buf: &mut String) {
             Token::Var(idx) => {
                 if let Some(arg) = args.get(*idx) {
                     buf.push_str(arg);
+                } else {
+                    debug!(
+                        idx,
+                        args_len = args.len(),
+                        "translation placeholder out of range — skipping"
+                    );
                 }
             }
         }
@@ -295,11 +301,13 @@ impl TranslationEngine {
     /// locale data for a single write.
     pub fn add_translation(&self, locale_idx: usize, key: &str, translation: &str) {
         if let Some(store) = self.overrides.get(locale_idx) {
+            let normalized = normalize_key(key).into_owned();
             store.insert(
-                normalize_key(key).into_owned(),
+                normalized.clone(),
                 Arc::new(ResolvedTranslation::from_template(translation)),
             );
-            self.cache.clear();
+            // Only evict the specific cache entry, not the entire cache.
+            self.cache.remove(&make_cache_key(locale_idx, &normalized));
         }
     }
 
@@ -318,7 +326,10 @@ impl TranslationEngine {
                 Arc::new(ResolvedTranslation::from_template(&translation)),
             );
         }
-        self.cache.clear();
+        // Evict only cache entries belonging to this locale — other locales
+        // are unaffected.  The prefix is e.g. "12:" for locale index 12.
+        let prefix = make_cache_prefix(locale_idx);
+        self.cache.retain(|k, _| !k.starts_with(&prefix));
     }
 
     /// Reload translation data atomically.
@@ -395,6 +406,14 @@ fn make_cache_key(locale_idx: usize, key: &str) -> String {
     // Use a compact representation: "<locale_idx>:<key>"
     let mut buf = String::with_capacity(4 + key.len() + 1);
     let _ = write!(buf, "{locale_idx}:{key}");
+    buf
+}
+
+/// Build the prefix that all cache keys for `locale_idx` share (`"N:"`).
+#[inline]
+fn make_cache_prefix(locale_idx: usize) -> String {
+    let mut buf = String::with_capacity(3);
+    let _ = write!(buf, "{locale_idx}:");
     buf
 }
 
