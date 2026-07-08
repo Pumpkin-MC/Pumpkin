@@ -11,6 +11,8 @@ use std::time::Duration;
 use tokio::time::{Instant, sleep_until};
 use tracing::debug;
 
+const EMPTY_SERVER_TICK_INTERVAL: Duration = Duration::from_secs(1);
+
 pub struct Ticker;
 
 impl Ticker {
@@ -53,6 +55,8 @@ impl Ticker {
 
             let tick_interval = if manager.is_sprinting() {
                 Duration::ZERO
+            } else if !server.has_n_players(1) {
+                EMPTY_SERVER_TICK_INTERVAL
             } else {
                 Duration::from_nanos(manager.nanoseconds_per_tick() as u64)
             };

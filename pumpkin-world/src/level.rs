@@ -434,11 +434,17 @@ impl Level {
         });
     }
 
-    pub fn get_tick_data(&self, active_chunks: &FxHashSet<Vector2<i32>>) -> TickData {
+    pub fn get_tick_data(
+        &self,
+        active_chunks: &FxHashSet<Vector2<i32>>,
+        random_tick_speed: usize,
+    ) -> TickData {
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
-            random_ticks: Vec::with_capacity(active_chunks.len() * 3),
+            random_ticks: Vec::with_capacity(
+                active_chunks.len().saturating_mul(random_tick_speed.min(3)),
+            ),
         };
 
         // 1. Process active chunks (random ticks, block entities)
@@ -451,7 +457,7 @@ impl Level {
 
                 // Use the bitmask to skip sections
                 let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
-                if mask != 0 {
+                if mask != 0 && random_tick_speed != 0 {
                     let sections = chunk.section.block_sections.read().unwrap();
                     let min_y = chunk.section.min_y;
 
@@ -460,7 +466,7 @@ impl Level {
                             continue;
                         }
                         let y_base = min_y + (i as i32 * 16);
-                        for _ in 0..3 {
+                        for _ in 0..random_tick_speed {
                             let r = rand::random::<u32>();
                             let x_offset = (r & 0xF) as usize;
                             let z_offset = (r >> 8 & 0xF) as usize;
