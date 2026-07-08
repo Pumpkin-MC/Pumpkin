@@ -152,14 +152,23 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 /// Empty namespaces in non‑English locales produce a [`warn!`]; otherwise
 /// the summary is logged at [`info!`] level.
 pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
+    // Feed maps directly into the engine to avoid a pointless
+    // serialize‑to‑JSON → parse‑from‑JSON round‑trip.
+    let engine = crate::store::translation_engine();
+    let locale_idx = locale as usize;
+
     if !downloaded.pumpkin.is_empty() {
-        let json = serde_json::to_string(&downloaded.pumpkin).unwrap();
-        crate::store::add_translation_file("pumpkin", &json, locale);
+        engine.add_translations(
+            locale_idx,
+            namespaced_entries("pumpkin", &downloaded.pumpkin),
+        );
     }
 
     if !downloaded.java.is_empty() {
-        let json = serde_json::to_string(&downloaded.java).unwrap();
-        crate::store::add_translation_file("java_minecraft", &json, locale);
+        engine.add_translations(
+            locale_idx,
+            namespaced_entries("java_minecraft", &downloaded.java),
+        );
     }
 
     // Bedrock Edition: compile-time embedded en_us only, no runtime loading.
@@ -411,8 +420,8 @@ pub fn ensure_locale_translations(locale: Locale) {
         return;
     }
 
-    // Check loader state BEFORE marking locale as loaded (Bug : prevent
-    // permanent poisoning when the loader hasn't been initialised yet).
+    // Check loader state BEFORE marking locale as loaded — prevents
+    // permanent poisoning when the loader hasn't been initialised yet.
     let Some((config, cache_root)) = LOADER_STATE.get() else {
         warn!(
             "Translation loader not initialised — cannot load translations for {}",
@@ -465,6 +474,23 @@ pub fn ensure_locale_translations(locale: Locale) {
     }
     // If partial_cache is true and download failed, we already loaded
     // the partial cache above. The missing namespaces will use EnUs fallback.
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Build namespaced, lowercased key–value pairs ready for [`TranslationEngine::add_translations`].
+fn namespaced_entries<'a>(
+    namespace: &'a str,
+    data: &'a HashMap<String, String>,
+) -> impl Iterator<Item = (String, String)> + 'a {
+    data.iter().map(move |(key, value)| {
+        (
+            crate::namespaced_key(namespace, key).to_ascii_lowercase(),
+            value.clone(),
+        )
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -100,6 +100,36 @@ pub struct TextComponentBase {
 }
 
 impl TextComponentBase {
+    // -----------------------------------------------------------------------
+    // Shared content resolver — eliminates the duplicated 5-way match across
+    // get_text, to_pretty_console_with_locale, to_bedrock_string_with_locale,
+    // and to_bedrock_legacy.
+    // -----------------------------------------------------------------------
+
+    /// Resolve the [`TextContent`] of this component into a string.
+    ///
+    /// The three primitive variants (`Text`, `EntityNames`, `Keybind`) are
+    /// handled identically across all callers.  Only [`TextContent::Translate`]
+    /// and [`TextContent::Custom`] need caller‑supplied resolvers.
+    fn resolve_content_text(
+        &self,
+        locale: Locale,
+        on_translate: impl FnOnce(&str, Option<&str>, &[Self], Locale) -> String,
+        on_custom: impl FnOnce(&str, &[Self], Locale) -> String,
+    ) -> String {
+        match &*self.content {
+            TextContent::Text { text } => text.to_string(),
+            TextContent::Translate {
+                translate,
+                bedrock_translate,
+                with,
+            } => on_translate(translate, bedrock_translate.as_deref(), with, locale),
+            TextContent::EntityNames { selector, .. } => selector.to_string(),
+            TextContent::Keybind { keybind } => keybind.to_string(),
+            TextContent::Custom { key, with, locale } => on_custom(key, with, *locale),
+        }
+    }
+
     /// Converts this component to a human-readable string for console output.
     ///
     /// # Returns
@@ -119,20 +149,14 @@ impl TextComponentBase {
             format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
         }
 
-        let mut text = match *self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate {
-                translate,
-                bedrock_translate: _,
-                with,
-            } => translation_to_pretty(format!("{JAVA_NAMESPACE}:{translate}"), locale, &with),
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, locale } => translation_to_pretty(key, locale, &with),
-        };
+        let mut text = self.resolve_content_text(
+            locale,
+            |translate, _, with, locale| {
+                translation_to_pretty(format!("{JAVA_NAMESPACE}:{translate}"), locale, with)
+            },
+            |key, with, locale| translation_to_pretty(key, locale, with),
+        );
+
         let style = self.style;
         let color = style.color;
         if let Some(color) = color {
@@ -175,24 +199,14 @@ impl TextComponentBase {
     #[must_use]
     #[allow(clippy::only_used_in_recursion)]
     pub fn to_bedrock_string_with_locale(&self, locale: Locale) -> String {
-        let mut text = String::new();
-
-        match &*self.content {
-            TextContent::Text { text: t } => text.push_str(t),
-            TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with: _,
-            } => {
-                let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
-                let _ = write!(text, "%{key}");
-            }
-            TextContent::EntityNames { selector, .. } => text.push_str(selector),
-            TextContent::Keybind { keybind } => text.push_str(keybind),
-            TextContent::Custom { key, with, locale } => {
-                text.push_str(&get_translation_text(key, *locale, with));
-            }
-        }
+        let mut text = self.resolve_content_text(
+            locale,
+            |translate, bedrock_translate, _, _locale| {
+                let key = bedrock_translate.unwrap_or(translate);
+                format!("%{key}")
+            },
+            |key, with, locale| get_translation_text(key, locale, with),
+        );
 
         for child in &self.extra {
             text.push_str(&child.to_bedrock_string_with_locale(locale));
@@ -216,7 +230,6 @@ impl TextComponentBase {
                     // Most Bedrock implementations fallback to Gray or ignore it.
                 }
                 Color::Reset => {
-                    // Explicitly handle the Reset variant
                     text.push_str("§r");
                 }
             }
@@ -237,25 +250,13 @@ impl TextComponentBase {
         // Note: Bedrock does not support strikethrough natively without resource packs.
 
         // 2. Resolve Content
-        match &*self.content {
-            TextContent::Text { text: t } => text.push_str(t),
-            TextContent::Translate {
-                translate,
-                bedrock_translate: _,
-                with,
-            } => {
-                text.push_str(&get_translation_text(
-                    format!("{BEDROCK_NAMESPACE}:{translate}"),
-                    locale,
-                    with,
-                ));
-            }
-            TextContent::EntityNames { selector, .. } => text.push_str(selector),
-            TextContent::Keybind { keybind } => text.push_str(keybind),
-            TextContent::Custom { key, with, locale } => {
-                text.push_str(&get_translation_text(key, *locale, with));
-            }
-        }
+        text.push_str(&self.resolve_content_text(
+            locale,
+            |translate, _, with, locale| {
+                get_translation_text(format!("{BEDROCK_NAMESPACE}:{translate}"), locale, with)
+            },
+            |key, with, locale| get_translation_text(key, locale, with),
+        ));
 
         // 3. Recursively append extra components
         for child in &self.extra {
@@ -277,22 +278,14 @@ impl TextComponentBase {
     /// The plain text content of the component.
     #[must_use]
     pub fn get_text(self, locale: Locale) -> String {
-        let mut text = match *self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate {
-                translate,
-                bedrock_translate: _,
-                with,
-            } => get_translation_text(format!("{JAVA_NAMESPACE}:{translate}"), locale, &with),
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, locale } => get_translation_text(key, locale, &with),
-        };
+        let mut text = self.resolve_content_text(
+            locale,
+            |translate, _, with, locale| {
+                get_translation_text(format!("{JAVA_NAMESPACE}:{translate}"), locale, with)
+            },
+            |key, with, locale| get_translation_text(key, locale, with),
+        );
 
-        // Recursively append the text of all child components
         for child in self.extra {
             text += &child.get_text(locale);
         }

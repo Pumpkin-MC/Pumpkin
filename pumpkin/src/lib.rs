@@ -62,10 +62,49 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
+/// Initialise the tracing subscriber with the configured layer stack.
+fn init_subscriber(
+    writer: std::sync::Mutex<Box<dyn std::io::Write + Send + 'static>>,
+    env_filter: tracing_subscriber::EnvFilter,
+    file_logger: Option<GzipRollingLogger>,
+    color: bool,
+    threads: bool,
+    with_timestamp: bool,
+) {
+    let base = tracing_subscriber::fmt::layer()
+        .with_writer(writer)
+        .with_ansi(color)
+        .with_ansi_sanitization(false)
+        .with_target(true)
+        .with_thread_names(threads)
+        .with_thread_ids(threads);
+
+    if with_timestamp {
+        let local_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+        let layer = base.with_timer(tracing_subscriber::fmt::time::OffsetTime::new(
+            local_offset,
+            time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
+        ));
+        let registry = tracing_subscriber::registry().with(env_filter).with(layer);
+        if let Some(fl) = file_logger {
+            registry.with(fl).init();
+        } else {
+            registry.init();
+        }
+    } else {
+        let layer = base.without_time();
+        let registry = tracing_subscriber::registry().with(env_filter).with(layer);
+        if let Some(fl) = file_logger {
+            registry.with(fl).init();
+        } else {
+            registry.init();
+        }
+    }
+}
+
 #[expect(clippy::print_stderr)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
-    use tracing_subscriber::fmt;
 
     let logger = advanced_config.logging.enabled.then(|| {
         let level = std::env::var("RUST_LOG")
@@ -128,40 +167,14 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             (Box::new(std::io::stdout()), None)
         };
 
-        let fmt_layer = fmt::layer()
-            .with_writer(std::sync::Mutex::new(logger))
-            .with_ansi(advanced_config.logging.color)
-            .with_ansi_sanitization(false)
-            .with_target(true)
-            .with_thread_names(advanced_config.logging.threads)
-            .with_thread_ids(advanced_config.logging.threads);
-
-        if advanced_config.logging.timestamp {
-            let local_offset =
-                time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-            let fmt_layer = fmt_layer.with_timer(fmt::time::OffsetTime::new(
-                local_offset,
-                time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
-            ));
-            let registry = tracing_subscriber::registry()
-                .with(env_filter)
-                .with(fmt_layer);
-            if let Some(file_logger) = file_logger {
-                registry.with(file_logger).init();
-            } else {
-                registry.init();
-            }
-        } else {
-            let fmt_layer = fmt_layer.without_time();
-            let registry = tracing_subscriber::registry()
-                .with(env_filter)
-                .with(fmt_layer);
-            if let Some(file_logger) = file_logger {
-                registry.with(file_logger).init();
-            } else {
-                registry.init();
-            }
-        }
+        init_subscriber(
+            std::sync::Mutex::new(logger),
+            env_filter,
+            file_logger,
+            advanced_config.logging.color,
+            advanced_config.logging.threads,
+            advanced_config.logging.timestamp,
+        );
 
         let logging_config = LoggingConfig {
             color: advanced_config.logging.color,

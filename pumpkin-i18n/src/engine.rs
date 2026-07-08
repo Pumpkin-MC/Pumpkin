@@ -375,9 +375,8 @@ impl TranslationEngine {
 // Normalize key
 // ---------------------------------------------------------------------------
 
-/// Normalise une clef de traduction en minuscules pour une recherche
-/// insensible à la casse. Évite toute allocation si la clef est déjà
-/// entièrement en minuscules.
+/// Normalise a translation key to lowercase for case-insensitive lookup.
+/// Avoids allocation when the key is already fully lowercase.
 #[inline]
 fn normalize_key(key: &str) -> Cow<'_, str> {
     if key.bytes().any(|byte| byte.is_ascii_uppercase()) {

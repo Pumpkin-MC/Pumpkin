@@ -87,11 +87,11 @@ impl SubstitutionRange {
     pub const fn len(&self) -> usize {
         (self.end - self.start) + 1
     }
-    /// Returns `true` if the range contains no characters.
-    ///
-    /// A range is considered empty when `start == end`.
+    /// Returns `true` when `end < start` — an inclusive range cannot
+    /// be empty otherwise (an inclusive range always covers at least
+    /// one character when `start <= end`).
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.start == self.end
+        self.end < self.start
     }
 }
