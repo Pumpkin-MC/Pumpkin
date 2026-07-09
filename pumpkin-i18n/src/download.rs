@@ -399,10 +399,13 @@ pub fn init_translation_loader(config: DownloadConfig, cache_root: PathBuf) {
 /// # Behaviour
 /// 1. **`EnUs`** — no-op (embedded at compile time).
 /// 2. **Already loaded** — no-op (deduplicated via internal tracking set).
-/// 3. **Complete disk cache** — loads both namespaces and returns.
-/// 4. **Partial disk cache** — loads what exists, then downloads the full
-///    set to fill gaps.
-/// 5. **No cache** — downloads from the configured mirror, saves to disk,
+/// 3. **Complete disk cache, fresh** — verifies cached files against remote
+///    SHA256 checksums; loads and returns without downloading.
+/// 4. **Complete disk cache, stale** — loads cached data for immediate use,
+///    then downloads fresh files and overwrites the cache on disk.
+/// 5. **Partial disk cache** — loads what exists for immediate use, then
+///    downloads the full set to fill gaps (only missing namespaces are saved).
+/// 6. **No cache** — downloads from the configured mirror, saves to disk,
 ///    and injects into the engine.
 ///
 /// Bedrock Edition translations are **not** downloaded or cached; only the
@@ -443,21 +446,21 @@ pub fn ensure_locale_translations(locale: Locale) {
         }
     }
 
-    // 1. Try disk cache first
-    let (had_partial, had_pumpkin, had_java) =
+    // 1. Try disk cache first — verify freshness against remote checksums
+    let (cache_was_complete, had_pumpkin, had_java) =
         if let Some(cached) = load_cached_translations(locale, cache_root) {
             let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
-            if complete {
-                // Both namespaces present — no download needed
+            if complete && cache_is_fresh(locale, cache_root) {
+                // Both namespaces present and up-to-date — no download needed
                 load_downloaded(&cached, locale);
                 return;
             }
-            // Partial cache: load what we have now for immediate use,
-            // then download the full set to fill gaps.
+            // Either incomplete or stale — load cached data for immediate use,
+            // then download the full set to overwrite.
             let had_pumpkin = !cached.pumpkin.is_empty();
             let had_java = !cached.java.is_empty();
             load_downloaded(&cached, locale);
-            (true, had_pumpkin, had_java)
+            (complete, had_pumpkin, had_java)
         } else {
             (false, false, false)
         };
@@ -465,11 +468,15 @@ pub fn ensure_locale_translations(locale: Locale) {
     // 2. Download full set from remote mirror
     let downloaded = download_locale(config, locale);
 
-    // 3. Save to disk for future runs, but skip namespaces that were
-    //    already on disk from the partial cache to avoid redundant I/O.
+    // 3. Save to disk for future runs.  When the cache was complete-but-stale
+    //    we overwrite all files; for a partial cache we only persist the
+    //    namespaces that were missing to avoid redundant I/O.
     if downloaded.has_any() {
-        if had_partial {
-            // Only persist namespaces that were missing from the cache.
+        if cache_was_complete {
+            // Cache was complete but stale — overwrite all cached files
+            save_downloaded_translations(&downloaded, locale, cache_root);
+        } else if had_pumpkin || had_java {
+            // Only persist namespaces that were missing from the partial cache.
             let mut to_save = DownloadedTranslations::default();
             if !had_pumpkin && !downloaded.pumpkin.is_empty() {
                 to_save.pumpkin.clone_from(&downloaded.pumpkin);
@@ -484,16 +491,99 @@ pub fn ensure_locale_translations(locale: Locale) {
             save_downloaded_translations(&downloaded, locale, cache_root);
         }
 
-        // 4. Inject into the global engine (overwrites partial cache data)
+        // 4. Inject into the global engine (overwrites partial/stale cache data)
         load_downloaded(&downloaded, locale);
-    } else if !had_partial {
+
+        // 5. Save checksums for next-startup freshness check (no network needed)
+        save_checksums(cache_root, config, locale);
+    } else if !cache_was_complete && !had_pumpkin && !had_java {
         warn!(
             "No translations available for {} — using English fallback",
             locale.to_code()
         );
     }
-    // If had_partial is true and download failed, we already loaded
-    // the partial cache above. The missing namespaces will use EnUs fallback.
+    // If cached data existed (complete or partial) and download failed,
+    // we already loaded the stale/partial cache above.  It will serve until
+    // the next restart when freshness is checked again.
+}
+
+// ---------------------------------------------------------------------------
+// Cache freshness helpers (local checksums — zero network on restart)
+// ---------------------------------------------------------------------------
+
+/// Check whether cached translation files match their locally-saved checksums.
+/// Returns `true` when both namespaces pass, `false` when any check fails
+/// (missing checksum file, I/O error, hash mismatch).
+fn cache_is_fresh(locale: Locale, cache_root: &Path) -> bool {
+    let dir = translation_cache_dir(cache_root, locale);
+
+    let pumpkin_fresh = check_local_checksum(
+        &dir.join("pumpkin.json"),
+        &dir.join("pumpkin.json.sha256"),
+    );
+    let java_fresh = check_local_checksum(
+        &dir.join("java_minecraft.json"),
+        &dir.join("java_minecraft.json.sha256"),
+    );
+
+    pumpkin_fresh && java_fresh
+}
+
+/// Compare a cached file against its locally-saved SHA256 digest.
+fn check_local_checksum(data_path: &Path, checksum_path: &Path) -> bool {
+    let Ok(data) = std::fs::read(data_path) else {
+        return false;
+    };
+    let Ok(expected) = std::fs::read_to_string(checksum_path) else {
+        return false;
+    };
+    sha256_hex(&data) == expected.trim()
+}
+
+/// Download checksum files from the remote mirror and save them alongside
+/// the cached translation files.  Errors are silent — a missing checksum
+/// file on the next restart simply triggers a re-download.
+pub fn save_checksums(cache_root: &Path, config: &DownloadConfig, locale: Locale) {
+    if config.skip_checksum {
+        return;
+    }
+
+    let code = locale.to_code();
+    let timeout = Duration::from_millis(config.timeout_ms);
+    let base_url = if config.mirror_url.is_empty() {
+        DEFAULT_MIRROR
+    } else {
+        config.mirror_url.trim_end_matches('/')
+    };
+
+    let dir = translation_cache_dir(cache_root, locale);
+    // Ensure the directory exists (created by save_downloaded_translations,
+    // but defensive).
+    let _ = std::fs::create_dir_all(&dir);
+
+    // Download and save each checksum independently — partial failures OK.
+    let pumpkin_url = format!("{base_url}/pumpkin/{code}.json");
+    if let Ok(checksum) = fetch_sha256(&pumpkin_url, timeout) {
+        let _ = std::fs::write(dir.join("pumpkin.json.sha256"), checksum.as_bytes());
+    }
+
+    let java_url = format!("{base_url}/vanilla/{code}_java.json");
+    if let Ok(checksum) = fetch_sha256(&java_url, timeout) {
+        let _ = std::fs::write(dir.join("java_minecraft.json.sha256"), checksum.as_bytes());
+    }
+}
+
+/// Compute the SHA256 digest of `data` as a lowercase hex string.
+fn sha256_hex(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher
+        .finalize()
+        .iter()
+        .fold(String::with_capacity(64), |mut acc, b| {
+            let _ = write!(acc, "{b:02x}");
+            acc
+        })
 }
 
 // ---------------------------------------------------------------------------

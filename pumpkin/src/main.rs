@@ -29,8 +29,8 @@ use pumpkin_util::translation::{localized_log, localized_log_format, localized_t
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_i18n::{
     self, DownloadConfig, download_locale, init_translation_loader, load_cached_translations,
-    load_downloaded, mark_locale_loaded, resolve_server_locale, save_downloaded_translations,
-    set_server_global_locale,
+    load_downloaded, mark_locale_loaded, resolve_server_locale, save_checksums,
+    save_downloaded_translations, set_server_global_locale,
 };
 use pumpkin_util::text::{
     TextComponent,
@@ -121,6 +121,7 @@ async fn main() {
         // 3. Save to disk for future runs (only non-empty namespaces are written)
         if downloaded.has_any() {
             save_downloaded_translations(&downloaded, server_global_locale, &cache_root);
+            save_checksums(&cache_root, &download_config, server_global_locale);
         }
 
         downloaded
