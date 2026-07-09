@@ -7,6 +7,11 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use syn::LitInt;
 
+#[derive(Deserialize)]
+struct GeyserBiomeMapping {
+    bedrock_id: u8,
+}
+
 /// Raw deserialization shape for a single biome entry from `biome.json`.
 #[derive(Deserialize)]
 pub struct Biome {
@@ -214,12 +219,21 @@ pub fn build() -> TokenStream {
     let biome_trees: MultiNoiseBiomeSuppliers =
         serde_json::from_str(&fs::read_to_string("../assets/multi_noise_biome_tree.json").unwrap())
             .expect("Failed to parse multi_noise_biome_tree.json");
+    let bedrock_biomes: BTreeMap<String, GeyserBiomeMapping> =
+        serde_json::from_str(&fs::read_to_string("../assets/bedrock/biomes.json").unwrap())
+            .expect("Failed to parse biomes.json");
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
     for (name, biome) in biomes {
+        let full_name = format!("minecraft:{name}");
+        let be_network_id = bedrock_biomes
+            .get(&full_name)
+            .map(|mapping| mapping.bedrock_id)
+            .unwrap_or(1);
+
         // let full_name = format!("minecraft:{name}");
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
@@ -327,6 +341,7 @@ pub fn build() -> TokenStream {
             pub const #format_name: Biome = Biome {
                 id: #index,
                 registry_id: #name,
+                be_network_id: #be_network_id,
                 weather: Weather::new(
                      #has_precipitation,
                      #temperature,
@@ -361,6 +376,7 @@ pub fn build() -> TokenStream {
         pub struct Biome {
             pub id: u8,
             pub registry_id: &'static str,
+            pub be_network_id: u8,
             pub weather: Weather,
             // carvers: &'static [&str],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
