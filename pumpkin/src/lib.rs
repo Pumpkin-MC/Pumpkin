@@ -29,7 +29,7 @@ use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::Mutex;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, info, warn};
@@ -59,6 +59,8 @@ pub struct LoggingConfig {
 pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
+
+const CLIENT_LOGIN_TIMEOUT: Duration = Duration::from_mins(1);
 
 #[expect(clippy::print_stderr)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
@@ -466,7 +468,18 @@ impl PumpkinServer {
                         tasks.spawn(async move {
                             let mut java_client = JavaClient::new(connection, client_addr, client_id);
                             java_client.start_outgoing_packet_task();
-                            let login_result = java_client.handle_login_sequence(&server_clone).await;
+                            let login_result = timeout(
+                                CLIENT_LOGIN_TIMEOUT,
+                                java_client.handle_login_sequence(&server_clone),
+                            )
+                            .await
+                            .unwrap_or_else(|_| {
+                                    debug!(
+                                        "Java client id {client_id} did not finish login within {CLIENT_LOGIN_TIMEOUT:?}"
+                                    );
+                                    java_client.close();
+                                    PacketHandlerResult::Stop
+                            });
 
                             match login_result {
                                 PacketHandlerResult::Stop => {
@@ -559,8 +572,26 @@ impl PumpkinServer {
                                 if is_new {
                                     let server_clone = self.server.clone();
                                     let client_clone = client.clone();
+                                    let formatted_address = if self.server.basic_config.scrub_ips {
+                                        scrub_address(&format!("{client_addr}"))
+                                    } else {
+                                        format!("{client_addr}")
+                                    };
                                     tasks.spawn(async move {
-                                        let login_result = client_clone.handle_login_sequence(&server_clone).await;
+                                        let login_result = if let Ok(result) = timeout(
+                                            CLIENT_LOGIN_TIMEOUT,
+                                            client_clone.handle_login_sequence(&server_clone),
+                                        )
+                                        .await
+                                        {
+                                            result
+                                        } else {
+                                            debug!(
+                                                "Bedrock client {formatted_address} did not finish login within {CLIENT_LOGIN_TIMEOUT:?}"
+                                            );
+                                            client_clone.close().await;
+                                            PacketHandlerResult::Stop
+                                        };
 
                                          match login_result {
                                             PacketHandlerResult::Stop => {
