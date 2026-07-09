@@ -93,8 +93,7 @@ impl EntityBase for FireballEntity {
             }
 
             let hit_pos = hit.hit_pos();
-            // Explosion sets fire if mob griefing is enabled (assuming true for now)
-            world.explode(hit_pos, self.explosion_power).await;
+            world.explode_as_mob(hit_pos, self.explosion_power).await;
         })
     }
 }

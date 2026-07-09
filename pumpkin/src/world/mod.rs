@@ -3223,7 +3223,27 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position);
+        self.explode_inner(position, power, false).await;
+    }
+
+    /// Like [`Self::explode`], but marks the explosion as mob-caused (e.g. a
+    /// Creeper or a Ghast fireball) so block destruction respects the
+    /// `mobGriefing` game rule. Entities are still damaged either way.
+    pub async fn explode_as_mob(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
+        self.explode_inner(position, power, true).await;
+    }
+
+    async fn explode_inner(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        power: f32,
+        mob_griefing_gated: bool,
+    ) {
+        let explosion = if mob_griefing_gated {
+            Explosion::new(power, position).with_mob_griefing_gate()
+        } else {
+            Explosion::new(power, position)
+        };
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion

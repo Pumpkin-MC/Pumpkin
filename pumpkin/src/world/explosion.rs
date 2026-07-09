@@ -18,12 +18,26 @@ use super::{BlockFlags, World};
 pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
+    mob_griefing_gated: bool,
 }
 
 impl Explosion {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
-        Self { power, pos }
+        Self {
+            power,
+            pos,
+            mob_griefing_gated: false,
+        }
+    }
+
+    /// Marks this explosion as caused by a mob (e.g. a Creeper or a Ghast
+    /// fireball), so block destruction respects the `mobGriefing` game rule.
+    /// Entities are still damaged either way; only block destruction is gated.
+    #[must_use]
+    pub const fn with_mob_griefing_gate(mut self) -> Self {
+        self.mob_griefing_gated = true;
+        self
     }
 
     fn get_blocks_to_destroy(
@@ -265,7 +279,14 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let blocks = self.get_blocks_to_destroy(world);
+        let should_destroy_blocks = !self.mob_griefing_gated
+            || world.level_info.load().game_rules.mob_griefing;
+
+        let blocks = if should_destroy_blocks {
+            self.get_blocks_to_destroy(world)
+        } else {
+            FxHashMap::default()
+        };
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {
             world
