@@ -4,8 +4,8 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    BundleContentsImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl,
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
+    BundleContentsImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomDataImpl,
+    CustomNameImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
     FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, IDSet, IDSetContent, IdOr,
     ItemModelImpl, MapIdImpl, MaxStackSizeImpl, PotionContentsImpl, SoundEvent,
     StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, UseCooldownImpl, get,
@@ -13,9 +13,10 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
+use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use serde::de;
 use serde::de::SeqAccess;
-use serde::ser::SerializeStruct;
+use serde::ser::{SerializeStruct, Serializer};
 
 const MAX_STATUS_EFFECTS: usize = 128;
 
@@ -349,14 +350,53 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 
 impl DataComponentCodec<Self> for CustomNameImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
-        seq.serialize_field::<String>("", &self.name)
+        seq.serialize_field("", &NetworkTextNbtString(self.name.clone().get_text()))
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         let name = seq
             .next_element::<String>()?
             .ok_or(de::Error::custom("No CustomNameImpl name string!"))?;
-        Ok(Self { name })
+        Ok(Self {
+            name: pumpkin_util::text::TextComponent::text(name),
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for CustomDataImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field("", &NetworkNbtTag(NbtTag::Compound(self.data.clone())))
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(_seq: &mut A) -> Result<Self, A::Error> {
+        Err(de::Error::custom(
+            "CustomData raw component decoding is not supported; use the custom-data item-stack API",
+        ))
+    }
+}
+
+struct NetworkTextNbtString(String);
+
+impl serde::Serialize for NetworkTextNbtString {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut bytes = Vec::new();
+        NbtTag::String(self.0.clone().into_boxed_str())
+            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
+            .map_err(serde::ser::Error::custom)?;
+        serializer.serialize_bytes(&bytes)
+    }
+}
+
+struct NetworkNbtTag(NbtTag);
+
+impl serde::Serialize for NetworkNbtTag {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut bytes = Vec::new();
+        self.0
+            .clone()
+            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
+            .map_err(serde::ser::Error::custom)?;
+        serializer.serialize_bytes(&bytes)
     }
 }
 
@@ -832,6 +872,9 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
 ) -> Result<Box<dyn DataComponentImpl>, A::Error> {
     match id {
         DataComponent::MaxStackSize => Ok(MaxStackSizeImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CustomData => Err(serde::de::Error::custom(
+            "CustomData raw component decoding is not supported; use the custom-data item-stack API",
+        )),
         DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
@@ -856,6 +899,7 @@ pub fn serialize<T: SerializeStruct>(
 ) -> Result<(), T::Error> {
     match id {
         DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
+        DataComponent::CustomData => get::<CustomDataImpl>(value).serialize(seq),
         DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
         DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),

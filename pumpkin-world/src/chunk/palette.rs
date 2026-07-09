@@ -1,7 +1,7 @@
-use std::{collections::HashMap, hash::Hash, iter::repeat_n};
+use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_data::{
-    BlockState,
+    BlockState, BlockStateId,
     block_properties::{has_random_ticks, is_air, is_liquid},
     fluid::Fluid,
 };
@@ -15,9 +15,8 @@ type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
 #[inline]
 #[must_use]
-pub fn has_random_ticking_fluid(state_id: u16) -> bool {
-    Fluid::from_state_id(state_id)
-        .is_some_and(|fluid| Fluid::same_fluid_type(fluid.id, Fluid::LAVA.id))
+pub fn has_random_ticking_fluid(id: BlockStateId) -> bool {
+    Fluid::from_state_id(id).is_some_and(|fluid| Fluid::same_fluid_type(fluid.id, Fluid::LAVA.id))
 }
 
 #[derive(Clone)]
@@ -381,17 +380,21 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
-    pub fn iter(&self) -> Box<dyn Iterator<Item = &V> + '_> {
+    pub fn iter(&self) -> Box<dyn Iterator<Item = V> + '_> {
         match self {
-            Self::Homogeneous(registry_id) => Box::new(repeat_n(registry_id, Self::VOLUME)),
+            Self::Homogeneous(registry_id) => {
+                Box::new(std::iter::repeat_n(*registry_id, Self::VOLUME))
+            }
             Self::Heterogeneous(data) => match &data.storage {
-                PaletteStorage::Dense(cube) => Box::new(cube.as_flattened().as_flattened().iter()),
+                PaletteStorage::Dense(cube) => {
+                    Box::new(cube.as_flattened().as_flattened().iter().copied())
+                }
                 PaletteStorage::Indexed(indices) => Box::new(
                     indices
                         .as_flattened()
                         .as_flattened()
                         .iter()
-                        .map(|&idx| &data.palette[idx as usize]),
+                        .map(|&idx| data.palette[idx as usize]),
                 ),
             },
         }
@@ -401,6 +404,34 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         match self {
             Self::Homogeneous(value) => *value == V::default(),
             Self::Heterogeneous(_) => false,
+        }
+    }
+}
+
+impl<'a, V: Hash + Eq + Copy + Default, const DIM: usize> IntoIterator
+    for &'a PalettedContainer<V, DIM>
+{
+    type Item = V;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            PalettedContainer::Homogeneous(registry_id) => Box::new(std::iter::repeat_n(
+                *registry_id,
+                PalettedContainer::<V, DIM>::VOLUME,
+            )),
+            PalettedContainer::Heterogeneous(data) => match &data.storage {
+                PaletteStorage::Dense(cube) => {
+                    Box::new(cube.as_flattened().as_flattened().iter().copied())
+                }
+                PaletteStorage::Indexed(indices) => Box::new(
+                    indices
+                        .as_flattened()
+                        .as_flattened()
+                        .iter()
+                        .map(|&idx| data.palette[idx as usize]),
+                ),
+            },
         }
     }
 }
@@ -463,6 +494,78 @@ impl BiomePalette {
     }
 
     #[must_use]
+    pub fn convert_be_network(&self) -> BeNetworkSerialization<u8> {
+        match self {
+            Self::Homogeneous(registry_id) => BeNetworkSerialization {
+                bits_per_entry: 0,
+                palette: NetworkPalette::Single(
+                    pumpkin_data::biome::Biome::from_id(*registry_id)
+                        .map_or(1, |b| b.be_network_id),
+                ),
+                packed_data: Box::new([]),
+            },
+            Self::Heterogeneous(data) => {
+                let bits_per_entry = encompassing_bits(data.palette.len());
+
+                let key_to_index_map: HashMap<_, usize> = data
+                    .palette
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| (*key, index))
+                    .collect();
+
+                let biomes_per_word = 32 / bits_per_entry;
+                let volume: usize = 4096;
+                let expected_word_count = volume.div_ceil(biomes_per_word as usize);
+                let mut packed_data = Vec::with_capacity(expected_word_count);
+
+                let mut current_word: u32 = 0;
+                let mut current_index_in_word = 0;
+
+                for x in 0..16 {
+                    for y in 0..16 {
+                        for z in 0..16 {
+                            let key = self.get(x / 4, z / 4, y / 4);
+                            let key_index = key_to_index_map.get(&key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > *key_index);
+
+                            current_word |= (*key_index as u32)
+                                << (bits_per_entry as u32 * current_index_in_word);
+                            current_index_in_word += 1;
+
+                            if current_index_in_word == biomes_per_word as u32 {
+                                packed_data.push(current_word);
+                                current_word = 0;
+                                current_index_in_word = 0;
+                            }
+                        }
+                    }
+                }
+
+                // Push any remaining bits if the volume isn't a multiple of biomes_per_word
+                if current_index_in_word > 0 {
+                    packed_data.push(current_word);
+                }
+
+                BeNetworkSerialization {
+                    bits_per_entry,
+                    palette: NetworkPalette::Indirect(
+                        data.palette
+                            .iter()
+                            .map(|&id| {
+                                pumpkin_data::biome::Biome::from_id(id)
+                                    .map_or(1, |b| b.be_network_id)
+                            })
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    ),
+                    packed_data: packed_data.into_boxed_slice(),
+                }
+            }
+        }
+    }
+
+    #[must_use]
     pub fn from_disk_nbt(nbt: ChunkSectionBiomes) -> Self {
         let palette = nbt.palette;
 
@@ -495,7 +598,7 @@ impl BlockPalette {
         match self {
             Self::Homogeneous(registry_id) => NetworkSerialization {
                 bits_per_entry: 0,
-                palette: NetworkPalette::Single(*registry_id),
+                palette: NetworkPalette::Single(registry_id.as_u16()),
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
@@ -512,7 +615,7 @@ impl BlockPalette {
                                 let y = (current_idx + i) / (Self::SIZE * Self::SIZE);
                                 let z = ((current_idx + i) / Self::SIZE) % Self::SIZE;
                                 let x = (current_idx + i) % Self::SIZE;
-                                let value = data.get(x, y, z);
+                                let value = data.get(x, y, z).as_u16();
                                 debug_assert!((1 << bits_per_entry) > value);
                                 acc |= (value as u64) << (bits_per_entry as u64 * i as u64);
                             }
@@ -532,7 +635,9 @@ impl BlockPalette {
 
                     NetworkSerialization {
                         bits_per_entry,
-                        palette: NetworkPalette::Indirect(palette),
+                        palette: NetworkPalette::Indirect(
+                            palette.iter().map(|v| v.as_u16()).collect(),
+                        ),
                         packed_data: packed,
                     }
                 }
@@ -674,16 +779,16 @@ impl BlockPalette {
         match self {
             Self::Homogeneous(registry_id) => {
                 if is_liquid(*registry_id) {
-                    0
-                } else {
                     Self::VOLUME as u16
+                } else {
+                    0
                 }
             }
             Self::Heterogeneous(data) => data
                 .palette
                 .iter()
                 .zip(data.counts.iter())
-                .filter_map(|(registry_id, count)| (!is_liquid(*registry_id)).then_some(*count))
+                .filter_map(|(registry_id, count)| is_liquid(*registry_id).then_some(*count))
                 .sum(),
         }
     }
@@ -754,7 +859,7 @@ pub struct BeNetworkSerialization<V> {
 // directly instead of using a palette above a certain bits-per-entry
 
 // TODO: Do our own testing; do we really need to handle network and disk serialization differently?
-pub type BlockPalette = PalettedContainer<u16, 16>;
+pub type BlockPalette = PalettedContainer<BlockStateId, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;

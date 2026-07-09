@@ -7,8 +7,9 @@ use crate::plugin::{
             generated_packets,
             pumpkin::plugin::event::{
                 ClientboundPacket, Event, PacketReceivedEventData, PacketSentEventData,
-                ServerBroadcastEventData, ServerCommandEventData, ServerTickEndEventData,
-                ServerTickStartEventData, ServerboundPacket,
+                ServerBroadcastEventData, ServerCommandEventData, ServerLoadEventData,
+                ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
+                ServerboundPacket,
             },
         },
     },
@@ -16,6 +17,7 @@ use crate::plugin::{
         packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
+        server_load::{LoadType, ServerLoadEvent},
         server_tick_end::ServerTickEndEvent,
         server_tick_start::ServerTickStartEvent,
     },
@@ -27,7 +29,7 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .add_player(self.player.clone())
             .expect("failed to add player resource");
 
-        let packet = match &self.player.client {
+        let packet = match self.player.client.as_ref() {
             ClientPlatform::Java(client) => {
                 let version = client.version.load();
                 generated_packets::deserialize_java_serverbound_packet(
@@ -75,7 +77,7 @@ impl ToFromWasmEvent for PacketSentEvent {
             .add_player(self.player.clone())
             .expect("failed to add player resource");
 
-        let packet = match &self.player.client {
+        let packet = match self.player.client.as_ref() {
             ClientPlatform::Java(_) => {
                 generated_packets::clientbound_java_any_to_wit(self.packet.as_ref())
                     .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java)
@@ -146,6 +148,29 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
                 message: consume_text_component(state, &data.message),
                 sender: consume_text_component(state, &data.sender),
                 cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for ServerLoadEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::ServerLoadEvent(ServerLoadEventData {
+            load_type: match self.load_type {
+                LoadType::Startup => ServerLoadType::Startup,
+                LoadType::Reload => ServerLoadType::Reload,
+            },
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::ServerLoadEvent(data) => Self {
+                load_type: match data.load_type {
+                    ServerLoadType::Startup => LoadType::Startup,
+                    ServerLoadType::Reload => LoadType::Reload,
+                },
             },
             _ => panic!("unexpected event type"),
         }

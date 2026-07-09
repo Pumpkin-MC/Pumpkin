@@ -1,14 +1,10 @@
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs};
+use crate::block::{BlockBehaviour, BlockFuture, OnPlaceArgs};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
-use pumpkin_data::tag::{self};
-use pumpkin_world::BlockStateId;
+use pumpkin_macros::pumpkin_block_from_tag;
 
+#[pumpkin_block_from_tag("minecraft:glazed_terracotta")]
 pub struct GlazedTerracottaBlock;
-impl BlockMetadata for GlazedTerracottaBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Item::C_GLAZED_TERRACOTTAS.1.into()
-    }
-}
 
 impl BlockBehaviour for GlazedTerracottaBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {

@@ -94,7 +94,7 @@ impl Bossbar {
 /// Extra methods for [`Player`] to send and manage the bossbar.
 impl Player {
     pub async fn send_bossbar(&self, bossbar: &Bossbar) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::Add {
                     title: bossbar.title.clone(),
@@ -123,7 +123,7 @@ impl Player {
     }
 
     pub async fn remove_bossbar(&self, uuid: Uuid) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::Remove;
 
@@ -141,7 +141,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_health(&self, uuid: &Uuid, health: f32) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateHealth(health);
 
@@ -159,7 +159,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_title(&self, uuid: &Uuid, title: TextComponent) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateTile(title);
 
@@ -183,7 +183,7 @@ impl Player {
         dividers: BossbarDivisions,
         _flags: BossbarFlags,
     ) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateStyle {
                     color: (color as u8).into(),
@@ -207,7 +207,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_flags(&self, uuid: &Uuid, flags: BossbarFlags) {
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java) => {
                 let boss_action = BosseventAction::UpdateFlags(flags.bits());
 

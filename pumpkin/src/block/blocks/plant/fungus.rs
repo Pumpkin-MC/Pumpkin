@@ -1,15 +1,15 @@
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs};
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockId, tag};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
 pub struct FungusBlock;
 
 impl BlockMetadata for FungusBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::CRIMSON_FUNGUS.id, Block::WARPED_FUNGUS.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::CRIMSON_FUNGUS, BlockId::WARPED_FUNGUS].into()
     }
 }
 

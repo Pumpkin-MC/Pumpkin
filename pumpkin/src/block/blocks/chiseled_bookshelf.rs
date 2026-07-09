@@ -12,6 +12,7 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
+    BlockStateId,
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
     item_stack::ItemStack,
@@ -21,7 +22,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use pumpkin_world::{BlockStateId, inventory::Inventory};
+use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]

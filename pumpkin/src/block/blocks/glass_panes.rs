@@ -2,23 +2,22 @@ use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::{BlockBehaviour, BlockMetadata};
+use crate::block::BlockBehaviour;
 use crate::world::World;
 
+#[pumpkin_block_from_tag("c:glass_panes")]
 pub struct GlassPaneBlock;
-impl BlockMetadata for GlassPaneBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::C_GLASS_PANES.1.into()
-    }
-}
 
 impl BlockBehaviour for GlassPaneBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -46,23 +45,22 @@ pub fn compute_pane_state(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
-) -> u16 {
+) -> BlockStateId {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
         let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
         let connected = other_block == block
-            || other_block_state.is_side_solid(direction.opposite())
+            || other_block_state.is_side_solid(direction.opposite().to_block_direction())
             || other_block.has_tag(&tag::Block::C_GLASS_PANES)
             || other_block == &Block::IRON_BARS
             || other_block.has_tag(&tag::Block::MINECRAFT_WALLS);
 
         match direction {
-            BlockDirection::North => pane_props.north = connected,
-            BlockDirection::South => pane_props.south = connected,
-            BlockDirection::West => pane_props.west = connected,
-            BlockDirection::East => pane_props.east = connected,
-            _ => {}
+            HorizontalFacing::North => pane_props.north = connected,
+            HorizontalFacing::South => pane_props.south = connected,
+            HorizontalFacing::West => pane_props.west = connected,
+            HorizontalFacing::East => pane_props.east = connected,
         }
     }
 

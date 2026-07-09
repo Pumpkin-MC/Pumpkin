@@ -1,1 +1,1 @@
-pub struct CocoaTreeDecorator {}
+pub struct CocoaTreeDecorator;

@@ -9,6 +9,7 @@ use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::RandomState;
 //use std::time::Instant;
 
 type FastHashSet<K> = HashSet<K>;
@@ -23,15 +24,12 @@ pub trait LightProvider {
 
 pub struct BlockLightProvider;
 impl LightProvider for BlockLightProvider {
-    #[inline(always)]
     fn get_light(cache: &Cache, pos: BlockPos) -> u8 {
         get_block_light(cache, pos)
     }
-    #[inline(always)]
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8) {
         set_block_light(cache, pos, level);
     }
-    #[inline(always)]
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
         current_level.saturating_sub(opacity.max(1))
     }
@@ -39,15 +37,12 @@ impl LightProvider for BlockLightProvider {
 
 pub struct SkyLightProvider;
 impl LightProvider for SkyLightProvider {
-    #[inline(always)]
     fn get_light(cache: &Cache, pos: BlockPos) -> u8 {
         get_sky_light(cache, pos)
     }
-    #[inline(always)]
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8) {
         set_sky_light(cache, pos, level);
     }
-    #[inline(always)]
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8 {
         if current_level == 15 && dir == BlockDirection::Down && opacity == 0 {
             return 15;
@@ -313,6 +308,7 @@ impl BlockLightPropagator {
 }
 
 impl SkyLightPropagator {
+    #[expect(clippy::too_many_lines)]
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
 
@@ -331,7 +327,7 @@ impl SkyLightPropagator {
         // Pre-allocate with exact size needed
         let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
         let mut surface_heights =
-            FastHashMap::with_capacity_and_hasher(capacity, Default::default());
+            FastHashMap::with_capacity_and_hasher(capacity, RandomState::default());
 
         // Process in Z-outer, X-inner order for better cache locality
         for z in start_z..end_z {

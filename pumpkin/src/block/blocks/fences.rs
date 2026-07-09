@@ -3,24 +3,23 @@ use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::{BlockBehaviour, BlockMetadata};
+use crate::block::BlockBehaviour;
 use crate::world::World;
 
+#[pumpkin_block_from_tag("minecraft:fences")]
 pub struct FenceBlock;
-impl BlockMetadata for FenceBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::C_FENCES.1.into()
-    }
-}
 
 impl BlockBehaviour for FenceBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -48,18 +47,22 @@ pub fn compute_fence_state(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
-) -> u16 {
+) -> BlockStateId {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
         let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
-        let connected = connects_to(block, other_block, other_block_state, direction);
+        let connected = connects_to(
+            block,
+            other_block,
+            other_block_state,
+            direction.to_block_direction(),
+        );
         match direction {
-            BlockDirection::North => fence_props.north = connected,
-            BlockDirection::South => fence_props.south = connected,
-            BlockDirection::West => fence_props.west = connected,
-            BlockDirection::East => fence_props.east = connected,
-            _ => {}
+            HorizontalFacing::North => fence_props.north = connected,
+            HorizontalFacing::South => fence_props.south = connected,
+            HorizontalFacing::West => fence_props.west = connected,
+            HorizontalFacing::East => fence_props.east = connected,
         }
     }
 

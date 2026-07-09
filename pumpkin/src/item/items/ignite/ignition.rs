@@ -3,7 +3,7 @@ use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ impl Ignition {
         block: &Block,
     ) -> bool
     where
-        F: FnOnce(Arc<World>, BlockPos, u16) -> Fut,
+        F: FnOnce(Arc<World>, BlockPos, BlockStateId) -> Fut,
         Fut: Future<Output = ()>,
     {
         let world = player.world();
@@ -46,7 +46,7 @@ impl Ignition {
     }
 }
 
-fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
+fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
     let mut props = {
         let props = &block.properties(state_id)?;
         props.to_props()

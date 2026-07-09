@@ -1,3 +1,1 @@
-pub struct DripstoneClusterFeature {
-    // TODO
-}
+pub struct DripstoneClusterFeature; // TODO

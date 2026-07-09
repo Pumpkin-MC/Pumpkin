@@ -58,7 +58,7 @@ impl CommandExecutor for TargetSelfExecutor {
                 let name = &player.gameprofile.name;
                 info!("[{name}: Transferring {name} to {hostname}:{port}]");
 
-                match &player.client {
+                match player.client.as_ref() {
                     ClientPlatform::Java(client) => {
                         client
                             .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))
@@ -121,7 +121,7 @@ impl CommandExecutor for TargetPlayerExecutor {
             }
 
             for p in players {
-                match &p.client {
+                match p.client.as_ref() {
                     ClientPlatform::Java(client) => {
                         client
                             .enqueue_packet(&JavaCTransfer::new(hostname, VarInt(port)))

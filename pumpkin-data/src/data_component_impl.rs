@@ -3,17 +3,17 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlockEntityData, BlocksAttacks, BundleContents, ChargedProjectiles,
-    Consumable, Container, CustomData, CustomName, Damage, DamageResistant, DeathProtection,
-    Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel, ItemName,
-    JukeboxPlayable, MapId, MaxDamage, MaxStackSize, PotionContents, StoredEnchantments, Tool,
-    Unbreakable, UseCooldown, Weapon,
+    AttributeModifiers, BlockEntityData, BlockState, BlocksAttacks, BundleContents,
+    ChargedProjectiles, Consumable, Container, CustomData, CustomName, Damage, DamageResistant,
+    DeathProtection, Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
+    ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage, MaxStackSize, OminousBottleAmplifier,
+    PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::{RegistryKey, Tag, Taggable};
-use crate::{AttributeModifierSlot, Block, Enchantment};
+use crate::{AttributeModifierSlot, Block, BlockId, Enchantment};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
@@ -55,6 +55,7 @@ pub trait DataComponentImpl: Send + Sync {
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
+        CustomData => Some(CustomDataImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
@@ -62,6 +63,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
+        CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
@@ -80,6 +82,10 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::WritableBookContent => {
             Some(WritableBookContentImpl::read_data(data)?.to_dyn())
         }
+        DataComponent::OminousBottleAmplifier => {
+            Some(OminousBottleAmplifierImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::BlockState => Some(BlockStateImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -135,9 +141,22 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     value.as_mut_any().downcast_mut::<T>().unwrap()
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CustomDataImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomDataImpl {
+    pub data: NbtCompound,
+}
+impl CustomDataImpl {
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_compound()
+            .map(|data| Self { data: data.clone() })
+    }
+}
 impl DataComponentImpl for CustomDataImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(self.data.clone())
+    }
+
     default_impl!(CustomData);
 }
 
@@ -203,16 +222,22 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent
-    pub name: String,
+    pub name: TextComponent,
+}
+impl CustomNameImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|name| Self {
+            name: TextComponent::text(name.to_string()),
+        })
+    }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().into())
+        NbtTag::String(self.name.clone().get_text().into())
     }
 
     fn get_hash(&self) -> i32 {
-        get_str_hash(self.name.as_str()) as i32
+        get_str_hash(self.name.clone().get_text().as_str()) as i32
     }
 
     default_impl!(CustomName);
@@ -972,7 +997,7 @@ impl IDSetContent for Block {
     }
 
     fn from_id(id: u16) -> Option<&'static Self> {
-        Some(Block::from_id(id))
+        BlockId::new(id).map(Self::from_id)
     }
 
     fn from_str(name: &str) -> Option<&'static Self> {
@@ -2055,7 +2080,23 @@ pub struct InstrumentImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesTrimMaterialImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct OminousBottleAmplifierImpl;
+pub struct OminousBottleAmplifierImpl {
+    pub amplifier: i32,
+}
+impl OminousBottleAmplifierImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|amplifier| Self { amplifier })
+    }
+}
+impl DataComponentImpl for OminousBottleAmplifierImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.amplifier)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.amplifier) as i32
+    }
+    default_impl!(OminousBottleAmplifier);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
@@ -2304,8 +2345,60 @@ impl ContainerImpl {
 impl DataComponentImpl for ContainerImpl {
     default_impl!(Container);
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlockStateImpl;
+#[derive(Clone, Debug)]
+#[allow(clippy::disallowed_types)]
+pub struct BlockStateImpl {
+    pub properties: std::collections::HashMap<String, String>,
+}
+impl PartialEq for BlockStateImpl {
+    fn eq(&self, other: &Self) -> bool {
+        self.properties == other.properties
+    }
+}
+impl Eq for BlockStateImpl {}
+impl std::hash::Hash for BlockStateImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut keys: Vec<&String> = self.properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            key.hash(state);
+            self.properties.get(key).hash(state);
+        }
+    }
+}
+impl BlockStateImpl {
+    #[allow(clippy::disallowed_types)]
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let mut properties = std::collections::HashMap::new();
+        for (key, val) in compound.child_tags.iter() {
+            if let Some(s) = val.extract_string() {
+                properties.insert(key.to_string(), s.to_string());
+            }
+        }
+        Some(Self { properties })
+    }
+}
+impl DataComponentImpl for BlockStateImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        for (k, v) in &self.properties {
+            compound.put_string(k, v.clone());
+        }
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        let mut keys: Vec<&String> = self.properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            digest.update(key.as_bytes());
+            digest.update(self.properties.get(key).unwrap().as_bytes());
+        }
+        digest.finalize() as i32
+    }
+    default_impl!(BlockState);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

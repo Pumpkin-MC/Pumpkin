@@ -279,6 +279,7 @@ impl NetherFortressPiece {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     pub fn create_piece(
         piece_type: NetherFortressPieceType,
         collector: &mut StructurePiecesCollector,

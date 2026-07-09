@@ -11,7 +11,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 pub struct ResourceLocationArgumentConsumer;
 
 impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::ResourceLocation
     }
 

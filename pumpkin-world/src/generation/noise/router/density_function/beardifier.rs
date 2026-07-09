@@ -12,6 +12,7 @@ const BEARD_KERNEL_SIZE: i32 = 24;
 
 static BEARD_KERNEL: OnceLock<[f64; 13824]> = OnceLock::new();
 
+#[expect(clippy::large_stack_arrays)]
 fn get_beard_kernel() -> &'static [f64; 13824] {
     BEARD_KERNEL.get_or_init(|| {
         let mut kernel = [0.0; 13824];
@@ -114,7 +115,7 @@ pub struct Beardifier {
 }
 
 impl Beardifier {
-    pub fn new(
+    pub const fn new(
         structures: Vec<BeardifierStructure>,
         junctions: Vec<BeardifierJunction>,
         affected_box: Option<BlockBox>,
@@ -129,9 +130,8 @@ impl Beardifier {
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for Beardifier {
     fn sample(&self, pos: &Vector3<i32>) -> f64 {
-        let affected_box = match self.affected_box {
-            Some(b) => b,
-            None => return 0.0,
+        let Some(affected_box) = self.affected_box else {
+            return 0.0;
         };
 
         let block_x = pos.x;

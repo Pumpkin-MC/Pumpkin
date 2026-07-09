@@ -1,16 +1,13 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block,
+    Block, BlockStateId,
     block_properties::{BlockProperties, NetherWartLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
 use crate::{
@@ -71,12 +68,12 @@ impl CropBlockBase for NetherWartBlock {
         3
     }
 
-    fn get_age(&self, state: u16, block: &Block) -> i32 {
+    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
         let props = NetherWartLikeProperties::from_state_id(state, block);
         i32::from(props.age)
     }
 
-    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
+    fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
         let mut props = NetherWartLikeProperties::from_state_id(state, block);
         props.age = age as u8;
         props.to_state_id(block)

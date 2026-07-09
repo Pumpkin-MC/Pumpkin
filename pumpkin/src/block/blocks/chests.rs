@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::block::entities::BlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
@@ -18,7 +19,6 @@ use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;

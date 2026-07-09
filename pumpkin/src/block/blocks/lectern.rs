@@ -10,12 +10,12 @@ use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, LecternLikeProperties};
 use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 

@@ -161,7 +161,7 @@ pub struct ChunkNoiseFunctionBuilderOptions {
 impl ChunkNoiseFunctionBuilderOptions {
     #[must_use]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub const fn new(
         horizontal_cell_block_count: usize,
         vertical_cell_block_count: usize,
         vertical_cell_count: usize,
@@ -304,12 +304,8 @@ impl DensityInterpolator {
     }
 
     #[inline]
-    pub(crate) fn swap_buffers(&mut self) {
-        #[cfg(debug_assertions)]
-        let test = self.start_buffer[0];
+    pub(crate) const fn swap_buffers(&mut self) {
         mem::swap(&mut self.start_buffer, &mut self.end_buffer);
-        #[cfg(debug_assertions)]
-        assert_eq!(test, self.end_buffer[0]);
     }
 }
 

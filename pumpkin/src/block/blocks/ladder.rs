@@ -4,12 +4,12 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, Facing, LadderLikeProperties};
 use pumpkin_data::{Block, BlockDirection, FacingExt, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 
 #[pumpkin_block("minecraft:ladder")]
@@ -45,7 +45,6 @@ impl BlockBehaviour for LadderBlock {
                 }
                 props.facing = dir
                     .opposite()
-                    .to_block_direction()
                     .to_horizontal_facing()
                     .expect("Opposite of horizontal direction should be horizontal");
                 return props.to_state_id(args.block);
@@ -59,7 +58,7 @@ impl BlockBehaviour for LadderBlock {
                 //this won't happen
                 return false;
             };
-            if can_place_ladder_at(world, args.position, dir) {
+            if can_place_ladder_at(world, args.position, dir.to_block_direction()) {
                 return true;
             }
         }
@@ -78,7 +77,7 @@ impl BlockBehaviour for LadderBlock {
                     props.facing.to_block_direction().opposite(),
                 )
             {
-                return 0;
+                return BlockStateId::AIR;
             }
             args.state_id
         })

@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-#[allow(clippy::all, unused_imports, dead_code)]
+#[allow(clippy::all, unused_imports, dead_code, clippy::too_many_lines)]
 fn build_placed_features()
 -> std::collections::HashMap<pumpkin_data::placed_feature::PlacedFeature, PlacedFeature> {
     use crate::block::BlockStateCodec;
@@ -93,9 +93,9 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier {
-                    noise_to_count_ratio: 160i32,
-                    noise_factor: 80f64,
-                    noise_offset: 0.3f64,
+                    to_count_ratio: 160i32,
+                    factor: 80f64,
+                    offset: 0.3f64,
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -1943,9 +1943,9 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Kelp),
             placement: vec![
                 PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier {
-                    noise_to_count_ratio: 120i32,
-                    noise_factor: 80f64,
-                    noise_offset: 0f64,
+                    to_count_ratio: 120i32,
+                    factor: 80f64,
+                    offset: 0f64,
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -1961,9 +1961,9 @@ fn build_placed_features()
             feature: Feature::Named(pumpkin_data::configured_feature::ConfiguredFeature::Kelp),
             placement: vec![
                 PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier {
-                    noise_to_count_ratio: 80i32,
-                    noise_factor: 80f64,
-                    noise_offset: 0f64,
+                    to_count_ratio: 80i32,
+                    factor: 80f64,
+                    offset: 0f64,
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
@@ -7587,9 +7587,9 @@ fn build_placed_features()
             ),
             placement: vec![
                 PlacementModifier::NoiseBasedCount(NoiseBasedCountPlacementModifier {
-                    noise_to_count_ratio: 20i32,
-                    noise_factor: 400f64,
-                    noise_offset: 0f64,
+                    to_count_ratio: 20i32,
+                    factor: 400f64,
+                    offset: 0f64,
                 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {

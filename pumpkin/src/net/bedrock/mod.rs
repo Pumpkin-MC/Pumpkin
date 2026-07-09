@@ -18,12 +18,18 @@ use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
     BClientPacket, PacketDecodeError, RawPacket,
     bedrock::{
-        MTU, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RakReliability, SPLIT_FRAME_MAX_CONTENT,
-        SubClient, UDP_HEADER_SIZE,
+        MTU, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability,
+        SPLIT_FRAME_MAX_CONTENT, SubClient, UDP_HEADER_SIZE,
         ack::Acknowledge,
         client::{
-            disconnect_player::CDisconnectPlayer, level_chunk::CLevelChunk,
-            raknet::connection::CConnectionRequestAccepted,
+            disconnect_player::CDisconnectPlayer,
+            level_chunk::CLevelChunk,
+            play_status::CPlayStatus,
+            raknet::connection::{
+                CAlreadyConnected, CConnectionBanned, CConnectionRequestAccepted, CDisconnect,
+                CNoFreeIncomingConnections,
+            },
+            resource_packs_info::{CResourcePacksInfo, ResourcePackEntry},
         },
         frame_set::{Frame, FrameSet},
         packet_decoder::UDPNetworkDecoder,
@@ -32,6 +38,7 @@ use pumpkin_protocol::{
             animate::SAnimate,
             block_pick_request::SBlockPickRequest,
             client_cache_status::SClientCacheStatus,
+            client_to_server_handshake::SClientToServerHandshake,
             command_request::SCommandRequest,
             container_close::SContainerClose,
             emote::SEmote,
@@ -44,15 +51,18 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput,
             raknet::{
                 connection::{
-                    SConnectedPing, SConnectionRequest, SDisconnect, SNewIncomingConnection,
+                    SConnectedPing, SConnectionLost, SConnectionRequest, SDisconnect,
+                    SNewIncomingConnection,
                 },
                 open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
-                unconnected_ping::SUnconnectedPing,
+                unconnected_ping::{SUnconnectedPing, SUnconnectedPingOpenConnections},
             },
+            request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_response::SResourcePackResponse,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
+            set_player_inventory_options::SSetPlayerInventoryOptions,
             text::SText,
         },
     },
@@ -76,7 +86,7 @@ pub mod open_connection;
 pub mod unconnected;
 use crate::{
     entity::player::Player,
-    net::{DisconnectReason, PacketHandlerResult},
+    net::{DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig},
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
 };
@@ -118,6 +128,7 @@ pub struct BedrockClient {
     pub be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
 
     tasks: TaskTracker,
+    rt_handle: tokio::runtime::Handle,
     outgoing_packet_queue_send: Sender<OutgoingPacket>,
     /// A queue of serialized packets to send to the network
     outgoing_packet_queue_recv: Mutex<Option<Receiver<OutgoingPacket>>>,
@@ -154,6 +165,7 @@ pub struct BedrockClient {
     ordered_queues: Mutex<HashMap<u8, BTreeMap<u32, Frame>>>,
     incoming_game_packet_send: Sender<RawPacket>,
     incoming_game_packet_recv: Mutex<Option<Receiver<RawPacket>>>,
+    pending_profile: Mutex<Option<(GameProfile, PlayerConfig)>>,
 }
 
 impl BedrockClient {
@@ -166,6 +178,7 @@ impl BedrockClient {
         let (send, recv) = tokio::sync::mpsc::channel(4096);
         let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
         let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
+        let rt_handle = tokio::runtime::Handle::current();
         Self {
             socket,
             player: Mutex::new(None),
@@ -176,6 +189,7 @@ impl BedrockClient {
             network_writer: Arc::new(RwLock::new(UDPNetworkEncoder::new())),
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
             tasks: TaskTracker::new(),
+            rt_handle,
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Mutex::new(Some(recv)),
             outgoing_packet_priority_send: priority_send,
@@ -200,6 +214,7 @@ impl BedrockClient {
             //input_sequence_number: AtomicU32::new(0),
             incoming_game_packet_send: incoming_send,
             incoming_game_packet_recv: Mutex::new(Some(incoming_recv)),
+            pending_profile: Mutex::new(None),
         }
     }
 
@@ -230,7 +245,7 @@ impl BedrockClient {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
             while !client.close_token.is_cancelled() {
-                let packet = tokio::select! {
+                let mut packet = tokio::select! {
                     biased;
                     () = client.close_token.cancelled() => break,
                     res = priority_packet_receiver.recv() => match res {
@@ -288,6 +303,19 @@ impl BedrockClient {
                     },
                 };
 
+                // Encrypt the packet payload if encryption is enabled.
+                if packet.data.len() > 1 && packet.data[0] == 0xfe {
+                    let mut encoder = client.network_writer.write().await;
+                    if let Some(encryptor) = encoder.encryptor_mut() {
+                        let mut data_to_encrypt = packet.data[1..].to_vec();
+                        encryptor.encrypt(&mut data_to_encrypt);
+                        let mut encrypted_payload = Vec::with_capacity(1 + data_to_encrypt.len());
+                        encrypted_payload.push(0xfe);
+                        encrypted_payload.extend_from_slice(&data_to_encrypt);
+                        packet.data = encrypted_payload.into();
+                    }
+                }
+
                 client
                     .send_framed_packet_data(packet.data.to_vec(), RakReliability::ReliableOrdered)
                     .await;
@@ -332,25 +360,72 @@ impl BedrockClient {
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         let player = self.player.lock().await.clone();
         let Some(player) = player.as_ref() else {
+            debug!(
+                "send_chunks: player not set yet, dropping {} chunks",
+                chunks.len()
+            );
             return;
         };
         let Some(server) = player.world().server.upgrade() else {
             return;
         };
 
+        let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let event = ChunkSend::new(player.world(), chunk.clone());
             let event = server.plugin_manager.fire(event).await;
-            if event.cancelled {
-                continue;
+            if !event.cancelled {
+                valid_chunks.push(chunk.clone());
             }
+        }
 
-            self.enqueue_packet_internal(&CLevelChunk {
-                dimension: 0,
-                cache_enabled: false,
-                chunk,
-            })
-            .await;
+        if valid_chunks.is_empty() {
+            return;
+        }
+
+        let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
+        for chunk in valid_chunks {
+            serialize_tasks.push(tokio::task::spawn_blocking(move || {
+                let mut packet_payload = Vec::new();
+                let packet = CLevelChunk {
+                    dimension: 0,
+                    cache_enabled: false,
+                    chunk: &chunk,
+                };
+                packet
+                    .write_packet(&mut packet_payload)
+                    .map(|()| packet_payload)
+            }));
+        }
+
+        let mut encoded_payloads = Vec::with_capacity(serialize_tasks.len());
+        for task in serialize_tasks {
+            match task.await {
+                Ok(Ok(payload)) => encoded_payloads.push(payload),
+                Ok(Err(e)) => error!("Failed to serialize Bedrock chunk: {:?}", e),
+                Err(e) => error!("Join error in Bedrock chunk serialization: {:?}", e),
+            }
+        }
+
+        let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
+        {
+            let encoder = self.network_writer.read().await;
+            for payload in encoded_payloads {
+                let mut packet_buf = Vec::new();
+                match encoder.write_game_packet(
+                    CLevelChunk::PACKET_ID as u16,
+                    SubClient::Main,
+                    SubClient::Main,
+                    &payload,
+                    &mut packet_buf,
+                ) {
+                    Ok(()) => packets_to_enqueue.push(packet_buf),
+                    Err(err) => error!("Failed to write game packet wrapper: {err}"),
+                }
+            }
+        }
+        for packet_buf in packets_to_enqueue {
+            self.enqueue_packet_data(packet_buf.into()).await;
         }
     }
 
@@ -653,6 +728,10 @@ impl BedrockClient {
             return;
         }
         self.close_token.cancel();
+
+        self.send_framed_packet(&CDisconnect, RakReliability::Unreliable)
+            .await;
+
         self.be_clients.lock().await.remove(&self.address);
     }
 
@@ -704,7 +783,7 @@ impl BedrockClient {
             RAKNET_NACK => {
                 self.handle_nack(&Acknowledge::read(reader)?).await;
             }
-            0x80..=0x8d => {
+            RAKNET_VALID..=0x8d => {
                 self.handle_frame_set(server, FrameSet::read(reader)?)
                     .await?;
             }
@@ -948,12 +1027,62 @@ impl BedrockClient {
                         }
                     };
                     match self.handle_login(packet, server).await {
-                        Ok(result) => return result,
+                        Ok(Some(result)) => return result,
+                        Ok(None) => {} // encryption enabled, wait for handshake
                         Err(err) => {
                             self.kick(DisconnectReason::Unknown, err.to_string()).await;
                             return PacketHandlerResult::Stop;
                         }
                     }
+                }
+                SClientToServerHandshake::PACKET_ID => {
+                    let _packet = match SClientToServerHandshake::read(payload) {
+                        Ok(p) => p,
+                        Err(err) => {
+                            error!("Failed to read SClientToServerHandshake: {err}");
+                            continue;
+                        }
+                    };
+                    let pending = self.pending_profile.lock().await.take();
+                    if let Some((profile, new_config)) = pending {
+                        self.enqueue_packet_internal(&CPlayStatus::LoginSuccess)
+                            .await;
+                        let br_config = &server.advanced_config.resource_pack.bedrock;
+
+                        let mut entries = Vec::new();
+                        if br_config.enabled {
+                            for pack in &br_config.packs {
+                                entries.push(ResourcePackEntry {
+                                    uuid: pack.uuid,
+                                    version: pack.version.clone(),
+                                    size: pack.size,
+                                    download_url: pack.download_url.clone(),
+                                    content_key: pack.content_key.clone(),
+                                    sub_pack_name: pack.sub_pack_name.clone(),
+                                    content_id: pack.content_id.clone(),
+                                    has_scripts: pack.has_scripts,
+                                    addon_pack: pack.addon_pack,
+                                    rtx_enabled: pack.rtx_enabled,
+                                });
+                            }
+                        }
+
+                        let packs_info = CResourcePacksInfo {
+                            resource_pack_required: br_config.force,
+                            has_addon_packs: false,
+                            has_scripts: false,
+                            is_vibrant_visuals_force_disabled: false,
+                            world_template_id: uuid::Uuid::nil(),
+                            world_template_version: String::new(),
+                            resource_packs: entries,
+                        };
+                        self.enqueue_packet_internal(&packs_info).await;
+                        return PacketHandlerResult::ReadyToPlay(profile, new_config);
+                    }
+                    error!("Received ClientToServerHandshake but no pending profile was found.");
+                    self.kick(DisconnectReason::BadPacket, "Handshake error".into())
+                        .await;
+                    return PacketHandlerResult::Stop;
                 }
                 _ => {
                     debug!(
@@ -1040,6 +1169,10 @@ impl BedrockClient {
                     &SSetLocalPlayerAsInitialized::read(reader)?,
                 );
             }
+            SSetPlayerInventoryOptions::PACKET_ID => {
+                let _ = SSetPlayerInventoryOptions::read(reader)?;
+                // Ignore for now
+            }
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
@@ -1068,6 +1201,10 @@ impl BedrockClient {
             }
             SBlockPickRequest::PACKET_ID => {
                 self.handle_block_pick_request(player, SBlockPickRequest::read(reader)?)
+                    .await;
+            }
+            SRequestAbility::PACKET_ID => {
+                self.handle_request_ability(player, SRequestAbility::read(reader)?)
                     .await;
             }
             SMobEquipment::PACKET_ID => {
@@ -1110,7 +1247,7 @@ impl BedrockClient {
                 self.handle_connected_ping(SConnectedPing::read(reader)?)
                     .await;
             }
-            SDisconnect::PACKET_ID => {
+            SDisconnect::PACKET_ID | SConnectionLost::PACKET_ID => {
                 self.close().await;
             }
             _ => {
@@ -1120,6 +1257,7 @@ impl BedrockClient {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_offline_packet(
         server: &Server,
         packet_id: u8,
@@ -1130,6 +1268,38 @@ impl BedrockClient {
     ) -> Result<(), Error> {
         let packet_id_i32 = i32::from(packet_id);
         if packet_id_i32 == SOpenConnectionRequest1::PACKET_ID {
+            let is_banned = {
+                let mut banned_ips = server.data.banned_ip_list.write().await;
+                banned_ips.get_entry(&addr.ip()).is_some()
+            };
+            if is_banned {
+                Self::send_offline_packet(
+                    &CConnectionBanned::new(server.server_guid),
+                    addr,
+                    socket,
+                )
+                .await;
+                return Ok(());
+            }
+
+            let player_count = {
+                let status = server.get_status().lock().await;
+                status
+                    .status_response
+                    .players
+                    .as_ref()
+                    .map_or(0, |p| p.online) as u32
+            };
+            if player_count >= server.basic_config.max_players {
+                Self::send_offline_packet(
+                    &CNoFreeIncomingConnections::new(server.server_guid),
+                    addr,
+                    socket,
+                )
+                .await;
+                return Ok(());
+            }
+
             let old_client = {
                 let mut clients_guard = be_clients.lock().await;
                 clients_guard.remove(&addr)
@@ -1153,6 +1323,20 @@ impl BedrockClient {
                 )
                 .await;
             }
+            SUnconnectedPingOpenConnections::PACKET_ID => {
+                let packet = SUnconnectedPingOpenConnections::read(payload)?;
+                Self::handle_unconnected_ping(
+                    server,
+                    SUnconnectedPing {
+                        time: packet.time,
+                        magic: packet.magic,
+                        client_guid: packet.client_guid,
+                    },
+                    addr,
+                    socket,
+                )
+                .await;
+            }
             SOpenConnectionRequest1::PACKET_ID => {
                 Self::handle_open_connection_1(
                     server,
@@ -1163,6 +1347,20 @@ impl BedrockClient {
                 .await;
             }
             SOpenConnectionRequest2::PACKET_ID => {
+                let is_already_connected = {
+                    let clients_guard = be_clients.lock().await;
+                    clients_guard.contains_key(&addr)
+                };
+                if is_already_connected {
+                    Self::send_offline_packet(
+                        &CAlreadyConnected::new(server.server_guid),
+                        addr,
+                        socket,
+                    )
+                    .await;
+                    return Ok(());
+                }
+
                 Self::handle_open_connection_2(
                     server,
                     SOpenConnectionRequest2::read(payload)?,
@@ -1210,20 +1408,9 @@ impl BedrockClient {
     {
         if self.close_token.is_cancelled() {
             None
-        } else if tokio::runtime::Handle::try_current().is_ok() {
-            Some(self.tasks.spawn(task))
         } else {
-            warn!("No Tokio runtime in current thread; running task on dedicated runtime thread");
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Failed to build fallback runtime");
-                rt.block_on(async move {
-                    let _ = task.await;
-                });
-            });
-            None
+            let _guard = self.rt_handle.enter();
+            Some(self.tasks.spawn(task))
         }
     }
 }

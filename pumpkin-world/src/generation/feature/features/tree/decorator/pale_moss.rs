@@ -1,1 +1,1 @@
-pub struct PaleMossTreeDecorator {}
+pub struct PaleMossTreeDecorator;

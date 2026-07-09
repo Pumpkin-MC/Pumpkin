@@ -1,4 +1,5 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_util::math::int_provider::IntProvider;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -85,7 +86,7 @@ impl UpwardsBranchingTrunkPlacer {
         nodes: &mut Vec<TreeNode>,
         logs: &mut Vec<BlockPos>,
         current_pos: BlockPos,
-        branch_dir: BlockDirection,
+        branch_dir: HorizontalFacing,
         branch_pos: i32,
         mut branch_steps: i32,
     ) {
@@ -140,7 +141,9 @@ impl UpwardsBranchingTrunkPlacer {
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
         if TreeFeature::can_replace(block.to_state(), block.to_block_id())
-            || self.can_grow_through.contains(&block.to_block_id())
+            || self
+                .can_grow_through
+                .contains(&block.to_block_id().as_u16())
         {
             chunk.set_block_state(&pos.0, trunk_state);
             return true;

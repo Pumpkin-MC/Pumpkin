@@ -69,7 +69,7 @@ impl ArgumentType for TimeArgumentType {
         }
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Time { min: self.min }
     }
 

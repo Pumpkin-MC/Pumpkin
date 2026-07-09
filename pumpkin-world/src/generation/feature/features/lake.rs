@@ -13,6 +13,7 @@ pub struct LakeFeature {
 }
 
 impl LakeFeature {
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
@@ -92,7 +93,7 @@ impl LakeFeature {
                         let place_pos = origin.add(xx as i32, yyx as i32, zz as i32);
                         let current_state =
                             GenerationCache::get_block_state(chunk, &place_pos.0).to_state();
-                        if self.can_replace_block(current_state) {
+                        if Self::can_replace_block(current_state) {
                             let place_air = yyx >= 4;
                             chunk.set_block_state(
                                 &place_pos.0,
@@ -124,9 +125,10 @@ impl LakeFeature {
                             let block_state =
                                 GenerationCache::get_block_state(chunk, &barrier_pos.0).to_state();
                             if block_state.is_solid()
-                                && !tag::Block::MINECRAFT_LAVA_POOL_STONE_CANNOT_REPLACE
-                                    .1
-                                    .contains(&block_state.id)
+                                && !block_state
+                                    .id
+                                    .to_block_id()
+                                    .has_tag(tag::Block::MINECRAFT_LAVA_POOL_STONE_CANNOT_REPLACE)
                             {
                                 chunk.set_block_state(&barrier_pos.0, barrier_state);
                             }
@@ -155,7 +157,7 @@ impl LakeFeature {
                     {
                         let current_state =
                             GenerationCache::get_block_state(chunk, &freeze_pos.0).to_state();
-                        if self.can_replace_block(current_state) {
+                        if Self::can_replace_block(current_state) {
                             chunk.set_block_state(&freeze_pos.0, Block::ICE.default_state);
                         }
                     }
@@ -166,9 +168,10 @@ impl LakeFeature {
         true
     }
 
-    fn can_replace_block(&self, state: &BlockState) -> bool {
-        !tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE
-            .1
-            .contains(&state.id)
+    fn can_replace_block(state: &BlockState) -> bool {
+        !state
+            .id
+            .to_block_id()
+            .has_tag(tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE)
     }
 }

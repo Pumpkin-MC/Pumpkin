@@ -135,6 +135,8 @@ fn build_spline_recursive(spline_repr: &SplineRepr) -> SplineValue {
 
 impl ProtoNoiseRouters {
     #[must_use]
+    #[expect(clippy::too_many_lines)]
+    #[expect(clippy::unreachable)]
     pub fn generate_proto_stack(
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
@@ -458,7 +460,7 @@ impl ProtoNoiseRouters {
                 } => {
                     let mut min_value = f64::INFINITY;
                     let mut max_value = f64::NEG_INFINITY;
-                    for &idx in functions_indices.iter() {
+                    for &idx in *functions_indices {
                         let min = stack[idx].min();
                         let max = stack[idx].max();
                         if min < min_value {

@@ -1,6 +1,6 @@
 use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockId, BlockState,
     block_properties::{BlockProperties, EnumVariants, SeaPickleLikeProperties},
     tag,
 };
@@ -26,8 +26,8 @@ impl CoralFeature {
         let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
         let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block_id();
 
-        if block != Block::WATER && !&tag::Block::MINECRAFT_CORALS.1.contains(&block)
-            || above_block != Block::WATER
+        if block != BlockId::WATER && !block.has_tag(tag::Block::MINECRAFT_CORALS)
+            || above_block != BlockId::WATER
         {
             return false;
         }
@@ -68,13 +68,12 @@ impl CoralFeature {
                 .properties(wall_coral.default_state.id)
                 .unwrap()
                 .to_props();
-            let facing = dir.to_facing();
             // Set the right Axis
             let props: Vec<(&str, &str)> = original_props
                 .iter()
                 .map(|(key, value)| {
                     if *key == "facing" {
-                        (*key, facing.to_value())
+                        (*key, dir.to_value())
                     } else {
                         (*key, *value)
                     }
@@ -112,6 +111,7 @@ impl CoralFeature {
     ) -> &'static Block {
         let values = tag.1;
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
-        Block::from_id(value)
+        let id = BlockId::new(value).expect("Invalid block id in tag");
+        id.to_block()
     }
 }

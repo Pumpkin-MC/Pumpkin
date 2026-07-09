@@ -1,6 +1,6 @@
 use crate::entity::EntityBase;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::HorizontalFacingExt;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::DoorHinge;
@@ -12,7 +12,6 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
@@ -112,14 +111,14 @@ async fn get_hinge(
 ) -> DoorHinge {
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
-    let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
+    let left_pos = pos.offset(left_dir.to_offset());
     let (left_block, left_state) = world.get_block_and_state(&left_pos);
-    let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_facing = top_pos.offset(facing.to_offset());
     let top_state = world.get_block_state(&top_facing);
     let right_dir = facing.rotate_clockwise();
-    let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
+    let right_pos = pos.offset(right_dir.to_offset());
     let (right_block, right_state) = world.get_block_and_state(&right_pos);
-    let top_right = top_pos.offset(facing.to_block_direction().to_offset());
+    let top_right = top_pos.offset(facing.to_offset());
     let top_right_state = world.get_block_state(&top_right);
 
     let has_left_door = world
@@ -139,7 +138,7 @@ async fn get_hinge(
 
     if (!has_left_door || has_right_door) && score <= 0 {
         if (!has_right_door || has_left_door) && score >= 0 {
-            let offset = facing.to_block_direction().to_offset();
+            let offset = facing.to_offset();
             let hit = use_item.cursor_pos;
             if (offset.x >= 0 || hit.z > 0.5)
                 && (offset.x <= 0 || hit.z < 0.5)
@@ -220,8 +219,8 @@ impl BlockBehaviour for DoorBlock {
                 DoubleBlockHalf::Lower => args.position.up(),
             };
 
-            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos);
-            if neighbor_block_id != args.block.id {
+            let neighbor_state_id = args.world.get_block_state_id(&other_half_pos);
+            if neighbor_state_id.to_block_id() != args.block.id {
                 args.world.update_neighbors(&other_half_pos, None).await;
                 return; // Neighbor is already gone or is a different block
             }
@@ -306,7 +305,7 @@ impl BlockBehaviour for DoorBlock {
                     && args.direction == BlockDirection::Down
                     && !can_place_at(args.world, args.position)
                 {
-                    return 0;
+                    return BlockStateId::AIR;
                 }
             } else if Block::from_state_id(args.neighbor_state_id).id == args.block.id
                 && DoorProperties::from_state_id(args.neighbor_state_id, args.block).half != lv
@@ -316,7 +315,7 @@ impl BlockBehaviour for DoorBlock {
                 new_state.half = lv;
                 return new_state.to_state_id(args.block);
             } else {
-                return 0;
+                return BlockStateId::AIR;
             }
             args.state_id
         })

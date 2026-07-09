@@ -42,7 +42,7 @@ fn ensure_dependency_chain_builds_multistage_chain() {
     // Ensure tasks were created, present in the DAG, and correctly chained
     for idx in start..=end {
         let key = holder.tasks[idx];
-        assert!(!key.is_null(), "task {} was not created", idx);
+        assert!(!key.is_null(), "task {idx} was not created");
 
         let node = graph.nodes.get(key).expect("graph missing node");
 
@@ -51,8 +51,7 @@ fn ensure_dependency_chain_builds_multistage_chain() {
         } else {
             assert_eq!(
                 node.in_degree, 1,
-                "Intermediate task {} should have in_degree of 1",
-                idx
+                "Intermediate task {idx} should have in_degree of 1"
             );
         }
     }
@@ -141,7 +140,7 @@ fn ensure_dependency_chain_does_nothing_if_already_met() {
     );
 
     // Ensure the function returned early without creating any tasks or queueing anything
-    for task in holder.tasks.iter() {
+    for task in &holder.tasks {
         assert!(
             task.is_null(),
             "No tasks should be created if the stage requirement is already met"
@@ -292,7 +291,7 @@ fn completed_proto_stage_drops_all_satisfied_tasks() {
 }
 
 #[test]
-fn test_cancellation_path_decrements_in_degree() {
+fn cancellation_path_decrements_in_degree() {
     let mut graph = DAG::default();
 
     // Create a task that is waiting (in_degree = 1)

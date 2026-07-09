@@ -4,19 +4,17 @@ use crate::block::{
     blocks::plant::{PlantBlockBase, crop::get_available_moisture},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
-    tag,
-    tag::Taggable,
+    Block, BlockDirection, BlockId, BlockStateId,
+    block_properties::{
+        BlockProperties, HorizontalFacing, WallTorchLikeProperties, WheatLikeProperties,
+    },
+    tag::{self, Taggable},
 };
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
 type StemProperties = WheatLikeProperties;
@@ -25,26 +23,26 @@ type AttachedStemProperties = WallTorchLikeProperties;
 pub struct StemBlock;
 
 impl BlockMetadata for StemBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::PUMPKIN_STEM.id, Block::MELON_STEM.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::PUMPKIN_STEM, BlockId::MELON_STEM].into()
     }
 }
 
 impl StemBlock {
-    fn state_with_age(block: &Block, state: u16, age: i32) -> BlockStateId {
+    fn state_with_age(block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
         let mut props = StemProperties::from_state_id(state, block);
         props.age = age as u8;
         props.to_state_id(block)
     }
 
-    fn get_attached_stem(dir: BlockDirection, block: &Block) -> BlockStateId {
+    fn get_attached_stem(dir: HorizontalFacing, block: &Block) -> BlockStateId {
         let attached_block = match block.id {
             id if id == Block::PUMPKIN_STEM.id => &Block::ATTACHED_PUMPKIN_STEM,
             id if id == Block::MELON_STEM.id => &Block::ATTACHED_MELON_STEM,
             _ => &Block::ATTACHED_MELON_STEM, // Should never happen
         };
         let mut props = AttachedStemProperties::default(attached_block);
-        props.facing = dir.to_horizontal_facing().unwrap();
+        props.facing = dir;
         props.to_state_id(attached_block)
     }
 

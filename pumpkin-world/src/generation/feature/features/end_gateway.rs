@@ -1,3 +1,1 @@
-pub struct EndGatewayFeature {
-    // TODO
-}
+pub struct EndGatewayFeature; // TODO

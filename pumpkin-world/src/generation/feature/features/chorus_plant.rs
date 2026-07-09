@@ -2,6 +2,7 @@ use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
         BlockProperties, BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties,
+        HorizontalFacing,
     },
     tag,
 };
@@ -12,11 +13,10 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-pub struct ChorusPlantFeature {}
+pub struct ChorusPlantFeature;
 
 impl ChorusPlantFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
@@ -32,10 +32,7 @@ impl ChorusPlantFeature {
         }
         let below = pos.down().0;
         let below_id = GenerationCache::get_block_state(chunk, &below).to_block_id();
-        if !tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT
-            .1
-            .contains(&below_id)
-        {
+        if !below_id.has_tag(tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT) {
             return false;
         }
 
@@ -51,7 +48,7 @@ impl ChorusPlantFeature {
 fn all_neighbors_empty<T: GenerationCache>(
     chunk: &T,
     pos: &BlockPos,
-    ignore: Option<BlockDirection>,
+    ignore: Option<HorizontalFacing>,
 ) -> bool {
     for dir in BlockDirection::horizontal() {
         if Some(dir) == ignore {
@@ -83,10 +80,10 @@ fn set_chorus_plant<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) {
 
     let plant_id = Block::CHORUS_PLANT.id;
     let flower_id = Block::CHORUS_FLOWER.id;
-    let supports = tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT.1;
+    let supports = tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT;
 
     let props = BrownMushroomBlockLikeProperties {
-        down: down_id == plant_id || down_id == flower_id || supports.contains(&down_id),
+        down: down_id == plant_id || down_id == flower_id || down_id.has_tag(supports),
         up: up_id == plant_id || up_id == flower_id,
         north: north_id == plant_id || north_id == flower_id,
         east: east_id == plant_id || east_id == flower_id,
@@ -139,12 +136,9 @@ fn grow_tree_recursive<T: GenerationCache>(
             stems += 1;
         }
 
-        // The 4 horizontal directions
-        const HORIZ: [BlockDirection; 4] = BlockDirection::horizontal();
-
         for _ in 0..stems {
             // Pick a random horizontal direction
-            let dir = HORIZ[random.next_bounded_i32(4) as usize];
+            let dir = BlockDirection::horizontal()[random.next_bounded_i32(4) as usize];
             let target = top.offset(dir.to_offset());
             let target_below = target.down();
 

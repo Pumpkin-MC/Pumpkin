@@ -1,3 +1,1 @@
-pub struct LargeDripstoneFeature {
-    // TODO
-}
+pub struct LargeDripstoneFeature; // TODO

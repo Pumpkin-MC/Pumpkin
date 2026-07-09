@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub use p384;
 pub use serde_json;
 
 pub use difficulty::Difficulty;
@@ -29,6 +30,7 @@ pub mod y_offset;
 
 pub mod identifier;
 pub mod jwt;
+pub mod resource_key;
 pub mod uuid;
 
 /// Represents the different types of height maps used for terrain generation and collision checks.

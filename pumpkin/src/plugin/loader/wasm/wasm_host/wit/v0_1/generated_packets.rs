@@ -20,6 +20,70 @@ pub fn serialize_java_packet(
     version: JavaMinecraftVersion,
 ) -> Option<Bytes> {
     match packet {
+        ClientboundPacket::ConfigCConfigDisconnect(data) => {
+            let p = pumpkin_protocol::java::client::config::CConfigDisconnect {
+                reason: &data.reason,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::ConfigCPluginMessage(data) => {
+            let p = pumpkin_protocol::java::client::config::CPluginMessage {
+                channel: &data.channel,
+                data: &data.data,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::ConfigCTransfer(data) => {
+            let var_int_port = VarInt(data.port);
+            let p = pumpkin_protocol::java::client::config::CTransfer {
+                host: &data.host,
+                port: &var_int_port,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::LoginCEncryptionRequest(data) => {
+            let p = pumpkin_protocol::java::client::login::CEncryptionRequest {
+                server_id: &data.server_id,
+                public_key: &data.public_key,
+                verify_token: &data.verify_token,
+                should_authenticate: data.should_authenticate.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::LoginCLoginDisconnect(data) => {
+            let p = pumpkin_protocol::java::client::login::CLoginDisconnect {
+                json_reason: data.json_reason.clone(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::LoginCLoginPluginRequest(data) => {
+            let p = pumpkin_protocol::java::client::login::CLoginPluginRequest {
+                message_id: VarInt(data.message_id),
+                channel: &data.channel,
+                data: &data.data,
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::LoginCSetCompression(data) => {
+            let p = pumpkin_protocol::java::client::login::CSetCompression {
+                threshold: VarInt(data.threshold),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
         ClientboundPacket::CAcknowledgeBlockChange(data) => {
             let p = pumpkin_protocol::java::client::play::CAcknowledgeBlockChange {
                 sequence_id: VarInt(data.sequence_id),
@@ -225,6 +289,21 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
+        ClientboundPacket::CInitializeWorldBorder(data) => {
+            let p = pumpkin_protocol::java::client::play::CInitializeWorldBorder {
+                x: data.x.try_into().unwrap(),
+                z: data.z.try_into().unwrap(),
+                old_diameter: data.old_diameter.try_into().unwrap(),
+                new_diameter: data.new_diameter.try_into().unwrap(),
+                speed: pumpkin_protocol::codec::var_long::VarLong(data.speed.try_into().unwrap()),
+                portal_teleport_boundary: VarInt(data.portal_teleport_boundary),
+                warning_blocks: VarInt(data.warning_blocks),
+                warning_time: VarInt(data.warning_time),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
         ClientboundPacket::CItemCooldown(data) => {
             let p = pumpkin_protocol::java::client::play::CItemCooldown {
                 group: data.group.clone(),
@@ -397,6 +476,16 @@ pub fn serialize_java_packet(
             let p = pumpkin_protocol::java::client::play::CSetBorderCenter {
                 x: data.x.try_into().unwrap(),
                 z: data.z.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::CSetBorderLerpSize(data) => {
+            let p = pumpkin_protocol::java::client::play::CSetBorderLerpSize {
+                old_diameter: data.old_diameter.try_into().unwrap(),
+                new_diameter: data.new_diameter.try_into().unwrap(),
+                speed: pumpkin_protocol::codec::var_long::VarLong(data.speed.try_into().unwrap()),
             };
             let mut buf = Vec::new();
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
@@ -628,6 +717,22 @@ pub fn serialize_java_packet(
             crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
             Some(buf.into())
         }
+        ClientboundPacket::StatusCPingResponse(data) => {
+            let p = pumpkin_protocol::java::client::status::CPingResponse {
+                payload: data.payload.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        ClientboundPacket::StatusCStatusResponse(data) => {
+            let p = pumpkin_protocol::java::client::status::CStatusResponse {
+                json_response: data.json_response.clone(),
+            };
+            let mut buf = Vec::new();
+            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();
+            Some(buf.into())
+        }
         _ => None,
     }
 }
@@ -639,11 +744,57 @@ pub fn deserialize_java_serverbound_packet(
     version: JavaMinecraftVersion,
 ) -> Option<ServerboundPacket> {
     match id {
+        id if id
+            == pumpkin_protocol::java::server::config::SClientInformationConfig::to_id(version) =>
+        {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::config::SClientInformationConfig as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::ConfigSClientInformationConfig(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSClientInformationConfig {
+                locale: p.locale.into(),
+                view_distance: p.view_distance.try_into().unwrap(),
+                chat_mode: p.chat_mode.0.try_into().unwrap(),
+                chat_colors: p.chat_colors.try_into().unwrap(),
+                skin_parts: p.skin_parts.try_into().unwrap(),
+                main_hand: p.main_hand.0.try_into().unwrap(),
+                text_filtering: p.text_filtering.try_into().unwrap(),
+                server_listing: p.server_listing.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::config::SKeepAlive::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::config::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::ConfigSKeepAlive(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSKeepAlive {
+                keep_alive_id: p.keep_alive_id.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::config::SKnownPacks::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::config::SKnownPacks as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::ConfigSKnownPacks(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSKnownPacks {
+                known_pack_count: p.known_pack_count.0.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::config::SConfigResourcePack::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::config::SConfigResourcePack as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::ConfigSConfigResourcePack(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSConfigResourcePack {
+                uuid: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: p.uuid.as_u64_pair().1, low: p.uuid.as_u64_pair().0 },
+                result: p.result.0.try_into().unwrap(),
+            }))
+        }
         id if id == pumpkin_protocol::java::server::play::SAttack::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SAttack as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
             Some(ServerboundPacket::SAttack(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SAttack {
                 entity_id: p.entity_id.0.try_into().unwrap(),
+            }))
+        }
+        id if id == pumpkin_protocol::java::server::play::SBundleItemSelected::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::SBundleItemSelected as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::SBundleItemSelected(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SBundleItemSelected {
+                slot_id: p.slot_id.0.try_into().unwrap(),
+                selected_item_index: p.selected_item_index.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SChatCommand::to_id(version) => {
@@ -910,6 +1061,13 @@ pub fn deserialize_java_serverbound_packet(
                 hand: p.hand.0.try_into().unwrap(),
             }))
         }
+        id if id == pumpkin_protocol::java::server::play::STeleportToEntity::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::play::STeleportToEntity as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::STeleportToEntity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::STeleportToEntity {
+                target: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: p.target.as_u64_pair().1, low: p.target.as_u64_pair().0 },
+            }))
+        }
         id if id == pumpkin_protocol::java::server::play::SUseItem::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SUseItem as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
@@ -933,12 +1091,82 @@ pub fn deserialize_java_serverbound_packet(
                 sequence: p.sequence.0.try_into().unwrap(),
             }))
         }
+        id if id == pumpkin_protocol::java::server::status::SStatusPingRequest::to_id(version) => {
+            use pumpkin_protocol::ServerPacket;
+            let p = <pumpkin_protocol::java::server::status::SStatusPingRequest as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            Some(ServerboundPacket::StatusSStatusPingRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::StatusSStatusPingRequest {
+                payload: p.payload.try_into().unwrap(),
+            }))
+        }
         _ => None,
     }
 }
 
 pub trait ToWitClientboundJava {
     fn to_wit(&self) -> ClientboundPacket;
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::config::CConfigDisconnect<'_> {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::ConfigCConfigDisconnect(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigCConfigDisconnect {
+                reason: self.reason.to_string(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::config::CPluginMessage<'_> {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::ConfigCPluginMessage(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigCPluginMessage {
+                channel: self.channel.to_string(),
+                data: self.data.iter().map(|v| *v as _).collect(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::config::CTransfer<'_> {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::ConfigCTransfer(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigCTransfer {
+                host: self.host.to_string(),
+                port: self.port.0.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CEncryptionRequest<'_> {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::LoginCEncryptionRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCEncryptionRequest {
+                server_id: self.server_id.to_string(),
+                public_key: self.public_key.iter().map(|v| *v as _).collect(),
+                verify_token: self.verify_token.iter().map(|v| *v as _).collect(),
+                should_authenticate: self.should_authenticate.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CLoginDisconnect {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::LoginCLoginDisconnect(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCLoginDisconnect {
+                json_reason: self.json_reason.to_string(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CLoginPluginRequest<'_> {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::LoginCLoginPluginRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCLoginPluginRequest {
+                message_id: self.message_id.0.try_into().unwrap(),
+                channel: self.channel.to_string(),
+                data: self.data.iter().map(|v| *v as _).collect(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::login::CSetCompression {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::LoginCSetCompression(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::LoginCSetCompression {
+                threshold: self.threshold.0.try_into().unwrap(),
+        })
+    }
 }
 
 impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CAcknowledgeBlockChange {
@@ -1122,6 +1350,21 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CHurtAnimati
     }
 }
 
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CInitializeWorldBorder {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::CInitializeWorldBorder(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CInitializeWorldBorder {
+                x: self.x.try_into().unwrap(),
+                z: self.z.try_into().unwrap(),
+                old_diameter: self.old_diameter.try_into().unwrap(),
+                new_diameter: self.new_diameter.try_into().unwrap(),
+                speed: self.speed.0.try_into().unwrap(),
+                portal_teleport_boundary: self.portal_teleport_boundary.0.try_into().unwrap(),
+                warning_blocks: self.warning_blocks.0.try_into().unwrap(),
+                warning_time: self.warning_time.0.try_into().unwrap(),
+        })
+    }
+}
+
 impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CItemCooldown {
     fn to_wit(&self) -> ClientboundPacket {
         ClientboundPacket::CItemCooldown(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CItemCooldown {
@@ -1258,6 +1501,16 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSetBorderCe
         ClientboundPacket::CSetBorderCenter(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSetBorderCenter {
                 x: self.x.try_into().unwrap(),
                 z: self.z.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CSetBorderLerpSize {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::CSetBorderLerpSize(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::CSetBorderLerpSize {
+                old_diameter: self.old_diameter.try_into().unwrap(),
+                new_diameter: self.new_diameter.try_into().unwrap(),
+                speed: self.speed.0.try_into().unwrap(),
         })
     }
 }
@@ -1470,8 +1723,49 @@ impl ToWitClientboundJava for pumpkin_protocol::java::client::play::CWorldEvent 
     }
 }
 
+impl ToWitClientboundJava for pumpkin_protocol::java::client::status::CPingResponse {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::StatusCPingResponse(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::StatusCPingResponse {
+                payload: self.payload.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundJava for pumpkin_protocol::java::client::status::CStatusResponse {
+    fn to_wit(&self) -> ClientboundPacket {
+        ClientboundPacket::StatusCStatusResponse(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::StatusCStatusResponse {
+                json_response: self.json_response.to_string(),
+        })
+    }
+}
+
 #[must_use]
 pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::config::CConfigDisconnect>()
+    {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::config::CPluginMessage>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::config::CTransfer>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CEncryptionRequest>()
+    {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CLoginDisconnect>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) =
+        any.downcast_ref::<pumpkin_protocol::java::client::login::CLoginPluginRequest>()
+    {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::login::CSetCompression>() {
+        return Some(p.to_wit());
+    }
     if let Some(p) =
         any.downcast_ref::<pumpkin_protocol::java::client::play::CAcknowledgeBlockChange>()
     {
@@ -1537,6 +1831,11 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CHurtAnimation>() {
         return Some(p.to_wit());
     }
+    if let Some(p) =
+        any.downcast_ref::<pumpkin_protocol::java::client::play::CInitializeWorldBorder>()
+    {
+        return Some(p.to_wit());
+    }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CItemCooldown>() {
         return Some(p.to_wit());
     }
@@ -1580,6 +1879,10 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSetBorderCenter>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSetBorderLerpSize>()
+    {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CSetBorderSize>() {
@@ -1656,6 +1959,12 @@ pub fn clientbound_java_any_to_wit(any: &dyn Any) -> Option<ClientboundPacket> {
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::play::CWorldEvent>() {
         return Some(p.to_wit());
     }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::status::CPingResponse>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::java::client::status::CStatusResponse>() {
+        return Some(p.to_wit());
+    }
     None
 }
 
@@ -1669,6 +1978,43 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
         BClientboundPacket::CChunkRadiusUpdate(data) => {
             let p = pumpkin_protocol::bedrock::client::CChunkRadiusUpdate {
                 chunk_radius: VarInt(data.chunk_radius),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CContainerOpen(data) => {
+            let p = pumpkin_protocol::bedrock::client::CContainerOpen {
+                container_id: data.container_id.try_into().unwrap(),
+                container_type: data.container_type.try_into().unwrap(),
+                position: pumpkin_util::math::position::BlockPos::new(
+                    data.position.0,
+                    data.position.1,
+                    data.position.2,
+                ),
+                target_entity_id: pumpkin_protocol::codec::var_long::VarLong(
+                    data.target_entity_id.try_into().unwrap(),
+                ),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CCorrectPlayerMove(data) => {
+            let p = pumpkin_protocol::bedrock::client::CCorrectPlayerMove {
+                prediction_type: data.prediction_type.try_into().unwrap(),
+                pos: pumpkin_util::math::vector3::Vector3::new(
+                    data.pos.0 as _,
+                    data.pos.1 as _,
+                    data.pos.2 as _,
+                ),
+                pos_delta: pumpkin_util::math::vector3::Vector3::new(
+                    data.pos_delta.0 as _,
+                    data.pos_delta.1 as _,
+                    data.pos_delta.2 as _,
+                ),
+                on_ground: data.on_ground.try_into().unwrap(),
+                tick: pumpkin_protocol::codec::var_ulong::VarULong(data.tick.try_into().unwrap()),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
@@ -1708,6 +2054,68 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::CMoveActorAbsolute(data) => {
+            let p = pumpkin_protocol::bedrock::client::CMoveActorAbsolute {
+                entity_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.entity_runtime_id.try_into().unwrap(),
+                ),
+                flags: data.flags.try_into().unwrap(),
+                position: pumpkin_util::math::vector3::Vector3::new(
+                    data.position.0 as _,
+                    data.position.1 as _,
+                    data.position.2 as _,
+                ),
+                pitch: data.pitch.try_into().unwrap(),
+                yaw: data.yaw.try_into().unwrap(),
+                head_yaw: data.head_yaw.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CMoveActorDelta(data) => {
+            let p = pumpkin_protocol::bedrock::client::CMoveActorDelta {
+                entity_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.entity_runtime_id.try_into().unwrap(),
+                ),
+                flags: data.flags.try_into().unwrap(),
+                x: data.x.try_into().unwrap(),
+                y: data.y.try_into().unwrap(),
+                z: data.z.try_into().unwrap(),
+                pitch: data.pitch.try_into().unwrap(),
+                yaw: data.yaw.try_into().unwrap(),
+                head_yaw: data.head_yaw.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CMovePlayer(data) => {
+            let p = pumpkin_protocol::bedrock::client::CMovePlayer {
+                player_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.player_runtime_id.try_into().unwrap(),
+                ),
+                position: pumpkin_util::math::vector3::Vector3::new(
+                    data.position.0 as _,
+                    data.position.1 as _,
+                    data.position.2 as _,
+                ),
+                pitch: data.pitch.try_into().unwrap(),
+                yaw: data.yaw.try_into().unwrap(),
+                head_yaw: data.head_yaw.try_into().unwrap(),
+                mode: data.mode.try_into().unwrap(),
+                on_ground: data.on_ground.try_into().unwrap(),
+                riding_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.riding_runtime_id.try_into().unwrap(),
+                ),
+                teleport_cause: data.teleport_cause.try_into().unwrap(),
+                teleport_source_entity_type: data.teleport_source_entity_type.try_into().unwrap(),
+                tick: pumpkin_protocol::codec::var_ulong::VarULong(data.tick.try_into().unwrap()),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         BClientboundPacket::CNetworkSettings(data) => {
             let p = pumpkin_protocol::bedrock::client::CNetworkSettings {
                 compression_threshold: data.compression_threshold.try_into().unwrap(),
@@ -1732,6 +2140,16 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::CRemoveActor(data) => {
+            let p = pumpkin_protocol::bedrock::client::CRemoveActor {
+                entity_unique_id: pumpkin_protocol::codec::var_long::VarLong(
+                    data.entity_unique_id.try_into().unwrap(),
+                ),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         BClientboundPacket::CSetDisplayObjective(data) => {
             let p = pumpkin_protocol::bedrock::client::CSetDisplayObjective {
                 display_slot: data.display_slot.clone(),
@@ -1747,6 +2165,22 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
         BClientboundPacket::CRemoveObjective(data) => {
             let p = pumpkin_protocol::bedrock::client::CRemoveObjective {
                 objective_name: data.objective_name.clone(),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CSetActorMotion(data) => {
+            let p = pumpkin_protocol::bedrock::client::CSetActorMotion {
+                target_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.target_runtime_id.try_into().unwrap(),
+                ),
+                motion: pumpkin_util::math::vector3::Vector3::new(
+                    data.motion.0 as _,
+                    data.motion.1 as _,
+                    data.motion.2 as _,
+                ),
+                tick: pumpkin_protocol::codec::var_ulong::VarULong(data.tick.try_into().unwrap()),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
@@ -1778,6 +2212,19 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
                 xuid: data.xuid.clone(),
                 platform_online_id: data.platform_online_id.clone(),
                 filtered_message: data.filtered_message.clone(),
+            };
+            let mut buf = Vec::new();
+            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
+        BClientboundPacket::CTakeItemActor(data) => {
+            let p = pumpkin_protocol::bedrock::client::CTakeItemActor {
+                item_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.item_runtime_id.try_into().unwrap(),
+                ),
+                actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                    data.actor_runtime_id.try_into().unwrap(),
+                ),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
@@ -1858,6 +2305,18 @@ pub fn deserialize_bedrock_serverbound_packet(
                 server_initiated: p.server_initiated.try_into().unwrap(),
             }))
         }
+        id if id == <pumpkin_protocol::bedrock::server::SEmote as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SEmote as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SEmote(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SEmote {
+                runtime_entity_id: p.runtime_entity_id.0.try_into().unwrap(),
+                emote_id: p.emote_id.into(),
+                emote_length: p.emote_length.try_into().unwrap(),
+                xuid: p.xuid.into(),
+                platform_id: p.platform_id.into(),
+                flags: p.flags.try_into().unwrap(),
+            }))
+        }
         id if id == <pumpkin_protocol::bedrock::server::SRequestChunkRadius as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SRequestChunkRadius as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
@@ -1881,6 +2340,24 @@ pub fn deserialize_bedrock_serverbound_packet(
                 download_size: p.download_size.try_into().unwrap(),
             }))
         }
+        id if id == <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SSetLocalPlayerAsInitialized(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SSetLocalPlayerAsInitialized {
+                runtime_entity_id: p.runtime_entity_id.0.try_into().unwrap(),
+            }))
+        }
+        id if id == <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SSetPlayerInventoryOptions(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SSetPlayerInventoryOptions {
+                left_inventory_tab: p.left_inventory_tab.try_into().unwrap(),
+                right_inventory_tab: p.right_inventory_tab.try_into().unwrap(),
+                filtering: p.filtering.try_into().unwrap(),
+                inventory_layout: p.inventory_layout.try_into().unwrap(),
+                crafting_layout: p.crafting_layout.try_into().unwrap(),
+            }))
+        }
         _ => None,
     }
 }
@@ -1893,6 +2370,29 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CChunkRadius
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CChunkRadiusUpdate(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CChunkRadiusUpdate {
                 chunk_radius: self.chunk_radius.0.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CContainerOpen {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CContainerOpen(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CContainerOpen {
+                container_id: self.container_id.try_into().unwrap(),
+                container_type: self.container_type.try_into().unwrap(),
+                position: (self.position.0.x, self.position.0.y, self.position.0.z),
+                target_entity_id: self.target_entity_id.0.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CCorrectPlayerMove {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CCorrectPlayerMove(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CCorrectPlayerMove {
+                prediction_type: self.prediction_type.try_into().unwrap(),
+                pos: (self.pos.x as _, self.pos.y as _, self.pos.z as _),
+                pos_delta: (self.pos_delta.x as _, self.pos_delta.y as _, self.pos_delta.z as _),
+                on_ground: self.on_ground.try_into().unwrap(),
+                tick: self.tick.0.try_into().unwrap(),
         })
     }
 }
@@ -1927,6 +2427,52 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CModalFormRe
     }
 }
 
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CMoveActorAbsolute {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CMoveActorAbsolute(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CMoveActorAbsolute {
+                entity_runtime_id: self.entity_runtime_id.0.try_into().unwrap(),
+                flags: self.flags.try_into().unwrap(),
+                position: (self.position.x as _, self.position.y as _, self.position.z as _),
+                pitch: self.pitch.try_into().unwrap(),
+                yaw: self.yaw.try_into().unwrap(),
+                head_yaw: self.head_yaw.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CMoveActorDelta {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CMoveActorDelta(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CMoveActorDelta {
+                entity_runtime_id: self.entity_runtime_id.0.try_into().unwrap(),
+                flags: self.flags.try_into().unwrap(),
+                x: self.x.try_into().unwrap(),
+                y: self.y.try_into().unwrap(),
+                z: self.z.try_into().unwrap(),
+                pitch: self.pitch.try_into().unwrap(),
+                yaw: self.yaw.try_into().unwrap(),
+                head_yaw: self.head_yaw.try_into().unwrap(),
+        })
+    }
+}
+
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CMovePlayer {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CMovePlayer(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CMovePlayer {
+                player_runtime_id: self.player_runtime_id.0.try_into().unwrap(),
+                position: (self.position.x as _, self.position.y as _, self.position.z as _),
+                pitch: self.pitch.try_into().unwrap(),
+                yaw: self.yaw.try_into().unwrap(),
+                head_yaw: self.head_yaw.try_into().unwrap(),
+                mode: self.mode.try_into().unwrap(),
+                on_ground: self.on_ground.try_into().unwrap(),
+                riding_runtime_id: self.riding_runtime_id.0.try_into().unwrap(),
+                teleport_cause: self.teleport_cause.try_into().unwrap(),
+                teleport_source_entity_type: self.teleport_source_entity_type.try_into().unwrap(),
+                tick: self.tick.0.try_into().unwrap(),
+        })
+    }
+}
+
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CNetworkSettings {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CNetworkSettings(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CNetworkSettings {
@@ -1949,6 +2495,14 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CPlayerHotba
     }
 }
 
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CRemoveActor {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CRemoveActor(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CRemoveActor {
+                entity_unique_id: self.entity_unique_id.0.try_into().unwrap(),
+        })
+    }
+}
+
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CSetDisplayObjective {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CSetDisplayObjective(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CSetDisplayObjective {
@@ -1965,6 +2519,16 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CRemoveObjec
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CRemoveObjective(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CRemoveObjective {
                 objective_name: self.objective_name.to_string(),
+        })
+    }
+}
+
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CSetActorMotion {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CSetActorMotion(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CSetActorMotion {
+                target_runtime_id: self.target_runtime_id.0.try_into().unwrap(),
+                motion: (self.motion.x as _, self.motion.y as _, self.motion.z as _),
+                tick: self.tick.0.try_into().unwrap(),
         })
     }
 }
@@ -2000,6 +2564,15 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CSetTitle {
     }
 }
 
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CTakeItemActor {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CTakeItemActor(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CTakeItemActor {
+                item_runtime_id: self.item_runtime_id.0.try_into().unwrap(),
+                actor_runtime_id: self.actor_runtime_id.0.try_into().unwrap(),
+        })
+    }
+}
+
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CTransfer {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CTransfer(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CTransfer {
@@ -2026,6 +2599,12 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CChunkRadiusUpdate>() {
         return Some(p.to_wit());
     }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CContainerOpen>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CCorrectPlayerMove>() {
+        return Some(p.to_wit());
+    }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CDisconnectPlayer>() {
         return Some(p.to_wit());
     }
@@ -2035,16 +2614,31 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CModalFormRequest>() {
         return Some(p.to_wit());
     }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CMoveActorAbsolute>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CMoveActorDelta>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CMovePlayer>() {
+        return Some(p.to_wit());
+    }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CNetworkSettings>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CPlayerHotbar>() {
         return Some(p.to_wit());
     }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CRemoveActor>() {
+        return Some(p.to_wit());
+    }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CSetDisplayObjective>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CRemoveObjective>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CSetActorMotion>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CSetHealth>() {
@@ -2054,6 +2648,9 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CSetTitle>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CTakeItemActor>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CTransfer>() {

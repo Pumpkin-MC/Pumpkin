@@ -29,7 +29,9 @@ pub fn build() -> TokenStream {
                 (quote! { Int }, quote! { i64 }, quote! { #i })
             }
             Value::Object(obj) => {
-                let default_val = obj.get("default").expect("Object game rule missing default value");
+                let default_val = obj
+                    .get("default")
+                    .expect("Object game rule missing default value");
                 match default_val {
                     Value::Number(n) if n.is_i64() => {
                         let i = n.as_i64().unwrap();

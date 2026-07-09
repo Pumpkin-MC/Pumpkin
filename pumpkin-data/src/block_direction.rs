@@ -84,7 +84,7 @@ impl BlockDirection {
         Self::all()[random.next_bounded_i32(Self::all().len() as i32 - 1) as usize]
     }
 
-    pub fn random_horizontal(random: &mut RandomGenerator) -> Self {
+    pub fn random_horizontal(random: &mut RandomGenerator) -> HorizontalFacing {
         Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32 - 1) as usize]
     }
 
@@ -159,8 +159,13 @@ impl BlockDirection {
     }
 
     #[must_use]
-    pub const fn horizontal() -> [Self; 4] {
-        [Self::North, Self::South, Self::West, Self::East]
+    pub const fn horizontal() -> [HorizontalFacing; 4] {
+        [
+            HorizontalFacing::North,
+            HorizontalFacing::South,
+            HorizontalFacing::West,
+            HorizontalFacing::East,
+        ]
     }
 
     #[must_use]
@@ -261,6 +266,7 @@ impl BlockDirection {
 
 pub trait FacingExt {
     fn to_block_direction(&self) -> BlockDirection;
+    fn to_horizontal_facing(&self) -> Option<HorizontalFacing>;
 }
 
 impl FacingExt for Facing {
@@ -272,6 +278,15 @@ impl FacingExt for Facing {
             Self::East => BlockDirection::East,
             Self::Up => BlockDirection::Up,
             Self::Down => BlockDirection::Down,
+        }
+    }
+    fn to_horizontal_facing(&self) -> Option<HorizontalFacing> {
+        match self {
+            Self::North => Some(HorizontalFacing::North),
+            Self::South => Some(HorizontalFacing::South),
+            Self::West => Some(HorizontalFacing::West),
+            Self::East => Some(HorizontalFacing::East),
+            _ => None,
         }
     }
 }

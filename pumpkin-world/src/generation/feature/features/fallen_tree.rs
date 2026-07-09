@@ -8,7 +8,6 @@ pub struct FallenTreeFeature {
 
 impl FallenTreeFeature {
     pub const fn generate(
-        &self,
         _chunk: &mut ProtoChunk,
         _min_y: i8,
         _height: u16,
@@ -19,12 +18,12 @@ impl FallenTreeFeature {
         false
     }
 
-    fn gen_stump(&self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, pos: BlockPos) {
-        chunk.set_block_state(
-            pos.0.x,
-            pos.0.y,
-            pos.0.z,
-            self.trunk_provider.get(random, pos),
-        );
-    }
+    // fn gen_stump(&self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, pos: BlockPos) {
+    //     // chunk.set_block_state(
+    //     //     pos.0.x,
+    //     //     pos.0.y,
+    //     //     pos.0.z,
+    //     //     self.trunk_provider.get(random, pos, chunk),
+    //     // );
+    // }
 }

@@ -30,14 +30,19 @@ pub mod processor;
 mod structure_template;
 mod template_piece;
 
+use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
 use crate::ProtoChunk;
 
 pub use block_state_resolver::BlockStateResolver;
-pub use cache::{TemplateCache, get_pool_elements, get_template, global_cache};
+pub use cache::{
+    TemplateCache, get_pool_elements, get_processor_list_json, get_template,
+    get_template_pool_json, global_cache,
+};
 pub use processor::StructureProcessor;
 pub use pumpkin_data::{Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
@@ -61,7 +66,8 @@ pub fn place_template(
     offset: (i32, i32),
     rotation: Rotation,
     skip_air: bool,
-    processors: &[Box<dyn StructureProcessor>],
+    apply_waterlogging: bool,
+    processors: &[StructureProcessor],
     chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
 ) {
     let (rotated_ox, rotated_oz) = rotation.rotate_offset(offset.0, offset.1);
@@ -71,8 +77,10 @@ pub fn place_template(
     for block in &template.blocks {
         let palette_entry = &template.palette[block.state as usize];
 
-        // Skip structure void blocks
-        if palette_entry.name == "minecraft:structure_void" {
+        // Structure blocks are data markers and structure void preserves the existing block.
+        if palette_entry.name == "minecraft:structure_void"
+            || palette_entry.name == "minecraft:structure_block"
+        {
             continue;
         }
 
@@ -81,9 +89,23 @@ pub fn place_template(
             continue;
         }
 
+        let mut block_entity_nbt = block.nbt.clone();
+        let mut placed_entry = palette_entry.clone();
+
+        // Jigsaw blocks are replaced during template processing, before block entities are
+        // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.
+        if palette_entry.name == "minecraft:jigsaw" {
+            let final_state = block_entity_nbt
+                .as_ref()
+                .and_then(|nbt| nbt.get_string("final_state"))
+                .unwrap_or("minecraft:air");
+            placed_entry = PaletteEntry::from_string(final_state);
+            block_entity_nbt = None;
+        }
+
         // Resolve block state with rotation applied to directional properties
         let Some(mut state) =
-            BlockStateResolver::resolve(palette_entry, rotation, Default::default())
+            BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
         else {
             continue;
         };
@@ -108,39 +130,67 @@ pub fn place_template(
 
         let world_pos = Vector3::new(wx, wy, wz);
 
+        if apply_waterlogging
+            && chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
+            && let Some((_, waterlogged)) = placed_entry
+                .properties
+                .iter_mut()
+                .find(|(name, _)| name == "waterlogged")
+        {
+            *waterlogged = "true".to_string();
+            if let Some(waterlogged_state) =
+                BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
+            {
+                state = waterlogged_state;
+            }
+        }
+
         // Apply processors
+        let mut should_place = true;
         for processor in processors {
-            state = processor.process(chunk, world_pos, state);
+            let Some(processed_state) = processor.process(chunk, world_pos, state) else {
+                should_place = false;
+                break;
+            };
+            state = processed_state;
+        }
+        if !should_place {
+            continue;
         }
 
         chunk.set_block_state(wx, wy, wz, state);
 
         // Create block entities for interactive blocks (furnaces, chests, etc.)
-        let block_entity_id = get_block_entity_id(&palette_entry.name);
-        if block.nbt.is_some() || block_entity_id.is_some() {
-            let block_entity_id = block_entity_id.unwrap_or(&palette_entry.name);
-            let mut block_entity_nbt = NbtCompound::new();
+        let block_entity_id = get_block_entity_id(&placed_entry.name);
+        if block_entity_nbt.is_some() || block_entity_id.is_some() {
+            let block_entity_id = block_entity_id.unwrap_or(&placed_entry.name);
+            let mut placed_nbt = NbtCompound::new();
 
-            block_entity_nbt.put_string("id", block_entity_id.to_string());
-            block_entity_nbt.put_int("x", wx);
-            block_entity_nbt.put_int("y", wy);
-            block_entity_nbt.put_int("z", wz);
+            placed_nbt.put_string("id", block_entity_id.to_string());
+            placed_nbt.put_int("x", wx);
+            placed_nbt.put_int("y", wy);
+            placed_nbt.put_int("z", wz);
 
-            if let Some(template_nbt) = &block.nbt {
+            if let Some(template_nbt) = &block_entity_nbt {
                 for (key, value) in &template_nbt.child_tags {
                     if key.as_ref() != "x"
                         && key.as_ref() != "y"
                         && key.as_ref() != "z"
                         && key.as_ref() != "id"
                     {
-                        block_entity_nbt
-                            .child_tags
-                            .insert(key.clone(), value.clone());
+                        placed_nbt.child_tags.insert(key.clone(), value.clone());
                     }
                 }
             }
 
-            chunk.add_block_entity(block_entity_nbt);
+            if placed_nbt.get_string("LootTable").is_some()
+                && placed_nbt.get_long("LootTableSeed").is_none()
+            {
+                let mut random = LegacyRand::from_seed(hash_block_pos(wx, wy, wz) as u64);
+                placed_nbt.put_long("LootTableSeed", random.next_i64());
+            }
+
+            chunk.add_block_entity(placed_nbt);
         }
     }
 }

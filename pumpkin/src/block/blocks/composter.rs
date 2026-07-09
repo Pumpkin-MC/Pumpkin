@@ -9,7 +9,7 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    Block,
+    Block, BlockStateId,
     block_properties::{BlockProperties, ComposterLikeProperties},
     composter_increase_chance::get_composter_increase_chance_from_item_id,
     entity::EntityType,
@@ -20,7 +20,7 @@ use pumpkin_data::{
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use rand::RngExt;
 
 #[pumpkin_block("minecraft:composter")]

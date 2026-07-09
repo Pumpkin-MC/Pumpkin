@@ -12,7 +12,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, Sugg
 pub struct BossbarStyleArgumentConsumer;
 
 impl GetClientSideArgParser for BossbarStyleArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         // Not sure if this is right...
         ArgumentType::ResourceLocation
     }

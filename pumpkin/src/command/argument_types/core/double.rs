@@ -31,7 +31,7 @@ impl ArgumentType for DoubleArgumentType {
         )
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Double {
             min: (self.min != f64::MIN).then_some(self.min),
             max: (self.max != f64::MAX).then_some(self.max),

@@ -6,12 +6,12 @@ use crate::block::{
     blocks::abstract_wall_mounting::WallMountedBlock,
 };
 use pumpkin_data::{
-    Block, BlockDirection, HorizontalFacingExt,
+    Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::{AttachFace, BlockProperties, LeverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{

@@ -73,25 +73,27 @@ impl PaletteEntry {
         Self { name, properties }
     }
 
-    /// Parses a block state string (e.g. "minecraft:oak_log[axis=x]") into a palette entry.
+    /// Parses a block state string (e.g. "`minecraft:oak_log`[axis=x]") into a palette entry.
+    #[must_use]
     pub fn from_string(s: &str) -> Self {
-        if let Some(bracket_pos) = s.find('[') {
-            let name = s[..bracket_pos].to_string();
-            let end_bracket = s.rfind(']').unwrap_or(s.len());
-            let props_str = &s[bracket_pos + 1..end_bracket];
-            let properties = props_str
-                .split(',')
-                .filter_map(|p| {
-                    let mut parts = p.split('=');
-                    let key = parts.next()?.trim().to_string();
-                    let value = parts.next()?.trim().to_string();
-                    Some((key, value))
-                })
-                .collect();
-            Self { name, properties }
-        } else {
-            Self::new(s.to_string())
-        }
+        s.find('[').map_or_else(
+            || Self::new(s.to_string()),
+            |bracket_pos| {
+                let name = s[..bracket_pos].to_string();
+                let end_bracket = s.rfind(']').unwrap_or(s.len());
+                let props_str = &s[bracket_pos + 1..end_bracket];
+                let properties = props_str
+                    .split(',')
+                    .filter_map(|p| {
+                        let mut parts = p.split('=');
+                        let key = parts.next()?.trim().to_string();
+                        let value = parts.next()?.trim().to_string();
+                        Some((key, value))
+                    })
+                    .collect();
+                Self { name, properties }
+            },
+        )
     }
 }
 
@@ -182,9 +184,8 @@ impl StructureTemplate {
         let mut palette = Vec::with_capacity(palette_list.len());
 
         for tag in palette_list {
-            let entry_compound = match tag {
-                NbtTag::Compound(c) => c,
-                _ => return Err(TemplateError::InvalidFieldType("palette entry")),
+            let NbtTag::Compound(entry_compound) = tag else {
+                return Err(TemplateError::InvalidFieldType("palette entry"));
             };
 
             let name = entry_compound
@@ -192,22 +193,22 @@ impl StructureTemplate {
                 .ok_or(TemplateError::MissingField("palette.Name"))?
                 .to_string();
 
-            let properties = if let Some(props_compound) = entry_compound.get_compound("Properties")
-            {
-                props_compound
-                    .child_tags
-                    .iter()
-                    .filter_map(|(key, value)| {
-                        if let NbtTag::String(v) = value {
-                            Some((key.to_string(), v.to_string()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
+            let properties =
+                entry_compound
+                    .get_compound("Properties")
+                    .map_or_else(Vec::new, |props_compound| {
+                        props_compound
+                            .child_tags
+                            .iter()
+                            .filter_map(|(key, value)| {
+                                if let NbtTag::String(v) = value {
+                                    Some((key.to_string(), v.to_string()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    });
 
             palette.push(PaletteEntry { name, properties });
         }
@@ -226,9 +227,8 @@ impl StructureTemplate {
         let mut blocks = Vec::with_capacity(blocks_list.len());
 
         for tag in blocks_list {
-            let block_compound = match tag {
-                NbtTag::Compound(c) => c,
-                _ => return Err(TemplateError::InvalidFieldType("blocks entry")),
+            let NbtTag::Compound(block_compound) = tag else {
+                return Err(TemplateError::InvalidFieldType("blocks entry"));
             };
 
             // Parse position
@@ -270,17 +270,15 @@ impl StructureTemplate {
     }
 
     fn parse_entities(compound: &NbtCompound) -> Result<Vec<TemplateEntity>, TemplateError> {
-        let entities_list = match compound.get_list("entities") {
-            Some(list) => list,
-            None => return Ok(Vec::new()),
+        let Some(entities_list) = compound.get_list("entities") else {
+            return Ok(Vec::new());
         };
 
         let mut entities = Vec::with_capacity(entities_list.len());
 
         for tag in entities_list {
-            let entity_compound = match tag {
-                NbtTag::Compound(c) => c,
-                _ => return Err(TemplateError::InvalidFieldType("entities entry")),
+            let NbtTag::Compound(entity_compound) = tag else {
+                return Err(TemplateError::InvalidFieldType("entities entry"));
             };
 
             // Parse position (double coordinates)
@@ -377,7 +375,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_palette_entry_creation() {
+    fn palette_entry_creation() {
         let entry = PaletteEntry::new("minecraft:stone".to_string());
         assert_eq!(entry.name, "minecraft:stone");
         assert!(entry.properties.is_empty());

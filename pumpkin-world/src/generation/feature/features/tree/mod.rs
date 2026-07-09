@@ -1,7 +1,7 @@
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
-use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::BlockState;
+use pumpkin_data::{BlockId, tag};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use root::RootPlacer;
 
@@ -59,6 +59,7 @@ impl TreeFeature {
         for decorator in &self.decorators {
             decorator.generate(
                 chunk,
+                block_registry,
                 random,
                 &root_positions,
                 &log_positions,
@@ -68,19 +69,16 @@ impl TreeFeature {
         true
     }
 
-    pub fn can_replace_or_log(state: &BlockState, block: u16) -> bool {
-        Self::can_replace(state, block) || tag::Block::MINECRAFT_LOGS.1.contains(&block)
+    pub fn can_replace_or_log(state: &BlockState, id: BlockId) -> bool {
+        Self::can_replace(state, id) || id.has_tag(tag::Block::MINECRAFT_LOGS)
     }
 
-    pub fn is_air_or_leaves(state: &BlockState, block: u16) -> bool {
-        state.is_air() || tag::Block::MINECRAFT_LEAVES.1.contains(&block)
+    pub fn is_air_or_leaves(state: &BlockState, id: BlockId) -> bool {
+        state.is_air() || id.has_tag(tag::Block::MINECRAFT_LEAVES)
     }
 
-    pub fn can_replace(state: &BlockState, block: u16) -> bool {
-        state.is_air()
-            || tag::Block::MINECRAFT_REPLACEABLE_BY_TREES
-                .1
-                .contains(&block)
+    pub fn can_replace(state: &BlockState, id: BlockId) -> bool {
+        state.is_air() || id.has_tag(tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -108,7 +106,7 @@ impl TreeFeature {
         }
 
         let root_positions = if let Some(placer) = &self.root_placer {
-            match placer.generate(chunk, random, pos, trunk_start) {
+            match placer.generate(chunk, block_registry, random, pos, trunk_start) {
                 Some(positions) => positions,
                 None => return (vec![], vec![], vec![]),
             }
@@ -116,7 +114,7 @@ impl TreeFeature {
             Vec::new()
         };
 
-        let trunk_state = self.trunk_provider.get(random, pos);
+        let trunk_state = self.trunk_provider.get(random, pos, chunk, block_registry);
 
         let (nodes, logs) = self.trunk_placer.generate(
             block_registry,
@@ -134,7 +132,9 @@ impl TreeFeature {
             .get_random_height(random, height as i32);
         let base_height = height as i32 - foliage_height;
         let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
-        let foliage_state = self.foliage_provider.get(random, pos);
+        let foliage_state = self
+            .foliage_provider
+            .get(random, pos, chunk, block_registry);
         let mut foliage_positions = Vec::new();
         for node in nodes {
             foliage_positions.extend(self.foliage_placer.generate(
@@ -158,7 +158,7 @@ impl TreeFeature {
                     let rstate = GenerationCache::get_block_state(chunk, &pos.0);
                     let block = rstate.to_block_id();
                     if Self::can_replace_or_log(rstate.to_state(), block)
-                        && (self.ignore_vines || block != Block::VINE)
+                        && (self.ignore_vines || block != BlockId::VINE)
                     {
                         continue;
                     }

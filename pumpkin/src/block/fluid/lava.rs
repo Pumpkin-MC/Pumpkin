@@ -1,12 +1,11 @@
 use super::flowing_trait::FlowingFluid;
 use crate::{
-    block::blocks::fire::fire::FireBlock,
-    block::{BlockFuture, BlockMetadata, fluid::FluidBehaviour},
+    block::{BlockFuture, FluidMetadata, blocks::fire::fire::FireBlock, fluid::FluidBehaviour},
     entity::EntityBase,
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::blocks_movement,
     damage::DamageType,
     dimension::Dimension,
@@ -15,14 +14,14 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 use std::sync::atomic::Ordering;
 
 pub struct FlowingLava;
 
-impl BlockMetadata for FlowingLava {
+impl FluidMetadata for FlowingLava {
     fn ids() -> Box<[u16]> {
         [Fluid::FLOWING_LAVA.id].into()
     }
@@ -196,7 +195,7 @@ impl FluidBehaviour for FlowingLava {
             if !base_entity.entity_type.fire_immune
                 && !base_entity.fire_immune.load(Ordering::Relaxed)
             {
-                base_entity.set_on_fire_for(15.0);
+                entity.set_on_fire_for(15.0);
 
                 // Also apply lava damage
                 base_entity.damage(entity, 4.0, DamageType::LAVA).await;
@@ -239,8 +238,7 @@ impl FluidBehaviour for FlowingLava {
                             Self::ignite_fire_if_possible(world, &test_pos).await;
                             return;
                         }
-                    } else if blocks_movement(block_state, Block::from_state_id(block_state.id).id)
-                    {
+                    } else if blocks_movement(block_state, block_state.id.to_block_id()) {
                         return;
                     }
                 }

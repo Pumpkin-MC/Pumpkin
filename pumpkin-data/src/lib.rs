@@ -315,19 +315,13 @@ pub mod block_state;
 mod blocks;
 
 #[cfg(feature = "block")]
-pub use block_direction::BlockDirection;
-#[cfg(feature = "block")]
-pub use block_direction::FacingExt;
-#[cfg(feature = "block")]
-pub use block_direction::HorizontalFacingExt;
+pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
 #[cfg(feature = "block")]
 pub use block_rotation::{Mirror, Rotation};
 #[cfg(feature = "block")]
-pub use block_state::BlockState;
+pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]
-pub use block_state::BlockStateRef;
-#[cfg(feature = "block")]
-pub use blocks::Block;
+pub use blocks::{Block, BlockId};
 
 #[cfg(feature = "chunk_gen_settings")]
 #[rustfmt::skip]

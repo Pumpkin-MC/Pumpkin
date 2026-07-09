@@ -8,6 +8,8 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+use pumpkin_protocol::codec::var_long::VarLong;
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -207,11 +209,11 @@ impl LivingEntity {
             &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
-                stack_amount.try_into().unwrap(),
+                VarInt(stack_amount as i32),
             ),
             &CTakeItemActor::new(
-                item.entity_id.try_into().unwrap(),
-                self.entity.entity_id.try_into().unwrap(),
+                VarULong(item.entity_id as u64),
+                VarULong(self.entity.entity_id as u64),
             ),
         );
     }
@@ -1316,6 +1318,27 @@ impl LivingEntity {
 
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death);
+            let tool = if let Some(cause_ent) = cause {
+                if let Some(player) = cause_ent
+                    .cast_any()
+                    .downcast_ref::<crate::entity::player::Player>()
+                {
+                    let hand_stack = player
+                        .inventory
+                        .get_stack_in_hand(pumpkin_util::Hand::Right)
+                        .await;
+                    let stack_guard = hand_stack.lock().await;
+                    (stack_guard.item_count > 0).then(|| stack_guard.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let is_raining = world.is_raining().await;
+            let is_thundering = world.is_thundering().await;
+
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 this_entity: Some(self.entity.entity_type),
@@ -1324,11 +1347,14 @@ impl LivingEntity {
                 position: Some(self.entity.pos.load()),
                 world_time: world.level_info.load().day_time as u64,
                 damage_type: Some(damage_type),
+                tool,
+                is_raining: Some(is_raining),
+                is_thundering: Some(is_thundering),
                 ..Default::default()
             };
 
             // Drop loot
-            self.drop_loot(params).await;
+            self.drop_loot(params.clone()).await;
 
             // Award experience
             if params.killed_by_player.unwrap_or(false)
@@ -1458,17 +1484,26 @@ impl LivingEntity {
 
         {
             let mut effects = self.active_effects.lock().await;
+            let entity_age = self.entity.age.load(Relaxed);
             for effect in effects.values_mut() {
-                // A duration below 0 means the effect is infinite
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
                     continue;
                 }
 
-                if Self::should_apply_effect_tick(effect) {
+                let tick_duration = if effect.duration == -1 {
+                    entity_age
+                } else {
+                    effect.duration
+                };
+
+                if Self::should_apply_effect_tick(effect, tick_duration) {
                     effects_to_apply.push((effect.effect_type, effect.amplifier));
                 }
-                effect.duration -= 1;
+
+                if effect.duration != -1 {
+                    effect.duration -= 1;
+                }
             }
         }
 
@@ -1487,8 +1522,7 @@ impl LivingEntity {
     /// Based on vanilla Minecraft's effect tick frequencies
     ///
     /// TODO: villager, beacon, and other effects.
-    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect) -> bool {
-        let duration = effect.duration;
+    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect, duration: i32) -> bool {
         let effect_type = effect.effect_type;
 
         if effect_type == &StatusEffect::REGENERATION {
@@ -2147,7 +2181,7 @@ impl EntityBase for LivingEntity {
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 
             if config.hurt_animation {
-                let entity_id = VarInt(self.entity.entity_id);
+                let entity_id = self.entity.entity_id;
                 let hurt_yaw = source.map_or(0.0, |source| {
                     let src = source.get_entity().pos.load();
                     let tgt = self.entity.pos.load();
@@ -2155,13 +2189,16 @@ impl EntityBase for LivingEntity {
                         - self.entity.yaw.load()
                 });
                 let hurt_event = SActorEvent {
-                    entity_runtime_id: entity_id,
+                    entity_runtime_id: VarLong(entity_id as i64),
                     event_type: ActorEventType::Hurt,
                     event_data: VarInt(0),
                     fire_at_position: None,
                 };
                 world
-                    .broadcast_editioned(&CHurtAnimation::new(entity_id, hurt_yaw), &hurt_event)
+                    .broadcast_editioned(
+                        &CHurtAnimation::new(VarInt(entity_id), hurt_yaw),
+                        &hurt_event,
+                    )
                     .await;
             }
 

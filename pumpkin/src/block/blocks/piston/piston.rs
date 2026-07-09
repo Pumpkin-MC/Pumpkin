@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use crate::block::entities::{has_block_block_entity, piston::PistonBlockEntity};
 use crate::entity::EntityBase;
+use pumpkin_data::BlockId;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, FacingExt,
+    Block, BlockDirection, BlockState, BlockStateId, FacingExt,
     block_properties::{
         BlockProperties, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
     },
@@ -11,7 +12,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 use rustc_hash::FxHashMap;
 
@@ -31,7 +32,7 @@ pub(crate) type PistonProps = pumpkin_data::block_properties::StickyPistonLikePr
 pub struct PistonBlock;
 
 impl BlockMetadata for PistonBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [Block::PISTON.id, Block::STICKY_PISTON.id].into()
     }
 }

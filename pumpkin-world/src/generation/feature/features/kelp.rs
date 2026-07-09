@@ -5,14 +5,11 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-pub struct KelpFeature {
-    // No extra parameters
-}
+pub struct KelpFeature;
 
 impl KelpFeature {
     #[allow(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,

@@ -14,7 +14,7 @@ impl StraightTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         block_registry: &dyn WorldPortalExt,
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
@@ -22,7 +22,7 @@ impl StraightTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
@@ -32,7 +32,7 @@ impl StraightTrunkPlacer {
         let mut logs = Vec::new();
         for i in 0..height {
             let pos = start_pos.up_height(i as i32);
-            if placer.place(chunk, &pos, trunk_state) {
+            if TrunkPlacer::place(chunk, &pos, trunk_state) {
                 logs.push(pos);
             }
         }

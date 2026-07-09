@@ -4,13 +4,15 @@ use std::sync::atomic::Ordering;
 use crate::block::entities::sign::SignBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::EnumVariants;
 use pumpkin_data::tag::Taggable;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -44,7 +46,7 @@ struct SupportInfo {
 
 /// Helper struct for sign placement configuration
 struct SignPlacement {
-    block_id: u16,
+    block_id: BlockId,
     facing: Option<String>,
     rotation: Option<u8>,
     attached: bool,
@@ -74,7 +76,7 @@ impl SignBlock {
         let mut side_direction = None;
         for direction in BlockDirection::horizontal() {
             let pos = position.offset(direction.to_offset());
-            if Self::is_valid_support(world, &pos, direction.opposite()) {
+            if Self::is_valid_support(world, &pos, direction.opposite().to_block_direction()) {
                 side_direction = Some(direction);
                 break;
             }
@@ -82,7 +84,7 @@ impl SignBlock {
 
         SupportInfo {
             above_is_valid,
-            side_direction,
+            side_direction: side_direction.map(|d| d.to_block_direction()),
         }
     }
 
@@ -167,7 +169,7 @@ impl SignBlock {
     }
 
     /// Selects the appropriate hanging sign variant.
-    fn select_hanging_variant(args: &OnPlaceArgs, support: &SupportInfo) -> Option<u16> {
+    fn select_hanging_variant(args: &OnPlaceArgs, support: &SupportInfo) -> Option<BlockId> {
         if args.direction == BlockDirection::Down && support.above_is_valid {
             Some(args.block.id) // Ceiling hanging
         } else if (args.direction.is_horizontal() || args.direction == BlockDirection::Up)
@@ -182,7 +184,7 @@ impl SignBlock {
     }
 
     /// Selects the appropriate standing sign variant.
-    fn select_standing_variant(args: &OnPlaceArgs, support: &SupportInfo) -> u16 {
+    fn select_standing_variant(args: &OnPlaceArgs, support: &SupportInfo) -> BlockId {
         if args.direction.is_horizontal() && support.side_direction.is_some() {
             get_sign_variant(args.block, false) // Wall sign
         } else {
@@ -296,7 +298,7 @@ impl BlockBehaviour for SignBlock {
             let support = Self::detect_support(args.world, args.position);
 
             let Some(placement) = Self::determine_placement(&args, &support) else {
-                return 0; // Invalid placement
+                return BlockStateId::AIR; // Invalid placement
             };
 
             let actual_block = Block::from_id(placement.block_id);
@@ -313,7 +315,7 @@ impl BlockBehaviour for SignBlock {
 
     fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            match &args.player.client {
+            match args.player.client.as_ref() {
                 crate::net::ClientPlatform::Java(java) => {
                     java.send_sign_packet(*args.position, true).await;
                 }
@@ -334,7 +336,7 @@ impl BlockBehaviour for SignBlock {
             for d in pumpkin_data::BlockDirection::horizontal() {
                 let wall_pos = args.position.offset(d.to_offset());
                 let (block, state) = args.block_accessor.get_block_and_state(&wall_pos);
-                if state.is_side_solid(d.opposite())
+                if state.is_side_solid(d.opposite().to_block_direction())
                     || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
                     || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
                 {
@@ -414,7 +416,7 @@ impl BlockBehaviour for SignBlock {
                     };
 
                     if !is_valid {
-                        return 0; // Return AIR to break the block
+                        return BlockStateId::AIR; // Return AIR to break the block
                     }
                 }
             }
@@ -453,7 +455,7 @@ impl BlockBehaviour for SignBlock {
 
             let is_facing_front_text =
                 is_facing_front_text(args.world, args.position, args.block, args.player);
-            match &args.player.client {
+            match args.player.client.as_ref() {
                 ClientPlatform::Java(java) => {
                     java.send_sign_packet(*args.position, is_facing_front_text)
                         .await;
@@ -571,7 +573,7 @@ fn get_wall_support_direction(block: &Block, state_id: BlockStateId) -> Option<B
 
 /// Helper to convert a regular sign to its wall variant.
 /// Returns the block ID of the wall variant, or the base block's ID if not found.
-fn get_sign_variant(base: &Block, is_hanging: bool) -> u16 {
+fn get_sign_variant(base: &Block, is_hanging: bool) -> BlockId {
     let base_name = base.name;
     let wood_type = base_name
         .strip_suffix("_hanging_sign")

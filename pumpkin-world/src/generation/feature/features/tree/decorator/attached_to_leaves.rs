@@ -1,1 +1,1 @@
-pub struct AttachedToLeavesTreeDecorator {}
+pub struct AttachedToLeavesTreeDecorator;

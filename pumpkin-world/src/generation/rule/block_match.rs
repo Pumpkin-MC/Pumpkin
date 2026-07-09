@@ -1,14 +1,12 @@
-use pumpkin_data::Block;
-
-use crate::block::RawBlockState;
+use pumpkin_data::{BlockId, BlockStateId};
 
 pub struct BlockMatchRuleTest {
-    pub block: Block,
+    pub block: BlockId,
 }
 
 impl BlockMatchRuleTest {
     #[must_use]
-    pub fn test(&self, state: RawBlockState) -> bool {
-        state.to_block().name == self.block.name
+    pub const fn test(&self, state: BlockStateId) -> bool {
+        state.to_block_id().as_u16() == self.block.as_u16()
     }
 }

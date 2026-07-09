@@ -1,5 +1,5 @@
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, translation};
+use pumpkin_data::{Block, BlockId, translation};
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
@@ -17,7 +17,7 @@ use super::{
 pub struct BlockArgumentConsumer;
 
 impl GetClientSideArgParser for BlockArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::BlockState
     }
 
@@ -79,11 +79,11 @@ pub struct BlockPredicateArgumentConsumer;
 #[derive(Debug)]
 pub enum BlockPredicate {
     Tag(Vec<u16>),
-    Block(u16),
+    Block(BlockId),
 }
 
 impl GetClientSideArgParser for BlockPredicateArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::BlockPredicate
     }
 
