@@ -16,3 +16,6 @@ This directory contains a number of different data files used to help support co
     - adapted from `GeyserMC/mappings` `items.json`.
     - Strips everything except the `bedrock_data` field (making it the value of each corresponding top-level key), omitting any `0` values.
     - Most of `items.json` is automatically generated, but that value appears to be manually maintained by the Geyser team. We separate that out for our own use, while keeping the rest generated.
+- `biomes.json`
+    - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings)
+    - Maps Java Edition biome identifiers to their corresponding Bedrock Edition biome ID. Used in code generation to translate Java biomes to Bedrock counterparts.

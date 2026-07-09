@@ -70,9 +70,9 @@ impl Frame {
         let mut frames = Vec::new();
         let mut header_buf = [0u8; 1];
 
-        while match reader.read(&mut header_buf) {
-            Ok(n) => n > 0,
-            Err(e) => return Err(e),
+        while {
+            let n = reader.read(&mut header_buf)?;
+            n > 0
         } {
             let header = header_buf[0];
             let mut frame = Self::default();

@@ -408,7 +408,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         {
             // Verify we are actually two sectors into the file
             let current_pos = write.stream_position().await?;
-            assert!(current_pos as usize == 2 * SECTOR_BYTES);
+            assert_eq!(current_pos as usize, 2 * SECTOR_BYTES);
         };
 
         let mut current_sector = 2;
