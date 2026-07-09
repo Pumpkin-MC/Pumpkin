@@ -83,6 +83,10 @@ impl DynamicOps for NbtOps {
         compound.into()
     }
 
+    fn get_bool(&self, input: &Self::Value) -> DataResult<bool> {
+        self.get_number(input).map(|n| f64::from(n) != 0.0)
+    }
+
     fn get_number(&self, input: &Self::Value) -> DataResult<Number> {
         match input {
             NbtTag::Byte(b) => DataResult::new_success(Number::Byte(*b)),
