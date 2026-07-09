@@ -1,39 +1,10 @@
 use std::borrow::Cow;
 
-use pumpkin_i18n::{Locale, SubstitutionRange, Token, placeholder_ranges, resolve_translation};
+use pumpkin_i18n::{Locale, Token, resolve_translation};
 
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
 pub use crate::translation::{translate_format, translate_plain};
-
-/// Reorders substitution placeholders within a translation string.
-///
-/// # Arguments
-/// * `translation`: The raw translation string containing placeholders.
-/// * `with`: Substitution components to insert into the placeholders.
-///
-/// # Returns
-/// A tuple containing the reordered components and their substitution ranges.
-#[must_use]
-pub fn reorder_substitutions(
-    translation: &str,
-    with: &[TextComponentBase],
-) -> (Vec<TextComponentBase>, Vec<SubstitutionRange>) {
-    let placeholders = placeholder_ranges(translation);
-    let mut substitutions = Vec::with_capacity(placeholders.len());
-    let mut ranges = Vec::with_capacity(placeholders.len());
-
-    for (arg_idx, range) in placeholders {
-        substitutions.push(
-            with.get(arg_idx)
-                .cloned()
-                .unwrap_or_else(empty_text_component),
-        );
-        ranges.push(range);
-    }
-
-    (substitutions, ranges)
-}
 
 /// Resolves a translation into formatted console output.
 ///
@@ -162,7 +133,7 @@ mod tests {
 
     use crate::text::TextComponent;
 
-    use super::{get_translation_text, reorder_substitutions, translation_to_pretty};
+    use super::{get_translation_text, translation_to_pretty};
 
     #[test]
     fn formats_explicit_placeholders_and_literal_percent() {
@@ -183,16 +154,5 @@ mod tests {
             translation_to_pretty("test_util_translation:ordered", Locale::EnUs, &args),
             "B then A % done"
         );
-    }
-
-    #[test]
-    fn reorder_substitutions_handles_missing_args() {
-        let (substitutions, ranges) =
-            reorder_substitutions("%s %2$s %% {name:?}", &[TextComponent::text("A").0]);
-
-        assert_eq!(ranges.len(), 3);
-        assert_eq!(substitutions[0].clone().get_text(Locale::EnUs), "A");
-        assert_eq!(substitutions[1].clone().get_text(Locale::EnUs), "");
-        assert_eq!(substitutions[2].clone().get_text(Locale::EnUs), "");
     }
 }

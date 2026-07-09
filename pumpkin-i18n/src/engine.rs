@@ -1,7 +1,7 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::sync::Arc;
-use std::{collections::HashMap, fmt::Write};
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
@@ -186,20 +186,22 @@ type ResolvedMap = DashMap<String, Arc<ResolvedTranslation>, FastHasher>;
 type SeenLogMap = DashMap<String, (), FastHasher>;
 
 /// A high‑performance translation engine with FST‑based key lookup,
-/// precompiled format tokens, and a concurrent cache.
+/// precompiled format tokens, and a concurrent per‑locale cache.
 ///
 /// # Design
 /// * One [`FstLocaleStore`] per locale, stored behind an [`ArcSwap`] so
 ///   locale data can be reloaded atomically without blocking readers.
-/// * A [`DashMap`] (sharded lock‑free map) with XXH64 hashing caches
-///   resolved translations keyed by `"locale:namespace:key"`.
+/// * A per‑locale [`DashMap`] (sharded lock‑free map, XXH64-hashed) avoids
+///   allocating a composite cache key on every resolve call and enables O(1)
+///   locale‑wide cache eviction.
 pub struct TranslationEngine {
     /// Per‑locale FST stores, atomically swappable.
     stores: ArcSwap<Box<[FstLocaleStore]>>,
     /// Runtime/plugin overrides. Checked before built-in FST data.
     overrides: Box<[ResolvedMap]>,
-    /// Cache for resolved translations. Key format: `"<locale_idx>:<key>"`.
-    cache: ResolvedMap,
+    /// Per‑locale resolved-translation cache.  `cache[locale_idx]` holds
+    /// entries keyed by the normalised (lowercased) translation key.
+    cache: Box<[ResolvedMap]>,
     /// Release-build log limiter for requested-locale → English fallback.
     #[cfg(not(debug_assertions))]
     fallback_log_once: SeenLogMap,
@@ -215,10 +217,11 @@ impl TranslationEngine {
     #[must_use]
     pub fn build(data: &[HashMap<String, String>]) -> Self {
         let stores = build_stores(data);
+        let num_locales = data.len();
         Self {
             stores: ArcSwap::from_pointee(stores),
-            overrides: build_override_maps(data.len()),
-            cache: DashMap::with_hasher(BuildHasherDefault::default()),
+            overrides: build_override_maps(num_locales),
+            cache: build_cache_maps(num_locales),
             #[cfg(not(debug_assertions))]
             fallback_log_once: DashMap::with_hasher(BuildHasherDefault::default()),
             #[cfg(not(debug_assertions))]
@@ -230,40 +233,44 @@ impl TranslationEngine {
     ///
     /// # Fallback strategy (identical to [`crate::store::get_translation`])
     /// 1. **Requested locale** — silent, no log.
-    /// 2. **`EnUs`** — logs [`warn!`] when the key was not found in step 1.
+    /// 2. **`EnUs`** — logs [`debug!`] when the key was not found in step 1.
     /// 3. **Raw key** — logs [`error!`] when neither locale contains the key.
     ///
-    /// The result is cached behind [`DashMap`] so subsequent lookups are
-    /// lock‑free. The return value is never `None` — at minimum the raw key
-    /// is wrapped as [`ResolvedTranslation::Missing`].
+    /// The result is cached in the per‑locale [`DashMap`] so subsequent
+    /// lookups are lock‑free and require **zero allocation** on cache hit.
+    /// The return value is never `None` — at minimum the raw key is wrapped
+    /// as [`ResolvedTranslation::Missing`].
     ///
     /// # Arguments
     /// * `locale_idx` — Index of the locale (use `locale as usize`).
     /// * `key` — The fully‑qualified translation key (`"namespace:entry"`).
     pub fn resolve(&self, locale_idx: usize, key: &str) -> Arc<ResolvedTranslation> {
         let key = normalize_key(key);
-        let cache_key = make_cache_key(locale_idx, key.as_ref());
+        let cache = &self.cache[locale_idx];
 
-        // Fast path: cache hit (no lock contention).
-        if let Some(entry) = self.cache.get(&cache_key) {
+        // Fast path: cache hit — zero allocation, no composite-key format.
+        if let Some(entry) = cache.get(key.as_ref()) {
             return entry.value().clone();
         }
 
         let stores = self.stores.load();
 
+        // Helper: insert into the requesting locale's cache and return.
+        let insert = |k: &str, v: Arc<ResolvedTranslation>| -> Arc<ResolvedTranslation> {
+            cache.insert(k.to_owned(), Arc::clone(&v));
+            v
+        };
+
         // Tier 1 – requested locale (silent)
         if let Some(entry) = self.lookup_override(locale_idx, key.as_ref()) {
-            self.cache.insert(cache_key, entry.clone());
-            return entry;
+            return insert(key.as_ref(), entry);
         }
 
         if let Some(entry) = stores
             .get(locale_idx)
             .and_then(|store| store.lookup(key.as_ref()))
         {
-            let resolved = Arc::new(entry.clone());
-            self.cache.insert(cache_key, resolved.clone());
-            return resolved;
+            return insert(key.as_ref(), Arc::new(entry.clone()));
         }
 
         // Tier 2 – EnUs fallback
@@ -272,8 +279,7 @@ impl TranslationEngine {
                 self.lookup_override(crate::locale::Locale::EnUs as usize, key.as_ref())
             {
                 self.log_english_fallback(locale_idx, key.as_ref());
-                self.cache.insert(cache_key, entry.clone());
-                return entry;
+                return insert(key.as_ref(), entry);
             }
 
             if let Some(entry) = stores
@@ -281,17 +287,17 @@ impl TranslationEngine {
                 .and_then(|store| store.lookup(key.as_ref()))
             {
                 self.log_english_fallback(locale_idx, key.as_ref());
-                let resolved = Arc::new(entry.clone());
-                self.cache.insert(cache_key, resolved.clone());
-                return resolved;
+                return insert(key.as_ref(), Arc::new(entry.clone()));
             }
         }
 
         // Tier 3 – raw key
         self.log_missing_translation(locale_idx, key.as_ref());
-        let resolved = Arc::new(ResolvedTranslation::Missing(Arc::from(key.into_owned())));
-        self.cache.insert(cache_key, resolved.clone());
-        resolved
+        let raw: Arc<str> = Arc::from(key.into_owned());
+        insert(
+            raw.as_ref(),
+            Arc::new(ResolvedTranslation::Missing(Arc::clone(&raw))),
+        )
     }
 
     /// Adds or replaces a runtime translation entry.
@@ -306,12 +312,14 @@ impl TranslationEngine {
                 normalized.clone(),
                 Arc::new(ResolvedTranslation::from_template(translation)),
             );
-            // Only evict the specific cache entry, not the entire cache.
-            self.cache.remove(&make_cache_key(locale_idx, &normalized));
+            self.cache[locale_idx].remove(&normalized);
         }
     }
 
     /// Adds or replaces several runtime translation entries for one locale.
+    ///
+    /// Clears the entire per‑locale cache afterwards (O(1)) so that future
+    /// lookups pick up the fresh overrides.  Other locales are unaffected.
     pub fn add_translations<I>(&self, locale_idx: usize, entries: I)
     where
         I: IntoIterator<Item = (String, String)>,
@@ -326,24 +334,7 @@ impl TranslationEngine {
                 Arc::new(ResolvedTranslation::from_template(&translation)),
             );
         }
-        // Evict only cache entries belonging to this locale — other locales
-        // are unaffected.  The prefix is e.g. "12:" for locale index 12.
-        // Collect affected keys first, then remove individually to avoid
-        // locking every shard concurrently like `retain` would.
-        let prefix = make_cache_prefix(locale_idx);
-        let stale: Vec<String> = self
-            .cache
-            .iter()
-            .filter_map(|entry| {
-                entry
-                    .key()
-                    .starts_with(&prefix)
-                    .then(|| entry.key().clone())
-            })
-            .collect();
-        for key in stale {
-            self.cache.remove(&key);
-        }
+        self.cache[locale_idx].clear();
     }
 
     /// Reload translation data atomically.
@@ -360,8 +351,9 @@ impl TranslationEngine {
         self.fallback_log_once.clear();
         #[cfg(not(debug_assertions))]
         self.missing_log_once.clear();
-        // Clear the cache so that new stores are used immediately.
-        self.cache.clear();
+        for cache in &self.cache {
+            cache.clear();
+        }
     }
 
     fn lookup_override(&self, locale_idx: usize, key: &str) -> Option<Arc<ResolvedTranslation>> {
@@ -415,22 +407,6 @@ fn normalize_key(key: &str) -> Cow<'_, str> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-#[inline]
-fn make_cache_key(locale_idx: usize, key: &str) -> String {
-    // Use a compact representation: "<locale_idx>:<key>"
-    let mut buf = String::with_capacity(4 + key.len() + 1);
-    let _ = write!(buf, "{locale_idx}:{key}");
-    buf
-}
-
-/// Build the prefix that all cache keys for `locale_idx` share (`"N:"`).
-#[inline]
-fn make_cache_prefix(locale_idx: usize) -> String {
-    let mut buf = String::with_capacity(3);
-    let _ = write!(buf, "{locale_idx}:");
-    buf
-}
-
 fn build_stores(data: &[HashMap<String, String>]) -> Box<[FstLocaleStore]> {
     data.iter()
         .map(FstLocaleStore::build)
@@ -439,6 +415,13 @@ fn build_stores(data: &[HashMap<String, String>]) -> Box<[FstLocaleStore]> {
 }
 
 fn build_override_maps(len: usize) -> Box<[ResolvedMap]> {
+    (0..len)
+        .map(|_| DashMap::with_hasher(BuildHasherDefault::default()))
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
+}
+
+fn build_cache_maps(len: usize) -> Box<[ResolvedMap]> {
     (0..len)
         .map(|_| DashMap::with_hasher(BuildHasherDefault::default()))
         .collect::<Vec<_>>()

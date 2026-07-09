@@ -1,7 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::SubstitutionRange;
-
 /// A precompiled token in a translation format template.
 ///
 /// During startup, every translation string containing placeholders
@@ -47,16 +45,8 @@ pub fn precompile(template: &str) -> Option<TokenStream> {
     parsed.has_tokens.then(|| parsed.tokens.into())
 }
 
-/// Returns placeholder argument indexes and byte ranges using the same parser as
-/// [`precompile`].
-#[must_use]
-pub fn placeholder_ranges(template: &str) -> Vec<(usize, SubstitutionRange)> {
-    parse_template(template).placeholders
-}
-
 struct ParsedTemplate {
     tokens: Vec<Token>,
-    placeholders: Vec<(usize, SubstitutionRange)>,
     has_tokens: bool,
 }
 
@@ -67,13 +57,11 @@ fn parse_template(template: &str) -> ParsedTemplate {
     if !bytes.contains(&b'%') && !bytes.contains(&b'{') && !bytes.contains(&b'}') {
         return ParsedTemplate {
             tokens: Vec::new(),
-            placeholders: Vec::new(),
             has_tokens: false,
         };
     }
 
     let mut tokens: Vec<Token> = Vec::new();
-    let mut placeholders = Vec::new();
     let mut named_args: HashMap<&str, usize> = HashMap::new();
     let mut cursor = 0usize;
     let mut text_start = 0usize;
@@ -85,7 +73,6 @@ fn parse_template(template: &str) -> ParsedTemplate {
                 parse_percent_placeholder(
                     template,
                     &mut tokens,
-                    &mut placeholders,
                     &mut cursor,
                     &mut text_start,
                     &mut sequential_idx,
@@ -95,7 +82,6 @@ fn parse_template(template: &str) -> ParsedTemplate {
                 parse_open_brace(
                     template,
                     &mut tokens,
-                    &mut placeholders,
                     &mut named_args,
                     &mut cursor,
                     &mut text_start,
@@ -119,17 +105,12 @@ fn parse_template(template: &str) -> ParsedTemplate {
     let has_tokens = tokens.len() != 1
         || !matches!(tokens.first(), Some(Token::Text(text)) if text.as_ref() == template);
 
-    ParsedTemplate {
-        tokens,
-        placeholders,
-        has_tokens,
-    }
+    ParsedTemplate { tokens, has_tokens }
 }
 
 fn parse_percent_placeholder(
     template: &str,
     tokens: &mut Vec<Token>,
-    placeholders: &mut Vec<(usize, SubstitutionRange)>,
     cursor: &mut usize,
     text_start: &mut usize,
     sequential_idx: &mut usize,
@@ -180,13 +161,6 @@ fn parse_percent_placeholder(
     }
 
     tokens.push(Token::Var(arg_idx));
-    placeholders.push((
-        arg_idx,
-        SubstitutionRange {
-            start: pct,
-            end: end_exclusive - 1,
-        },
-    ));
     *cursor = end_exclusive;
     *text_start = *cursor;
 }
@@ -194,7 +168,6 @@ fn parse_percent_placeholder(
 fn parse_open_brace<'a>(
     template: &'a str,
     tokens: &mut Vec<Token>,
-    placeholders: &mut Vec<(usize, SubstitutionRange)>,
     named_args: &mut HashMap<&'a str, usize>,
     cursor: &mut usize,
     text_start: &mut usize,
@@ -224,13 +197,6 @@ fn parse_open_brace<'a>(
 
     push_text(template, tokens, *text_start, open);
     tokens.push(Token::Var(arg_idx));
-    placeholders.push((
-        arg_idx,
-        SubstitutionRange {
-            start: open,
-            end: close,
-        },
-    ));
     *cursor = close + 1;
     *text_start = *cursor;
 }

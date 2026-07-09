@@ -13,7 +13,7 @@ pub use client::{
 pub use download::{
     DownloadConfig, DownloadedTranslations, download_locale, ensure_locale_translations,
     init_translation_loader, load_cached_translations, load_downloaded, mark_locale_loaded,
-    save_downloaded_translations, save_checksums,
+    save_checksums, save_downloaded_translations,
 };
 pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
 pub use locale::Locale;
@@ -24,7 +24,7 @@ pub use store::{
     add_translation, add_translation_file, format_translation, get_translation,
     resolve_translation, translation_engine,
 };
-pub use token::{Token, placeholder_ranges, precompile};
+pub use token::{Token, precompile};
 
 use std::str::FromStr;
 
@@ -67,30 +67,4 @@ pub fn namespaced_key(namespace: &str, key: &str) -> String {
 /// ASCII-only lowercasing. Returns [`Locale::EnUs`] on failure.
 pub(crate) fn parse_locale_value(raw: &str) -> Locale {
     Locale::from_str(raw).unwrap_or(Locale::EnUs)
-}
-
-/// A character range representing a substitution placeholder within a translation string.
-///
-/// The range is inclusive and corresponds to the full placeholder span
-/// (for example `%s` or `%1$s`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct SubstitutionRange {
-    /// Start byte index (inclusive).
-    pub start: usize,
-    /// End byte index (inclusive).
-    pub end: usize,
-}
-impl SubstitutionRange {
-    /// Returns the length of the range.
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        (self.end - self.start) + 1
-    }
-    /// Returns `true` when `end < start` — an inclusive range cannot
-    /// be empty otherwise (an inclusive range always covers at least
-    /// one character when `start <= end`).
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.end < self.start
-    }
 }

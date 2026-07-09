@@ -326,7 +326,7 @@ impl FromStr for Locale {
             "zh_hk" => Ok(Self::ZhHk),       // Chinese Traditional (Hong Kong; Mix)
             "zh_tw" => Ok(Self::ZhTw),       // Chinese Traditional (Taiwan; Mandarin)
             "zlm_arab" => Ok(Self::ZlmArab), // Malay (Jawi)
-            _ => Ok(Self::EnUs),             // Default to English (US) if not found
+            _ => Err(()),                    // Unrecognized locale code — caller should handle
         }
     }
 }
