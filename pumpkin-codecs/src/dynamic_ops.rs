@@ -70,9 +70,7 @@ pub trait DynamicOps {
     create_number_impl!(double, f64, Double, create_double);
 
     /// Returns how a boolean is represented by this `DynamicOps`.
-    fn create_bool(&self, data: bool) -> Self::Value {
-        self.create_byte(i8::from(data))
-    }
+    fn create_bool(&self, data: bool) -> Self::Value;
 
     /// Returns how a string is represented by this `DynamicOps`.
     fn create_string(&self, data: &str) -> Self::Value;
@@ -88,9 +86,7 @@ pub trait DynamicOps {
         I: IntoIterator<Item = (Self::Value, Self::Value)>;
 
     /// Tries to get a `bool` represented by this `DynamicOps`.
-    fn get_bool(&self, input: &Self::Value) -> DataResult<bool> {
-        self.get_number(input).map(|n| i8::from(n) != 0)
-    }
+    fn get_bool(&self, input: &Self::Value) -> DataResult<bool>;
 
     /// Tries to get a number represented by this `DynamicOps`.
     fn get_number(&self, input: &Self::Value) -> DataResult<Number>;

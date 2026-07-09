@@ -571,7 +571,7 @@ pub fn build() -> TokenStream {
             assert_eq!(
                 expected_values, &property.values,
                 "Enum overlap for '{}' ({:?} vs {:?})",
-                property.name, &property.values, expected_values
+                property.name, property.values, expected_values
             );
 
             property_mapping.push(PropertyVariantMapping {

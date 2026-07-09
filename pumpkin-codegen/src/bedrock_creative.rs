@@ -75,11 +75,11 @@ pub fn build() -> TokenStream {
         let mut icon_item_id = 0i16;
         let mut icon_item_aux_value = 0u32;
 
-        if let Some(ref icon) = g.icon {
-            if let Some(&id) = bedrock_items_map.get(icon.name.as_str()) {
-                icon_item_id = id;
-                icon_item_aux_value = icon.meta.unwrap_or(0) as u32;
-            }
+        if let Some(ref icon) = g.icon
+            && let Some(&id) = bedrock_items_map.get(icon.name.as_str())
+        {
+            icon_item_id = id;
+            icon_item_aux_value = icon.meta.unwrap_or(0) as u32;
         }
 
         group_tokens.push(quote! {
