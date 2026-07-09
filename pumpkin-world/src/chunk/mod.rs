@@ -847,7 +847,10 @@ impl std::fmt::Display for ChunkParsingError {
             Self::ErrorDeserializingChunk(msg) => write!(
                 f,
                 "{}",
-                localized_log_format("chunk.parsing.error.deserializing", std::slice::from_ref(msg))
+                localized_log_format(
+                    "chunk.parsing.error.deserializing",
+                    std::slice::from_ref(msg)
+                )
             ),
         }
     }

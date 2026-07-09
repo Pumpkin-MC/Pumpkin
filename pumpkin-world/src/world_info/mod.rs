@@ -358,7 +358,10 @@ impl std::fmt::Display for WorldInfoError {
             Self::DeserializationError(msg) => write!(
                 f,
                 "{}",
-                localized_log_format("world.info.error.deserialization", std::slice::from_ref(msg))
+                localized_log_format(
+                    "world.info.error.deserialization",
+                    std::slice::from_ref(msg)
+                )
             ),
             Self::UnsupportedDataVersion(version) => write!(
                 f,
