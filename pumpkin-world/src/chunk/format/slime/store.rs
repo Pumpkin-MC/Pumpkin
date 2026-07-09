@@ -116,7 +116,7 @@ impl SlimeWorldStore {
         let mut entity_compounds: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
         for (coord, chunk) in &entity_handles {
             let guard = chunk.data.lock().await;
-            entity_compounds.insert(*coord, guard.values().cloned().collect());
+            entity_compounds.insert(*coord, guard.clone());
         }
 
         // Serializing (NBT + zstd) and writing the file are CPU/IO heavy; run them

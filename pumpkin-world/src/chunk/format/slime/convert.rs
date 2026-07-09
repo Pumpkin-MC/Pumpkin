@@ -17,7 +17,6 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
-use uuid::Uuid;
 
 use crate::chunk::format::{ChunkSectionBiomes, ChunkSectionBlockStates, LightContainer};
 use crate::chunk::palette::{BiomePalette, BlockPalette};
@@ -85,16 +84,6 @@ fn palette_entry_to_state_id(entry: &VanillaPaletteEntry) -> u16 {
 /// Resolve a vanilla biome name to a Pumpkin biome id, defaulting to plains.
 fn biome_name_to_id(name: &str) -> u8 {
     Biome::from_name(strip_namespace(name)).map_or(Biome::PLAINS.id, |biome| biome.id)
-}
-
-/// Decode a vanilla UUID stored as an `int[4]` array (`[most_hi, most_lo, least_hi, least_lo]`).
-fn uuid_from_int_array(array: &[i32]) -> Option<Uuid> {
-    let [most_hi, most_lo, least_hi, least_lo] = *<&[i32; 4]>::try_from(array).ok()?;
-    let most = (u64::from(most_hi.cast_unsigned()) << 32) | u64::from(most_lo.cast_unsigned());
-    let least = (u64::from(least_hi.cast_unsigned()) << 32) | u64::from(least_lo.cast_unsigned());
-    Some(Uuid::from_u128(
-        (u128::from(most) << 64) | u128::from(least),
-    ))
 }
 
 /// Parse a named-compound NBT segment into `T`; empty segments yield `None`.
@@ -227,14 +216,9 @@ pub(crate) fn chunk_to_chunk_data(
 ///
 /// Returns [`SlimeError`] if the entity NBT payload is malformed.
 pub(crate) fn chunk_to_entity_data(chunk: &SlimeChunk) -> Result<ChunkEntityData, SlimeError> {
-    let mut data = FxHashMap::default();
-    if let Some(list) = parse_segment::<CompoundList>(&chunk.entities)? {
-        for entity in list.items {
-            if let Some(uuid) = entity.get_int_array("UUID").and_then(uuid_from_int_array) {
-                data.insert(uuid, entity);
-            }
-        }
-    }
+    let data = parse_segment::<CompoundList>(&chunk.entities)?
+        .map(|list| list.items)
+        .unwrap_or_default();
 
     Ok(ChunkEntityData {
         x: chunk.x,
@@ -248,11 +232,13 @@ pub(crate) fn chunk_to_entity_data(chunk: &SlimeChunk) -> Result<ChunkEntityData
 mod tests {
     use std::collections::BTreeMap;
 
+    use bytes::Bytes;
     use pumpkin_data::Block;
-    use uuid::Uuid;
+    use pumpkin_nbt::tag::NbtTag;
 
     use super::{
-        VanillaPaletteEntry, biome_name_to_id, palette_entry_to_state_id, uuid_from_int_array,
+        SlimeChunk, VanillaPaletteEntry, biome_name_to_id, chunk_to_entity_data,
+        palette_entry_to_state_id,
     };
 
     #[test]
@@ -316,16 +302,37 @@ mod tests {
     }
 
     #[test]
-    fn decodes_uuid_int_array() {
-        let uuid = Uuid::from_u128(0x0123_4567_89ab_cdef_fedc_ba98_7654_3210);
-        let bytes = uuid.as_u128();
-        let array = [
-            ((bytes >> 96) as u32).cast_signed(),
-            ((bytes >> 64) as u32).cast_signed(),
-            ((bytes >> 32) as u32).cast_signed(),
-            (bytes as u32).cast_signed(),
-        ];
-        assert_eq!(uuid_from_int_array(&array), Some(uuid));
-        assert_eq!(uuid_from_int_array(&[0, 0, 0]), None);
+    fn keeps_every_entity_regardless_of_uuid() {
+        let mut no_uuid = NbtCompound::new();
+        no_uuid.put_string("id", "minecraft:cow".to_string());
+
+        let mut with_uuid = NbtCompound::new();
+        with_uuid.put_string("id", "minecraft:pig".to_string());
+        with_uuid.put("UUID", NbtTag::IntArray(vec![1, 2, 3, 4]));
+
+        let mut root = NbtCompound::new();
+        root.put_list(
+            "entities",
+            vec![NbtTag::Compound(no_uuid), NbtTag::Compound(with_uuid)],
+        );
+        let mut buf = Vec::new();
+        pumpkin_nbt::to_bytes(&root, &mut buf).expect("serializing test fixture should not fail");
+
+        let chunk = SlimeChunk {
+            x: 0,
+            z: 0,
+            sections: Vec::new(),
+            height_maps: Bytes::new(),
+            block_entities: Bytes::new(),
+            entities: Bytes::from(buf),
+            block_ticks: Bytes::new(),
+            fluid_ticks: Bytes::new(),
+            poi: Bytes::new(),
+        };
+
+        let entity_data = chunk_to_entity_data(&chunk).unwrap();
+        // Vanilla entity NBT is a flat list; an entity missing/malformed `UUID`
+        // must still be imported rather than silently dropped.
+        assert_eq!(entity_data.data.into_inner().len(), 2);
     }
 }
