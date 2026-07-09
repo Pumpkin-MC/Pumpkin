@@ -1,4 +1,4 @@
-//! [`FileIO`] backends that serve a SlimeWorld from a shared in-memory store.
+//! [`FileIO`] backends that serve a `SlimeWorld` from a shared in-memory store.
 //!
 //! Unlike the region-based formats (Anvil / Linear / Pump), a `.slime` file
 //! holds an entire world in one blob that is loaded wholesale into RAM. Both
@@ -22,12 +22,12 @@ use super::store::SlimeWorldStore;
 type BoxedFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// [`FileIO`] serving block data from a shared [`SlimeWorldStore`].
-pub(crate) struct SlimeChunkIo {
+pub struct SlimeChunkIo {
     store: Arc<SlimeWorldStore>,
 }
 
 impl SlimeChunkIo {
-    pub(crate) fn new(store: Arc<SlimeWorldStore>) -> Self {
+    pub(crate) const fn new(store: Arc<SlimeWorldStore>) -> Self {
         Self { store }
     }
 }
@@ -45,7 +45,7 @@ impl FileIO for SlimeChunkIo {
             for &coord in chunk_coords {
                 let data = self
                     .store
-                    .get_chunk(&coord)
+                    .get_chunk(coord)
                     .map_or_else(|| LoadedData::Missing(coord), LoadedData::Loaded);
                 if stream.send(data).await.is_err() {
                     break;
@@ -94,12 +94,12 @@ impl FileIO for SlimeChunkIo {
 }
 
 /// [`FileIO`] serving entity data from a shared [`SlimeWorldStore`].
-pub(crate) struct SlimeEntityIo {
+pub struct SlimeEntityIo {
     store: Arc<SlimeWorldStore>,
 }
 
 impl SlimeEntityIo {
-    pub(crate) fn new(store: Arc<SlimeWorldStore>) -> Self {
+    pub(crate) const fn new(store: Arc<SlimeWorldStore>) -> Self {
         Self { store }
     }
 }
@@ -117,7 +117,7 @@ impl FileIO for SlimeEntityIo {
             for &coord in chunk_coords {
                 let data = self
                     .store
-                    .get_entity(&coord)
+                    .get_entity(coord)
                     .map_or_else(|| LoadedData::Missing(coord), LoadedData::Loaded);
                 if stream.send(data).await.is_err() {
                     break;

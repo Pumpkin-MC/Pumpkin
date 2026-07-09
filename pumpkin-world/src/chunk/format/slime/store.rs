@@ -1,4 +1,4 @@
-//! Shared in-memory state for a loaded SlimeWorld.
+//! Shared in-memory state for a loaded `SlimeWorld`.
 //!
 //! A `.slime` file holds an entire world, but Pumpkin wires up *two* separate
 //! [`FileIO`](crate::chunk::io::FileIO) backends per level (one for block data,
@@ -23,8 +23,8 @@ use super::{chunk_to_chunk_data, chunk_to_entity_data, read_slime_world};
 /// Filename used when a world is persisted but had no source `.slime` file.
 const DEFAULT_SLIME_NAME: &str = "world.slime";
 
-/// The whole loaded SlimeWorld, shared between the chunk and entity backends.
-pub(crate) struct SlimeWorldStore {
+/// The whole loaded `SlimeWorld`, shared between the chunk and entity backends.
+pub struct SlimeWorldStore {
     /// Where the world is read from / written back to.
     path: PathBuf,
     /// Vanilla `DataVersion`, preserved across save.
@@ -68,15 +68,19 @@ impl SlimeWorldStore {
         })
     }
 
-    pub(crate) fn get_chunk(&self, coord: &Vector2<i32>) -> Option<SyncChunk> {
-        self.chunks.read().expect("chunks lock").get(coord).cloned()
+    pub(crate) fn get_chunk(&self, coord: Vector2<i32>) -> Option<SyncChunk> {
+        self.chunks
+            .read()
+            .expect("chunks lock")
+            .get(&coord)
+            .cloned()
     }
 
-    pub(crate) fn get_entity(&self, coord: &Vector2<i32>) -> Option<SyncEntityChunk> {
+    pub(crate) fn get_entity(&self, coord: Vector2<i32>) -> Option<SyncEntityChunk> {
         self.entities
             .read()
             .expect("entities lock")
-            .get(coord)
+            .get(&coord)
             .cloned()
     }
 

@@ -1,6 +1,6 @@
 //! Convert a parsed [`SlimeChunk`] into Pumpkin's native chunk representation.
 //!
-//! SlimeWorld stores chunk block states and biomes as the *vanilla* paletted
+//! `SlimeWorld` stores chunk block states and biomes as the *vanilla* paletted
 //! NBT (a palette of namespaced names, not Pumpkin's numeric ids), so the names
 //! are resolved to global block-state / biome ids here before the section
 //! palettes are built. Block entities and entities are mapped onto
@@ -12,6 +12,7 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 
 use bytes::Bytes;
+use pumpkin_data::block_state::BlockStateId;
 use pumpkin_data::{Block, biome::Biome, chunk::ChunkStatus};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -65,7 +66,7 @@ fn strip_namespace(name: &str) -> &str {
 
 /// Resolve a vanilla palette entry (block name + properties) to a Pumpkin global
 /// block-state id, falling back to air for unknown blocks.
-fn palette_entry_to_state_id(entry: &VanillaPaletteEntry) -> u16 {
+fn palette_entry_to_state_id(entry: &VanillaPaletteEntry) -> BlockStateId {
     let Some(block) = Block::from_registry_key(strip_namespace(&entry.name)) else {
         return Block::AIR.default_state.id;
     };
@@ -108,13 +109,13 @@ fn light_container(array: Option<&Bytes>) -> LightContainer {
 /// Convert a [`SlimeChunk`] into Pumpkin's [`ChunkData`].
 ///
 /// `min_section_y` is the bottom-most section index of the target dimension
-/// (e.g. `-4` for the overworld); SlimeWorld stores sections bottom-up without
+/// (e.g. `-4` for the overworld); `SlimeWorld` stores sections bottom-up without
 /// an explicit Y, so the absolute section Y of section `i` is `min_section_y + i`.
 ///
 /// # Errors
 ///
 /// Returns [`SlimeError`] if any of the chunk's NBT payloads are malformed.
-pub(crate) fn chunk_to_chunk_data(
+pub fn chunk_to_chunk_data(
     chunk: &SlimeChunk,
     min_section_y: i32,
 ) -> Result<ChunkData, SlimeError> {
@@ -129,7 +130,7 @@ pub(crate) fn chunk_to_chunk_data(
         sky_lights[index] = light_container(section.sky_light.as_ref());
 
         if let Some(states) = parse_segment::<VanillaBlockStates>(&section.block_states)? {
-            let palette: Box<[u16]> = states
+            let palette: Box<[BlockStateId]> = states
                 .palette
                 .iter()
                 .map(palette_entry_to_state_id)
@@ -215,7 +216,7 @@ pub(crate) fn chunk_to_chunk_data(
 /// # Errors
 ///
 /// Returns [`SlimeError`] if the entity NBT payload is malformed.
-pub(crate) fn chunk_to_entity_data(chunk: &SlimeChunk) -> Result<ChunkEntityData, SlimeError> {
+pub fn chunk_to_entity_data(chunk: &SlimeChunk) -> Result<ChunkEntityData, SlimeError> {
     let data = parse_segment::<CompoundList>(&chunk.entities)?
         .map(|list| list.items)
         .unwrap_or_default();
@@ -234,6 +235,7 @@ mod tests {
 
     use bytes::Bytes;
     use pumpkin_data::Block;
+    use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
 
     use super::{

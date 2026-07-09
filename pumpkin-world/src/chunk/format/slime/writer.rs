@@ -3,7 +3,7 @@
 //! This is the inverse of [`super::reader`]: section block / biome palettes are
 //! turned back into the vanilla string-paletted NBT, light is written as raw
 //! nibble arrays, and the whole thing is framed and zstd-compressed exactly the
-//! way AdvancedSlimePaper's `SlimeSerializer` does it.
+//! way `AdvancedSlimePaper`'s `SlimeSerializer` does it.
 //!
 //! POI, block-tick and fluid-tick segments are not produced (the `flags` byte is
 //! written as `0`); the world `extra` block (which carries `properties`) is
@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use bytes::{BufMut, BytesMut};
+use pumpkin_data::block_state::BlockStateId;
 use pumpkin_data::{Block, biome::Biome};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
@@ -75,7 +76,7 @@ fn serialize_named<T: Serialize>(value: &T) -> Vec<u8> {
 }
 
 /// Resolve a Pumpkin global block-state id back to a vanilla palette entry.
-fn state_id_to_entry(state_id: u16) -> PaletteEntryOut {
+fn state_id_to_entry(state_id: BlockStateId) -> PaletteEntryOut {
     let block = Block::from_state_id(state_id);
     let properties = block.properties(state_id).and_then(|props| {
         let map: BTreeMap<String, String> = props

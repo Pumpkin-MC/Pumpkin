@@ -1,6 +1,6 @@
-//! Binary parser for the `.slime` container format (AdvancedSlimePaper v13).
+//! Binary parser for the `.slime` container format (`AdvancedSlimePaper` v13).
 //!
-//! Layout mirrors AdvancedSlimePaper `dev/26.2` (`SlimeSerializer` /
+//! Layout mirrors `AdvancedSlimePaper` `dev/26.2` (`SlimeSerializer` /
 //! `v13SlimeWorldDeSerializer`): big-endian integers and two zstd-compressed
 //! payloads (the chunks, then the world "extra"), each framed as
 //! `[i32 compressed_len][i32 raw_len][compressed bytes]`. NBT segments are

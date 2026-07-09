@@ -1,4 +1,4 @@
-//! In-memory representation of a parsed `.slime` world (AdvancedSlimePaper v13).
+//! In-memory representation of a parsed `.slime` world (`AdvancedSlimePaper` v13).
 //!
 //! The reader ([`super::read_slime_world`]) fills this model with the raw,
 //! still-NBT-encoded payloads exactly as they appear on disk. Interpreting the
@@ -10,7 +10,7 @@ use bytes::Bytes;
 
 /// A whole `.slime` world held in memory.
 ///
-/// SlimeWorld stores an entire (small) world in a single file; this is the
+/// `SlimeWorld` stores an entire (small) world in a single file; this is the
 /// decoded form of that file before it is mapped onto Pumpkin's chunk
 /// representation.
 #[derive(Debug)]

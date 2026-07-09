@@ -186,9 +186,7 @@ impl Level {
             >::new(config.clone())),
             ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkEntityData>>::new(())),
             ChunkConfig::Slime => Arc::new(SlimeEntityIo::new(
-                slime_store
-                    .clone()
-                    .expect("slime store created for slime config"),
+                slime_store.expect("slime store created for slime config"),
             )),
         };
 
