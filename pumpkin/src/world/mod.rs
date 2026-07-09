@@ -3552,7 +3552,7 @@ impl World {
                         // Keep the persisted UUID so the entity keeps its identity
                         // across reloads (matching vanilla); only fall back to a
                         // fresh one if it is missing/corrupt.
-                        let uuid = read_entity_uuid(entity_nbt).unwrap_or_else(Uuid::new_v4);
+                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
                         // Pos is zero since it will be read from nbt.
                         let entity =
                             from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
@@ -5331,46 +5331,5 @@ impl WorldPortalExt for WorldPortal {
         chunk_z: i32,
     ) {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
-    }
-}
-
-/// Reads an entity's persistent UUID from its saved NBT (the `UUID` int-array
-/// written by `Entity::write_nbt`), so a reloaded entity keeps its identity.
-fn read_entity_uuid(nbt: &NbtCompound) -> Option<Uuid> {
-    let [a, b, c, d] = nbt.get_int_array("UUID")? else {
-        return None;
-    };
-    let uuid = ((*a as u32 as u128) << 96)
-        | ((*b as u32 as u128) << 64)
-        | ((*c as u32 as u128) << 32)
-        | (*d as u32 as u128);
-    Some(Uuid::from_u128(uuid))
-}
-
-#[cfg(test)]
-mod entity_uuid_tests {
-    use super::read_entity_uuid;
-    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-    use uuid::Uuid;
-
-    #[test]
-    fn read_entity_uuid_matches_write_format() {
-        let original = Uuid::from_u128(0x0123_4567_89ab_cdef_fedc_ba98_7654_3210);
-        let u = original.as_u128();
-        // Same layout Entity::write_nbt produces.
-        let mut nbt = NbtCompound::new();
-        nbt.put(
-            "UUID",
-            NbtTag::IntArray(vec![
-                (u >> 96) as i32,
-                ((u >> 64) & 0xFFFF_FFFF) as i32,
-                ((u >> 32) & 0xFFFF_FFFF) as i32,
-                (u & 0xFFFF_FFFF) as i32,
-            ]),
-        );
-        assert_eq!(read_entity_uuid(&nbt), Some(original));
-
-        // Missing or malformed UUID falls back to None.
-        assert_eq!(read_entity_uuid(&NbtCompound::new()), None);
     }
 }

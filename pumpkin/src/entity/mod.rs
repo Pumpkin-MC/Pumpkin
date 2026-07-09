@@ -3261,16 +3261,7 @@ impl NBTStorage for Entity {
                 "id",
                 format!("minecraft:{}", self.entity_type.resource_name),
             );
-            let uuid = self.entity_uuid.as_u128();
-            nbt.put(
-                "UUID",
-                NbtTag::IntArray(vec![
-                    (uuid >> 96) as i32,
-                    ((uuid >> 64) & 0xFFFF_FFFF) as i32,
-                    ((uuid >> 32) & 0xFFFF_FFFF) as i32,
-                    (uuid & 0xFFFF_FFFF) as i32,
-                ]),
-            );
+            nbt.put_uuid("UUID", self.entity_uuid);
             nbt.put(
                 "Pos",
                 NbtTag::List(vec![
