@@ -94,7 +94,7 @@ where
 ///
 /// # Fallback strategy
 /// 1. **Requested locale** — silent, no log.
-/// 2. **`EnUs`** — logs [`warn!`] when the key was not found in step 1.
+/// 2. **`EnUs`** — logs [`debug!`] when the key was not found in step 1.
 /// 3. **Raw key** — logs [`error!`] when neither locale contains the key.
 ///
 /// # Arguments

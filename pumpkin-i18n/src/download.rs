@@ -33,7 +33,7 @@ const DEFAULT_MIRROR: &str =
     "https://raw.githubusercontent.com/Q2297045667/Pumpkin/i18n-assets/assets/translations";
 
 /// Holds downloaded translations for a single locale, organised by namespace.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DownloadedTranslations {
     /// `pumpkin:` namespace entries.
     pub pumpkin: HashMap<String, String>,
@@ -444,36 +444,55 @@ pub fn ensure_locale_translations(locale: Locale) {
     }
 
     // 1. Try disk cache first
-    let partial_cache = if let Some(cached) = load_cached_translations(locale, cache_root) {
-        let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
-        if complete {
-            // Both namespaces present — no download needed
+    let (had_partial, had_pumpkin, had_java) =
+        if let Some(cached) = load_cached_translations(locale, cache_root) {
+            let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
+            if complete {
+                // Both namespaces present — no download needed
+                load_downloaded(&cached, locale);
+                return;
+            }
+            // Partial cache: load what we have now for immediate use,
+            // then download the full set to fill gaps.
+            let had_pumpkin = !cached.pumpkin.is_empty();
+            let had_java = !cached.java.is_empty();
             load_downloaded(&cached, locale);
-            return;
-        }
-        // Partial cache: load what we have now, then download the full set
-        load_downloaded(&cached, locale);
-        true
-    } else {
-        false
-    };
+            (true, had_pumpkin, had_java)
+        } else {
+            (false, false, false)
+        };
 
     // 2. Download full set from remote mirror
     let downloaded = download_locale(config, locale);
 
-    // 3. Save to disk for future runs
+    // 3. Save to disk for future runs, but skip namespaces that were
+    //    already on disk from the partial cache to avoid redundant I/O.
     if downloaded.has_any() {
-        save_downloaded_translations(&downloaded, locale, cache_root);
+        if had_partial {
+            // Only persist namespaces that were missing from the cache.
+            let mut to_save = DownloadedTranslations::default();
+            if !had_pumpkin && !downloaded.pumpkin.is_empty() {
+                to_save.pumpkin.clone_from(&downloaded.pumpkin);
+            }
+            if !had_java && !downloaded.java.is_empty() {
+                to_save.java.clone_from(&downloaded.java);
+            }
+            if to_save.has_any() {
+                save_downloaded_translations(&to_save, locale, cache_root);
+            }
+        } else {
+            save_downloaded_translations(&downloaded, locale, cache_root);
+        }
 
         // 4. Inject into the global engine (overwrites partial cache data)
         load_downloaded(&downloaded, locale);
-    } else if !partial_cache {
+    } else if !had_partial {
         warn!(
             "No translations available for {} — using English fallback",
             locale.to_code()
         );
     }
-    // If partial_cache is true and download failed, we already loaded
+    // If had_partial is true and download failed, we already loaded
     // the partial cache above. The missing namespaces will use EnUs fallback.
 }
 

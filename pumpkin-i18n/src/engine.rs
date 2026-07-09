@@ -328,8 +328,22 @@ impl TranslationEngine {
         }
         // Evict only cache entries belonging to this locale — other locales
         // are unaffected.  The prefix is e.g. "12:" for locale index 12.
+        // Collect affected keys first, then remove individually to avoid
+        // locking every shard concurrently like `retain` would.
         let prefix = make_cache_prefix(locale_idx);
-        self.cache.retain(|k, _| !k.starts_with(&prefix));
+        let stale: Vec<String> = self
+            .cache
+            .iter()
+            .filter_map(|entry| {
+                entry
+                    .key()
+                    .starts_with(&prefix)
+                    .then(|| entry.key().clone())
+            })
+            .collect();
+        for key in stale {
+            self.cache.remove(&key);
+        }
     }
 
     /// Reload translation data atomically.
