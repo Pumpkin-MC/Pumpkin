@@ -128,7 +128,10 @@ impl GenerationSchedule {
                 let level_clone = level.clone();
 
                 let handle = thread::Builder::new()
-                    .name(localized_log_format("world.chunk_system.thread_name.gen", &[i.to_string()]))
+                    .name(localized_log_format(
+                        "world.chunk_system.thread_name.gen",
+                        &[i.to_string()],
+                    ))
                     .spawn(move || {
                         generation_work(&recv_gen, &send_chunk, &level_clone);
                     })

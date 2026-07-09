@@ -34,7 +34,7 @@ impl std::fmt::Display for PlayerDataError {
             Self::Nbt(msg) => write!(
                 f,
                 "{}",
-                localized_log_format("world.player_data.error.nbt", &[msg.clone()])
+                localized_log_format("world.player_data.error.nbt", std::slice::from_ref(msg))
             ),
         }
     }

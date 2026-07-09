@@ -9,11 +9,11 @@ use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
-use pumpkin_util::translation::{localized_log, localized_log_format};
 use tokio::sync::Mutex;
 
 pub mod format;
@@ -40,14 +40,27 @@ impl std::fmt::Display for ChunkReadingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::IoError(e) => write!(
-                f, "{}",
+                f,
+                "{}",
                 localized_log_format("chunk.reading.error.io", &[e.to_string()])
             ),
-            Self::InvalidHeader => write!(f, "{}", localized_log("chunk.reading.error.invalid_header")),
-            Self::RegionIsInvalid => write!(f, "{}", localized_log("chunk.reading.error.region_invalid")),
-            Self::Compression(e) => write!(f, "{}", localized_log_format("chunk.reading.error.compression", &[e.to_string()])),
+            Self::InvalidHeader => {
+                write!(f, "{}", localized_log("chunk.reading.error.invalid_header"))
+            }
+            Self::RegionIsInvalid => {
+                write!(f, "{}", localized_log("chunk.reading.error.region_invalid"))
+            }
+            Self::Compression(e) => write!(
+                f,
+                "{}",
+                localized_log_format("chunk.reading.error.compression", &[e.to_string()])
+            ),
             Self::ChunkNotExist => write!(f, "{}", localized_log("chunk.reading.error.not_exist")),
-            Self::ParsingError(e) => write!(f, "{}", localized_log_format("chunk.reading.error.parsing", &[e.to_string()])),
+            Self::ParsingError(e) => write!(
+                f,
+                "{}",
+                localized_log_format("chunk.reading.error.parsing", &[e.to_string()])
+            ),
         }
     }
 }
@@ -65,16 +78,19 @@ impl std::fmt::Display for ChunkWritingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::IoError(e) => write!(
-                f, "{}",
+                f,
+                "{}",
                 localized_log_format("chunk.writing.error.io", &[e.to_string()])
             ),
             Self::Compression(e) => write!(
-                f, "{}",
+                f,
+                "{}",
                 localized_log_format("chunk.writing.error.compression", &[e.to_string()])
             ),
             Self::ChunkSerializingError(msg) => write!(
-                f, "{}",
-                localized_log_format("chunk.writing.error.serializing", &[msg.clone()])
+                f,
+                "{}",
+                localized_log_format("chunk.writing.error.serializing", std::slice::from_ref(msg))
             ),
         }
     }
@@ -94,11 +110,29 @@ pub enum CompressionError {
 impl std::fmt::Display for CompressionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnknownCompression => write!(f, "{}", localized_log("chunk.compression.error.unknown")),
-            Self::ZlibError(e) => write!(f, "{}", localized_log_format("chunk.compression.error.zlib", &[e.to_string()])),
-            Self::GZipError(e) => write!(f, "{}", localized_log_format("chunk.compression.error.gzip", &[e.to_string()])),
-            Self::LZ4Error(e) => write!(f, "{}", localized_log_format("chunk.compression.error.lz4", &[e.to_string()])),
-            Self::ZstdError(e) => write!(f, "{}", localized_log_format("chunk.compression.error.zstd", &[e.to_string()])),
+            Self::UnknownCompression => {
+                write!(f, "{}", localized_log("chunk.compression.error.unknown"))
+            }
+            Self::ZlibError(e) => write!(
+                f,
+                "{}",
+                localized_log_format("chunk.compression.error.zlib", &[e.to_string()])
+            ),
+            Self::GZipError(e) => write!(
+                f,
+                "{}",
+                localized_log_format("chunk.compression.error.gzip", &[e.to_string()])
+            ),
+            Self::LZ4Error(e) => write!(
+                f,
+                "{}",
+                localized_log_format("chunk.compression.error.lz4", &[e.to_string()])
+            ),
+            Self::ZstdError(e) => write!(
+                f,
+                "{}",
+                localized_log_format("chunk.compression.error.zstd", &[e.to_string()])
+            ),
         }
     }
 }
@@ -803,13 +837,17 @@ impl std::fmt::Display for ChunkParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::FailedReadStatus(e) => write!(
-                f, "{}",
+                f,
+                "{}",
                 localized_log_format("chunk.parsing.error.read_status", &[e.to_string()])
             ),
-            Self::ChunkNotGenerated => write!(f, "{}", localized_log("chunk.parsing.error.not_generated")),
+            Self::ChunkNotGenerated => {
+                write!(f, "{}", localized_log("chunk.parsing.error.not_generated"))
+            }
             Self::ErrorDeserializingChunk(msg) => write!(
-                f, "{}",
-                localized_log_format("chunk.parsing.error.deserializing", &[msg.clone()])
+                f,
+                "{}",
+                localized_log_format("chunk.parsing.error.deserializing", std::slice::from_ref(msg))
             ),
         }
     }
@@ -826,7 +864,8 @@ impl std::fmt::Display for ChunkSerializingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ErrorSerializingChunk(e) => write!(
-                f, "{}",
+                f,
+                "{}",
                 localized_log_format("chunk.serializing.error", &[e.to_string()])
             ),
         }

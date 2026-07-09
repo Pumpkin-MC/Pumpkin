@@ -536,14 +536,15 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
             // xxhash64 integrity check.
             let actual_hash = xxh64(&buf[..compressed_size], 0);
             if actual_hash != entry.xxhash {
+                let expected_hash = entry.xxhash;
                 error!(
                     "{}",
                     localized_log_format(
                         "world.chunk.linear.xxhash_mismatch",
                         &[
                             bucket_idx.to_string(),
-                            format!("{:#x}", entry.xxhash),
-                            format!("{:#x}", actual_hash),
+                            format!("{expected_hash:#x}"),
+                            format!("{actual_hash:#x}"),
                         ]
                     )
                 );

@@ -129,7 +129,10 @@ pub fn load_processor_list(name: &str) -> Arc<[StructureProcessor]> {
     let Some(json) = super::cache::get_processor_list_json(name) else {
         tracing::warn!(
             "{}",
-            localized_log_format("world.structure.processor.unknown_list", &[name.to_string()])
+            localized_log_format(
+                "world.structure.processor.unknown_list",
+                &[name.to_string()]
+            )
         );
         return Arc::from([]);
     };

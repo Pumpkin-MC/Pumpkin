@@ -25,9 +25,8 @@ fn parse_block_name<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<&'static Block, D::Error> {
     let s = String::deserialize(deserializer)?;
-    let block =
-        Block::from_name(s.as_str())
-            .ok_or_else(|| serde::de::Error::custom(localized_log("block.error.invalid_block_name")))?;
+    let block = Block::from_name(s.as_str())
+        .ok_or_else(|| serde::de::Error::custom(localized_log("block.error.invalid_block_name")))?;
     Ok(block)
 }
 

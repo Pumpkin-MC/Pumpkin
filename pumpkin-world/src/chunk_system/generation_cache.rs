@@ -156,7 +156,12 @@ impl GenerationCache for Cache {
                 "{}",
                 localized_log_format(
                     "world.chunk_system.illegal_get_block_state",
-                    &[format!("{pos:?}"), self.x.to_string(), self.z.to_string(), self.size.to_string()]
+                    &[
+                        format!("{pos:?}"),
+                        self.x.to_string(),
+                        self.z.to_string(),
+                        self.size.to_string()
+                    ]
                 )
             );
             return BlockStateId::AIR;
@@ -181,7 +186,12 @@ impl GenerationCache for Cache {
                 "{}",
                 localized_log_format(
                     "world.chunk_system.illegal_set_block_state",
-                    &[format!("{pos:?}"), self.x.to_string(), self.z.to_string(), self.size.to_string()]
+                    &[
+                        format!("{pos:?}"),
+                        self.x.to_string(),
+                        self.z.to_string(),
+                        self.size.to_string()
+                    ]
                 )
             );
             return;

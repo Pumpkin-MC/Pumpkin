@@ -3,9 +3,9 @@ use std::path::Path;
 
 use crate::CURRENT_MC_VERSION;
 use pumpkin_data::game_rules::GameRuleRegistry;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
-use pumpkin_util::translation::{localized_log, localized_log_format};
 
 pub mod anvil;
 
@@ -358,17 +358,23 @@ impl std::fmt::Display for WorldInfoError {
             Self::DeserializationError(msg) => write!(
                 f,
                 "{}",
-                localized_log_format("world.info.error.deserialization", &[msg.clone()])
+                localized_log_format("world.info.error.deserialization", std::slice::from_ref(msg))
             ),
             Self::UnsupportedDataVersion(version) => write!(
                 f,
                 "{}",
-                localized_log_format("world.info.error.unsupported_data_version", &[version.to_string()])
+                localized_log_format(
+                    "world.info.error.unsupported_data_version",
+                    &[version.to_string()]
+                )
             ),
             Self::UnsupportedLevelVersion(version) => write!(
                 f,
                 "{}",
-                localized_log_format("world.info.error.unsupported_level_version", &[version.to_string()])
+                localized_log_format(
+                    "world.info.error.unsupported_level_version",
+                    &[version.to_string()]
+                )
             ),
         }
     }

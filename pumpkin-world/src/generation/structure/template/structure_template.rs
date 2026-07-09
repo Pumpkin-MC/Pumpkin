@@ -23,20 +23,33 @@ impl std::fmt::Display for TemplateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NbtError(e) => write!(
-                f, "{}",
+                f,
+                "{}",
                 localized_log_format("world.structure.template.error.nbt", &[e.to_string()])
             ),
             Self::MissingField(field) => write!(
-                f, "{}",
-                localized_log_format("world.structure.template.error.missing_field", &[(*field).to_string()])
+                f,
+                "{}",
+                localized_log_format(
+                    "world.structure.template.error.missing_field",
+                    &[(*field).to_string()]
+                )
             ),
             Self::InvalidFieldType(field) => write!(
-                f, "{}",
-                localized_log_format("world.structure.template.error.invalid_field_type", &[(*field).to_string()])
+                f,
+                "{}",
+                localized_log_format(
+                    "world.structure.template.error.invalid_field_type",
+                    &[(*field).to_string()]
+                )
             ),
             Self::InvalidPaletteIndex(idx) => write!(
-                f, "{}",
-                localized_log_format("world.structure.template.error.invalid_palette_index", &[idx.to_string()])
+                f,
+                "{}",
+                localized_log_format(
+                    "world.structure.template.error.invalid_palette_index",
+                    &[idx.to_string()]
+                )
             ),
             Self::TemplateNotFound(msg) => write!(f, "{msg}"),
         }
