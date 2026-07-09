@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
+use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
@@ -45,7 +45,7 @@ impl SingleChunkDataSerializer for ChunkData {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+        Box::pin(async move { self.internal_to_bytes() })
     }
 
     #[inline]
@@ -173,7 +173,14 @@ impl ChunkData {
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+            match light {
+                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                _ => None,
+            }
+        }
+
         let is_light_correct = self
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
@@ -182,13 +189,6 @@ impl ChunkData {
             let entities_guard = self.pending_block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
-
-        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
-            match light {
-                Some(LightContainer::Full(data)) => Some(data.as_ref()),
-                _ => None,
-            }
-        }
 
         let light_lock = self.light_engine.lock().unwrap();
         let heightmap_lock = self.heightmap.lock().unwrap();
@@ -355,7 +355,31 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Box<[u16]>,
+    #[serde(with = "block_state_checked")]
+    pub(crate) palette: Box<[BlockStateId]>,
+}
+
+mod block_state_checked {
+    use pumpkin_data::BlockStateId;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        value: &[BlockStateId],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        value
+            .iter()
+            .map(|v| BlockStateId::as_u16(*v))
+            .collect::<Vec<u16>>()
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Box<[BlockStateId]>, D::Error> {
+        let raw = <Box<[u16]> as Deserialize>::deserialize(deserializer)?;
+        Ok(raw.iter().map(|v| BlockStateId::new_or_air(*v)).collect())
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -65,6 +65,7 @@ impl PoolAliasLookup {
 
 impl JigsawPlacement {
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub fn add_pieces(
         context: &mut StructureGeneratorContext,
         start_pool_id: &str,
@@ -73,8 +74,8 @@ impl JigsawPlacement {
         position: BlockPos,
         do_expansion_hack: bool,
         project_start_to_heightmap: bool,
-        max_distance_from_center: MaxDistance,
-        dimension_padding: DimensionPadding,
+        max_distance_from_center: &MaxDistance,
+        dimension_padding: &DimensionPadding,
         liquid_settings: LiquidSettings,
         pool_alias_lookup: &PoolAliasLookup,
     ) -> Option<StructurePosition> {
@@ -236,9 +237,8 @@ impl JigsawPlacement {
                     }
 
                     let target_pool_id = pool_alias_lookup.lookup(raw_pool_id);
-                    let target_pool = match TemplatePool::discover(target_pool_id) {
-                        Some(p) => p,
-                        None => continue,
+                    let Some(target_pool) = TemplatePool::discover(target_pool_id) else {
+                        continue;
                     };
 
                     let mut target_elements = Vec::new();
@@ -258,9 +258,8 @@ impl JigsawPlacement {
                             break;
                         }
 
-                        let target_size = match get_element_size(&element) {
-                            Some(size) => size,
-                            None => continue,
+                        let Some(target_size) = get_element_size(&element) else {
+                            continue;
                         };
                         let target_projection = element.projection;
                         let target_rigid = target_projection == JigsawProjection::Rigid;
@@ -387,13 +386,15 @@ impl JigsawPlacement {
                                             let child_pool_max_y =
                                                 get_pool_max_y_size(child_pool_id);
 
-                                            let mut child_fallback_max_y = 0;
-                                            if let Some(cp) = TemplatePool::discover(child_pool_id)
+                                            let child_fallback_max_y = if let Some(cp) =
+                                                TemplatePool::discover(child_pool_id)
                                             {
-                                                child_fallback_max_y = get_pool_max_y_size(
+                                                get_pool_max_y_size(
                                                     pool_alias_lookup.lookup(&cp.fallback),
-                                                );
-                                            }
+                                                )
+                                            } else {
+                                                0
+                                            };
 
                                             expand_to = expand_to
                                                 .max(child_pool_max_y)

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub use p384;
 pub use serde_json;
 
 pub use difficulty::Difficulty;

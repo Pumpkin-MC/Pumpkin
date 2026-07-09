@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, block_properties::BlockProperties};
+use pumpkin_data::{Block, BlockDirection, BlockId, block_properties::BlockProperties};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
@@ -12,7 +12,7 @@ pub struct EndPortal;
 
 impl EndPortal {
     const FRAME_BLOCK: Block = Block::END_PORTAL_FRAME;
-    const FRAME_BLOCK_ID: u16 = Self::FRAME_BLOCK.id;
+    const FRAME_BLOCK_ID: BlockId = Self::FRAME_BLOCK.id;
 
     pub async fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
         let mid_pos = Self::get_mid_pos(world, pos);

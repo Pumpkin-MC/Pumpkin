@@ -3,15 +3,15 @@ use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, CanPlaceAtArgs,
     GetStateForNeighborUpdateArgs, PlacedArgs,
 };
-use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::{Block, BlockId};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 pub struct TwistingVinesBlock;
 impl BlockMetadata for TwistingVinesBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::TWISTING_VINES.id, Block::TWISTING_VINES_PLANT.id].into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::TWISTING_VINES, BlockId::TWISTING_VINES_PLANT].into()
     }
 }
 

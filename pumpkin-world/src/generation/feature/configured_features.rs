@@ -145,6 +145,7 @@ pub enum ConfiguredFeature {
 
 impl ConfiguredFeature {
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -193,7 +194,7 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::PointedDripstone(feature) => feature.generate(chunk, random, pos),
-            Self::CoralMushroom(feature) => feature.generate(
+            Self::CoralMushroom(_feature) => CoralMushroomFeature::generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -202,7 +203,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::CoralTree(feature) => feature.generate(
+            Self::CoralTree(_feature) => CoralTreeFeature::generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -211,7 +212,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::CoralClaw(feature) => feature.generate(
+            Self::CoralClaw(_feature) => CoralClawFeature::generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -220,7 +221,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::EndPlatform(feature) => feature.generate(
+            Self::EndPlatform(_feature) => EndPlatformFeature::generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -240,7 +241,9 @@ impl ConfiguredFeature {
             ),
             Self::SpringFeature(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
-            Self::Flower(feature) => feature.generate(
+            Self::RandomPatch(feature)
+            | Self::Flower(feature)
+            | Self::NoBonemealFlower(feature) => feature.generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -249,17 +252,8 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::NoBonemealFlower(feature) => feature.generate(
-                chunk,
-                block_registry,
-                min_y,
-                height,
-                feature_name,
-                random,
-                pos,
-            ),
-            Self::DesertWell(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::DesertWell(_feature) => {
+                DesertWellFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
             Self::Fossil(feature) => feature.generate(chunk, min_y, height, random, pos),
             Self::Bamboo(feature) => feature.generate(
@@ -272,15 +266,6 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::BlockColumn(feature) => feature.generate(
-                chunk,
-                block_registry,
-                min_y,
-                height,
-                feature_name,
-                random,
-                pos,
-            ),
-            Self::RandomPatch(feature) => feature.generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -325,7 +310,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::Vines(feature) => feature.generate(
+            Self::Vines(_feature) => VinesFeature::generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -355,8 +340,8 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::Kelp(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::Kelp(_feature) => {
+                KelpFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
             Self::Ore(feature) => feature.generate(
                 chunk,
@@ -376,12 +361,12 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::MonsterRoom(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::MonsterRoom(_feature) => {
+                DungeonFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::BlueIce(feature) => feature.generate(chunk, random, pos),
-            Self::GlowstoneBlob(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::BlueIce(_feature) => BlueIceFeature::generate(chunk, random, pos),
+            Self::GlowstoneBlob(_feature) => {
+                GlowstoneBlobFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
             Self::Disk(feature) => feature.generate(
                 chunk,
@@ -402,22 +387,22 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::BasaltPillar(feature) => feature.generate(chunk, random, pos),
+            Self::BasaltPillar(_feature) => BasaltPillarFeature::generate(chunk, random, pos),
             Self::ForestRock(feature) => feature.generate(chunk, random, pos),
-            Self::FreezeTopLayer(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::FreezeTopLayer(_feature) => {
+                FreezeTopLayerFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::IceSpike(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::IceSpike(_feature) => {
+                IceSpikeFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
             Self::Iceberg(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::ChorusPlant(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::ChorusPlant(_feature) => {
+                ChorusPlantFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::EndIsland(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            Self::EndIsland(_feature) => {
+                EndIslandFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
             Self::SculkPatch(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::RootSystem(feature) => feature.generate(

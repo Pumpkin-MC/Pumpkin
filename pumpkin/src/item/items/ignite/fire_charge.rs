@@ -1,12 +1,12 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -38,7 +38,7 @@ impl ItemBehaviour for FireChargeItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             Ignition::ignite_block(
-                |world: Arc<World>, pos: BlockPos, new_state_id: u16| async move {
+                |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
                     world
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;

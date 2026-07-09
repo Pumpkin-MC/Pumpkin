@@ -1,6 +1,6 @@
 use super::TreeDecorator;
-use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::block_state_provider::BlockStateProvider, world::WorldPortalExt};
 use pumpkin_data::{Block, tag::Block::MINECRAFT_LEAVES};
 use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos},
@@ -18,6 +18,7 @@ impl PlaceOnGroundTreeDecorator {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
@@ -53,13 +54,14 @@ impl PlaceOnGroundTreeDecorator {
                 random.next_inbetween_i32(block_box.min.y, block_box.max.y),
                 random.next_inbetween_i32(block_box.min.z, block_box.max.z),
             );
-            self.generate_decoration(chunk, pos, random);
+            self.generate_decoration(chunk, block_registry, pos, random);
         }
     }
 
     fn generate_decoration<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) {
@@ -69,10 +71,14 @@ impl PlaceOnGroundTreeDecorator {
         // TODO
         if (up_state.to_state().is_air() || up_state.to_block_id() == Block::VINE)
             && state.to_state().is_full_cube()
-            && !MINECRAFT_LEAVES.1.contains(&state.to_block_id())
+            && !state.to_block_id().has_tag(MINECRAFT_LEAVES)
         // TODO: using heightmap seems not to work
         {
-            chunk.set_block_state(&up_pos.0, self.block_state_provider.get(random, up_pos));
+            chunk.set_block_state(
+                &up_pos.0,
+                self.block_state_provider
+                    .get(random, up_pos, chunk, block_registry),
+            );
         }
     }
 }

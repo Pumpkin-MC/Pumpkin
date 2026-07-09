@@ -87,6 +87,8 @@ pub struct Server {
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
     pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
+    /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
+    pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
     listing: Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -202,7 +204,10 @@ impl Server {
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_manager = Arc::new(AdvancementManager::new(players_dir.clone(), true));
+        let advancement_manager = Arc::new(AdvancementManager::new(
+            players_dir.clone(),
+            advanced_config.advancement.save_advancements,
+        ));
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
@@ -259,6 +264,7 @@ impl Server {
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
             bedrock_oidc_keys: OnceCell::new(),
+            bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),

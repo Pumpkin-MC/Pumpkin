@@ -1,8 +1,8 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, RandomTickArgs, UseWithItemArgs};
-use pumpkin_data::Block;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
+use pumpkin_data::{Block, BlockId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::world::BlockFlags;
 
@@ -19,7 +19,7 @@ impl BlockBehaviour for FlowerPotBlock {
             //Place the flower inside the pot
             let potted_block_id = get_potted_item(item.id);
             if args.block.eq(&Block::FLOWER_POT) {
-                if potted_block_id != 0 {
+                if potted_block_id != BlockId::AIR {
                     args.world
                         .set_block_state(
                             args.position,
@@ -29,7 +29,7 @@ impl BlockBehaviour for FlowerPotBlock {
                         .await;
                 }
                 return BlockActionResult::Success;
-            } else if potted_block_id != 0 {
+            } else if potted_block_id != BlockId::AIR {
                 //if the player have an item that can be potted in his hand, nothing happens
                 return BlockActionResult::Consume;
             }

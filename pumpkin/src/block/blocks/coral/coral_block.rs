@@ -2,17 +2,21 @@ use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, OnScheduledTickArgs, PlacedArgs,
     blocks::coral::{is_dead_coral, scan_for_water, try_schedule_die_tick},
 };
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockId, tag};
 use pumpkin_world::world::BlockFlags;
 pub struct CoralBlock;
 impl BlockMetadata for CoralBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         let alive_plants = tag::Block::MINECRAFT_CORAL_BLOCKS.1;
         let mut plants = Vec::new();
         for alive_plant_id in alive_plants {
-            let clone = *alive_plant_id;
-            plants.push(clone);
-            plants.push(get_dead_coral_block_type(Block::from_id(clone)).id);
+            let block_id = BlockId::new_or_air(*alive_plant_id);
+            plants.push(block_id);
+            plants.push(
+                get_dead_coral_block_type(block_id)
+                    .expect("not a coral block")
+                    .id,
+            );
         }
         plants.into()
     }
@@ -28,7 +32,10 @@ impl BlockBehaviour for CoralBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
-                let dead_block_state_id = get_dead_coral_block_type(args.block).default_state.id;
+                let dead_block_state_id = get_dead_coral_block_type(args.block.id)
+                    .expect("not a coral block")
+                    .default_state
+                    .id;
                 args.world
                     .set_block_state(args.position, dead_block_state_id, BlockFlags::empty())
                     .await;
@@ -36,16 +43,13 @@ impl BlockBehaviour for CoralBlock {
         })
     }
 }
-fn get_dead_coral_block_type(block: &Block) -> Block {
-    if block == &Block::BRAIN_CORAL_BLOCK {
-        Block::DEAD_BRAIN_CORAL_BLOCK
-    } else if block == &Block::BUBBLE_CORAL_BLOCK {
-        Block::DEAD_BUBBLE_CORAL_BLOCK
-    } else if block == &Block::FIRE_CORAL_BLOCK {
-        Block::DEAD_FIRE_CORAL_BLOCK
-    } else if block == &Block::HORN_CORAL_BLOCK {
-        Block::DEAD_HORN_CORAL_BLOCK
-    } else {
-        Block::DEAD_TUBE_CORAL_BLOCK
+const fn get_dead_coral_block_type(id: BlockId) -> Option<&'static Block> {
+    match id {
+        BlockId::BRAIN_CORAL_BLOCK => Some(&Block::DEAD_BRAIN_CORAL_BLOCK),
+        BlockId::BUBBLE_CORAL_BLOCK => Some(&Block::DEAD_BUBBLE_CORAL_BLOCK),
+        BlockId::FIRE_CORAL_BLOCK => Some(&Block::FIRE_CORAL_BLOCK),
+        BlockId::HORN_CORAL_BLOCK => Some(&Block::DEAD_HORN_CORAL_BLOCK),
+        BlockId::TUBE_CORAL_BLOCK => Some(&Block::DEAD_TUBE_CORAL_BLOCK),
+        _ => None,
     }
 }

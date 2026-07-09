@@ -96,6 +96,7 @@ impl StructurePieceBase for CorridorNetherWartsRoomPiece {
         );
     }
 
+    #[allow(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

@@ -57,21 +57,45 @@ use crate::{
 use pumpkin_data::BlockDirection;
 use tracing::{debug, info};
 
-fn descriptor_to_stack(desc: &NetworkItemDescriptor) -> ItemStack {
+fn descriptor_to_stack(desc: &NetworkItemDescriptor, is_creative: bool) -> ItemStack {
     if desc.id.0 == 0 || desc.stack_size == 0 {
         ItemStack::EMPTY.clone()
-    } else if let Some(mapping) = pumpkin_data::item::JavaToBedrockItemMapping::from_bedrock(
-        desc.id.0 as i16,
-        desc.aux_value.0,
-    ) {
-        ItemStack::new(desc.stack_size as u8, mapping.java_item)
     } else {
-        tracing::warn!(
-            "Failed to map bedrock item id {} and data {} to Java item",
-            desc.id.0,
-            desc.aux_value.0
-        );
-        ItemStack::EMPTY.clone()
+        let mut mapped_item = None;
+
+        if is_creative {
+            let index = (desc.id.0.saturating_sub(1)) as usize;
+            if index < pumpkin_data::bedrock_creative::CREATIVE_ENTRIES.len() {
+                let entry = pumpkin_data::bedrock_creative::CREATIVE_ENTRIES[index];
+                if let Some(mapping) = pumpkin_data::item::JavaToBedrockItemMapping::from_bedrock(
+                    entry.item_id,
+                    entry.item_aux_value,
+                ) {
+                    mapped_item = Some(mapping.java_item);
+                }
+            }
+        }
+
+        if mapped_item.is_none()
+            && let Some(mapping) = pumpkin_data::item::JavaToBedrockItemMapping::from_bedrock(
+                desc.id.0 as i16,
+                desc.aux_value.0,
+            )
+        {
+            mapped_item = Some(mapping.java_item);
+        }
+
+        mapped_item.map_or_else(
+            || {
+                tracing::warn!(
+                    "Failed to map bedrock item id {} and data {} to Java item",
+                    desc.id.0,
+                    desc.aux_value.0
+                );
+                ItemStack::EMPTY.clone()
+            },
+            |item| ItemStack::new(desc.stack_size as u8, item),
+        )
     }
 }
 
@@ -321,13 +345,15 @@ impl BedrockClient {
         }
 
         if input_data.get(InputData::StartFlying as usize) {
-            let mut abilities = player.abilities.lock().await;
-            if !abilities.flying {
+            let flying = { player.abilities.lock().await.flying };
+            if !flying {
                 send_cancellable! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), true);
                     'after: {
-                        abilities.flying = true;
+                        {
+                            player.abilities.lock().await.flying = true;
+                        };
                         player.send_abilities_update().await;
                     }
                     'cancelled: {
@@ -336,13 +362,15 @@ impl BedrockClient {
                 }}
             }
         } else if input_data.get(InputData::StopFlying as usize) {
-            let mut abilities = player.abilities.lock().await;
-            if abilities.flying {
+            let flying = { player.abilities.lock().await.flying };
+            if flying {
                 send_cancellable! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), false);
                     'after: {
-                        abilities.flying = false;
+                        {
+                            player.abilities.lock().await.flying = false;
+                        };
                         player.send_abilities_update().await;
                     }
                     'cancelled: {
@@ -504,12 +532,13 @@ impl BedrockClient {
             player_screen_handler.send_content_updates().await;
         }
 
+        let is_creative = player.gamemode.load() == GameMode::Creative;
         for action in &packet.actions {
             use pumpkin_protocol::bedrock::server::inventory_transaction::InventoryActionSource;
             let source_type = InventoryActionSource::from(action.source_type);
             if source_type == InventoryActionSource::World {
-                let old_stack = descriptor_to_stack(&action.old_item);
-                let new_stack = descriptor_to_stack(&action.new_item);
+                let old_stack = descriptor_to_stack(&action.old_item, is_creative);
+                let new_stack = descriptor_to_stack(&action.new_item, is_creative);
                 if old_stack.is_empty() && !new_stack.is_empty() {
                     player.drop_item(new_stack).await;
                 }
@@ -517,7 +546,7 @@ impl BedrockClient {
                 if let Some(screen_slot) =
                     map_bedrock_slot_to_screen_handler(window_id, action.inventory_slot)
                 {
-                    let item_stack = descriptor_to_stack(&action.new_item);
+                    let item_stack = descriptor_to_stack(&action.new_item, is_creative);
 
                     let mut player_screen_handler = player.player_screen_handler.lock().await;
 
@@ -610,7 +639,16 @@ impl BedrockClient {
 
                 if data.action_type.0 == 0 {
                     // Click block
+                    let is_creative = player.gamemode.load() == GameMode::Creative;
+                    let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
+
                     let held_item = player.inventory.held_item();
+                    if !client_stack.is_empty() {
+                        let mut server_stack = held_item.lock().await;
+                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
+                            *server_stack = client_stack.clone();
+                        }
+                    }
 
                     let result = server
                         .block_registry
@@ -647,6 +685,53 @@ impl BedrockClient {
                                 &world,
                             )
                             .await;
+                    }
+
+                    let mut stack = held_item.lock().await;
+                    if !stack.is_empty() {
+                        server
+                            .item_registry
+                            .use_on_block(
+                                &mut stack,
+                                player,
+                                data.block_position,
+                                face,
+                                data.click_position,
+                                block,
+                                &server,
+                            )
+                            .await;
+
+                        let item_id = stack.item.id;
+                        if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
+                            let dummy_use_item_on =
+                                pumpkin_protocol::java::server::play::SUseItemOn {
+                                    hand: VarInt(0),
+                                    position: data.block_position,
+                                    face: VarInt(data.block_face),
+                                    cursor_pos: data.click_position,
+                                    inside_block: false,
+                                    is_against_world_border: false,
+                                    sequence: VarInt(0),
+                                };
+
+                            if let Ok(Some(_)) = server
+                                .block_registry
+                                .place_block(
+                                    player,
+                                    placed_block,
+                                    &server,
+                                    &dummy_use_item_on,
+                                    data.block_position,
+                                    face,
+                                )
+                                .await
+                            {
+                                if player.gamemode.load() != GameMode::Creative {
+                                    stack.decrement(1);
+                                }
+                            }
+                        }
                     }
                 }
             }

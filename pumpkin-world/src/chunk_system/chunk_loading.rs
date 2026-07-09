@@ -4,6 +4,7 @@ use itertools::Itertools;
 use std::cmp::{Ordering, PartialEq, min};
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
+use std::fmt::Write;
 use std::mem::swap;
 use std::sync::Arc;
 use tracing::debug;
@@ -38,6 +39,7 @@ impl From<HeapNode> for (ChunkPos, i8) {
 
 struct LevelCache(i32, i32, usize, [(i8, i8); 256 * 256]);
 
+#[expect(clippy::large_stack_arrays)]
 impl LevelCache {
     const fn new() -> Self {
         Self(0, 0, 0, [(0, 0); 256 * 256])
@@ -176,22 +178,21 @@ impl ChunkLoading {
 
         let mut header = "X/Y".to_string();
         for y in sy..=ty {
-            header.push_str(&format!("{y:4}"));
+            let _ = write!(header, "{y:4}");
         }
 
         let grid: String = (sx..=tx)
             .map(|x| {
                 let mut row = format!("{x:3}");
-                row.push_str(
-                    &(sy..=ty)
-                        .map(|y| {
-                            format!(
-                                "{:4}",
-                                map.get(&ChunkPos::new(x, y)).unwrap_or(&Self::MAX_LEVEL)
-                            )
-                        })
-                        .collect::<String>(),
-                );
+                let mut cols = String::new();
+                for y in sy..=ty {
+                    let _ = write!(
+                        cols,
+                        "{:4}",
+                        map.get(&ChunkPos::new(x, y)).unwrap_or(&Self::MAX_LEVEL)
+                    );
+                }
+                row.push_str(&cols);
                 row
             })
             .collect::<Vec<_>>()
@@ -393,6 +394,7 @@ impl ChunkLoading {
 }
 
 #[test]
+#[expect(clippy::print_stdout)]
 fn test() {
     let mut a = ChunkLoading::new(Arc::new(LevelChannel::new()));
 
@@ -426,24 +428,20 @@ fn test() {
     {
         let mut header = "X/Y".to_string();
         for y in sy..=ty {
-            header.push_str(&format!("{y:4}"));
+            let _ = write!(header, "{y:4}");
         }
 
         let grid: String = (sx..=tx)
             .map(|x| {
                 let mut row = format!("{x:3}");
-                row.push_str(
-                    &(sy..=ty)
-                        .map(|y| {
-                            format!(
-                                "{:4}",
-                                a.pos_level
-                                    .get(&ChunkPos::new(x, y))
-                                    .unwrap_or(&ChunkLoading::MAX_LEVEL)
-                            )
-                        })
-                        .collect::<String>(),
-                );
+                for y in sy..=ty {
+                    let level = a
+                        .pos_level
+                        .get(&ChunkPos::new(x, y))
+                        .unwrap_or(&ChunkLoading::MAX_LEVEL);
+
+                    let _ = write!(row, "{level:4}");
+                }
                 row
             })
             .collect::<Vec<_>>()

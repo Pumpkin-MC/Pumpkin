@@ -6,10 +6,10 @@ use pumpkin_util::{
 };
 
 pub struct SmallDripstoneFeature {
-    pub chance_of_taller_dripstone: f32,
-    pub chance_of_directional_spread: f32,
-    pub chance_of_spread_radius2: f32,
-    pub chance_of_spread_radius3: f32,
+    pub taller_dripstone: f32,
+    pub directional_spread: f32,
+    pub spread_radius2: f32,
+    pub spread_radius3: f32,
 }
 
 impl SmallDripstoneFeature {
@@ -62,17 +62,17 @@ impl SmallDripstoneFeature {
     ) {
         super::gen_dripstone(chunk, pos);
         for dir in BlockDirection::horizontal() {
-            if random.next_f32() > self.chance_of_directional_spread {
+            if random.next_f32() > self.directional_spread {
                 continue;
             }
             let pos = pos.offset(dir.to_offset());
             super::gen_dripstone(chunk, pos);
-            if random.next_f32() > self.chance_of_spread_radius2 {
+            if random.next_f32() > self.spread_radius2 {
                 continue;
             }
             let pos = pos.offset(BlockDirection::random(random).to_offset());
             super::gen_dripstone(chunk, pos);
-            if random.next_f32() > self.chance_of_spread_radius3 {
+            if random.next_f32() > self.spread_radius3 {
                 continue;
             }
             let pos = pos.offset(BlockDirection::random(random).to_offset());

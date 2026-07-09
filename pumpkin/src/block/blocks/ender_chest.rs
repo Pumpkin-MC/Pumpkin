@@ -6,6 +6,7 @@ use crate::block::{
     registry::BlockActionResult,
 };
 use crate::world::World;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
 use pumpkin_data::translation;
 use pumpkin_inventory::{
@@ -16,7 +17,7 @@ use pumpkin_inventory::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{BlockStateId, inventory::Inventory};
+use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
 struct EnderChestScreenFactory(Arc<dyn Inventory>);

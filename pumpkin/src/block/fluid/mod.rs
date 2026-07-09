@@ -16,10 +16,10 @@ use crate::block::BlockFuture;
 use crate::entity::{EntityBase, player::Player};
 use crate::{server::Server, world::World};
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use std::sync::Arc;
 
 pub trait FluidBehaviour: Send + Sync {
@@ -69,7 +69,7 @@ pub trait FluidBehaviour: Send + Sync {
         _use_item_on: &'a SUseItemOn,
         _replacing: BlockIsReplacing,
     ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async { fluid.default_state_index })
+        Box::pin(async { fluid.states[fluid.default_state_index as usize].block_state_id })
     }
 
     fn get_state_for_neighbour_update<'a>(
@@ -79,7 +79,7 @@ pub trait FluidBehaviour: Send + Sync {
         _block_pos: &'a BlockPos,
         _notify: bool,
     ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async { 0 })
+        Box::pin(async { BlockStateId::AIR })
     }
 
     fn on_neighbor_update<'a>(

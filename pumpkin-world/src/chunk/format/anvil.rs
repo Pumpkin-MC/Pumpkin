@@ -124,7 +124,7 @@ impl Compression {
     const LZ4_ID: u8 = 4;
     const CUSTOM_ID: u8 = 127;
 
-    fn decompress_data(&self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
+    fn decompress_data(self, compressed_data: &[u8]) -> Result<Box<[u8]>, CompressionError> {
         fn decode<R: std::io::Read>(mut reader: R, capacity: usize) -> std::io::Result<Box<[u8]>> {
             let mut buf = Vec::with_capacity(capacity);
             reader.read_to_end(&mut buf)?;
@@ -149,7 +149,7 @@ impl Compression {
 
     const LZ4_COMPRESSION_LEVEL_BASE: u32 = 10;
     fn compress_data(
-        &self,
+        self,
         uncompressed_data: &[u8],
         compression_level: u32,
     ) -> Result<Vec<u8>, CompressionError> {
@@ -491,6 +491,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     }
 }
 
+#[expect(clippy::large_stack_arrays)]
 impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
     fn default() -> Self {
         Self {
@@ -498,7 +499,7 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
             write_action: Mutex::new(WriteAction::Pass),
             // Two sectors for offset + timestamp
             end_sector: 2,
-            _dummy: Default::default(),
+            _dummy: PhantomData,
         }
     }
 }
@@ -606,6 +607,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         Ok(chunk_file)
     }
 
+    #[expect(clippy::too_many_lines)]
     async fn update_chunk(
         &mut self,
         chunk: &Self::Data,

@@ -109,6 +109,11 @@ fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8
         // Some versions prefix keys with DATA_ (Bedrock), others don't (Java)
         // Try both forms so every version resolves correctly
         let prefixed = format!("DATA_{final_name}");
+        let aliases: &[&str] = if final_name == "CUSTOM_NAME_VISIBLE" {
+            &["NAME_VISIBLE"]
+        } else {
+            &[]
+        };
 
         let mut fields = TokenStream::new();
         for (ver, data) in versions.iter() {
@@ -116,6 +121,7 @@ fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8
             let id = data
                 .get(final_name.as_str())
                 .or_else(|| data.get(prefixed.as_str()))
+                .or_else(|| aliases.iter().find_map(|alias| data.get(*alias)))
                 .copied()
                 .unwrap_or(255);
             fields.extend(quote! {
@@ -133,7 +139,16 @@ fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8
 
 fn normalize_name(name: &str) -> String {
     let upper = name.to_uppercase();
-    upper
+    let normalized = upper
         .strip_prefix("DATA_")
-        .map_or(upper.clone(), str::to_string)
+        .map_or(upper.clone(), str::to_string);
+
+    // Mojang renamed the shared entity custom-name visibility tracker from
+    // NAME_VISIBLE to DATA_CUSTOM_NAME_VISIBLE in newer mappings. Keep one
+    // generated constant usable across both naming schemes.
+    if normalized == "NAME_VISIBLE" {
+        "CUSTOM_NAME_VISIBLE".to_string()
+    } else {
+        normalized
+    }
 }

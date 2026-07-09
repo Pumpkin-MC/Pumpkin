@@ -1,10 +1,11 @@
 use crate::block::{BrokenArgs, PlacedArgs};
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
 };
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
@@ -16,16 +17,16 @@ use crate::block::{
 pub struct TallPlantBlock;
 
 impl BlockMetadata for TallPlantBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::TALL_GRASS.id,
-            Block::LARGE_FERN.id,
-            Block::PITCHER_PLANT.id,
+            BlockId::TALL_GRASS,
+            BlockId::LARGE_FERN,
+            BlockId::PITCHER_PLANT,
             // TallFlowerBlocks
-            Block::SUNFLOWER.id,
-            Block::LILAC.id,
-            Block::PEONY.id,
-            Block::ROSE_BUSH.id,
+            BlockId::SUNFLOWER,
+            BlockId::LILAC,
+            BlockId::PEONY,
+            BlockId::ROSE_BUSH,
         ]
         .into()
     }

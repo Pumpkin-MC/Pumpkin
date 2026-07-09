@@ -1,15 +1,16 @@
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
-    BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
-    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut,
-    read_data,
+    BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DataComponentImpl,
+    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl,
+    UseCooldownImpl, get, get_mut, read_data,
 };
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
 use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
@@ -412,6 +413,87 @@ impl ItemStack {
         }
     }
 
+    fn custom_data_compound(&self) -> Option<&NbtCompound> {
+        self.get_data_component::<CustomDataImpl>()
+            .map(|custom_data| &custom_data.data)
+    }
+
+    pub fn set_custom_data(&mut self, namespace: &str, key: &str, value: NbtTag) {
+        let mut custom_data = self
+            .get_data_component::<CustomDataImpl>()
+            .map_or_else(NbtCompound::new, |custom_data| custom_data.data.clone());
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data
+            .child_tags
+            .insert(namespace.into(), NbtTag::Compound(namespace_data));
+
+        self.set_custom_data_component(custom_data);
+    }
+
+    fn set_custom_data_component(&mut self, custom_data: NbtCompound) {
+        let component = Some(CustomDataImpl { data: custom_data }.to_dyn());
+        if let Some((_, data)) = self
+            .patch
+            .iter_mut()
+            .find(|(id, _)| *id == DataComponent::CustomData)
+        {
+            *data = component;
+        } else {
+            self.patch.push((DataComponent::CustomData, component));
+        }
+    }
+
+    pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<NbtTag> {
+        self.custom_data_compound()?
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub fn remove_custom_data(&mut self, namespace: &str, key: &str) {
+        let Some(mut custom_data) = self
+            .get_data_component::<CustomDataImpl>()
+            .map(|custom_data| custom_data.data.clone())
+        else {
+            return;
+        };
+
+        let Some(NbtTag::Compound(mut namespace_data)) = custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data
+                .child_tags
+                .insert(namespace.into(), NbtTag::Compound(namespace_data));
+        }
+
+        if custom_data.is_empty() {
+            self.patch
+                .retain(|(id, _)| *id != DataComponent::CustomData);
+        } else {
+            self.set_custom_data_component(custom_data);
+        }
+    }
+
+    #[must_use]
+    pub fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).is_some()
+    }
+
     #[must_use]
     pub fn split(&mut self, amount: u8) -> Self {
         let min = amount.min(self.item_count);
@@ -654,11 +736,176 @@ impl From<&RecipeResultStruct> for ItemStack {
 mod tests {
     use super::*;
     use crate::data_component::DataComponent;
-    use crate::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
+    use crate::data_component_impl::{
+        CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, UnbreakableImpl,
+    };
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
         ItemStack::new(1, &Item::IRON_SWORD)
+    }
+
+    #[test]
+    fn custom_data_sets_and_reads_typed_values() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data(
+            "test_plugin",
+            "payload",
+            NbtTag::ByteArray(vec![0, 1, 127, -128, -1].into()),
+        );
+
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "marker"),
+            Some(NbtTag::Byte(1))
+        );
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "mode"),
+            Some(NbtTag::String("pos1".into()))
+        );
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "payload"),
+            Some(NbtTag::ByteArray(vec![0, 1, 127, -128, -1].into()))
+        );
+        assert!(stack.has_custom_data("test_plugin", "marker"));
+    }
+
+    #[test]
+    fn custom_data_sets_and_reads_full_nbt_tags() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+        let mut compound = NbtCompound::new();
+        compound.child_tags.insert("byte".into(), NbtTag::Byte(1));
+        compound.child_tags.insert("short".into(), NbtTag::Short(2));
+        compound.child_tags.insert("int".into(), NbtTag::Int(3));
+        compound.child_tags.insert("long".into(), NbtTag::Long(4));
+        compound
+            .child_tags
+            .insert("float".into(), NbtTag::Float(5.0));
+        compound
+            .child_tags
+            .insert("double".into(), NbtTag::Double(6.0));
+        compound
+            .child_tags
+            .insert("string".into(), NbtTag::String("value".into()));
+        compound.child_tags.insert(
+            "list".into(),
+            NbtTag::List(vec![NbtTag::Int(1), NbtTag::Int(2)]),
+        );
+        compound
+            .child_tags
+            .insert("byte_array".into(), NbtTag::ByteArray(vec![1, 2].into()));
+        compound
+            .child_tags
+            .insert("int_array".into(), NbtTag::IntArray(vec![3, 4]));
+        compound
+            .child_tags
+            .insert("long_array".into(), NbtTag::LongArray(vec![5, 6]));
+
+        let tag = NbtTag::Compound(compound);
+        stack.set_custom_data("test_plugin", "full", tag.clone());
+
+        assert_eq!(stack.get_custom_data("test_plugin", "full"), Some(tag));
+    }
+
+    #[test]
+    fn custom_data_preserves_sibling_namespaces_and_keys() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("other_plugin", "flag", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(0));
+
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "marker"),
+            Some(NbtTag::Byte(0))
+        );
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "mode"),
+            Some(NbtTag::String("pos1".into()))
+        );
+        assert_eq!(
+            stack.get_custom_data("other_plugin", "flag"),
+            Some(NbtTag::Byte(1))
+        );
+    }
+
+    #[test]
+    fn remove_custom_data_removes_only_target_key_and_cleans_empty_component() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
+        stack.set_custom_data("other_plugin", "flag", NbtTag::Byte(1));
+
+        stack.remove_custom_data("test_plugin", "marker");
+        assert!(!stack.has_custom_data("test_plugin", "marker"));
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "mode"),
+            Some(NbtTag::String("pos1".into()))
+        );
+        assert_eq!(
+            stack.get_custom_data("other_plugin", "flag"),
+            Some(NbtTag::Byte(1))
+        );
+        assert!(stack.get_data_component::<CustomDataImpl>().is_some());
+
+        stack.remove_custom_data("test_plugin", "mode");
+        stack.remove_custom_data("other_plugin", "flag");
+        assert!(stack.get_data_component::<CustomDataImpl>().is_none());
+    }
+
+    #[test]
+    fn custom_data_preserves_other_item_components() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+        stack.patch.push((
+            DataComponent::CustomName,
+            Some(
+                CustomNameImpl {
+                    name: pumpkin_util::text::TextComponent::text("Marked Item"),
+                }
+                .to_dyn(),
+            ),
+        ));
+        stack
+            .patch
+            .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
+
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.remove_custom_data("test_plugin", "missing");
+
+        assert!(stack.get_data_component::<CustomNameImpl>().is_some());
+        assert!(stack.get_data_component::<UnbreakableImpl>().is_some());
+        assert_eq!(
+            stack.get_custom_data("test_plugin", "marker"),
+            Some(NbtTag::Byte(1))
+        );
+    }
+
+    #[test]
+    fn custom_data_survives_item_stack_nbt_roundtrip() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+        stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
+        stack.set_custom_data("test_plugin", "mode", NbtTag::String("pos1".into()));
+        stack
+            .patch
+            .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+        let decoded = ItemStack::read_item_stack(&compound).expect("stack should decode");
+
+        assert_eq!(
+            decoded.get_custom_data("test_plugin", "marker"),
+            Some(NbtTag::Byte(1))
+        );
+        assert_eq!(
+            decoded.get_custom_data("test_plugin", "mode"),
+            Some(NbtTag::String("pos1".into()))
+        );
+        assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
     }
 
     // ── damage_item ───────────────────────────────────────────────

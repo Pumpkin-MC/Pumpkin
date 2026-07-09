@@ -69,7 +69,7 @@ impl BlockColumnFeature {
             }
             let layer = &self.layers[l];
             for _n in 0..*m {
-                let state = layer.provider.get(random, mutable);
+                let state = layer.provider.get(random, mutable, chunk, block_registry);
                 chunk.set_block_state(&mutable.0, state);
                 mutable = mutable.offset(self.direction.to_offset());
             }

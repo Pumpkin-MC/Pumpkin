@@ -20,7 +20,7 @@ impl SimpleBlockFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let state = self.to_place.get(random, pos);
+        let state = self.to_place.get(random, pos, chunk, block_registry);
         let block = Block::from_state_id(state.id);
         let block_accessor: &dyn BlockAccessor = chunk;
         if !block_registry.can_place_at(block, state, block_accessor, &pos) {

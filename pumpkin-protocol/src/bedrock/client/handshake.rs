@@ -1,7 +1,7 @@
+use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(PacketWrite)]
 #[packet(0x03)]
 pub struct CHandshake {
     jwt_data: String,

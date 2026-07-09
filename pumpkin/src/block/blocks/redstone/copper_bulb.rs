@@ -1,9 +1,9 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
-use pumpkin_data::Block;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 type CopperBulbLikeProperties = pumpkin_data::block_properties::CopperBulbLikeProperties;
@@ -11,16 +11,16 @@ type CopperBulbLikeProperties = pumpkin_data::block_properties::CopperBulbLikePr
 pub struct CopperBulbBlock;
 
 impl BlockMetadata for CopperBulbBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::COPPER_BULB.id,
-            Block::EXPOSED_COPPER_BULB.id,
-            Block::WEATHERED_COPPER_BULB.id,
-            Block::OXIDIZED_COPPER_BULB.id,
-            Block::WAXED_COPPER_BULB.id,
-            Block::WAXED_EXPOSED_COPPER_BULB.id,
-            Block::WAXED_WEATHERED_COPPER_BULB.id,
-            Block::WAXED_OXIDIZED_COPPER_BULB.id,
+            BlockId::COPPER_BULB,
+            BlockId::EXPOSED_COPPER_BULB,
+            BlockId::WEATHERED_COPPER_BULB,
+            BlockId::OXIDIZED_COPPER_BULB,
+            BlockId::WAXED_COPPER_BULB,
+            BlockId::WAXED_EXPOSED_COPPER_BULB,
+            BlockId::WAXED_WEATHERED_COPPER_BULB,
+            BlockId::WAXED_OXIDIZED_COPPER_BULB,
         ]
         .into()
     }

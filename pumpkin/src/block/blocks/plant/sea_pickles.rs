@@ -6,6 +6,7 @@ use crate::block::{
 };
 use crate::block::{BlockFuture, BlockIsReplacing};
 use crate::entity::EntityBase;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
@@ -13,7 +14,6 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 

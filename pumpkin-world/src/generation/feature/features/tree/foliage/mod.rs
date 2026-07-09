@@ -146,7 +146,7 @@ impl FoliagePlacer {
         pos: BlockPos,
         foliage_provider: &BlockState,
     ) -> bool {
-        GenerationCache::get_block_state(chunk, &pos.0).0 == foliage_provider.id
+        GenerationCache::get_block_state(chunk, &pos.0) == foliage_provider.id
     }
 
     fn try_place_extension<T: GenerationCache>(
@@ -264,6 +264,7 @@ pub enum FoliageType {
 
 impl FoliageType {
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -382,12 +383,12 @@ impl FoliageType {
             Self::Blob(blob) => blob.get_random_height(random),
             Self::Spruce(spruce) => spruce.get_random_height(random, trunk_height),
             Self::Pine(pine) => pine.get_random_height(random, trunk_height),
-            Self::Acacia(acacia) => acacia.get_random_height(random),
+            Self::Acacia(_acacia) => AcaciaFoliagePlacer::get_random_height(random),
             Self::Bush(bush) => bush.get_random_height(random),
             Self::Fancy(fancy) => fancy.get_random_height(random),
             Self::Jungle(jungle) => jungle.get_random_height(random, trunk_height),
             Self::MegaPine(mega_pine) => mega_pine.get_random_height(random, trunk_height),
-            Self::DarkOak(dark_oak) => dark_oak.get_random_height(random),
+            Self::DarkOak(_dark_oak) => DarkOakFoliagePlacer::get_random_height(random),
             Self::RandomSpread(random_spread) => {
                 random_spread.get_random_height(random, trunk_height)
             }

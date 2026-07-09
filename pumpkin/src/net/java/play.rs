@@ -12,7 +12,7 @@ use tracing::{Level, debug, error, info, trace, warn};
 
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
-use crate::block::{self, BlockIsReplacing};
+use crate::block::{self};
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
@@ -21,7 +21,6 @@ use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
-use crate::plugin::block::block_place::BlockPlaceEvent;
 use crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
 use crate::plugin::player::fish::{PlayerFishEvent, PlayerFishState};
 use crate::plugin::player::item_held::PlayerItemHeldEvent;
@@ -40,17 +39,14 @@ use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
-use pumpkin_data::block_properties::{
-    BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
-};
+use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
 };
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Advancement, Block, BlockDirection, BlockState, translation};
+use pumpkin_data::{Advancement, Block, BlockDirection, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -77,10 +73,8 @@ use pumpkin_protocol::java::server::play::{
     SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
     STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
-use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::generation::structure::structures::jigsaw::JigsawJointType;
 use pumpkin_world::world::BlockFlags;
@@ -1882,7 +1876,7 @@ impl JavaClient {
                     {
                         self.enqueue_packet(&CBlockUpdate::new(
                             position,
-                            VarInt(i32::from(state.id)),
+                            VarInt(i32::from(state.id.as_u16())),
                         ))
                         .await;
                         self.update_sequence(player, player_action.sequence.0);
@@ -1939,7 +1933,7 @@ impl JavaClient {
                                 player
                                     .increment_stat(
                                         StatisticCategory::Mined,
-                                        broken_state.id as i32,
+                                        broken_state.id.as_u16() as i32,
                                         1,
                                     )
                                     .await;
@@ -2021,7 +2015,7 @@ impl JavaClient {
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
                             .await;
                         player
-                            .increment_stat(StatisticCategory::Mined, state.id as i32, 1)
+                            .increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1)
                             .await;
                     }
 
@@ -2088,7 +2082,7 @@ impl JavaClient {
         let synced_state_id = world.get_block_state_id(&position);
         self.send_packet_now(&CBlockUpdate::new(
             position,
-            VarInt(i32::from(synced_state_id)),
+            VarInt(i32::from(synced_state_id.as_u16())),
         ))
         .await;
     }
@@ -2198,7 +2192,7 @@ impl JavaClient {
             'cancelled: {
                 self.enqueue_packet(&CBlockUpdate::new(
                     position,
-                    VarInt(block.id as i32),
+                    VarInt(block.id.as_u16() as i32),
                 ))
                 .await;
                 return Ok(());
@@ -2711,55 +2705,6 @@ impl JavaClient {
         );
     }
 
-    fn entity_blocks_block_placement(entity: &dyn EntityBase) -> bool {
-        let base_entity = entity.get_entity();
-        if base_entity.is_removed()
-            || base_entity.no_clip.load(Ordering::Relaxed)
-            || entity.is_spectator()
-        {
-            return false;
-        }
-
-        if entity.get_living_entity().is_some() {
-            return true;
-        }
-
-        // Matches vanilla's "blocksBuilding" intent for non-living entities:
-        // minecarts/boats/rafts + a few special entities.
-        let entity_type = base_entity.entity_type;
-        let resource_name = entity_type.resource_name;
-        entity_type == &EntityType::END_CRYSTAL
-            || entity_type == &EntityType::FALLING_BLOCK
-            || entity_type == &EntityType::TNT
-            || resource_name.ends_with("_minecart")
-            || resource_name.ends_with("_boat")
-            || resource_name.ends_with("_raft")
-    }
-
-    fn has_blocking_entity_in_box(world: &World, placed_box: &BoundingBox) -> bool {
-        let players = world.players.load();
-        if players.iter().any(|player| {
-            Self::entity_blocks_block_placement(player.as_ref())
-                && player
-                    .get_entity()
-                    .bounding_box
-                    .load()
-                    .intersects(placed_box)
-        }) {
-            return true;
-        }
-
-        world.entities.load().iter().any(|entity| {
-            Self::entity_blocks_block_placement(entity.as_ref())
-                && entity
-                    .get_entity()
-                    .bounding_box
-                    .load()
-                    .intersects(placed_box)
-        })
-    }
-
-    #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
         player: &Arc<Player>,
@@ -2769,171 +2714,27 @@ impl JavaClient {
         location: BlockPos,
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
-        let entity = &player.get_entity();
-
-        match player.gamemode.load() {
-            GameMode::Spectator | GameMode::Adventure => {
-                return Err(BlockPlacingError::InvalidGamemode);
-            }
-            _ => {}
-        }
-
-        let clicked_block_pos = BlockPos(location.0);
-        let world = entity.world.load_full();
-
-        // Check if the block is under the world
-        if location.0.y + face.to_offset().y < world.get_bottom_y() {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        // Check the world's max build height
-        if location.0.y + face.to_offset().y > world.get_top_y() {
-            player
-                .send_system_message_raw(
-                    &TextComponent::translate_cross(
-                        translation::java::BUILD_TOOHIGH,
-                        translation::bedrock::BUILD_TOOHIGH,
-                        vec![TextComponent::text((world.get_top_y()).to_string())],
-                    )
-                    .color_named(NamedColor::Red),
-                    true,
-                )
+        match server
+            .block_registry
+            .place_block(player, block, server, &use_item_on, location, face)
+            .await
+        {
+            Ok(Some((final_block_pos, new_state))) => {
+                self.send_packet_now(&CBlockUpdate::new(
+                    final_block_pos,
+                    VarInt(i32::from(new_state.as_u16())),
+                ))
                 .await;
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
-
-        let replace_clicked_block = if clicked_block == block {
-            world
-                .block_registry
-                .can_update_at(
-                    &world,
-                    clicked_block,
-                    clicked_block_state.id,
-                    &clicked_block_pos,
-                    face,
-                    &use_item_on,
-                    player,
-                )
-                .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
-        } else if clicked_block_state.replaceable() {
-            if clicked_block == &Block::WATER {
-                let water_props =
-                    WaterLikeProperties::from_state_id(clicked_block_state.id, clicked_block);
-                Some(BlockIsReplacing::Water(water_props.level))
-            } else {
-                Some(BlockIsReplacing::Other)
+                Ok(true)
             }
-        } else {
-            None
-        };
-
-        let (final_block_pos, final_face, replacing) =
-            if let Some(replacing) = replace_clicked_block {
-                (clicked_block_pos, face.opposite(), replacing)
-            } else {
-                let block_pos = BlockPos(location.0 + face.to_offset());
-                let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
-
-                let replace_previous_block = if previous_block == block {
-                    world
-                        .block_registry
-                        .can_update_at(
-                            &world,
-                            previous_block,
-                            previous_block_state.id,
-                            &block_pos,
-                            face.opposite(),
-                            &use_item_on,
-                            player,
-                        )
-                        .then_some(BlockIsReplacing::Itself(previous_block_state.id))
-                } else {
-                    previous_block_state.replaceable().then(|| {
-                        if previous_block == &Block::WATER {
-                            let water_props = WaterLikeProperties::from_state_id(
-                                previous_block_state.id,
-                                previous_block,
-                            );
-                            BlockIsReplacing::Water(water_props.level)
-                        } else {
-                            BlockIsReplacing::None
-                        }
-                    })
-                };
-
-                match replace_previous_block {
-                    Some(replacing) => (block_pos, face.opposite(), replacing),
-                    None => {
-                        // Don't place and don't decrement if the previous block is not replaceable
-                        return Ok(false);
-                    }
-                }
-            };
-
-        if !server.block_registry.can_place_at(
-            Some(server),
-            Some(&*world),
-            &*world,
-            Some(player),
-            block,
-            block.default_state,
-            &final_block_pos,
-            Some(final_face),
-            Some(&use_item_on),
-        ) {
-            return Ok(false);
-        }
-
-        let new_state = server
-            .block_registry
-            .on_place(
-                server,
-                &world,
-                player,
-                block,
-                &final_block_pos,
-                final_face,
-                replacing,
-                &use_item_on,
-            )
-            .await;
-
-        // Mirror vanilla obstruction checks: only entities that block building should prevent
-        // placement. (e.g. arrows/xp orbs/displays/markers should not)
-        let state = BlockState::from_id(new_state);
-        for shape in state.get_block_collision_shapes() {
-            let placed_box = shape.at_pos(final_block_pos);
-
-            if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
-                return Ok(false);
+            Ok(None) => Ok(false),
+            Err(crate::block::registry::BlockPlacingError::InvalidGamemode) => {
+                Err(BlockPlacingError::InvalidGamemode)
+            }
+            Err(crate::block::registry::BlockPlacingError::BlockOutOfWorld) => {
+                Err(BlockPlacingError::BlockOutOfWorld)
             }
         }
-
-        let event =
-            BlockPlaceEvent::new(player.clone(), block, clicked_block, final_block_pos, true);
-        let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
-        if event.cancelled {
-            return Ok(false);
-        }
-
-        let _replaced_id = world
-            .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
-            .await;
-        self.send_packet_now(&CBlockUpdate::new(
-            final_block_pos,
-            VarInt(i32::from(new_state)),
-        ))
-        .await;
-
-        server
-            .block_registry
-            .player_placed(&world, block, new_state, &final_block_pos, face, player)
-            .await;
-
-        // The block was placed successfully, so decrement their inventory
-        Ok(true)
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.

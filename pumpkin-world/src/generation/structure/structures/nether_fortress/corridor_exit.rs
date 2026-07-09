@@ -86,6 +86,7 @@ impl StructurePieceBase for CorridorExitPiece {
         );
     }
 
+    #[allow(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,

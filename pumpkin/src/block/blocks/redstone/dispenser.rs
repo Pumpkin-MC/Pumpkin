@@ -1,8 +1,8 @@
 use crate::block::{BlockBehaviour, BlockFuture, OnPlaceArgs};
 use crate::entity::EntityBase;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, DispenserLikeProperties};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 
 #[pumpkin_block("minecraft:dispenser")]
 pub struct DispenserBlock;

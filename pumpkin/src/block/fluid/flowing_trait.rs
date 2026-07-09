@@ -1,11 +1,11 @@
 use super::{pathfinder, physics};
 use crate::{block::BlockFuture, world::World};
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockStateId,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
 pub type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 pub type FluidFuture<'a, T> = BlockFuture<'a, T>;

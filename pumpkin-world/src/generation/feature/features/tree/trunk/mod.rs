@@ -42,7 +42,6 @@ impl TrunkPlacer {
     }
 
     pub fn set_dirt<T: GenerationCache>(
-        &self,
         block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         random: &mut RandomGenerator,
@@ -56,7 +55,6 @@ impl TrunkPlacer {
     }
 
     pub fn place<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         pos: &BlockPos,
         trunk_block: &BlockState,
@@ -70,14 +68,13 @@ impl TrunkPlacer {
     }
 
     pub fn try_place<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         pos: &BlockPos,
         trunk_block: &BlockState,
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
         if TreeFeature::can_replace_or_log(block.to_state(), block.to_block_id()) {
-            return self.place(chunk, pos, trunk_block);
+            return Self::place(chunk, pos, trunk_block);
         }
         false
     }

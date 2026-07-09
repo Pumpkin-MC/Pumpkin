@@ -853,14 +853,14 @@ impl TrackedData {
         v26_2: 2u8,
     };
     pub const CUSTOM_NAME_VISIBLE: TrackedId = TrackedId {
-        v1_21: 255u8,
-        v1_21_2: 255u8,
-        v1_21_4: 255u8,
-        v1_21_5: 255u8,
-        v1_21_6: 255u8,
-        v1_21_7: 255u8,
-        v1_21_9: 255u8,
-        v1_21_11: 255u8,
+        v1_21: 3u8,
+        v1_21_2: 3u8,
+        v1_21_4: 3u8,
+        v1_21_5: 3u8,
+        v1_21_6: 3u8,
+        v1_21_7: 3u8,
+        v1_21_9: 3u8,
+        v1_21_11: 3u8,
         v26_1: 3u8,
         v26_2: 3u8,
     };
@@ -2339,18 +2339,6 @@ impl TrackedData {
         v1_21_11: 255u8,
         v26_1: 19u8,
         v26_2: 19u8,
-    };
-    pub const NAME_VISIBLE: TrackedId = TrackedId {
-        v1_21: 3u8,
-        v1_21_2: 3u8,
-        v1_21_4: 3u8,
-        v1_21_5: 3u8,
-        v1_21_6: 3u8,
-        v1_21_7: 3u8,
-        v1_21_9: 3u8,
-        v1_21_11: 3u8,
-        v26_1: 255u8,
-        v26_2: 255u8,
     };
     pub const NO_GRAVITY: TrackedId = TrackedId {
         v1_21: 5u8,

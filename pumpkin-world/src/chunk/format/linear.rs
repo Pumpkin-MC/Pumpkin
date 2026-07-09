@@ -309,6 +309,7 @@ pub struct LinearV2File<S: SingleChunkDataSerializer> {
     _dummy: PhantomData<S>,
 }
 
+#[expect(clippy::large_stack_arrays)]
 impl<S: SingleChunkDataSerializer> Default for LinearV2File<S> {
     fn default() -> Self {
         Self {
@@ -448,6 +449,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         Ok(())
     }
 
+    #[expect(clippy::large_stack_arrays)]
     fn read(raw_file: Bytes) -> Result<Self, ChunkReadingError> {
         let mut buf = raw_file;
 
@@ -471,7 +473,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         // the per-chunk size field inside each bucket.
         let mut bitmap_raw = [0u8; ChunkBitmap::SIZE];
         bitmap_raw.copy_from_slice(&buf.split_to(ChunkBitmap::SIZE));
-        let _bitmap = ChunkBitmap(bitmap_raw);
+        //let _bitmap = ChunkBitmap(bitmap_raw);
 
         let _features = NbtFeatures::from_bytes(&mut buf)?;
 
@@ -581,13 +583,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         for chunk in chunks {
             let index = Self::get_chunk_index(chunk.x, chunk.y);
 
-            let result = match &self.chunks_data[index] {
-                Some(data) => match S::from_bytes(data, chunk) {
+            let result = self.chunks_data[index].as_ref().map_or_else(
+                || LoadedData::Missing(chunk),
+                |data| match S::from_bytes(data, chunk) {
                     Ok(c) => LoadedData::Loaded(c),
                     Err(err) => LoadedData::Error((chunk, err)),
                 },
-                None => LoadedData::Missing(chunk),
-            };
+            );
 
             if stream.send(result).await.is_err() {
                 // Receiver dropped — stop early to avoid unnecessary work.

@@ -329,6 +329,7 @@ impl ChunkNoiseRouter<'_> {
 
 impl<'a> ChunkNoiseRouter<'a> {
     #[must_use]
+    #[expect(clippy::too_many_lines)]
     pub fn generate(
         base: &'a ProtoNoiseRouter,
         build_options: &ChunkNoiseFunctionBuilderOptions,

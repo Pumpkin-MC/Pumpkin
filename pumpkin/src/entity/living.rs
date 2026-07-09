@@ -1484,17 +1484,26 @@ impl LivingEntity {
 
         {
             let mut effects = self.active_effects.lock().await;
+            let entity_age = self.entity.age.load(Relaxed);
             for effect in effects.values_mut() {
-                // A duration below 0 means the effect is infinite
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
                     continue;
                 }
 
-                if Self::should_apply_effect_tick(effect) {
+                let tick_duration = if effect.duration == -1 {
+                    entity_age
+                } else {
+                    effect.duration
+                };
+
+                if Self::should_apply_effect_tick(effect, tick_duration) {
                     effects_to_apply.push((effect.effect_type, effect.amplifier));
                 }
-                effect.duration -= 1;
+
+                if effect.duration != -1 {
+                    effect.duration -= 1;
+                }
             }
         }
 
@@ -1513,8 +1522,7 @@ impl LivingEntity {
     /// Based on vanilla Minecraft's effect tick frequencies
     ///
     /// TODO: villager, beacon, and other effects.
-    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect) -> bool {
-        let duration = effect.duration;
+    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect, duration: i32) -> bool {
         let effect_type = effect.effect_type;
 
         if effect_type == &StatusEffect::REGENERATION {

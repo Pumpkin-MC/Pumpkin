@@ -1,11 +1,10 @@
 use block_match::BlockMatchRuleTest;
 use block_state_match::BlockStateMatchRuleTest;
+use pumpkin_data::BlockStateId;
 use pumpkin_util::random::RandomGenerator;
 use random_block_match::RandomBlockMatchRuleTest;
 use random_block_state_match::RandomBlockStateMatchRuleTest;
 use tag_match::TagMatchRuleTest;
-
-use crate::block::RawBlockState;
 
 pub mod block_match;
 pub mod block_state_match;
@@ -23,7 +22,7 @@ pub enum RuleTest {
 }
 
 impl RuleTest {
-    pub fn test(&self, state: RawBlockState, random: &mut RandomGenerator) -> bool {
+    pub fn test(&self, state: BlockStateId, random: &mut RandomGenerator) -> bool {
         match self {
             Self::AlwaysTrue => true,
             Self::BlockMatch(rule) => rule.test(state),

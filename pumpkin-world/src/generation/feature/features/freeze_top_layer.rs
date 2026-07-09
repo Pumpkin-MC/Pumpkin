@@ -6,11 +6,10 @@ use pumpkin_util::random::RandomGenerator;
 
 const SEA_LEVEL: i32 = 63; // TODO: getSeaLevel() from the worldgen context instead of hardcoding
 
-pub struct FreezeTopLayerFeature {}
+pub struct FreezeTopLayerFeature;
 
 impl FreezeTopLayerFeature {
     pub fn generate<T: GenerationCache>(
-        &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
@@ -50,19 +49,19 @@ impl FreezeTopLayerFeature {
                 if top_temp < 0.15 {
                     let top_raw = GenerationCache::get_block_state(chunk, &top_vec);
                     // Re-read below (may have been replaced by ice in the freeze step above)
-                    let below_raw = GenerationCache::get_block_state(chunk, &below_vec);
+                    let below = GenerationCache::get_block_state(chunk, &below_vec);
 
                     // topPos must be air; belowPos must not be air (something to stand on)
                     if top_raw.to_state().is_air()
-                        && !below_raw.to_state().is_air()
-                        && !Block::from_state_id(below_raw.to_state().id)
+                        && !below.to_state().is_air()
+                        && !Block::from_state_id(below.to_state().id)
                             .has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
                     {
                         chunk.set_block_state(&top_vec, Block::SNOW.default_state);
 
                         // Update the `snowy` block-state property on the block below if it has one
-                        let below_block = below_raw.to_block();
-                        if let Some(props) = below_block.properties(below_raw.0) {
+                        let below_block = below.to_block();
+                        if let Some(props) = below_block.properties(below) {
                             let prop_list = props.to_props();
                             if prop_list.iter().any(|(k, _)| *k == "snowy") {
                                 let new_props: Vec<(&str, &str)> = prop_list

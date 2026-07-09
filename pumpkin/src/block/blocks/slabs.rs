@@ -1,8 +1,8 @@
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SlabType;
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_world::BlockStateId;
 
 use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
