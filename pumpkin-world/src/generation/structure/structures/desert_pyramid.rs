@@ -166,10 +166,12 @@ impl DesertPyramidPiece {
         // the structure-level afterPlace pass when brushable support exists.
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn try_place_chest(
         &mut self,
         chunk: &mut ProtoChunk,
         bb: &BlockBox,
+        random: &mut RandomGenerator,
         index: usize,
         x: i32,
         y: i32,
@@ -192,7 +194,8 @@ impl DesertPyramidPiece {
         nbt.put_int("y", world_pos.y);
         nbt.put_int("z", world_pos.z);
         nbt.put_string("id", "minecraft:chest".to_string());
-        // TODO: attach desert_pyramid loot table once structure container loot exists.
+        nbt.put_string("LootTable", "minecraft:chests/desert_pyramid".to_string());
+        nbt.put_long("LootTableSeed", random.next_i64());
         chunk.add_block_entity(nbt);
         self.has_placed_chest[index] = true;
     }
@@ -788,7 +791,7 @@ impl StructurePieceBase for DesertPyramidPiece {
         self.piece.add_block(chunk, cut, 10, -11, 13, bb);
 
         for (index, x, z) in [(0, 10, 12), (1, 8, 10), (2, 10, 8), (3, 12, 10)] {
-            self.try_place_chest(chunk, bb, index, x, -11, z);
+            self.try_place_chest(chunk, bb, random, index, x, -11, z);
         }
 
         self.add_cellar(chunk, bb, &mut level_random);

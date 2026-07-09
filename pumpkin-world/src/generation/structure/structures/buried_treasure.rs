@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos},
-    random::RandomGenerator,
+    random::{RandomGenerator, RandomImpl},
 };
 
 use crate::{
@@ -58,7 +59,7 @@ impl StructurePieceBase for BuriedTreasurePiece {
         &mut self,
         chunk: &mut ProtoChunk,
         _block_registry: &dyn WorldPortalExt,
-        _random: &mut RandomGenerator,
+        random: &mut RandomGenerator,
         _seed: i64,
         _chunk_box: &BlockBox,
     ) {
@@ -117,9 +118,18 @@ impl StructurePieceBase for BuriedTreasurePiece {
                     chunk.set_block_state(offset_pos.0.x, offset_pos.0.y, offset_pos.0.z, state1);
                 }
 
-                // Place the Chest
-                // TODO: Add loot table logic here (requires seed)
+                // Place the Chest, deferring its contents to the loot table
+                // (rolled lazily the first time a player opens it).
                 chunk.set_block_state(pos.0.x, pos.0.y, pos.0.z, Block::CHEST.default_state);
+
+                let mut chest_nbt = NbtCompound::new();
+                chest_nbt.put_string("id", "minecraft:chest".to_string());
+                chest_nbt.put_int("x", pos.0.x);
+                chest_nbt.put_int("y", pos.0.y);
+                chest_nbt.put_int("z", pos.0.z);
+                chest_nbt.put_string("LootTable", "minecraft:chests/buried_treasure".to_string());
+                chest_nbt.put_long("LootTableSeed", random.next_i64());
+                chunk.add_block_entity(chest_nbt);
                 return;
             }
             pos = pos.down();
