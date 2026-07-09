@@ -99,7 +99,7 @@ impl LevelCache {
                     match change.entry(pos) {
                         Entry::Occupied(mut entry) => {
                             let i = entry.get_mut();
-                            debug_assert!(i.1 == value.0);
+                            debug_assert_eq!(i.1, value.0);
                             if i.0 == value.1 {
                                 entry.remove();
                             } else {

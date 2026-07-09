@@ -104,10 +104,9 @@ impl JigsawPlacement {
                 }
             }
 
-            if let Some(anchor) = found_anchor {
+            {
+                let anchor = found_anchor?;
                 anchored_position = anchor;
-            } else {
-                return None;
             }
         }
 

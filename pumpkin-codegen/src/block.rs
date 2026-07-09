@@ -412,7 +412,7 @@ impl ToTokens for BlockPropertyStruct {
                         Self::from_index(id.as_u16() - min_id)
                     } else {
                         #[cfg(debug_assertions)]
-                        panic!("State ID {} does not exist for {}", id, &block.name);
+                        panic!("State ID {} does not exist for {}", id, block.name);
 
                         #[cfg(not(debug_assertions))]
                         Self::from_index(0)
@@ -1490,7 +1490,7 @@ fn get_be_data_from_nbt<R: Read + Seek>(
                     pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
                     pumpkin_nbt::tag::NbtTag::String(v) => v.into(),
                     _ => {
-                        panic!("Unexpected type for {}. Value: {val:?}", &key);
+                        panic!("Unexpected type for {}. Value: {val:?}", key);
                     }
                 };
 
@@ -1525,7 +1525,9 @@ fn parse_geyser_entry(
         .unwrap_or(java_block_name)
         .strip_prefix("minecraft:")
         .unwrap_or_else(|| {
-            compound.get_string("bedrock_identifier").unwrap_or(java_block_name)
+            compound
+                .get_string("bedrock_identifier")
+                .unwrap_or(java_block_name)
         })
         .to_string();
 
@@ -1543,7 +1545,10 @@ fn parse_geyser_entry(
                 pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
                 pumpkin_nbt::tag::NbtTag::String(v) => v.to_string(),
                 _ => {
-                    panic!("Unexpected NBT type in Geyser state tag for {}. Value: {:?}", key, val);
+                    panic!(
+                        "Unexpected NBT type in Geyser state tag for {}. Value: {:?}",
+                        key, val
+                    );
                 }
             };
             properties.insert(key.to_string(), unpacked);
@@ -1552,4 +1557,3 @@ fn parse_geyser_entry(
 
     (bedrock_identifier, properties)
 }
-

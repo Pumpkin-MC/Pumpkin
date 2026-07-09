@@ -286,7 +286,7 @@ fn operations() {
     assert_parse_ok!("bool(0)", NbtTag::Byte(0));
     assert_parse_ok!("bool( 1 )", NbtTag::Byte(1));
     assert_parse_ok!("bool (2.5  )", NbtTag::Byte(1));
-    assert_parse_ok!("bool ( -4.3412e+12  )", NbtTag::Byte(0));
+    assert_parse_ok!("bool ( -4.3412e+12  )", NbtTag::Byte(1));
 
     assert_parse_err!("bool(", "Expected a valid unquoted string", 5, [")"]);
     assert_parse_err!("bool()", "No such operation: bool/0", 6, []);
