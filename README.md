@@ -65,7 +65,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Experience
   - [x] Hunger
   - [X] Off Hand
-  - [X] Advancements
+  - [X] Advancements (W.I.P)
   - [x] Eating
   - ...
 - Entities
