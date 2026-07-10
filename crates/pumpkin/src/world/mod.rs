@@ -37,7 +37,7 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, NBTStorage, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, NBTStorage, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, java::JavaClient},
     plugin::{
@@ -391,7 +391,11 @@ impl World {
     /// currently in; the chunk is rewritten from scratch every unload cycle, so
     /// there is nothing stale to deduplicate.
     async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        let current_chunk = entity.get_entity().block_pos.load().chunk_position();
+        let base_entity = entity.get_entity();
+        if base_entity.is_removed() {
+            return;
+        }
+        let current_chunk = base_entity.block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
         entity.write_nbt(&mut nbt).await;
         let chunk = self.level.get_entity_chunk(current_chunk).await;
@@ -3775,6 +3779,7 @@ impl World {
                             .client
                             .enqueue_packet(&base_entity.create_spawn_packet())
                             .await;
+                        player.try_restore_vehicle(&entity).await;
                         entities_to_add.push(entity);
                     }
 
@@ -3796,6 +3801,7 @@ impl World {
                                 .client
                                 .enqueue_packet(&base_entity.create_spawn_packet())
                                 .await;
+                            player.try_restore_vehicle(entity).await;
                         }
                     }
                 }
@@ -4279,6 +4285,15 @@ impl World {
     #[allow(clippy::unused_async)]
     pub async fn remove_entity(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
+        if base_entity
+            .removal_reason
+            .swap(Some(RemovalReason::Discarded))
+            .is_some()
+        {
+            return;
+        }
+        base_entity.removed.store(true, Ordering::Release);
+
         self.spawn_state.load().remove_entity(self, entity);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
