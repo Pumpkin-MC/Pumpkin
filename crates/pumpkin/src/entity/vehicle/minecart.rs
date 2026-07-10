@@ -1,20 +1,37 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::any::Any;
+use std::array::from_fn;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
+use std::sync::{Arc, Mutex as StdMutex};
 
 use pumpkin_protocol::java::server::play::SPlayerInput;
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
+        player::Player,
     },
     server::Server,
+    world::loot::fill_chest_inventory,
 };
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, PoweredRailLikeProperties};
+use pumpkin_data::chest_loot_table::get_chest_loot_table;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::translation;
+use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{
+    BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
+};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
+use tokio::sync::Mutex;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
 
@@ -40,19 +57,206 @@ pub struct MinecartEntity {
     pub vehicle: VehicleEntity,
     pub active: AtomicBool,
     pub tnt_fuse: AtomicI32,
+    container: Option<Arc<MinecartInventory>>,
 }
 
 impl MinecartEntity {
-    pub const fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
+        let container = (entity.entity_type.id == EntityType::CHEST_MINECART.id)
+            .then(|| Arc::new(MinecartInventory::new()));
         Self {
             vehicle: VehicleEntity::new(entity),
             active: AtomicBool::new(false),
             tnt_fuse: AtomicI32::new(-1),
+            container,
         }
     }
 }
 
-impl NBTStorage for MinecartEntity {}
+struct MinecartInventory {
+    items: [Arc<Mutex<ItemStack>>; Self::SIZE],
+    loot_table: StdMutex<Option<String>>,
+    loot_table_seed: AtomicI64,
+}
+
+impl MinecartInventory {
+    const SIZE: usize = 27;
+
+    fn new() -> Self {
+        Self {
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            loot_table: StdMutex::new(None),
+            loot_table_seed: AtomicI64::new(0),
+        }
+    }
+
+    fn read_nbt(&self, nbt: &NbtCompound) {
+        let loot_table = nbt.get_string("LootTable").map(str::to_owned);
+        self.loot_table_seed.store(
+            nbt.get_long("LootTableSeed").unwrap_or(0),
+            Ordering::Relaxed,
+        );
+        *self.loot_table.lock().expect("Loot table mutex poisoned") = loot_table;
+
+        if !self.has_loot_table() {
+            self.read_data(nbt, &self.items);
+        }
+    }
+
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        let loot_table = self
+            .loot_table
+            .lock()
+            .expect("Loot table mutex poisoned")
+            .clone();
+        if let Some(loot_table) = loot_table {
+            nbt.put_string("LootTable", loot_table);
+            let seed = self.loot_table_seed.load(Ordering::Relaxed);
+            if seed != 0 {
+                nbt.put_long("LootTableSeed", seed);
+            }
+        } else {
+            self.write_inventory_nbt(nbt, true).await;
+        }
+    }
+
+    fn has_loot_table(&self) -> bool {
+        self.loot_table
+            .lock()
+            .expect("Loot table mutex poisoned")
+            .is_some()
+    }
+
+    async fn unpack_loot(self: &Arc<Self>) {
+        let loot_table = self
+            .loot_table
+            .lock()
+            .expect("Loot table mutex poisoned")
+            .take();
+        let Some(loot_table) = loot_table else {
+            return;
+        };
+        let Some(table) = get_chest_loot_table(&loot_table) else {
+            *self.loot_table.lock().expect("Loot table mutex poisoned") = Some(loot_table);
+            return;
+        };
+
+        let inventory: Arc<dyn Inventory> = self.clone();
+        fill_chest_inventory(
+            &inventory,
+            table,
+            self.loot_table_seed.load(Ordering::Relaxed),
+        )
+        .await;
+        self.mark_dirty();
+    }
+}
+
+impl Inventory for MinecartInventory {
+    fn size(&self) -> usize {
+        self.items.len()
+    }
+
+    fn is_empty(&self) -> InventoryFuture<'_, bool> {
+        Box::pin(async move {
+            for slot in &self.items {
+                if !slot.lock().await.is_empty() {
+                    return false;
+                }
+            }
+            true
+        })
+    }
+
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
+        Box::pin(async move { self.items[slot].clone() })
+    }
+
+    fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let mut removed = ItemStack::EMPTY.clone();
+            std::mem::swap(&mut removed, &mut *self.items[slot].lock().await);
+            self.mark_dirty();
+            removed
+        })
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let removed = split_stack(&self.items, slot, amount).await;
+            self.mark_dirty();
+            removed
+        })
+    }
+
+    fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {
+            *self.items[slot].lock().await = stack;
+            self.mark_dirty();
+        })
+    }
+
+    fn mark_dirty(&self) {}
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Clearable for MinecartInventory {
+    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            for slot in &self.items {
+                *slot.lock().await = ItemStack::EMPTY.clone();
+            }
+            self.mark_dirty();
+        })
+    }
+}
+
+struct MinecartScreenFactory {
+    inventory: Arc<MinecartInventory>,
+    title: TextComponent,
+}
+
+impl ScreenHandlerFactory for MinecartScreenFactory {
+    fn create_screen_handler<'a>(
+        &'a self,
+        sync_id: u8,
+        player_inventory: &'a Arc<PlayerInventory>,
+        _player: &'a dyn InventoryPlayer,
+    ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
+        Box::pin(async move {
+            let inventory: Arc<dyn Inventory> = self.inventory.clone();
+            let handler = create_generic_9x3(sync_id, player_inventory, inventory).await;
+            Some(Arc::new(Mutex::new(handler)) as SharedScreenHandler)
+        })
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        self.title.clone()
+    }
+}
+
+impl NBTStorage for MinecartEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.vehicle.entity.write_nbt(nbt).await;
+            if let Some(container) = &self.container {
+                container.write_nbt(nbt).await;
+            }
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.vehicle.entity.read_nbt_non_mut(nbt).await;
+            if let Some(container) = &self.container {
+                container.read_nbt(nbt);
+            }
+        })
+    }
+}
 
 impl EntityBase for MinecartEntity {
     #[allow(clippy::too_many_lines)]
@@ -564,7 +768,35 @@ impl EntityBase for MinecartEntity {
         source: Option<&'a dyn EntityBase>,
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { self.vehicle.damage_with_context(amount, source).await })
+        Box::pin(async move {
+            let creative = source
+                .and_then(EntityBase::get_player)
+                .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
+            let will_break = creative || self.vehicle.get_damage() + amount * 10.0 > 40.0;
+
+            if will_break
+                && !creative
+                && self
+                    .vehicle
+                    .entity
+                    .world
+                    .load()
+                    .level_info
+                    .load()
+                    .game_rules
+                    .entity_drops
+                && let Some(container) = &self.container
+            {
+                container.unpack_loot().await;
+                let inventory: Arc<dyn Inventory> = container.clone();
+                let world = self.vehicle.entity.world.load();
+                world
+                    .scatter_inventory(&self.vehicle.entity.block_pos.load(), &inventory)
+                    .await;
+            }
+
+            self.vehicle.damage_with_context(amount, source).await
+        })
     }
 
     fn interact<'a>(
@@ -573,6 +805,40 @@ impl EntityBase for MinecartEntity {
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
+            if let Some(container) = &self.container {
+                if player.is_spectator() && container.has_loot_table() {
+                    return false;
+                }
+                if !player.is_spectator() {
+                    container.unpack_loot().await;
+                }
+
+                let title = self
+                    .vehicle
+                    .entity
+                    .custom_name
+                    .load()
+                    .as_ref()
+                    .clone()
+                    .unwrap_or_else(|| {
+                        TextComponent::translate_cross(
+                            translation::java::ENTITY_MINECRAFT_CHEST_MINECART,
+                            translation::bedrock::ENTITY_CHEST_MINECART_NAME,
+                            [],
+                        )
+                    });
+                return player
+                    .open_handled_screen(
+                        &MinecartScreenFactory {
+                            inventory: container.clone(),
+                            title,
+                        },
+                        None,
+                    )
+                    .await
+                    .is_some();
+            }
+
             if player.get_entity().is_sneaking() {
                 return false;
             }
@@ -673,5 +939,61 @@ impl EntityBase for MinecartEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MinecartInventory;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_world::inventory::Inventory;
+
+    #[tokio::test]
+    async fn deferred_mineshaft_loot_is_preserved_until_unpacked() {
+        let inventory = std::sync::Arc::new(MinecartInventory::new());
+        let mut source = NbtCompound::new();
+        source.put_string(
+            "LootTable",
+            "minecraft:chests/abandoned_mineshaft".to_string(),
+        );
+        source.put_long("LootTableSeed", 1234);
+        inventory.read_nbt(&source);
+
+        let mut deferred = NbtCompound::new();
+        inventory.write_nbt(&mut deferred).await;
+        assert_eq!(
+            deferred.get_string("LootTable"),
+            Some("minecraft:chests/abandoned_mineshaft")
+        );
+        assert_eq!(deferred.get_long("LootTableSeed"), Some(1234));
+        assert!(deferred.get_list("Items").is_none());
+
+        inventory.unpack_loot().await;
+        assert!(!inventory.is_empty().await);
+
+        let mut unpacked = NbtCompound::new();
+        inventory.write_nbt(&mut unpacked).await;
+        assert!(unpacked.get_string("LootTable").is_none());
+        assert!(unpacked.get_list("Items").is_some());
+    }
+
+    #[tokio::test]
+    async fn chest_minecart_items_round_trip_through_nbt() {
+        let inventory = MinecartInventory::new();
+        inventory
+            .set_stack(8, ItemStack::new(3, &Item::POWERED_RAIL))
+            .await;
+
+        let mut nbt = NbtCompound::new();
+        inventory.write_nbt(&mut nbt).await;
+
+        let restored = MinecartInventory::new();
+        restored.read_nbt(&nbt);
+        let stack = restored.get_stack(8).await;
+        let stack = stack.lock().await;
+        assert_eq!(stack.get_item().id, Item::POWERED_RAIL.id);
+        assert_eq!(stack.item_count, 3);
     }
 }

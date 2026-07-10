@@ -5,7 +5,7 @@ use crate::generation::generator::WorldGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
     chunk::{
-        ChunkData, ChunkEntityData, ChunkReadingError,
+        ChunkData, ChunkEntityData, ChunkReadingError, entity_uuid_from_nbt,
         format::anvil::AnvilChunkFile,
         io::{
             Dirtiable, FileIO, LoadedData,
@@ -686,16 +686,25 @@ impl Level {
             let cancel_notifier = level.cancel_token.cancelled();
 
             let fetch_task = async {
-                let to_fetch: Vec<_> = chunks
+                let block_chunk_futures = chunks
                     .iter()
-                    .filter(|pos| {
-                        level.loaded_entity_chunks.get(pos).is_none_or(|chunk| {
-                            let _ = sender.try_send((Arc::downgrade(chunk.value()), false));
-                            false // Don't fetch
-                        })
-                    })
-                    .copied()
-                    .collect();
+                    .filter(|pos| !level.loaded_chunks.contains_key(pos))
+                    .map(|pos| level.fetch_chunk(*pos));
+                futures::future::join_all(block_chunk_futures).await;
+
+                let mut to_fetch = Vec::new();
+                for pos in &chunks {
+                    let loaded = level
+                        .loaded_entity_chunks
+                        .get(pos)
+                        .map(|chunk| chunk.value().clone());
+                    if let Some(chunk) = loaded {
+                        let generated = level.merge_generated_entities(*pos, &chunk).await;
+                        let _ = sender.try_send((Arc::downgrade(&chunk), generated));
+                    } else {
+                        to_fetch.push(*pos);
+                    }
+                }
 
                 if !to_fetch.is_empty() {
                     let (tx, mut rx) = tokio::sync::mpsc::channel::<
@@ -711,6 +720,7 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = Vector2::new(chunk.x, chunk.z);
+                                level.merge_generated_entities(pos, &chunk).await;
                                 level.loaded_entity_chunks.insert(pos, chunk.clone());
                                 let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
@@ -730,6 +740,7 @@ impl Level {
                                         }
                                     }
                                     if let Ok(chunk) = rx.await {
+                                        level_clone.merge_generated_entities(pos, &chunk).await;
                                         let _ =
                                             sender_clone.send((Arc::downgrade(&chunk), true)).await;
                                     }
@@ -750,11 +761,17 @@ impl Level {
     }
 
     pub async fn get_entity_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncEntityChunk {
-        if let Some(chunk) = self.loaded_entity_chunks.get(&pos) {
-            return chunk.clone();
+        if let Some(chunk) = self
+            .loaded_entity_chunks
+            .get(&pos)
+            .map(|chunk| chunk.value().clone())
+        {
+            self.merge_generated_entities(pos, &chunk).await;
+            return chunk;
         }
 
         if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
+            self.merge_generated_entities(pos, &chunk).await;
             self.loaded_entity_chunks.insert(pos, chunk.clone());
             chunk
         } else {
@@ -768,8 +785,42 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.expect("Entity generation worker dropped")
+            let chunk = rx.await.expect("Entity generation worker dropped");
+            self.merge_generated_entities(pos, &chunk).await;
+            chunk
         }
+    }
+
+    async fn merge_generated_entities(
+        &self,
+        pos: Vector2<i32>,
+        entity_chunk: &SyncEntityChunk,
+    ) -> bool {
+        let pending = self.loaded_chunks.get(&pos).map_or_else(Vec::new, |chunk| {
+            std::mem::take(
+                &mut *chunk
+                    .pending_entities
+                    .lock()
+                    .expect("Pending entity mutex poisoned"),
+            )
+        });
+        if pending.is_empty() {
+            return false;
+        }
+
+        let mut entities = entity_chunk.data.lock().await;
+        for generated in pending {
+            let generated_uuid = entity_uuid_from_nbt(&generated);
+            if generated_uuid.is_none_or(|uuid| {
+                !entities
+                    .iter()
+                    .any(|entity| entity_uuid_from_nbt(entity) == Some(uuid))
+            }) {
+                entities.push(generated);
+            }
+        }
+        entity_chunk.mark_dirty(true);
+        true
     }
 
     pub fn get_block_state(&self, position: &BlockPos) -> BlockStateId {
