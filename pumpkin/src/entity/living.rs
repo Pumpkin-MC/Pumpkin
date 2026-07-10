@@ -1365,7 +1365,11 @@ impl LivingEntity {
                     ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
                 }
             }
-            self.entity.pose.store(EntityPose::Dying);
+            // Use `set_pose` (not a raw store) so the DYING pose is actually
+            // broadcast to clients via entity metadata. Without this, clients
+            // never learn the entity's pose changed and keep rendering it in
+            // its last pose instead of playing the death animation (#2205).
+            self.entity.set_pose(EntityPose::Dying);
 
             self.drop_equipment().await;
 
