@@ -121,6 +121,45 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
+fn write_root_vehicle(nbt: &mut NbtCompound, uuid: Uuid) {
+    let value = uuid.as_u128();
+    let mut root_vehicle = NbtCompound::new();
+    root_vehicle.put(
+        "Attach",
+        NbtTag::IntArray(vec![
+            (value >> 96) as i32,
+            (value >> 64) as i32,
+            (value >> 32) as i32,
+            value as i32,
+        ]),
+    );
+    nbt.put("RootVehicle", NbtTag::Compound(root_vehicle));
+}
+
+fn read_root_vehicle(nbt: &NbtCompound) -> Option<Uuid> {
+    let root_vehicle = nbt.get_compound("RootVehicle")?;
+    let uuid = if let Some([most, more, less, least]) = root_vehicle.get_int_array("Attach") {
+        [*most, *more, *less, *least]
+    } else {
+        let [most, more, less, least] = root_vehicle.get_list("Attach")? else {
+            return None;
+        };
+        [
+            most.extract_int()?,
+            more.extract_int()?,
+            less.extract_int()?,
+            least.extract_int()?,
+        ]
+    };
+
+    Some(Uuid::from_u128(
+        (uuid[0] as u32 as u128) << 96
+            | (uuid[1] as u32 as u128) << 64
+            | (uuid[2] as u32 as u128) << 32
+            | uuid[3] as u32 as u128,
+    ))
+}
+
 pub const DATA_VERSION: i32 = 4903; // 26.2
 
 /// Food exhaustion applied for every block a player mines.
@@ -532,6 +571,7 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
+    root_vehicle_uuid: AtomicCell<Option<Uuid>>,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
     pub player_screen_handler: Arc<Mutex<PlayerScreenHandler>>,
@@ -790,6 +830,7 @@ impl Player {
             last_food_saturation: AtomicBool::new(true),
             subscribed_debug_sample: AtomicBool::new(false),
             has_played_before: AtomicBool::new(false),
+            root_vehicle_uuid: AtomicCell::new(None),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
             player_screen_handler: player_screen_handler.clone(),
@@ -958,6 +999,16 @@ impl Player {
 
     /// Removes the [`Player`] out of the current [`World`].
     pub async fn remove(self: &Arc<Self>) {
+        let vehicle = self.living_entity.entity.vehicle.lock().await.clone();
+        if let Some(vehicle) = vehicle {
+            self.root_vehicle_uuid
+                .store(Some(vehicle.get_entity().entity_uuid));
+            vehicle
+                .get_entity()
+                .remove_passenger_on_disconnect(self.entity_id())
+                .await;
+        }
+
         self.stats
             .lock()
             .await
@@ -1002,6 +1053,21 @@ impl Player {
         );
 
         //self.world().level.list_cached();
+    }
+
+    pub(crate) async fn try_restore_vehicle(self: &Arc<Self>, vehicle: &Arc<dyn EntityBase>) {
+        let Some(expected_uuid) = self.root_vehicle_uuid.swap(None) else {
+            return;
+        };
+        if vehicle.get_entity().entity_uuid != expected_uuid {
+            self.root_vehicle_uuid.store(Some(expected_uuid));
+            return;
+        }
+
+        vehicle
+            .get_entity()
+            .add_passenger(vehicle.clone(), self.clone())
+            .await;
     }
 
     #[expect(clippy::too_many_lines)]
@@ -4755,6 +4821,18 @@ impl NBTStorage for Player {
                 nbt.put_bool("SpawnForced", respawn.force);
             }
             nbt.put_int("XpSeed", self.enchantment_seed.load(Ordering::Relaxed));
+            let vehicle_uuid = self
+                .living_entity
+                .entity
+                .vehicle
+                .lock()
+                .await
+                .as_ref()
+                .map(|vehicle| vehicle.get_entity().entity_uuid)
+                .or_else(|| self.root_vehicle_uuid.load());
+            if let Some(vehicle_uuid) = vehicle_uuid {
+                write_root_vehicle(nbt, vehicle_uuid);
+            }
             self.stats.lock().await.write_nbt(nbt);
         })
     }
@@ -4825,6 +4903,7 @@ impl NBTStorage for Player {
                 nbt.get_int("XpSeed").unwrap_or(rand::random()),
                 Ordering::Relaxed,
             );
+            self.root_vehicle_uuid.store(read_root_vehicle(nbt));
             self.stats.lock().await.read_nbt(nbt);
         })
     }
@@ -5750,7 +5829,9 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::bedrock_inventory_slot;
+    use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
+    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+    use uuid::Uuid;
 
     #[test]
     fn player_screen_slots_map_to_bedrock_inventory() {
@@ -5760,5 +5841,40 @@ mod tests {
         assert_eq!(bedrock_inventory_slot(44), Some(8));
         assert_eq!(bedrock_inventory_slot(8), None);
         assert_eq!(bedrock_inventory_slot(45), None);
+    }
+
+    #[test]
+    fn root_vehicle_uuid_round_trips_with_vanilla_shape() {
+        let expected = Uuid::from_u128(0xFEDC_BA98_7654_3210_89AB_CDEF_0123_4567);
+        let mut nbt = NbtCompound::new();
+
+        write_root_vehicle(&mut nbt, expected);
+
+        assert_eq!(read_root_vehicle(&nbt), Some(expected));
+        assert!(
+            nbt.get_compound("RootVehicle")
+                .and_then(|root| root.get_int_array("Attach"))
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn root_vehicle_uuid_accepts_integer_lists() {
+        let expected = Uuid::from_u128(0xFEDC_BA98_7654_3210_89AB_CDEF_0123_4567);
+        let value = expected.as_u128();
+        let mut root_vehicle = NbtCompound::new();
+        root_vehicle.put(
+            "Attach",
+            NbtTag::List(vec![
+                NbtTag::Int((value >> 96) as i32),
+                NbtTag::Int((value >> 64) as i32),
+                NbtTag::Int((value >> 32) as i32),
+                NbtTag::Int(value as i32),
+            ]),
+        );
+        let mut nbt = NbtCompound::new();
+        nbt.put("RootVehicle", NbtTag::Compound(root_vehicle));
+
+        assert_eq!(read_root_vehicle(&nbt), Some(expected));
     }
 }
