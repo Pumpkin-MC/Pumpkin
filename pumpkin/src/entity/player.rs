@@ -3982,9 +3982,17 @@ impl Player {
         let world = self.world();
         let entity_id = self.entity_id();
 
+        // `hand` here is decoded (via `Hand::try_from`) from the gameplay `hand` field of
+        // packets like `SwingArm`/`UseItemOn` (see `handle_swing_arm`/`handle_use_item_on`),
+        // where protocol value `0` means "main hand" and `1` means "off hand". That decode
+        // maps `0 -> Hand::Left` and `1 -> Hand::Right`, which is the inverse of the
+        // player's actual left/right handedness used by `ClientInformation.main_hand`. So,
+        // for this gameplay context, `Hand::Left` means "main hand" and `Hand::Right` means
+        // "off hand". Getting this backwards causes the wrong arm to appear to swing for
+        // other players (see #2196).
         let animation = match hand {
-            Hand::Right => Animation::SwingMainArm,
-            Hand::Left => Animation::SwingOffhand,
+            Hand::Left => Animation::SwingMainArm,
+            Hand::Right => Animation::SwingOffhand,
         };
 
         let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
