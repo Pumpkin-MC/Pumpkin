@@ -71,6 +71,8 @@ fn is_builtin_translation_key(key: &str, locale: Locale) -> bool {
     }
 
     !resolve_translation(&pumpkin_translation_key(key), locale).is_missing()
+}
+
 /// Whether console and RCON command output is broadcast to online operators.
 ///
 /// Set from [`CommandsConfig::broadcast_console_to_ops`] during server startup.

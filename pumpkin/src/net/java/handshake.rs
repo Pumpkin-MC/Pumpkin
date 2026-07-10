@@ -19,7 +19,7 @@ impl JavaClient {
             "{}",
             localized_log_format(
                 "server.log.java_handshake_next_state",
-                &[format!("{:?}", &handshake.next_state)]
+                &[format!("{:?}", handshake.next_state)]
             )
         );
         self.connection_state.store(handshake.next_state);

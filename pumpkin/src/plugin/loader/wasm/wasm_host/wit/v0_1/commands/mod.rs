@@ -691,7 +691,7 @@ where
 }
 
 #[expect(clippy::too_many_lines)]
-#[allow(clippy::match_same_arms)]
+#[allow(clippy::match_same_arms, unreachable_patterns)]
 const fn map_util_locale_to_wit(locale: I18nLocale) -> Locale {
     match locale {
         I18nLocale::AfZa => Locale::AfZa,
