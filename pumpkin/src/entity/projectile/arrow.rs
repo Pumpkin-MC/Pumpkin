@@ -210,6 +210,20 @@ impl EntityBase for ArrowEntity {
             }
 
             if self.in_ground.load(Ordering::Relaxed) {
+                // The block we stuck into may have been broken (or otherwise turned
+                // non-solid) since last tick. Re-check for collision at our current
+                // position and, if there is none anymore, resume falling instead of
+                // staying frozen in place forever.
+                let stuck_pos = entity.pos.load();
+                let stuck_box = BoundingBox::new(stuck_pos, stuck_pos).expand(0.06, 0.06, 0.06);
+                if world.is_space_empty(stuck_box) {
+                    self.in_ground.store(false, Ordering::Relaxed);
+                    self.in_ground_time.store(0, Ordering::Relaxed);
+                    self.life.store(0, Ordering::Relaxed);
+                    *self.last_block_pos.write().unwrap() = None;
+                    return;
+                }
+
                 // Increment in-ground time and life
                 let _in_ground_time = self.in_ground_time.fetch_add(1, Ordering::Relaxed);
                 let life = self.life.fetch_add(1, Ordering::Relaxed);
