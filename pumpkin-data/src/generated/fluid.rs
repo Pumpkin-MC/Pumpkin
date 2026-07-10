@@ -902,7 +902,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "WaterLikeFluidProperties"
+                fluid.name, "WaterLikeFluidProperties"
             );
         }
         let prop_index = self.to_index();
@@ -916,7 +916,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "WaterLikeFluidProperties"
+                fluid.name, "WaterLikeFluidProperties"
             );
         }
         for (idx, state) in fluid.states.iter().enumerate() {
@@ -930,7 +930,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "WaterLikeFluidProperties"
+                fluid.name, "WaterLikeFluidProperties"
             );
         }
         Self::from_index(fluid.default_state_index)
@@ -942,7 +942,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "WaterLikeFluidProperties"
+                fluid.name, "WaterLikeFluidProperties"
             );
         }
         let mut fluid_props = Self::default(fluid);
@@ -990,7 +990,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "FlowingWaterLikeFluidProperties"
+                fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         let prop_index = self.to_index();
@@ -1004,7 +1004,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "FlowingWaterLikeFluidProperties"
+                fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         for (idx, state) in fluid.states.iter().enumerate() {
@@ -1018,7 +1018,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "FlowingWaterLikeFluidProperties"
+                fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         Self::from_index(fluid.default_state_index)
@@ -1033,7 +1033,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                &fluid.name, "FlowingWaterLikeFluidProperties"
+                fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         let mut fluid_props = Self::default(fluid);

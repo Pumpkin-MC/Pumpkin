@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -133,7 +133,7 @@ impl MobData {
 pub struct BaseNodeEvaluator {
     pub context: Option<PathfindingContext>,
     pub mob_data: Option<MobData>,
-    pub nodes: HashMap<Vector3<i32>, Node>,
+    pub nodes: FxHashMap<Vector3<i32>, Node>,
     pub entity_width: i32,
     pub entity_height: i32,
     pub entity_depth: i32, // Same as width?
@@ -155,7 +155,7 @@ impl BaseNodeEvaluator {
         Self {
             context: None,
             mob_data: None,
-            nodes: HashMap::new(),
+            nodes: FxHashMap::default(),
             entity_width: 1,
             entity_height: 2,
             entity_depth: 1,

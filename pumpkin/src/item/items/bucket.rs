@@ -112,10 +112,19 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
             .await;
     } else {
         let item_stack = ItemStack::new(1, item);
-        player
-            .inventory
-            .set_stack(player.inventory.get_selected_slot().into(), item_stack)
-            .await;
+        let held_item = player.inventory.held_item();
+        let mut held_stack = held_item.lock().await;
+
+        if held_stack.item_count == 1 {
+            *held_stack = item_stack;
+        } else {
+            held_stack.decrement(1);
+            drop(held_stack);
+            player
+                .inventory
+                .offer_or_drop_stack(item_stack, player)
+                .await;
+        }
     }
 }
 

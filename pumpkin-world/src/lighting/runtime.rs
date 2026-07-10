@@ -277,6 +277,16 @@ impl DynamicLightEngine {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
+            // Never propagate into an unloaded chunk. Writes to an unloaded
+            // chunk are dropped silently, so the "brighter than neighbor" check
+            // below would stay true forever and keep re-queuing the same
+            // position, spinning this loop indefinitely at the border between
+            // loaded and unloaded chunks.
+            let (neighbor_chunk, _) = neighbor_pos.chunk_and_chunk_relative_position();
+            if !level.is_chunk_loaded(&neighbor_chunk) {
+                continue;
+            }
+
             let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
             let neighbor_state = level.get_block_state(&neighbor_pos).to_state();
             let opacity = neighbor_state.opacity;
@@ -305,6 +315,13 @@ impl DynamicLightEngine {
     fn propagate_sky_light_decrease(&self, level: &Arc<Level>, pos: &BlockPos, removed_light: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
+
+            // See `propagate_sky_light_increase`: skip unloaded chunks so sky
+            // light updates never spin at loaded/unloaded chunk borders.
+            let (neighbor_chunk, _) = neighbor_pos.chunk_and_chunk_relative_position();
+            if !level.is_chunk_loaded(&neighbor_chunk) {
+                continue;
+            }
 
             let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
             if neighbor_light == 0 {

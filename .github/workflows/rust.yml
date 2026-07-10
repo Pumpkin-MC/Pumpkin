@@ -139,7 +139,7 @@ jobs:
           cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
 
       - name: Upload unsigned executable for SignPath (Windows only)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name == 'push' && github.ref == 'refs/heads/master'
         id: upload_unsigned
         uses: actions/upload-artifact@v7
         with:
@@ -148,7 +148,7 @@ jobs:
           retention-days: 1
 
       - name: Submit SignPath signing request (Windows only)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
@@ -160,7 +160,7 @@ jobs:
           output-artifact-directory: dist/signed/
 
       - name: Overwrite with signed version (Windows only)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name == 'push' && github.ref == 'refs/heads/master'
         shell: bash
         run: |
           cp dist/signed/* dist/

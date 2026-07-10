@@ -1,7 +1,7 @@
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::pathfinder::node::PathType;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 const CACHE_SIZE: usize = 4096;
 const CACHE_MASK: usize = CACHE_SIZE - 1;
@@ -10,7 +10,7 @@ const CACHE_MASK: usize = CACHE_SIZE - 1;
 pub struct PathTypeCache {
     positions: Vec<i64>,
     path_types: Vec<Option<PathType>>,
-    overflow_cache: HashMap<Vector3<i32>, PathType>,
+    overflow_cache: FxHashMap<Vector3<i32>, PathType>,
 }
 
 impl PathTypeCache {
@@ -19,7 +19,7 @@ impl PathTypeCache {
         Self {
             positions: vec![0; CACHE_SIZE],
             path_types: vec![None; CACHE_SIZE],
-            overflow_cache: HashMap::new(),
+            overflow_cache: FxHashMap::default(),
         }
     }
 
