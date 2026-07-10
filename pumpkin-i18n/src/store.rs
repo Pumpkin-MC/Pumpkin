@@ -33,10 +33,16 @@ pub fn resolve_translation(key: &str, locale: Locale) -> Arc<ResolvedTranslation
 /// Adds or overrides a single translation entry.
 ///
 /// # Arguments
-/// * `namespace`: The namespace of the translation key.
-/// * `key`: The translation key without namespace.
+/// * `namespace`: The namespace of the translation key (e.g. `"pumpkin"`).
+///   Must **not** already contain a namespace prefix or colon.
+/// * `key`: The bare translation key (e.g. `"commands.help.header"`).
+///   Must **not** already contain a namespace prefix or colon.
 /// * `translation`: The localized translation string.
 /// * `locale`: The locale the translation belongs to.
+///
+/// The full key is assembled as `"{namespace}:{key}"` via
+/// [`crate::namespaced_key`]. Passing an already-namespaced key
+/// will produce a double-prefixed key such as `"pumpkin:pumpkin:foo"`.
 pub fn add_translation<N, K, V>(namespace: N, key: K, translation: V, locale: Locale)
 where
     N: AsRef<str>,

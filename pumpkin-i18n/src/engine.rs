@@ -329,8 +329,11 @@ impl TranslationEngine {
         };
 
         for (key, translation) in entries {
+            // Callers should already pass lowercased keys, but we normalise
+            // defensively so that a missed call site doesn't cause a cache miss.
+            let normalized = normalize_key(&key);
             store.insert(
-                key.to_ascii_lowercase(),
+                normalized.into_owned(),
                 Arc::new(ResolvedTranslation::from_template(&translation)),
             );
         }
