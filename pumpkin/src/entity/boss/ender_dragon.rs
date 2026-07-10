@@ -233,6 +233,12 @@ pub struct EnderDragonEntity {
     pub ticks_sitting: Mutex<i32>,
     pub sit_attack_timer: Mutex<i32>,
     pub breathing_timer: Mutex<i32>,
+
+    /// Players currently intersecting the dragon's hitbox that have already
+    /// received a collision knockback/hit for the current contact. Used so
+    /// `handle_player_collisions` only hits a player once per contact instead
+    /// of every tick they remain inside the dragon.
+    pub colliding_players: Mutex<std::collections::HashSet<uuid::Uuid>>,
 }
 
 impl EnderDragonEntity {
@@ -284,6 +290,7 @@ impl EnderDragonEntity {
             ticks_sitting: Mutex::new(0),
             sit_attack_timer: Mutex::new(0),
             breathing_timer: Mutex::new(0),
+            colliding_players: Mutex::new(std::collections::HashSet::new()),
         })
     }
 
@@ -557,30 +564,61 @@ impl EnderDragonEntity {
         let xm = f64::midpoint(dragon_bbox.min.x, dragon_bbox.max.x);
         let zm = f64::midpoint(dragon_bbox.min.z, dragon_bbox.max.z);
 
+        let mut colliding_players = self.colliding_players.lock().await;
+        let mut still_colliding = std::collections::HashSet::new();
+
         for player in world.players.load().iter() {
-            if player
+            if !player
                 .living_entity
                 .entity
                 .bounding_box
                 .load()
                 .intersects(&dragon_bbox)
             {
-                let player_pos = player.get_entity().pos.load();
-                let xd = player_pos.x - xm;
-                let zd = player_pos.z - zm;
-                let dd = (xd * xd + zd * zd).max(0.1);
+                continue;
+            }
 
-                player
-                    .living_entity
-                    .entity
-                    .apply_knockback(4.0, xd / dd, zd / dd);
-                player.get_entity().send_velocity();
+            // Invulnerable players (e.g. creative/spectator mode) are never
+            // pushed around by the dragon: vanilla only ever applies the
+            // collision knockback alongside a successful hit, and an
+            // invulnerable target can't be hit.
+            if player
+                .living_entity
+                .entity
+                .is_invulnerable_to(&DamageType::MOB_ATTACK)
+                .await
+            {
+                continue;
+            }
 
-                if !self.phase.lock().await.is_sitting() {
-                    player.damage(self, 5.0, DamageType::MOB_ATTACK).await;
-                }
+            let uuid = player.living_entity.entity.entity_uuid;
+            still_colliding.insert(uuid);
+
+            // Only knock the player back on the tick contact begins.
+            // Otherwise every tick of continued overlap re-applies knockback
+            // and damage, flinging the player around instead of hitting them
+            // once on contact.
+            if colliding_players.contains(&uuid) {
+                continue;
+            }
+
+            let player_pos = player.get_entity().pos.load();
+            let xd = player_pos.x - xm;
+            let zd = player_pos.z - zm;
+            let dd = (xd * xd + zd * zd).max(0.1);
+
+            player
+                .living_entity
+                .entity
+                .apply_knockback(4.0, xd / dd, zd / dd);
+            player.get_entity().send_velocity();
+
+            if !self.phase.lock().await.is_sitting() {
+                player.damage(self, 5.0, DamageType::MOB_ATTACK).await;
             }
         }
+
+        *colliding_players = still_colliding;
     }
 
     fn tick_crystal_healing(&self) {
