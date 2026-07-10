@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
 use pumpkin_protocol::java::server::play::SPlayerInput;
@@ -18,6 +18,7 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, PoweredRailLikeProperties};
 use pumpkin_data::chest_loot_table::get_chest_loot_table;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
@@ -75,8 +76,8 @@ impl MinecartEntity {
 
 struct MinecartInventory {
     items: [Arc<Mutex<ItemStack>>; Self::SIZE],
-    loot_table: StdMutex<Option<String>>,
-    loot_table_seed: AtomicI64,
+    loot_table: StdMutex<Option<(String, i64)>>,
+    drops_claimed: AtomicBool,
 }
 
 impl MinecartInventory {
@@ -86,19 +87,25 @@ impl MinecartInventory {
         Self {
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             loot_table: StdMutex::new(None),
-            loot_table_seed: AtomicI64::new(0),
+            drops_claimed: AtomicBool::new(false),
         }
     }
 
+    fn claim_drops(&self) -> bool {
+        !self.drops_claimed.swap(true, Ordering::AcqRel)
+    }
+
     fn read_nbt(&self, nbt: &NbtCompound) {
-        let loot_table = nbt.get_string("LootTable").map(str::to_owned);
-        self.loot_table_seed.store(
-            nbt.get_long("LootTableSeed").unwrap_or(0),
-            Ordering::Relaxed,
-        );
+        let loot_table = nbt.get_string("LootTable").map(|loot_table| {
+            (
+                loot_table.to_owned(),
+                nbt.get_long("LootTableSeed").unwrap_or(0),
+            )
+        });
+        let has_loot_table = loot_table.is_some();
         *self.loot_table.lock().expect("Loot table mutex poisoned") = loot_table;
 
-        if !self.has_loot_table() {
+        if !has_loot_table {
             self.read_data(nbt, &self.items);
         }
     }
@@ -109,9 +116,8 @@ impl MinecartInventory {
             .lock()
             .expect("Loot table mutex poisoned")
             .clone();
-        if let Some(loot_table) = loot_table {
+        if let Some((loot_table, seed)) = loot_table {
             nbt.put_string("LootTable", loot_table);
-            let seed = self.loot_table_seed.load(Ordering::Relaxed);
             if seed != 0 {
                 nbt.put_long("LootTableSeed", seed);
             }
@@ -133,22 +139,16 @@ impl MinecartInventory {
             .lock()
             .expect("Loot table mutex poisoned")
             .take();
-        let Some(loot_table) = loot_table else {
+        let Some((loot_table, seed)) = loot_table else {
             return;
         };
         let Some(table) = get_chest_loot_table(&loot_table) else {
-            *self.loot_table.lock().expect("Loot table mutex poisoned") = Some(loot_table);
+            *self.loot_table.lock().expect("Loot table mutex poisoned") = Some((loot_table, seed));
             return;
         };
 
         let inventory: Arc<dyn Inventory> = self.clone();
-        fill_chest_inventory(
-            &inventory,
-            table,
-            self.loot_table_seed.load(Ordering::Relaxed),
-        )
-        .await;
-        self.mark_dirty();
+        fill_chest_inventory(&inventory, table, seed).await;
     }
 }
 
@@ -176,27 +176,19 @@ impl Inventory for MinecartInventory {
         Box::pin(async move {
             let mut removed = ItemStack::EMPTY.clone();
             std::mem::swap(&mut removed, &mut *self.items[slot].lock().await);
-            self.mark_dirty();
             removed
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let removed = split_stack(&self.items, slot, amount).await;
-            self.mark_dirty();
-            removed
-        })
+        Box::pin(async move { split_stack(&self.items, slot, amount).await })
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             *self.items[slot].lock().await = stack;
-            self.mark_dirty();
         })
     }
-
-    fn mark_dirty(&self) {}
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -209,7 +201,6 @@ impl Clearable for MinecartInventory {
             for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
-            self.mark_dirty();
         })
     }
 }
@@ -772,30 +763,28 @@ impl EntityBase for MinecartEntity {
             let creative = source
                 .and_then(EntityBase::get_player)
                 .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
-            let will_break = creative || self.vehicle.get_damage() + amount * 10.0 > 40.0;
+            let will_break = self.vehicle.entity.is_alive()
+                && (creative || self.vehicle.get_damage() + amount * 10.0 > 40.0);
+            let damaged = self.vehicle.damage_with_context(amount, source).await;
 
             if will_break
                 && !creative
-                && self
-                    .vehicle
-                    .entity
-                    .world
-                    .load()
-                    .level_info
-                    .load()
-                    .game_rules
-                    .entity_drops
+                && self.vehicle.entity.is_removed()
                 && let Some(container) = &self.container
             {
-                container.unpack_loot().await;
-                let inventory: Arc<dyn Inventory> = container.clone();
                 let world = self.vehicle.entity.world.load();
-                world
-                    .scatter_inventory(&self.vehicle.entity.block_pos.load(), &inventory)
-                    .await;
+                if world.level_info.load().game_rules.entity_drops && container.claim_drops() {
+                    container.unpack_loot().await;
+                    let inventory: Arc<dyn Inventory> = container.clone();
+                    let position = self.vehicle.entity.block_pos.load();
+                    world.scatter_inventory(&position, &inventory).await;
+                    world
+                        .drop_stack(&position, ItemStack::new(1, &Item::CHEST_MINECART))
+                        .await;
+                }
             }
 
-            self.vehicle.damage_with_context(amount, source).await
+            damaged
         })
     }
 
