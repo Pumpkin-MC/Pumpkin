@@ -1,5 +1,6 @@
 pub mod list_ping;
 pub mod packet;
+pub mod plugin_load;
 pub mod server_broadcast;
 pub mod server_command;
 pub mod server_load;

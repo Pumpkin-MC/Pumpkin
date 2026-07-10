@@ -123,7 +123,8 @@ impl Context {
             .map_err(|e| e.to_string())?
             .insert(id, Box::new(wrapped));
 
-        self.register_event(id, E::EVENT_TYPE, event_priority, blocking);
+        self.register_event(id, E::EVENT_TYPE, event_priority, blocking)
+            .map_err(|e| e.to_string())?;
         Ok(id)
     }
 }
