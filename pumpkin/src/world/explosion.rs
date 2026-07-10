@@ -279,8 +279,8 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let should_destroy_blocks = !self.mob_griefing_gated
-            || world.level_info.load().game_rules.mob_griefing;
+        let should_destroy_blocks =
+            !self.mob_griefing_gated || world.level_info.load().game_rules.mob_griefing;
 
         let blocks = if should_destroy_blocks {
             self.get_blocks_to_destroy(world)
