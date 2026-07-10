@@ -62,6 +62,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
     Block, BlockStateId,
@@ -4527,6 +4528,26 @@ impl World {
                 BlockStateId::AIR
             };
 
+            // Snapshot a shulker box's inventory before its block entity is torn down by
+            // `set_block_state` below. Vanilla copies these contents onto the dropped item
+            // (instead of scattering them like a chest) and still drops a non-empty shulker
+            // box in creative mode, so both need the contents captured up front.
+            let container_items = if broken_block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES)
+                && let Some(block_entity) = self.get_block_entity(position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                let mut items = Vec::new();
+                for slot in 0..inventory.size() {
+                    let stack = inventory.get_stack(slot).await.lock().await.clone();
+                    if !stack.is_empty() {
+                        items.push((slot as u8, stack));
+                    }
+                }
+                Some(items)
+            } else {
+                None
+            };
+
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
             // Close container screens for any players viewing this block
@@ -4555,7 +4576,16 @@ impl World {
                     None => self.broadcast_to_chunk(chunk_pos, &particles_packet),
                 }
             }
-            if !flags.contains(BlockFlags::SKIP_DROPS) {
+            // Vanilla still drops a shulker box that has items in it even when a creative
+            // player breaks it, unlike ordinary blocks (which drop nothing in creative).
+            let force_shulker_drop = container_items.as_ref().is_some_and(|items| {
+                !items.is_empty()
+                    && cause
+                        .as_ref()
+                        .is_some_and(|player| player.gamemode.load() == GameMode::Creative)
+            });
+
+            if !flags.contains(BlockFlags::SKIP_DROPS) || force_shulker_drop {
                 let tool = if let Some(player) = &cause {
                     let hand_stack = player
                         .inventory
@@ -4582,6 +4612,7 @@ impl World {
                     tool,
                     is_raining: Some(is_raining),
                     is_thundering: Some(is_thundering),
+                    container_items,
                     ..Default::default()
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;

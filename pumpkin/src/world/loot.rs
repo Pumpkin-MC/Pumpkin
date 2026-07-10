@@ -1,4 +1,6 @@
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{ContainerImpl, DataComponentImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
@@ -27,6 +29,10 @@ pub struct LootContextParameters {
     pub tool: Option<ItemStack>,
     pub is_raining: Option<bool>,
     pub is_thundering: Option<bool>,
+    /// Non-empty `(slot, stack)` pairs snapshotted from a block entity's inventory (e.g. a
+    /// shulker box) right before it was torn down, for the `minecraft:container` include of a
+    /// `CopyComponents { source: "block_entity", .. }` loot function to copy onto the drop.
+    pub container_items: Option<Vec<(u8, ItemStack)>>,
 }
 
 pub trait LootTableExt {
@@ -230,11 +236,38 @@ impl LootFunctionExt for LootFunction {
                 }
             }
             LootFunctionTypes::CopyComponents { source, include } => {
-                tracing::warn!(
-                    "CopyComponents not supported from source: {} for {:?}",
-                    source,
-                    include
-                );
+                if *source == "block_entity" {
+                    if include.contains(&"minecraft:container")
+                        && let Some(items) = &params.container_items
+                        && !items.is_empty()
+                    {
+                        let container = ContainerImpl {
+                            items: items.clone(),
+                        };
+                        for stack in stacks.iter_mut() {
+                            stack
+                                .patch
+                                .push((DataComponent::Container, Some(container.clone().to_dyn())));
+                        }
+                    }
+
+                    let unhandled: Vec<&&str> = include
+                        .iter()
+                        .filter(|name| **name != "minecraft:container")
+                        .collect();
+                    if !unhandled.is_empty() {
+                        tracing::warn!(
+                            "CopyComponents from block_entity: unsupported includes {:?}",
+                            unhandled
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        "CopyComponents not supported from source: {} for {:?}",
+                        source,
+                        include
+                    );
+                }
             }
             LootFunctionTypes::CopyState {
                 block: _,

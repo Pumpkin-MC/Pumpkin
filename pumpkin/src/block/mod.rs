@@ -341,6 +341,9 @@ pub struct PlayerPlacedArgs<'a> {
     pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
+    /// The item stack that was consumed to place this block, if known. Used to restore
+    /// state (e.g. a shulker box's contents) that vanilla carries on the item itself.
+    pub placed_item: Option<&'a ItemStack>,
 }
 
 pub struct OnLandedUponArgs<'a> {

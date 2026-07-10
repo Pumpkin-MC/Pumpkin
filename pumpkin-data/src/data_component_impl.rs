@@ -2513,6 +2513,30 @@ impl ContainerImpl {
     }
 }
 impl DataComponentImpl for ContainerImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::with_capacity(self.items.len());
+        for (slot, stack) in &self.items {
+            let mut compound = NbtCompound::new();
+            compound.put_int("slot", i32::from(*slot));
+            let mut item_compound = NbtCompound::new();
+            stack.write_item_stack(&mut item_compound);
+            compound.put_compound("item", item_compound);
+            list.push(NbtTag::Compound(compound));
+        }
+        NbtTag::List(list)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[Container.to_id()]);
+        for (slot, stack) in &self.items {
+            digest.update(&[*slot]);
+            digest.update(&get_str_hash(stack.item.registry_key).to_le_bytes());
+            digest.update(&get_i32_hash(i32::from(stack.item_count)).to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
+
     default_impl!(Container);
 }
 #[derive(Clone, Debug)]

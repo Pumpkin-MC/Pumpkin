@@ -1,17 +1,19 @@
 use std::borrow::Cow;
 
+use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    BundleContentsImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomDataImpl,
-    CustomNameImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
-    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, IDSet, IDSetContent, IdOr,
-    ItemModelImpl, MapIdImpl, MaxStackSizeImpl, PotionContentsImpl, SoundEvent,
+    BundleContentsImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect, ContainerImpl,
+    CustomDataImpl, CustomNameImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot,
+    EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, IDSet,
+    IDSetContent, IdOr, ItemModelImpl, MapIdImpl, MaxStackSizeImpl, PotionContentsImpl, SoundEvent,
     StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, UseCooldownImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use serde::de;
@@ -889,6 +891,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Container => Ok(ContainerImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom(format!("{id:?} (TODO)"))),
     }
 }
@@ -914,6 +917,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
+        DataComponent::Container => get::<ContainerImpl>(value).serialize(seq),
         _ => Err(serde::ser::Error::custom(format!(
             "{} not yet implemented",
             id.to_name()
@@ -1084,6 +1088,57 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
             items.push(deserialize_item_stack_template(seq)?);
+        }
+        Ok(Self { items })
+    }
+}
+
+impl DataComponentCodec<Self> for ContainerImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        // Mirrors vanilla's `ItemContainerContents`: a positional list padded with empty
+        // slots up to the highest occupied slot index, so the item retains slot positions.
+        let size = self
+            .items
+            .iter()
+            .map(|(slot, _)| usize::from(*slot) + 1)
+            .max()
+            .unwrap_or(0);
+
+        seq.serialize_field::<VarInt>("", &VarInt::from(size as i32))?;
+
+        let mut slots = vec![ItemStack::EMPTY.clone(); size];
+        for (slot, stack) in &self.items {
+            if let Some(entry) = slots.get_mut(usize::from(*slot)) {
+                *entry = stack.clone();
+            }
+        }
+        for stack in slots {
+            seq.serialize_field::<ItemStackSerializer>("", &ItemStackSerializer::from(stack))?;
+        }
+        Ok(())
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_CONTAINER_ITEMS: usize = 256;
+
+        let len = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No ContainerImpl len VarInt!"))?
+            .0 as usize;
+
+        if len > MAX_CONTAINER_ITEMS {
+            return Err(de::Error::custom("Too many items in Container"));
+        }
+
+        let mut items = Vec::new();
+        for slot in 0..len {
+            let stack = seq
+                .next_element::<ItemStackSerializer>()?
+                .ok_or(de::Error::custom("No ContainerImpl item stack"))?
+                .to_stack();
+            if !stack.is_empty() {
+                items.push((slot as u8, stack));
+            }
         }
         Ok(Self { items })
     }

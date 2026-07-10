@@ -441,6 +441,7 @@ impl BlockRegistry {
     }
 
     #[expect(clippy::too_many_lines)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn place_block(
         &self,
         player: &Arc<Player>,
@@ -449,6 +450,7 @@ impl BlockRegistry {
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+        placed_item: Option<&ItemStack>,
     ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
         let entity = &player.get_entity();
 
@@ -616,6 +618,7 @@ impl BlockRegistry {
             &final_block_pos,
             face,
             player,
+            placed_item,
         )
         .await;
 
@@ -886,6 +889,7 @@ impl BlockRegistry {
         block.default_state.id
     }
 
+    #[expect(clippy::too_many_arguments)]
     pub async fn player_placed(
         &self,
         world: &Arc<World>,
@@ -894,6 +898,7 @@ impl BlockRegistry {
         position: &BlockPos,
         direction: BlockDirection,
         player: &Player,
+        placed_item: Option<&ItemStack>,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -905,6 +910,7 @@ impl BlockRegistry {
                     position,
                     direction,
                     player,
+                    placed_item,
                 })
                 .await;
         }

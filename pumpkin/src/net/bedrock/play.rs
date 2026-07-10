@@ -724,6 +724,7 @@ impl BedrockClient {
                                     &dummy_use_item_on,
                                     data.block_position,
                                     face,
+                                    Some(&*stack),
                                 )
                                 .await
                             {

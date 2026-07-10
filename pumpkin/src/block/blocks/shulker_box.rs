@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::block::{BlockFuture, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
+use crate::block::{
+    BlockFuture, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
+};
 use crate::block::{
     registry::BlockActionResult,
     {BlockBehaviour, NormalUseArgs},
@@ -9,6 +11,7 @@ use crate::block::{
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::data_component_impl::ContainerImpl;
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -75,6 +78,31 @@ impl BlockBehaviour for ShulkerBoxBlock {
         Box::pin(async move {
             let barrel_block_entity = ShulkerBoxBlockEntity::new(*args.position);
             args.world.add_block_entity(Arc::new(barrel_block_entity));
+        })
+    }
+
+    /// Restores the contents a shulker box was holding as an item (vanilla keeps them on the
+    /// item's `minecraft:container` component instead of scattering them like a chest) into
+    /// the freshly created block entity's inventory.
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(container) = args
+                .placed_item
+                .and_then(|stack| stack.get_data_component::<ContainerImpl>())
+            else {
+                return;
+            };
+
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                for (slot, stack) in &container.items {
+                    let slot = *slot as usize;
+                    if slot < inventory.size() {
+                        inventory.set_stack(slot, stack.clone()).await;
+                    }
+                }
+            }
         })
     }
 
