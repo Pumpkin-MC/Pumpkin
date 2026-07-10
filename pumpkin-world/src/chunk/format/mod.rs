@@ -377,6 +377,7 @@ impl ChunkData {
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
+            pending_entities: std::sync::Mutex::default(),
             light_engine: std::sync::Mutex::new(light_engine),
             light_populated: AtomicBool::new(light_correct),
             status,
