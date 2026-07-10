@@ -1,22 +1,25 @@
 use std::{collections::HashMap, sync::Arc};
 use wasmtime::component::Resource;
 
-use crate::plugin::loader::wasm::wasm_host::{
-    DowncastResourceExt,
-    state::{CommandResource, ContextResource, PluginHostState},
-    wit::v0_1::{
-        events::{ToFromWasmEvent, WasmPluginEventHandler},
-        pumpkin::{
-            self,
-            plugin::{
-                command::Command,
-                context::Context,
-                event::{EventPriority, EventType},
-                permission::{Permission, PermissionDefault, PermissionLevel},
-                server::Server,
+use crate::plugin::{
+    loader::wasm::wasm_host::{
+        DowncastResourceExt,
+        state::{CommandResource, ContextResource, PluginHostState},
+        wit::v0_1::{
+            events::{ToFromWasmEvent, WasmPluginEventHandler},
+            pumpkin::{
+                self,
+                plugin::{
+                    command::Command,
+                    context::Context,
+                    event::{EventPriority, EventType},
+                    permission::{Permission, PermissionDefault, PermissionLevel},
+                    server::Server,
+                },
             },
         },
     },
+    permissions,
 };
 
 macro_rules! register_host_event {
@@ -238,6 +241,7 @@ async fn register_server_event(
 ) {
     use crate::plugin::server::{
         packet::{PacketReceivedEvent, PacketSentEvent},
+        plugin_load::PluginLoadEvent,
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::ServerLoadEvent,
@@ -262,6 +266,9 @@ async fn register_server_event(
         }
         EventType::ServerLoadEvent => {
             register_typed_event::<ServerLoadEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PluginLoadEvent => {
+            register_typed_event::<PluginLoadEvent>(resource, handler, priority, blocking).await;
         }
         EventType::ServerTickEndEvent => {
             register_typed_event::<ServerTickEndEvent>(resource, handler, priority, blocking).await;
@@ -313,7 +320,16 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), String>> {
+        let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
+
+        // Guard sensitive lifecycle events behind explicit permissions.
+        if event_type == EventType::PluginLoadEvent && !has_perm(permissions::EVENTS_PLUGIN_LOAD) {
+            return Ok(Err(
+                "plugin is missing permission event.plugin-load".to_string()
+            ));
+        }
+
         // Updated return type
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
@@ -340,6 +356,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::ServerCommandEvent
             | EventType::ServerBroadcastEvent
             | EventType::ServerLoadEvent
+            | EventType::PluginLoadEvent
             | EventType::ServerTickEndEvent
             | EventType::ServerTickStartEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
@@ -360,7 +377,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             }
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     async fn register_command(
