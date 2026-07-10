@@ -273,7 +273,7 @@ impl WorldGenSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "PascalCase", default)]
 pub struct WorldVersion {
     // The version name as a string, e.g. "15w32b".
     pub name: String,
@@ -282,6 +282,8 @@ pub struct WorldVersion {
     // Whether the version is a snapshot or not.
     pub snapshot: bool,
     // Developing series. In 1.18 experimental snapshots, it was set to "ccpreview". In others, set to "main".
+    // Third-party tools that generate/convert level.dat files (e.g. Bedrock -> Java converters) don't always
+    // include this field, so it must not be required (see #1291).
     pub series: String,
 }
 
