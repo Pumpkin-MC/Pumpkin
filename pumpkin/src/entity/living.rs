@@ -2588,7 +2588,16 @@ impl EntityBase for LivingEntity {
             if self.hurt_cooldown.load(Relaxed) > 0 {
                 self.hurt_cooldown.fetch_sub(1, Relaxed);
             }
-            if self.health.load() <= 0.0 {
+            // The Ender Dragon drives its own multi-second death sequence via
+            // `DyingPhase`, which must keep ticking for `DEATH_TIMER_MAX` (200)
+            // ticks so it can activate the exit portal, place the egg, and
+            // spawn a gateway (see `DragonFight::set_dragon_killed`) before it
+            // removes itself. The generic 20-tick corpse-removal below would
+            // otherwise delete it from `world.entities` long before that
+            // completes — a removed entity is never ticked again — silently
+            // skipping the exit-portal activation and leaving the fight
+            // unresolved forever, so it is excluded here.
+            if self.health.load() <= 0.0 && self.entity.entity_type != &EntityType::ENDER_DRAGON {
                 let time = self.death_time.fetch_add(1, Relaxed);
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
