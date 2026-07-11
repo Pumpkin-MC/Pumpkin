@@ -1,12 +1,15 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicI32, Ordering, Ordering::Relaxed},
+    atomic::{AtomicI32, AtomicU8, Ordering, Ordering::Relaxed},
 };
 
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
@@ -36,6 +39,7 @@ const TEMPT_ITEMS: &[&Item] = &[
 /// Wiki: <https://minecraft.wiki/w/Chicken>
 pub struct ChickenEntity {
     pub mob_entity: MobEntity,
+    pub variant: AtomicU8,
     egg_lay_time: AtomicI32,
 }
 
@@ -45,6 +49,7 @@ impl ChickenEntity {
         let egg_lay_time = rand::rng().random_range(6000..12000);
         let chicken = Self {
             mob_entity,
+            variant: AtomicU8::new(1), // Default to temperate
             egg_lay_time: AtomicI32::new(egg_lay_time),
         };
         let mob_arc = Arc::new(chicken);
@@ -78,6 +83,12 @@ impl NBTStorage for ChickenEntity {
         Box::pin(async {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
+            let variant_str = match self.variant.load(Ordering::Relaxed) {
+                0 => "minecraft:cold",
+                2 => "minecraft:warm",
+                _ => "minecraft:temperate",
+            };
+            nbt.put_string("variant", variant_str.to_string());
         })
     }
 
@@ -86,6 +97,17 @@ impl NBTStorage for ChickenEntity {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             self.egg_lay_time
                 .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
+            if let Some(variant_str) = nbt.get_string("variant") {
+                let variant = match variant_str
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(variant_str)
+                {
+                    "cold" => 0,
+                    "warm" => 2,
+                    _ => 1,
+                };
+                self.variant.store(variant, Ordering::Relaxed);
+            }
         })
     }
 }
@@ -93,6 +115,34 @@ impl NBTStorage for ChickenEntity {
 impl Mob for ChickenEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_set_variant_name(&self, name: &str) {
+        let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
+            "cold" => 0,
+            "warm" => 2,
+            _ => 1,
+        };
+        self.variant.store(variant, Ordering::Relaxed);
+    }
+
+    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+            if is_baby {
+                entity.send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                    TrackedData::BABY_ID,
+                    MetaDataType::BOOLEAN,
+                    true,
+                )]);
+            }
+            entity.send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                TrackedData::VARIANT,
+                MetaDataType::CHICKEN_VARIANT,
+                VarInt(self.variant.load(Ordering::Relaxed) as i32),
+            )]);
+        })
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {

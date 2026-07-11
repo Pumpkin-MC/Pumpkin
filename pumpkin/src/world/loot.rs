@@ -255,14 +255,24 @@ impl LootFunctionExt for LootFunction {
                     if !properties_to_copy.is_empty() {
                         for stack in stacks.iter_mut() {
                             if let Some(block_state_comp) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::BlockStateImpl>() {
+                                    let mut props = block_state_comp.properties.to_mut().clone();
                                     for (k, v) in &properties_to_copy {
-                                        block_state_comp.properties.insert(k.clone(), v.clone());
+                                        if let Some(pos) = props.iter().position(|(pk, _)| pk.as_ref() == k) {
+                                            props[pos].1 = std::borrow::Cow::Owned(v.clone());
+                                        } else {
+                                            props.push((std::borrow::Cow::Owned(k.clone()), std::borrow::Cow::Owned(v.clone())));
+                                        }
                                     }
+                                    block_state_comp.properties = std::borrow::Cow::Owned(props);
                                 } else {
+                                    let properties: Vec<(std::borrow::Cow<'static, str>, std::borrow::Cow<'static, str>)> = properties_to_copy
+                                        .iter()
+                                        .map(|(k, v)| (std::borrow::Cow::Owned(k.clone()), std::borrow::Cow::Owned(v.clone())))
+                                        .collect();
                                     stack.patch.push((
                                         pumpkin_data::data_component::DataComponent::BlockState,
                                         Some(Box::new(pumpkin_data::data_component_impl::BlockStateImpl {
-                                            properties: properties_to_copy.clone(),
+                                            properties: std::borrow::Cow::Owned(properties),
                                         })),
                                     ));
                                 }

@@ -181,7 +181,7 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 ] }
 slotmap = { version = "1.1", default-features = false, features = ["std"] }
 temp-dir = { version = "0.2.0", default-features = false }
-thread_local = { version = "1.1.9", default-features = false }
+thread_local = { version = "1.1.10", default-features = false }
 time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 

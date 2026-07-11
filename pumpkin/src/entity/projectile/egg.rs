@@ -148,15 +148,11 @@ impl EntityBase for EggEntity {
                 let world_clone = world.clone();
                 let spawn_pos_clone = spawn_pos;
 
-                // Read the stack stored in set_item_stack
-                //let stack = self.item_stack.lock().unwrap();
-
-                // TODO: Map the item ID to the chicken variant
-                // let variant = match stack.item.id {
-                //     id if id == Item::BLUE_EGG.id => EntityVariant::Cold,
-                //     id if id == Item::BROWN_EGG.id => EntityVariant::Warm,
-                //     _ => EntityVariant::Default,
-                // };
+                let variant_name = {
+                    let stack = self.item_stack.read().await;
+                    stack.get_data_component::<pumpkin_data::data_component_impl::ChickenVariantImpl>()
+                        .map(|comp| comp.value.clone())
+                };
 
                 tokio::spawn(async move {
                     for _ in 0..to_spawn {
@@ -167,7 +163,9 @@ impl EntityBase for EggEntity {
                         let new_entity = mob.get_entity();
                         new_entity.set_rotation(yaw, 0.0);
                         new_entity.set_age(-24000);
-                        //new_entity.set_variant(variant);
+                        if let Some(name) = &variant_name {
+                            mob.set_variant_name(name);
+                        }
 
                         world_clone.spawn_entity(mob).await;
                     }

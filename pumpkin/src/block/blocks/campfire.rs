@@ -9,18 +9,27 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
 
+use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockIsReplacing, GetStateForNeighborUpdateArgs,
-        OnEntityCollisionArgs, OnPlaceArgs,
+        OnEntityCollisionArgs, OnPlaceArgs, PlacedArgs,
     },
     entity::EntityBase,
 };
+use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:campfires")]
 pub struct CampfireBlock;
 
 impl BlockBehaviour for CampfireBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = CampfireBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     // TODO: cooking food on campfire (CampfireBlockEntity)
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {

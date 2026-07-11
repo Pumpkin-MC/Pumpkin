@@ -919,6 +919,15 @@ impl BlockRegistry {
         old_state_id: BlockStateId,
         notify: bool,
     ) {
+        let state = world.get_block_state(position);
+        if state.block_entity_type != u16::MAX
+            && world.get_block_entity(position).is_none()
+            && let Some(entity) =
+                crate::block::entities::create_block_entity(state.block_entity_type, *position)
+        {
+            world.add_block_entity(entity);
+        }
+
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
