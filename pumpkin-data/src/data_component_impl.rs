@@ -7,7 +7,7 @@ use crate::data_component::DataComponent::{
     ChargedProjectiles, Consumable, Container, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
     ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage, MaxStackSize, OminousBottleAmplifier,
-    PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
+    PotionContents, Profile, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -87,6 +87,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
             Some(OminousBottleAmplifierImpl::read_data(data)?.to_dyn())
         }
         DataComponent::BlockState => Some(BlockStateImpl::read_data(data)?.to_dyn()),
+        DataComponent::Profile => Some(ProfileImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -2309,7 +2310,176 @@ impl DataComponentImpl for FireworksImpl {
     default_impl!(Fireworks);
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ProfileImpl;
+pub struct ProfileProperty {
+    pub name: String,
+    pub value: String,
+    pub signature: Option<String>,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+pub struct ProfileImpl {
+    pub name: Option<String>,
+    pub id: Option<[i32; 4]>, // UUID represented as a standard NBT IntArray
+    pub properties: Vec<ProfileProperty>,
+
+    pub texture: Option<String>,
+    pub cape: Option<String>,
+    pub elytra: Option<String>,
+    pub model: Option<String>,
+}
+
+impl ProfileImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        match data {
+            NbtTag::String(name) => Some(Self {
+                name: Some(name.to_string()),
+                ..Default::default()
+            }),
+            NbtTag::Compound(compound) => {
+                let name = compound.get_string("name").map(String::from);
+
+                let id = compound.get_int_array("id").and_then(|arr| {
+                    if arr.len() == 4 {
+                        Some([arr[0], arr[1], arr[2], arr[3]])
+                    } else {
+                        None
+                    }
+                });
+
+                let mut properties = Vec::new();
+                if let Some(props_list) = compound.get_list("properties") {
+                    for prop_tag in props_list {
+                        if let Some(prop_comp) = prop_tag.extract_compound()
+                            && let (Some(prop_name), Some(prop_value)) =
+                                (prop_comp.get_string("name"), prop_comp.get_string("value"))
+                        {
+                            properties.push(ProfileProperty {
+                                name: prop_name.to_string(),
+                                value: prop_value.to_string(),
+                                signature: prop_comp.get_string("signature").map(String::from),
+                            });
+                        }
+                    }
+                }
+
+                let texture = compound.get_string("texture").map(String::from);
+                let cape = compound.get_string("cape").map(String::from);
+                let elytra = compound.get_string("elytra").map(String::from);
+                let model = compound.get_string("model").map(String::from);
+
+                Some(Self {
+                    name,
+                    id,
+                    properties,
+                    texture,
+                    cape,
+                    elytra,
+                    model,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+impl DataComponentImpl for ProfileImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+
+        if let Some(name) = &self.name {
+            compound.put_string("name", name.clone());
+        }
+
+        if let Some(id) = &self.id {
+            compound.put("id", NbtTag::IntArray(id.to_vec()));
+        }
+
+        if !self.properties.is_empty() {
+            let mut props_list = Vec::new();
+            for prop in &self.properties {
+                let mut prop_comp = NbtCompound::new();
+                prop_comp.put_string("name", prop.name.clone());
+                prop_comp.put_string("value", prop.value.clone());
+                if let Some(sig) = &prop.signature {
+                    prop_comp.put_string("signature", sig.clone());
+                }
+                props_list.push(NbtTag::Compound(prop_comp));
+            }
+            compound.put_list("properties", props_list);
+        }
+
+        if let Some(texture) = &self.texture {
+            compound.put_string("texture", texture.clone());
+        }
+        if let Some(cape) = &self.cape {
+            compound.put_string("cape", cape.clone());
+        }
+        if let Some(elytra) = &self.elytra {
+            compound.put_string("elytra", elytra.clone());
+        }
+        if let Some(model) = &self.model {
+            compound.put_string("model", model.clone());
+        }
+
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+
+        if let Some(name) = &self.name {
+            digest.update(&[1u8]);
+            digest.update(&get_str_hash(name).to_le_bytes());
+        }
+
+        if let Some(id) = &self.id {
+            digest.update(&[2u8]);
+            for val in id {
+                digest.update(&get_i32_hash(*val).to_le_bytes());
+            }
+        }
+
+        if !self.properties.is_empty() {
+            digest.update(&[3u8]);
+            for prop in &self.properties {
+                digest.update(&get_str_hash(&prop.name).to_le_bytes());
+                digest.update(&get_str_hash(&prop.value).to_le_bytes());
+                if let Some(sig) = &prop.signature {
+                    digest.update(&[1u8]);
+                    digest.update(&get_str_hash(sig).to_le_bytes());
+                } else {
+                    // Null terminator for missing signature
+                    digest.update(&[0u8]);
+                }
+            }
+        }
+
+        if let Some(texture) = &self.texture {
+            digest.update(&[4u8]);
+            digest.update(&get_str_hash(texture).to_le_bytes());
+        }
+
+        if let Some(cape) = &self.cape {
+            digest.update(&[5u8]);
+            digest.update(&get_str_hash(cape).to_le_bytes());
+        }
+
+        if let Some(elytra) = &self.elytra {
+            digest.update(&[6u8]);
+            digest.update(&get_str_hash(elytra).to_le_bytes());
+        }
+
+        if let Some(model) = &self.model {
+            digest.update(&[7u8]);
+            digest.update(&get_str_hash(model).to_le_bytes());
+        }
+
+        digest.finalize() as i32
+    }
+
+    default_impl!(Profile);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NoteBlockSoundImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
