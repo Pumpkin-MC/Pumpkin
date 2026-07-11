@@ -527,16 +527,15 @@ impl LootConditionExt for LootCondition {
                 // Mirrors vanilla `EntityTarget` resolution from `LootContext.java:148-186`.
                 let target = match *entity {
                     "this" => params.this_entity,
-                    "attacker" | "killer" => params.killer_entity,
+                    "attacker" | "killer" | "attacking_player" => params.killer_entity,
                     "direct_attacker" | "direct_killer" => params.direct_killer_entity,
-                    "attacking_player" => params.killer_entity,
                     _ => None,
                 };
                 if let Some(target) = target {
-                    if let Some(expected) = expected_type {
-                        if !compare_entity_type(expected, target) {
-                            return false;
-                        }
+                    if let Some(expected) = expected_type
+                        && !compare_entity_type(expected, target)
+                    {
+                        return false;
                     }
                     // Mirrors vanilla `EntityFlagsPredicate.isOnFire` check.
                     if let Some(expected_fire) = is_on_fire {
