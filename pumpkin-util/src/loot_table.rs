@@ -103,7 +103,7 @@ pub enum LootCondition {
     /// Checks properties of the entity (e.g. type, flags, equipment).
     /// Mirrors vanilla `LootItemEntityPropertyCondition`.
     EntityProperties {
-        /// The entity target to check: "this", "attacker", or "direct_attacker".
+        /// The entity target to check: "this", "attacker", or "`direct_attacker`".
         entity: &'static str,
         /// Expected entity type (e.g. "minecraft:cow").
         expected_type: Option<&'static str>,
