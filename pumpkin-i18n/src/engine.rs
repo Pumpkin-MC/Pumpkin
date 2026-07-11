@@ -245,6 +245,11 @@ impl TranslationEngine {
     /// * `locale_idx` — Index of the locale (use `locale as usize`).
     /// * `key` — The fully‑qualified translation key (`"namespace:entry"`).
     pub fn resolve(&self, locale_idx: usize, key: &str) -> Arc<ResolvedTranslation> {
+        debug_assert!(
+            locale_idx < crate::locale::Locale::COUNT,
+            "locale_idx {locale_idx} out of range (COUNT={})",
+            crate::locale::Locale::COUNT,
+        );
         let key = normalize_key(key);
         let cache = &self.cache[locale_idx];
 
@@ -306,13 +311,20 @@ impl TranslationEngine {
     /// keeps plugin/custom translation loading cheap and avoids rebuilding all
     /// locale data for a single write.
     pub fn add_translation(&self, locale_idx: usize, key: &str, translation: &str) {
+        debug_assert!(
+            locale_idx < crate::locale::Locale::COUNT,
+            "locale_idx {locale_idx} out of range (COUNT={})",
+            crate::locale::Locale::COUNT,
+        );
         if let Some(store) = self.overrides.get(locale_idx) {
             let normalized = normalize_key(key).into_owned();
+            // Evict cached entry before inserting the override, so we can move
+            // `normalized` into the insert call without an extra clone.
+            self.cache[locale_idx].remove(&normalized);
             store.insert(
-                normalized.clone(),
+                normalized,
                 Arc::new(ResolvedTranslation::from_template(translation)),
             );
-            self.cache[locale_idx].remove(&normalized);
         }
     }
 
@@ -324,6 +336,11 @@ impl TranslationEngine {
     where
         I: IntoIterator<Item = (String, String)>,
     {
+        debug_assert!(
+            locale_idx < crate::locale::Locale::COUNT,
+            "locale_idx {locale_idx} out of range (COUNT={})",
+            crate::locale::Locale::COUNT,
+        );
         let Some(store) = self.overrides.get(locale_idx) else {
             return;
         };

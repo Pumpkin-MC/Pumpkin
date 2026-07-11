@@ -59,20 +59,21 @@ where
 ///
 /// # Arguments
 /// * `namespace`: The namespace applied to all loaded keys.
-/// * `file_path`: A JSON string containing a flat key-value translation map.
+/// * `json_content`: A JSON string containing a flat key-value translation map.
 /// * `locale`: The locale the translations belong to.
-pub fn add_translation_file<N, J>(namespace: N, file_path: J, locale: Locale)
+pub fn add_translation_file<N, J>(namespace: N, json_content: J, locale: Locale)
 where
     N: AsRef<str>,
     J: AsRef<str>,
 {
-    let translations_map: HashMap<String, String> = match serde_json::from_str(file_path.as_ref()) {
-        Ok(map) => map,
-        Err(error) => {
-            warn!("failed to parse translation json: {error}");
-            return;
-        }
-    };
+    let translations_map: HashMap<String, String> =
+        match serde_json::from_str(json_content.as_ref()) {
+            Ok(map) => map,
+            Err(error) => {
+                warn!("failed to parse translation json: {error}");
+                return;
+            }
+        };
 
     if translations_map.is_empty() {
         warn!(
@@ -111,12 +112,7 @@ where
 /// The localized translation, the English fallback, or the raw key.
 #[must_use]
 pub fn get_translation(key: &str, locale: Locale) -> String {
-    let resolved = resolve_translation(key, locale);
-    if resolved.is_missing() {
-        key.to_owned()
-    } else {
-        resolved.as_str().to_owned()
-    }
+    resolve_translation(key, locale).value_or_raw(key)
 }
 
 /// Formats a translation with already-rendered string arguments.
@@ -124,11 +120,7 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
 pub fn format_translation(key: &str, locale: Locale, args: &[String]) -> String {
     let resolved = resolve_translation(key, locale);
     if args.is_empty() || resolved.tokens().is_none() {
-        return if resolved.is_missing() {
-            key.to_owned()
-        } else {
-            resolved.as_str().to_owned()
-        };
+        return resolved.value_or_raw(key);
     }
 
     let mut output = String::with_capacity(resolved.as_str().len());
