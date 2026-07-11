@@ -25,7 +25,7 @@ static PLAYER_CACHE: LazyLock<PlayerCache> =
     LazyLock::new(|| DashMap::with_hasher(BuildHasherDefault::default()));
 
 /// Maximum number of cached player locales before the cache is flushed.
-/// At ~60 bytes per entry (36-byte UUID + 1-byte Locale + DashMap overhead),
+/// At ~60 bytes per entry (36-byte UUID + 1-byte Locale + `DashMap` overhead),
 /// 100k entries ≈ 6 MB — well under the memory budget for even large networks.
 const MAX_PLAYER_CACHE_SIZE: usize = 100_000;
 
