@@ -8,7 +8,7 @@ use crate::command::snbt::markers::{
     ArrayPrefix, Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
 };
 use crate::command::snbt::operations::SnbtOperations;
-use crate::command::snbt::{NUMBER_PARSE_FAILURE, SnbtParser, tr_snbt_plain};
+use crate::command::snbt::{NUMBER_PARSE_FAILURE, SnbtParser};
 use pumpkin_codecs::{DynamicOps, Number};
 use pumpkin_data::translation;
 use pumpkin_nbt::compound::NbtCompound;
@@ -443,7 +443,7 @@ impl SnbtParser<'_, '_> {
             None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
                 Err(_) => self.store_dynamic_error(
                     &NUMBER_PARSE_FAILURE,
-                    tr_snbt_plain("commands.snbt.number_parse_failure.invalid_float_literal"),
+                    localized_log("commands.snbt.number_parse_failure.invalid_float_literal"),
                 ),
                 Ok(value) if value.is_finite() => {
                     return Some(NbtTag::Double(value));
@@ -454,7 +454,7 @@ impl SnbtParser<'_, '_> {
                 Err(_) => {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
-                        tr_snbt_plain("commands.snbt.number_parse_failure.invalid_float_literal"),
+                        localized_log("commands.snbt.number_parse_failure.invalid_float_literal"),
                     );
                 }
                 Ok(value) if value.is_finite() => {
@@ -852,7 +852,7 @@ impl SnbtParser<'_, '_> {
                     _ => {
                         self.store_dynamic_error(
                             &INVALID_CODEPOINT,
-                            tr_snbt_plain("commands.snbt.invalid_codepoint.expected_integer"),
+                            localized_log("commands.snbt.invalid_codepoint.expected_integer"),
                         );
                         return None;
                     }
