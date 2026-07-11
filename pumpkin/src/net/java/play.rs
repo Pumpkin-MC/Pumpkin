@@ -1743,12 +1743,16 @@ impl JavaClient {
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
         let Some(target) = target else {
-            self.kick(TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ))
-            .await;
+            // The target entity may have died, been unloaded, or otherwise been removed
+            // between the client sending this packet and the server processing it (e.g.
+            // when quickly attacking multiple mobs). This is an expected race condition,
+            // not a sign of a malicious client, so it must not disconnect the player.
+            // See: https://github.com/Pumpkin-MC/Pumpkin/issues/1800
+            debug!(
+                "Player id {} attacked entity id {}, which was not found.",
+                player.entity_id(),
+                entity_id.0
+            );
             return;
         };
         if let Some(player_victim) = &player_target {
@@ -1866,20 +1870,22 @@ impl JavaClient {
                 }
             }}
         } else {
-            // Entity not found
+            // Entity not found. This commonly happens when the target entity died or was
+            // unloaded between the client sending this packet and the server processing it
+            // (e.g. when quickly attacking multiple mobs), which is expected and not a sign
+            // of a malicious client, so it must not disconnect the player.
+            // See: https://github.com/Pumpkin-MC/Pumpkin/issues/1800
             send_cancellable! {{
                 server;
                 PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
 
                 'after: {
                     if event.action == ActionType::Attack {
-                        error!(
+                        debug!(
                             "Player id {} interacted with entity id {}, which was not found.",
                             player.entity_id(),
                             event.entity_id
                         );
-                        self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
-                        .await;
                     }
                 }
             }}
