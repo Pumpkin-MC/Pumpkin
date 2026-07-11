@@ -139,6 +139,19 @@ struct FstLocaleStore {
 impl FstLocaleStore {
     /// Build an [`FstLocaleStore`] from a flat `key → translation` map.
     fn build(data: &HashMap<String, String>) -> Self {
+        // Fast path: empty map → empty store (avoids building 141 empty FSTs
+        // at startup when only EnUs is embedded at compile time).
+        if data.is_empty() {
+            // Build a valid empty FST from a builder with no entries.
+            let empty_fst = MapBuilder::memory()
+                .into_inner()
+                .expect("empty FST build failed");
+            return Self {
+                fst: Map::new(empty_fst).expect("empty FST load failed"),
+                entries: Box::new([]),
+            };
+        }
+
         // 1. Lowercase keys for case-insensitive lookup, then sort.
         let mut sorted: Vec<(String, &str)> = data
             .iter()

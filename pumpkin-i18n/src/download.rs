@@ -593,6 +593,13 @@ fn fetch_sha256(data_url: &str, timeout: Duration) -> Result<String, String> {
         .call()
         .map_err(|e| format!("checksum download failed: {e}"))?;
 
+    if !response.status().is_success() {
+        return Err(format!(
+            "HTTP {status} from {checksum_url} — checksum not available",
+            status = response.status(),
+        ));
+    }
+
     let body = response
         .into_body()
         .read_to_string()
@@ -661,6 +668,13 @@ fn fetch_json(
         .get(url)
         .call()
         .map_err(|e| format!("HTTP request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "HTTP {} from {url} — mirror returned an error",
+            response.status(),
+        ));
+    }
 
     let body = response
         .into_body()

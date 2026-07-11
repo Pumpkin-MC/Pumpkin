@@ -17,8 +17,17 @@ type PlayerCache = DashMap<String, Locale, BuildHasherDefault<Xxh64>>;
 /// Populated on login, read during translation lookups, and cleaned on
 /// disconnect. Uses [`DashMap`] with XXH64 hashing for lock‑free concurrent
 /// reads.
+///
+/// An upper-bound guard clears the cache when it exceeds [`MAX_PLAYER_CACHE_SIZE`]
+/// entries so that a missing [`remove_player_locale`] call (e.g. disconnect-
+/// handler race, crash) cannot cause unbounded growth over very long uptimes.
 static PLAYER_CACHE: LazyLock<PlayerCache> =
     LazyLock::new(|| DashMap::with_hasher(BuildHasherDefault::default()));
+
+/// Maximum number of cached player locales before the cache is flushed.
+/// At ~60 bytes per entry (36-byte UUID + 1-byte Locale + DashMap overhead),
+/// 100k entries ≈ 6 MB — well under the memory budget for even large networks.
+const MAX_PLAYER_CACHE_SIZE: usize = 100_000;
 
 /// Resolve and cache a player's locale on login.
 ///
@@ -31,6 +40,14 @@ static PLAYER_CACHE: LazyLock<PlayerCache> =
 /// The resolved [`Locale`], which has also been stored in [`PLAYER_CACHE`].
 pub fn set_player_locale(uuid: &str, player_reported_locale: &str, config_value: &str) -> Locale {
     let locale = resolve_client_locale(player_reported_locale, config_value);
+
+    // Guard against unbounded growth: if the cache exceeds the cap (e.g.
+    // because remove_player_locale was never called for many players due to
+    // disconnect-handler races), clear the stale entries in one shot.
+    if PLAYER_CACHE.len() >= MAX_PLAYER_CACHE_SIZE {
+        PLAYER_CACHE.clear();
+    }
+
     PLAYER_CACHE.insert(uuid.to_owned(), locale);
     locale
 }
