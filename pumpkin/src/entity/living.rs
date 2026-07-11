@@ -1350,6 +1350,12 @@ impl LivingEntity {
                 tool,
                 is_raining: Some(is_raining),
                 is_thundering: Some(is_thundering),
+                is_on_fire: Some(
+                    self.entity
+                        .fire_ticks
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                        > 0,
+                ),
                 ..Default::default()
             };
 

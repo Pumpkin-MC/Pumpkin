@@ -1572,10 +1572,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -1666,10 +1670,14 @@ impl EntityType {
                                 LootCondition::EntityProperties {
                                     entity: "this",
                                     expected_type: None,
+                                    is_on_fire: Some(true),
+                                    mainhand_enchantment_tag: None,
                                 },
                                 LootCondition::EntityProperties {
                                     entity: "direct_attacker",
                                     expected_type: None,
+                                    is_on_fire: None,
+                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                 },
                             ])]),
                         }]),
@@ -1924,10 +1932,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -2112,7 +2124,9 @@ impl EntityType {
                     bonus_rolls: LootNumberProviderTypes::Constant(0f32),
                     conditions: Some(&[LootCondition::EntityProperties {
                         entity: "attacker",
-                        expected_type: None,
+                        expected_type: Some("#minecraft:skeletons"),
+                        is_on_fire: None,
+                        mainhand_enchantment_tag: None,
                     }]),
                     functions: None,
                 },
@@ -2251,10 +2265,14 @@ impl EntityType {
                                 LootCondition::EntityProperties {
                                     entity: "this",
                                     expected_type: None,
+                                    is_on_fire: Some(true),
+                                    mainhand_enchantment_tag: None,
                                 },
                                 LootCondition::EntityProperties {
                                     entity: "direct_attacker",
                                     expected_type: None,
+                                    is_on_fire: None,
+                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                 },
                             ])]),
                         },
@@ -2634,10 +2652,16 @@ impl EntityType {
                                         LootCondition::EntityProperties {
                                             entity: "this",
                                             expected_type: None,
+                                            is_on_fire: Some(true),
+                                            mainhand_enchantment_tag: None,
                                         },
                                         LootCondition::EntityProperties {
                                             entity: "direct_attacker",
                                             expected_type: None,
+                                            is_on_fire: None,
+                                            mainhand_enchantment_tag: Some(
+                                                "#minecraft:smelts_loot",
+                                            ),
                                         },
                                     ])]),
                                 },
@@ -2704,10 +2728,14 @@ impl EntityType {
                                 LootCondition::EntityProperties {
                                     entity: "this",
                                     expected_type: None,
+                                    is_on_fire: Some(true),
+                                    mainhand_enchantment_tag: None,
                                 },
                                 LootCondition::EntityProperties {
                                     entity: "direct_attacker",
                                     expected_type: None,
+                                    is_on_fire: None,
+                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                 },
                             ])]),
                         }]),
@@ -3554,7 +3582,7 @@ impl EntityType {
                     conditions: Some(&[
                         LootCondition::DamageSourceProperties {
                             expected_source_type: None,
-                            expected_direct_type: None,
+                            expected_direct_type: Some("minecraft:fireball"),
                         },
                         LootCondition::KilledByPlayer,
                     ]),
@@ -3909,10 +3937,16 @@ impl EntityType {
                                         LootCondition::EntityProperties {
                                             entity: "this",
                                             expected_type: None,
+                                            is_on_fire: Some(true),
+                                            mainhand_enchantment_tag: None,
                                         },
                                         LootCondition::EntityProperties {
                                             entity: "direct_attacker",
                                             expected_type: None,
+                                            is_on_fire: None,
+                                            mainhand_enchantment_tag: Some(
+                                                "#minecraft:smelts_loot",
+                                            ),
                                         },
                                     ])]),
                                 },
@@ -3964,10 +3998,14 @@ impl EntityType {
                                 LootCondition::EntityProperties {
                                     entity: "this",
                                     expected_type: None,
+                                    is_on_fire: Some(true),
+                                    mainhand_enchantment_tag: None,
                                 },
                                 LootCondition::EntityProperties {
                                     entity: "direct_attacker",
                                     expected_type: None,
+                                    is_on_fire: None,
+                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                 },
                             ])]),
                         }]),
@@ -4120,10 +4158,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -4399,6 +4441,8 @@ impl EntityType {
                         conditions: Some(&[LootCondition::EntityProperties {
                             entity: "this",
                             expected_type: None,
+                            is_on_fire: None,
+                            mainhand_enchantment_tag: None,
                         }]),
                         functions: Some(&[
                             LootFunction {
@@ -4462,10 +4506,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             }]),
@@ -5017,12 +5065,14 @@ impl EntityType {
                         quality: 0i32,
                         conditions: Some(&[
                             LootCondition::Inverted(&LootCondition::DamageSourceProperties {
-                                expected_source_type: None,
+                                expected_source_type: Some("minecraft:frog"),
                                 expected_direct_type: None,
                             }),
                             LootCondition::EntityProperties {
                                 entity: "this",
                                 expected_type: None,
+                                is_on_fire: None,
+                                mainhand_enchantment_tag: None,
                             },
                         ]),
                         functions: Some(&[
@@ -5056,7 +5106,7 @@ impl EntityType {
                         weight: 1i32,
                         quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: None,
+                            expected_source_type: Some("minecraft:frog"),
                             expected_direct_type: None,
                         }]),
                         functions: Some(&[LootFunction {
@@ -5074,7 +5124,7 @@ impl EntityType {
                         weight: 1i32,
                         quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: None,
+                            expected_source_type: Some("minecraft:frog"),
                             expected_direct_type: None,
                         }]),
                         functions: Some(&[LootFunction {
@@ -5092,7 +5142,7 @@ impl EntityType {
                         weight: 1i32,
                         quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: None,
+                            expected_source_type: Some("minecraft:frog"),
                             expected_direct_type: None,
                         }]),
                         functions: Some(&[LootFunction {
@@ -5367,10 +5417,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -6260,10 +6314,14 @@ impl EntityType {
                                 LootCondition::EntityProperties {
                                     entity: "this",
                                     expected_type: None,
+                                    is_on_fire: Some(true),
+                                    mainhand_enchantment_tag: None,
                                 },
                                 LootCondition::EntityProperties {
                                     entity: "direct_attacker",
                                     expected_type: None,
+                                    is_on_fire: None,
+                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                 },
                             ])]),
                         },
@@ -6476,6 +6534,8 @@ impl EntityType {
                 conditions: Some(&[LootCondition::EntityProperties {
                     entity: "this",
                     expected_type: None,
+                    is_on_fire: None,
+                    mainhand_enchantment_tag: None,
                 }]),
                 functions: None,
             }]),
@@ -6576,10 +6636,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -6620,10 +6684,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -6862,10 +6930,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -7052,10 +7124,14 @@ impl EntityType {
                                 LootCondition::EntityProperties {
                                     entity: "this",
                                     expected_type: None,
+                                    is_on_fire: Some(true),
+                                    mainhand_enchantment_tag: None,
                                 },
                                 LootCondition::EntityProperties {
                                     entity: "direct_attacker",
                                     expected_type: None,
+                                    is_on_fire: None,
+                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                 },
                             ])]),
                         }]),
@@ -7161,10 +7237,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             },
@@ -7199,6 +7279,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7211,6 +7293,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7223,6 +7307,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7235,6 +7321,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7247,6 +7335,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7259,6 +7349,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7271,6 +7363,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7283,6 +7377,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7295,6 +7391,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7307,6 +7405,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7319,6 +7419,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7331,6 +7433,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7343,6 +7447,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7355,6 +7461,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7367,6 +7475,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7379,6 +7489,8 @@ impl EntityType {
                                     conditions: Some(&[LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: None,
                                     }]),
                                     functions: None,
                                 },
@@ -7828,7 +7940,7 @@ impl EntityType {
                         quality: 0i32,
                         conditions: Some(&[LootCondition::Inverted(
                             &LootCondition::DamageSourceProperties {
-                                expected_source_type: None,
+                                expected_source_type: Some("minecraft:frog"),
                                 expected_direct_type: None,
                             },
                         )]),
@@ -7863,7 +7975,7 @@ impl EntityType {
                         weight: 1i32,
                         quality: 0i32,
                         conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: None,
+                            expected_source_type: Some("minecraft:frog"),
                             expected_direct_type: None,
                         }]),
                         functions: Some(&[LootFunction {
@@ -7880,6 +7992,8 @@ impl EntityType {
                 conditions: Some(&[LootCondition::EntityProperties {
                     entity: "this",
                     expected_type: None,
+                    is_on_fire: None,
+                    mainhand_enchantment_tag: None,
                 }]),
                 functions: None,
             }]),
@@ -10260,6 +10374,8 @@ impl EntityType {
                         conditions: Some(&[LootCondition::EntityProperties {
                             entity: "this",
                             expected_type: None,
+                            is_on_fire: None,
+                            mainhand_enchantment_tag: None,
                         }]),
                         functions: Some(&[
                             LootFunction {
@@ -10323,10 +10439,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             }]),
@@ -10360,6 +10480,8 @@ impl EntityType {
                         LootCondition::EntityProperties {
                             entity: "this",
                             expected_type: None,
+                            is_on_fire: None,
+                            mainhand_enchantment_tag: None,
                         },
                     ]),
                     functions: None,
@@ -10674,10 +10796,14 @@ impl EntityType {
                                     LootCondition::EntityProperties {
                                         entity: "this",
                                         expected_type: None,
+                                        is_on_fire: Some(true),
+                                        mainhand_enchantment_tag: None,
                                     },
                                     LootCondition::EntityProperties {
                                         entity: "direct_attacker",
                                         expected_type: None,
+                                        is_on_fire: None,
+                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
                                     },
                                 ])]),
                             }]),
