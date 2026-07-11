@@ -23,13 +23,21 @@ struct BoundingPlane {
 impl BoundingPlane {
     /// Checks whether this plane intersects another plane.
     ///
+    /// A small epsilon is used so that two planes which are merely touching
+    /// (as happens when an entity is already resting flush against a block
+    /// from a previous tick's collision resolution) still count as
+    /// intersecting instead of being treated as fully separated. Without this
+    /// tolerance, floating-point rounding in [`BoundingBox::calculate_collision_time`]
+    /// can leave a resting entity a few ULPs to either side of the boundary,
+    /// which would otherwise let it slip through on the next tick.
+    ///
     /// # Arguments
     /// * `other` – The other bounding plane to check against.
     pub fn intersects(&self, other: &Self) -> bool {
-        self.min.x < other.max.x
-            && self.max.x > other.min.x
-            && self.min.y < other.max.y
-            && self.max.y > other.min.y
+        self.min.x < other.max.x + BoundingBox::COLLISION_EPSILON
+            && self.max.x > other.min.x - BoundingBox::COLLISION_EPSILON
+            && self.min.y < other.max.y + BoundingBox::COLLISION_EPSILON
+            && self.max.y > other.min.y - BoundingBox::COLLISION_EPSILON
     }
 
     /// Projects a 3D bounding box onto a 2D plane by excluding one axis.
@@ -55,6 +63,21 @@ impl BoundingPlane {
 }
 
 impl BoundingBox {
+    /// Tolerance used when resolving entity/block collisions along a single axis.
+    ///
+    /// Movement is clipped one axis at a time by solving for the exact time the
+    /// entity's leading face reaches the obstacle. Once resolved, the entity is
+    /// left resting exactly on that boundary, but re-expressing that same
+    /// boundary the next tick (via a fresh division/multiplication) does not
+    /// always round back to the identical `f64`: it can land a few ULPs to
+    /// either side. Landing a hair past the boundary makes the next tick's
+    /// collision time compute as slightly negative, which used to be treated
+    /// as "already fully past this obstacle, nothing to block", letting the
+    /// entity's full, unclipped movement through and visibly clip it into the
+    /// block. Tolerating a tiny negative time (clamped back to `0.0`) keeps a
+    /// resting entity pinned at the boundary instead.
+    const COLLISION_EPSILON: f64 = 1.0E-7;
+
     /// Creates a default bounding box at the origin using entity dimensions.
     ///
     /// # Arguments
@@ -273,9 +296,22 @@ impl BoundingBox {
         let move_positive = movement_on_axis.is_sign_positive();
         let self_plane_const = self.get_side(move_positive).get_axis(axis);
         let other_plane_const = other.get_side(!move_positive).get_axis(axis);
-        let collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
+        let mut collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
 
-        if collision_time < 0.0 || collision_time >= max_time {
+        // A resting entity (already touching `other` on this axis from a prior
+        // tick's clip) can round to a collision time that is a hair below zero
+        // due to floating-point error, even though it is still, for all
+        // practical purposes, exactly at the boundary. Treat that as "touching
+        // now" (time 0) instead of "already fully past, ignore" so it stays
+        // blocked. See `COLLISION_EPSILON` for details.
+        if collision_time < 0.0 {
+            if collision_time < -Self::COLLISION_EPSILON {
+                return None;
+            }
+            collision_time = 0.0;
+        }
+
+        if collision_time >= max_time {
             return None;
         }
 
@@ -436,5 +472,71 @@ impl EntityDimensions {
             height,
             eye_height,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const fn box_from_axis(min: [f64; 3], max: [f64; 3]) -> BoundingBox {
+        BoundingBox::new(
+            Vector3::new(min[0], min[1], min[2]),
+            Vector3::new(max[0], max[1], max[2]),
+        )
+    }
+
+    /// Regression test for a mob clipping into a block after being hit: a box resting
+    /// almost exactly against a neighboring block (a hair past the boundary, as can
+    /// happen from floating-point rounding on a previous tick's collision resolution)
+    /// must still be reported as colliding instead of being skipped as "already past".
+    #[test]
+    fn resting_entity_stays_blocked_despite_rounding_noise() {
+        let resting = box_from_axis([0.0, 0.0, 0.0], [1.0 + 1.0E-10, 1.0, 1.0]);
+        let neighbor = box_from_axis([1.0, 0.0, 0.0], [2.0, 1.0, 1.0]);
+
+        let movement = Vector3::new(0.5, 0.0, 0.0);
+        let collision_time = resting.calculate_collision_time(&neighbor, movement, Axis::X, 1.0);
+
+        // Before the epsilon tolerance this rounded to a tiny negative time and was
+        // treated as "already fully past", letting the whole movement through. It
+        // must instead resolve to a collision at time 0, keeping movement blocked.
+        assert_eq!(collision_time, Some(0.0));
+    }
+
+    /// Boxes that are unambiguously separated (far beyond the rounding tolerance)
+    /// must still be reported as not colliding.
+    #[test]
+    fn genuinely_separated_boxes_do_not_collide() {
+        let far_away = box_from_axis([5.0, 0.0, 0.0], [6.0, 1.0, 1.0]);
+        let neighbor = box_from_axis([1.0, 0.0, 0.0], [2.0, 1.0, 1.0]);
+
+        let movement = Vector3::new(0.5, 0.0, 0.0);
+        let collision_time = far_away.calculate_collision_time(&neighbor, movement, Axis::X, 1.0);
+
+        assert_eq!(collision_time, None);
+    }
+
+    /// Pins down the exact tolerance boundary: a negative collision time within
+    /// `COLLISION_EPSILON` is clamped to a real collision at `0.0`, while one just
+    /// beyond it is still correctly ignored.
+    #[test]
+    fn epsilon_boundary_for_negative_collision_time() {
+        let neighbor = box_from_axis([1.0, 0.0, 0.0], [2.0, 1.0, 1.0]);
+        let movement = Vector3::new(1.0, 0.0, 0.0);
+
+        let just_inside = BoundingBox::COLLISION_EPSILON * 0.5;
+        let self_inside = box_from_axis([just_inside, 0.0, 0.0], [1.0 + just_inside, 1.0, 1.0]);
+        assert_eq!(
+            self_inside.calculate_collision_time(&neighbor, movement, Axis::X, 1.0),
+            Some(0.0)
+        );
+
+        let just_outside = BoundingBox::COLLISION_EPSILON * 2.0;
+        let self_outside = box_from_axis([just_outside, 0.0, 0.0], [1.0 + just_outside, 1.0, 1.0]);
+        assert_eq!(
+            self_outside.calculate_collision_time(&neighbor, movement, Axis::X, 1.0),
+            None
+        );
     }
 }
