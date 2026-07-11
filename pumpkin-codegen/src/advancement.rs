@@ -493,7 +493,7 @@ impl TreeNodePosition {
     ///
     /// This is the third of three passes. It only executes if the minimum y value found in
     /// the second walk was negative, ensuring all final positions are non-negative.
-    fn third_walk(nodes: &mut Vec<TreeNodePosition>, idx: usize, offset: f32) {
+    fn third_walk(nodes: &mut Vec<TreeNodePosition>, _idx: usize, offset: f32) {
         nodes.iter_mut().for_each(|node| {
             node.y += offset;
         });

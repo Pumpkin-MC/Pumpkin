@@ -183,7 +183,7 @@ mod tests {
             Box::pin(async move { Ok(bytes) })
         }
         fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
-            let mut mock: MockChunk = pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(bytes))
+            let mut mock: Self = pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(bytes))
                 .map_err(|e| {
                     ChunkReadingError::ParsingError(
                         crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
@@ -199,7 +199,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pump_file_roundtrip() {
+    async fn pump_file_roundtrip() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.child("r.0.0.pump");
 

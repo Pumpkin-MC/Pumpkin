@@ -141,7 +141,9 @@ impl UpwardsBranchingTrunkPlacer {
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
         if TreeFeature::can_replace(block.to_state(), block.to_block_id())
-            || self.can_grow_through.contains(&block.to_block_id())
+            || self
+                .can_grow_through
+                .contains(&block.to_block_id().as_u16())
         {
             chunk.set_block_state(&pos.0, trunk_state);
             return true;

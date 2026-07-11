@@ -267,6 +267,7 @@ impl StrongholdPiece {
         bb.min.y > 10
     }
 
+    #[allow(clippy::too_many_lines)]
     fn generate_entrance(
         &self,
         chunk: &mut ProtoChunk,

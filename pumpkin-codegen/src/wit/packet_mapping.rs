@@ -643,9 +643,9 @@ fn parse_packet_file(
                             "        id if id == {}::{}::to_id(version) => {{\n",
                             rust_path_prefix, struct_name
                         ));
-                        output.push_str(&format!(
-                            "            use pumpkin_protocol::ServerPacket;\n"
-                        ));
+                        output.push_str(
+                            &"            use pumpkin_protocol::ServerPacket;\n".to_string(),
+                        );
                         output.push_str(&format!(
                             "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;\n",
                             rust_path_prefix, struct_name
@@ -659,9 +659,9 @@ fn parse_packet_file(
                             "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
                             rust_path_prefix, struct_name
                         ));
-                        output.push_str(&format!(
-                            "            use pumpkin_protocol::BServerPacket;\n"
-                        ));
+                        output.push_str(
+                            &"            use pumpkin_protocol::BServerPacket;\n".to_string(),
+                        );
                         output.push_str(&format!(
                             "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;\n",
                             rust_path_prefix, struct_name
@@ -708,7 +708,7 @@ fn parse_packet_file(
                         "    if let Some(p) = any.downcast_ref::<{}::{}>() {{\n",
                         rust_path_prefix, struct_name
                     ));
-                    output.push_str(&format!("        return Some(p.to_wit());\n"));
+                    output.push_str(&"        return Some(p.to_wit());\n".to_string());
                     output.push_str("    }\n");
                 }
             }

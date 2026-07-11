@@ -1,8 +1,8 @@
 use crate::block::{BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, MangroveRootsLikeProperties};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 
 #[pumpkin_block("minecraft:mangrove_roots")]

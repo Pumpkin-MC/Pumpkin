@@ -1,22 +1,22 @@
 use std::sync::Arc;
 
-use crate::block::{BlockFuture, BlockMetadata, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
+use crate::block::{BlockFuture, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
 use crate::block::{
     registry::BlockActionResult,
     {BlockBehaviour, NormalUseArgs},
 };
 
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::{self};
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
@@ -46,13 +46,8 @@ impl ScreenHandlerFactory for ShulkerBoxScreenFactory {
     }
 }
 
+#[pumpkin_block_from_tag("minecraft:shulker_boxes")]
 pub struct ShulkerBoxBlock;
-
-impl BlockMetadata for ShulkerBoxBlock {
-    fn ids() -> Box<[u16]> {
-        tag::Block::MINECRAFT_SHULKER_BOXES.1.into()
-    }
-}
 
 type EndRodLikeProperties = pumpkin_data::block_properties::EndRodLikeProperties;
 

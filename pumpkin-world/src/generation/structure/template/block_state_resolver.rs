@@ -33,9 +33,7 @@ impl BlockStateResolver {
         // Find the block
         let block = Block::from_name(&entry.name).or_else(|| Block::from_registry_key(block_name));
 
-        let block = if let Some(b) = block {
-            b
-        } else {
+        let Some(block) = block else {
             warn!("Unknown block in template: {}", entry.name);
             return None;
         };
@@ -93,16 +91,14 @@ impl BlockStateResolver {
             "axis" => rotation.rotate_axis(value).to_string(),
 
             // Block rotation (signs, banners - 0-15 value)
-            "rotation" => {
-                if let Ok(rot_value) = value.parse::<i32>() {
+            "rotation" => value.parse::<i32>().map_or_else(
+                |_| value.to_string(),
+                |rot_value| {
                     let mirrored = mirror.mirror_block_rotation(rot_value);
                     let rotated = rotation.rotate_block_rotation(mirrored);
-                    // Use static strings for the 16 possible rotation values
                     Self::rotation_to_str(rotated).to_string()
-                } else {
-                    value.to_string()
-                }
-            }
+                },
+            ),
 
             // Half properties don't need rotation (top/bottom stays the same)
             // Shape, mode, and most other properties don't need transformation either
@@ -113,7 +109,6 @@ impl BlockStateResolver {
     /// Converts a rotation value (0-15) to a static string.
     const fn rotation_to_str(rotation: i32) -> &'static str {
         match rotation % 16 {
-            0 => "0",
             1 => "1",
             2 => "2",
             3 => "3",
@@ -139,14 +134,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_simple_block() {
+    fn resolve_simple_block() {
         let entry = PaletteEntry::new("minecraft:stone".to_string());
         let state = BlockStateResolver::resolve_simple(&entry);
         assert!(state.is_some());
     }
 
     #[test]
-    fn test_resolve_with_properties() {
+    fn resolve_with_properties() {
         let entry = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
@@ -161,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rotation_transforms_facing() {
+    fn rotation_transforms_facing() {
         let entry = PaletteEntry::with_properties(
             "minecraft:furnace".to_string(),
             vec![
@@ -180,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_block_returns_none() {
+    fn unknown_block_returns_none() {
         let entry = PaletteEntry::new("minecraft:nonexistent_block".to_string());
         let state = BlockStateResolver::resolve_simple(&entry);
         assert!(state.is_none());

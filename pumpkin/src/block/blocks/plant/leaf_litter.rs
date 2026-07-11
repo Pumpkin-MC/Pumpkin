@@ -1,22 +1,18 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_world::BlockStateId;
+use pumpkin_macros::pumpkin_block;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs,
-    GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs,
 };
 
 use super::segmented::Segmented;
 
 type LeafLitterProperties = pumpkin_data::block_properties::LeafLitterLikeProperties;
 
+#[pumpkin_block("minecraft:leaf_litter")]
 pub struct LeafLitterBlock;
-
-impl BlockMetadata for LeafLitterBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::LEAF_LITTER.id].into()
-    }
-}
 
 impl BlockBehaviour for LeafLitterBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {

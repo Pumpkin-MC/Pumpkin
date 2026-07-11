@@ -39,13 +39,14 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::{
-    BlocksAttacksImpl, DeathProtectionImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+    AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, translation};
+use pumpkin_data::{Block, Enchantment, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
@@ -1484,17 +1485,26 @@ impl LivingEntity {
 
         {
             let mut effects = self.active_effects.lock().await;
+            let entity_age = self.entity.age.load(Relaxed);
             for effect in effects.values_mut() {
-                // A duration below 0 means the effect is infinite
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
                     continue;
                 }
 
-                if Self::should_apply_effect_tick(effect) {
+                let tick_duration = if effect.duration == -1 {
+                    entity_age
+                } else {
+                    effect.duration
+                };
+
+                if Self::should_apply_effect_tick(effect, tick_duration) {
                     effects_to_apply.push((effect.effect_type, effect.amplifier));
                 }
-                effect.duration -= 1;
+
+                if effect.duration != -1 {
+                    effect.duration -= 1;
+                }
             }
         }
 
@@ -1513,8 +1523,7 @@ impl LivingEntity {
     /// Based on vanilla Minecraft's effect tick frequencies
     ///
     /// TODO: villager, beacon, and other effects.
-    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect) -> bool {
-        let duration = effect.duration;
+    fn should_apply_effect_tick(effect: &pumpkin_data::potion::Effect, duration: i32) -> bool {
         let effect_type = effect.effect_type;
 
         if effect_type == &StatusEffect::REGENERATION {
@@ -2023,10 +2032,105 @@ impl EntityBase for LivingEntity {
             let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
+            let mut damage_after_armor = amount;
+            if !bypasses_armor_durability(&damage_type) {
+                let mut armor = 0.0f32;
+                let mut toughness = 0.0f32;
+                {
+                    let equipment_lock = self.entity_equipment.lock().await;
+                    for slot in [
+                        EquipmentSlot::HEAD,
+                        EquipmentSlot::CHEST,
+                        EquipmentSlot::LEGS,
+                        EquipmentSlot::FEET,
+                    ] {
+                        let stack_arc = equipment_lock.get(&slot);
+                        let stack = stack_arc.lock().await;
+                        if !stack.is_empty()
+                            && let Some(modifiers) =
+                                stack.get_data_component::<AttributeModifiersImpl>()
+                        {
+                            for modifier in modifiers.attribute_modifiers.iter() {
+                                if modifier.r#type == &Attributes::ARMOR {
+                                    armor += modifier.amount as f32;
+                                } else if modifier.r#type == &Attributes::ARMOR_TOUGHNESS {
+                                    toughness += modifier.amount as f32;
+                                }
+                            }
+                        }
+                    }
+                }
+                let value = 2.0f32 + toughness / 4.0;
+                let clamped_armor = (armor - damage_after_armor / value)
+                    .max(armor / 5.0)
+                    .min(20.0);
+                damage_after_armor *= 1.0 - clamped_armor / 25.0;
+            }
+
+            let mut damage_after_enchantments = damage_after_armor;
+            if damage_type != DamageType::OUT_OF_WORLD {
+                let mut epf = 0i32;
+                {
+                    let equipment_lock = self.entity_equipment.lock().await;
+                    for slot in [
+                        EquipmentSlot::HEAD,
+                        EquipmentSlot::CHEST,
+                        EquipmentSlot::LEGS,
+                        EquipmentSlot::FEET,
+                    ] {
+                        let stack_arc = equipment_lock.get(&slot);
+                        let stack = stack_arc.lock().await;
+                        if !stack.is_empty()
+                            && let Some(enchantments) =
+                                stack.get_data_component::<EnchantmentsImpl>()
+                        {
+                            for (enchantment, level) in enchantments.enchantment.iter() {
+                                let mut factor = 0;
+                                let enc = *enchantment;
+                                if enc == &Enchantment::PROTECTION {
+                                    if damage_type != DamageType::DROWN
+                                        && damage_type != DamageType::STARVE
+                                        && damage_type != DamageType::GENERIC_KILL
+                                    {
+                                        factor = *level;
+                                    }
+                                } else if enc == &Enchantment::FIRE_PROTECTION {
+                                    if is_fire_damage {
+                                        factor = *level * 2;
+                                    }
+                                } else if enc == &Enchantment::BLAST_PROTECTION {
+                                    if damage_type == DamageType::EXPLOSION
+                                        || damage_type == DamageType::PLAYER_EXPLOSION
+                                    {
+                                        factor = *level * 2;
+                                    }
+                                } else if enc == &Enchantment::PROJECTILE_PROTECTION {
+                                    if damage_type == DamageType::ARROW
+                                        || damage_type == DamageType::MOB_PROJECTILE
+                                        || damage_type == DamageType::THROWN
+                                    {
+                                        factor = (*level) * 2;
+                                    }
+                                } else if enc == &Enchantment::FEATHER_FALLING
+                                    && damage_type == DamageType::FALL
+                                {
+                                    factor = (*level) * 4;
+                                }
+                                epf += factor;
+                            }
+                        }
+                    }
+                }
+                epf = epf.min(20);
+                if epf > 0 {
+                    damage_after_enchantments *= 1.0 - (epf as f32 * 0.04);
+                }
+            }
+
             // Apply Resistance effect reduction (20% per level), excluding bypasses_cooldown_protection and starvation damage
             let resistance_reduction =
                 if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
-                    self.get_effect(&pumpkin_data::effect::StatusEffect::RESISTANCE)
+                    self.get_effect(&StatusEffect::RESISTANCE)
                         .await
                         .map_or(0.0, |e| 0.2 * (e.amplifier + 1) as f32)
                 } else {
@@ -2034,10 +2138,10 @@ impl EntityBase for LivingEntity {
                 };
 
             // Total damage after reductions
-            let effective_amount = amount * (1.0 - resistance_reduction);
+            let effective_amount = damage_after_enchantments * (1.0 - resistance_reduction);
 
             if resistance_reduction > 0.0 {
-                let resisted = amount * resistance_reduction;
+                let resisted = damage_after_enchantments * resistance_reduction;
                 if let Some(player) = caller.get_player() {
                     player
                         .increment_stat(

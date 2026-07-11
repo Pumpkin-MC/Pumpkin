@@ -135,16 +135,15 @@ pub struct LevelDat {
 #[cfg(test)]
 mod test {
 
+    use flate2::read::GzDecoder;
+    use pumpkin_data::game_rules::GameRuleRegistry;
+    use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
+    use pumpkin_util::{Difficulty, world_seed::Seed};
     use std::{
         fs,
         io::{Cursor, Read},
         sync::LazyLock,
     };
-
-    use flate2::read::GzDecoder;
-    use pumpkin_data::game_rules::GameRuleRegistry;
-    use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
-    use pumpkin_util::{Difficulty, world_seed::Seed};
     use temp_dir::TempDir;
 
     use crate::{
@@ -283,10 +282,9 @@ mod test {
         .unwrap();
 
         let result = AnvilLevelInfo.read_world_info(temp_dir.path());
-        match result {
-            Ok(_) => panic!("This should fail!"),
-            Err(WorldInfoError::UnsupportedDataVersion(_)) => {}
-            Err(_) => panic!("Wrong error!"),
-        }
+        assert!(matches!(
+            result,
+            Err(WorldInfoError::UnsupportedDataVersion(_))
+        ));
     }
 }

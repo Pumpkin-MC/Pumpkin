@@ -2496,21 +2496,42 @@ impl Player {
                     last_pos.y.round() as i32,
                     last_pos.z.round() as i32,
                 ));
-                self.client
-                    .send_packet_now(&CRespawn::new(
-                        PlayerSpawnData::new(
-                        new_world.dimension.clone(),
-                        biome::hash_seed(new_world.level.seed.0), // seed
-                        self.gamemode.load() as u8,
-                        self.previous_gamemode.load().unwrap_or(self.gamemode.load()) as i8,
-                        false,
-                        false,
-                        Some((death_dimension, death_location)),
-                        VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
-                        new_world.sea_level.into(),
-                        ),
-                        CRespawn::KEEP_ALL_DATA,
-                    )).await;
+                match self.client.as_ref() {
+                    ClientPlatform::Java(java) => {
+                        java.send_packet_now(&CRespawn::new(
+                            PlayerSpawnData::new(
+                                new_world.dimension.clone(),
+                                biome::hash_seed(new_world.level.seed.0), // seed
+                                self.gamemode.load() as u8,
+                                self.previous_gamemode.load().unwrap_or(self.gamemode.load()) as i8,
+                                false,
+                                false,
+                                Some((death_dimension, death_location)),
+                                VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
+                                new_world.sea_level.into(),
+                            ),
+                            CRespawn::KEEP_ALL_DATA,
+                        )).await;
+                    }
+                    ClientPlatform::Bedrock(bedrock) => {
+                        let bedrock_dimension = if new_world.dimension == Dimension::OVERWORLD {
+                            0
+                        } else if new_world.dimension == Dimension::THE_NETHER {
+                            1
+                        } else if new_world.dimension == Dimension::THE_END {
+                            2
+                        } else {
+                            0
+                        };
+                        let pos_f32 = Vector3::new(position.x as f32, position.y as f32, position.z as f32);
+                        let change_dim_packet = pumpkin_protocol::bedrock::client::CChangeDimension::new(
+                            bedrock_dimension,
+                            pos_f32,
+                            false,
+                        );
+                        bedrock.enqueue_packet(&change_dim_packet).await;
+                    }
+                }
 
                 self.send_permission_lvl_update();
 
@@ -4931,7 +4952,6 @@ impl InventoryPlayer for Player {
                 }
                 ClientPlatform::Bedrock(bedrock) => {
                     use pumpkin_protocol::bedrock::{
-                        client::inventory_content::CInventoryContent,
                         client::inventory_slot::CInventorySlot,
                         network_item::{
                             ContainerName, FullContainerName, NetworkItemStackDescriptor,
@@ -4948,23 +4968,20 @@ impl InventoryPlayer for Player {
 
                     if window_id == 0 {
                         tracing::info!(
-                            "enqueue_slot_packet: window_id is 0, sending CInventoryContent to Bedrock client"
+                            "enqueue_slot_packet: window_id is 0, sending CInventorySlot to Bedrock client"
                         );
-                        let mut slots = Vec::with_capacity(36);
-                        let main_inventory = &self.inventory().main_inventory;
-                        for s in main_inventory {
-                            let stack = s.lock().await;
-                            slots.push(NetworkItemStackDescriptor::from(&*stack));
-                        }
+                        let slot_idx = packet.slot as usize;
+                        let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
 
-                        let bedrock_packet = CInventoryContent {
-                            container_id: VarUInt(0),
-                            slots,
-                            full_container_name: FullContainerName {
+                        let bedrock_packet = CInventorySlot {
+                            window_id: VarUInt(0),
+                            inventory_slot: VarUInt(slot_idx as u32),
+                            container_name: Some(FullContainerName {
                                 container_name: ContainerName::Inventory,
                                 dynamic_id: None,
-                            },
-                            storage_item: NetworkItemStackDescriptor::default(),
+                            }),
+                            storage: None,
+                            item: item_desc,
                         };
                         bedrock.enqueue_packet(&bedrock_packet).await;
                     } else {
@@ -5073,7 +5090,7 @@ impl InventoryPlayer for Player {
                 }
                 ClientPlatform::Bedrock(bedrock) => {
                     use pumpkin_protocol::bedrock::{
-                        client::inventory_content::CInventoryContent,
+                        client::inventory_slot::CInventorySlot,
                         network_item::{
                             ContainerName, FullContainerName, NetworkItemStackDescriptor,
                         },
@@ -5081,24 +5098,21 @@ impl InventoryPlayer for Player {
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
                     tracing::info!(
-                        "enqueue_slot_set_packet: slot={}, sending CInventoryContent to Bedrock client",
+                        "enqueue_slot_set_packet: slot={}, sending CInventorySlot to Bedrock client",
                         packet.slot.0
                     );
-                    let mut slots = Vec::with_capacity(36);
-                    let main_inventory = &self.inventory().main_inventory;
-                    for s in main_inventory {
-                        let stack = s.lock().await;
-                        slots.push(NetworkItemStackDescriptor::from(&*stack));
-                    }
 
-                    let bedrock_packet = CInventoryContent {
-                        container_id: VarUInt(0),
-                        slots,
-                        full_container_name: FullContainerName {
+                    let item_stack = &*packet.item.0;
+                    let item_desc = NetworkItemStackDescriptor::from(item_stack);
+                    let bedrock_packet = CInventorySlot {
+                        window_id: VarUInt(0),
+                        inventory_slot: VarUInt(packet.slot.0 as u32),
+                        container_name: Some(FullContainerName {
                             container_name: ContainerName::Inventory,
                             dynamic_id: None,
-                        },
-                        storage_item: NetworkItemStackDescriptor::default(),
+                        }),
+                        storage: None,
+                        item: item_desc,
                     };
                     bedrock.enqueue_packet(&bedrock_packet).await;
                 }

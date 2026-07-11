@@ -388,31 +388,31 @@ impl ToTokens for BlockPropertyStruct {
 
                 #[inline]
                 #[allow(clippy::manual_range_patterns)]
-                fn handles_block_id(block_id: u16) -> bool where Self: Sized {
-                    matches!(block_id, #(#block_ids)|*)
+                fn handles_block_id(block_id: BlockId) -> bool where Self: Sized {
+                    matches!(block_id.as_u16(), #(#block_ids)|*)
                 }
 
-                fn to_state_id(&self, block: &Block) -> u16 {
+                fn to_state_id(&self, block: &Block) -> BlockStateId {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
-                    block.states[0].id + self.to_index()
+                    block.states[self.to_index() as usize].id
                 }
 
-                fn from_state_id(state_id: u16, block: &Block) -> Self {
+                fn from_state_id(id: BlockStateId, block: &Block) -> Self {
                     debug_assert!(
                         Self::handles_block_id(block.id),
                         "{} is not a valid block for {}", block.name, #struct_name
                     );
 
-                    let min_id = block.states[0].id;
-                    let max_id = block.states.last().map(|s| s.id).unwrap_or(min_id);
+                    let min_id = block.states[0].id.as_u16();
+                    let max_id = block.states.last().map(|s| s.id.as_u16()).unwrap_or(min_id);
 
-                    if (min_id..=max_id).contains(&state_id) {
-                        Self::from_index(state_id - min_id)
+                    if (min_id..=max_id).contains(&id.as_u16()) {
+                        Self::from_index(id.as_u16() - min_id)
                     } else {
                         #[cfg(debug_assertions)]
-                        panic!("State ID {} does not exist for {}", state_id, &block.name);
+                        panic!("State ID {} does not exist for {}", id, block.name);
 
                         #[cfg(not(debug_assertions))]
                         Self::from_index(0)
@@ -426,14 +426,14 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-               fn to_props(&self) -> Vec<(&'static str, &'static str)> {
+                fn to_props(&self) -> Vec<(&'static str, &'static str)> {
                    vec![ #(#to_props_entries),* ]
                 }
 
                 #[allow(clippy::manual_range_patterns)]
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     #[cfg(debug_assertions)]
-                    if !matches!(block.id, #(#block_ids)|*) {
+                    if !matches!(block.id.as_u16(), #(#block_ids)|*) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
@@ -498,11 +498,21 @@ impl ToTokens for BoundingBox {
     }
 }
 
+#[derive(Deserialize, Copy, Clone, PartialEq, Eq)]
+pub struct BlockStateId(pub u16);
+
+impl ToTokens for BlockStateId {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let inner = self.0;
+        tokens.extend(quote! { BlockStateId::new(#inner).unwrap() });
+    }
+}
+
 /// Deserialized representation of a single block state as stored in `blocks.json`.
 #[derive(Deserialize, Clone)]
 pub struct BlockState {
     /// Globally unique numeric ID for this block state.
-    pub id: u16,
+    pub id: BlockStateId,
     /// Bitfield encoding boolean state properties (air, random ticks, etc.).
     pub state_flags: u16,
     /// Bitfield encoding which sides of the block are solid.
@@ -579,7 +589,7 @@ impl BlockState {
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
-        let id = LitInt::new(&self.id.to_string(), Span::call_site());
+        let id = self.id;
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
         let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
@@ -627,11 +637,21 @@ impl BlockState {
     }
 }
 
+#[derive(Deserialize, Copy, Clone)]
+pub struct BlockId(pub u16);
+
+impl ToTokens for BlockId {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let inner = self.0;
+        tokens.extend(quote! { BlockId::new(#inner).unwrap() });
+    }
+}
+
 /// Deserialized representation of a Minecraft block as stored in `blocks.json`.
 #[derive(Deserialize)]
 pub struct Block {
     /// Numeric block ID used in the protocol.
-    pub id: u16,
+    pub id: BlockId,
     /// Registry name without the `minecraft:` namespace prefix.
     pub name: String,
     /// Translation key for the block's display name.
@@ -656,7 +676,7 @@ pub struct Block {
     /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
     /// State ID of the default (canonical) block state.
-    pub default_state_id: u16,
+    pub default_state_id: BlockStateId,
     /// All possible states for this block in state-ID order.
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
@@ -665,7 +685,7 @@ pub struct Block {
 
 impl ToTokens for Block {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let id = LitInt::new(&self.id.to_string(), Span::call_site());
+        let id = self.id;
         let name = LitStr::new(&self.name, Span::call_site());
         //let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
@@ -823,6 +843,13 @@ pub fn build() -> TokenStream {
     let mut be_blocks_cursor = Cursor::new(be_blocks_data);
     let be_blocks = get_be_data_from_nbt(&mut be_blocks_cursor);
 
+    let geyser_blocks_data = fs::read("../assets/bedrock/blocks.nbt").unwrap();
+    let geyser_nbt_compound =
+        pumpkin_nbt::nbt_compress::read_gzip_compound_tag(Cursor::new(geyser_blocks_data)).unwrap();
+    let bedrock_mappings_list = geyser_nbt_compound
+        .get_list("bedrock_mappings")
+        .expect("Missing bedrock_mappings list in Geyser blocks.nbt");
+
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
@@ -841,6 +868,7 @@ pub fn build() -> TokenStream {
     let mut liquid_states = Vec::new();
 
     let mut constants_list = Vec::new();
+    let mut block_id_constants = Vec::new();
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
@@ -915,8 +943,8 @@ pub fn build() -> TokenStream {
 
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
-        let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let item_id = block.item_id;
+        let block_id = block.id;
 
         // let mut block_with_descriptors = block.clone();
         // block_with_descriptors.property_descriptors = property_descriptors;
@@ -925,99 +953,57 @@ pub fn build() -> TokenStream {
             pub const #const_ident: Self = #block;
         });
 
-        type_from_raw_id_array.push((block.id, quote! { &Block::#const_ident }));
+        block_id_constants.push(quote! {
+            pub const #const_ident: Self = #block_id;
+        });
+
+        type_from_raw_id_array.push((block.id.0, quote! { &Block::#const_ident }));
 
         block_from_name_entries.push(quote! {
             #name_str => Block::#const_ident,
         });
 
-        let be_name = match block.name.as_str() {
-            "dead_bush" => "deadbush",
-            "tripwire" => "trip_wire",
-            "note_block" => "noteblock",
-            "powered_rail" => "golden_rail",
-            "cobweb" => "web",
-            "tall_seagrass" => "seagrass",
-            "wall_torch" => "torch",
-            "spawner" => "mob_spawner",
-            "snow" => "snow_layer",
-            "snow_block" => "snow",
-            name => name,
-        };
-
-        let be_state_list = be_blocks.get(be_name);
-
         for (i, state) in block.states.iter().enumerate() {
             if state.has_random_ticks() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 random_tick_states.push(state_id);
             }
             if state.is_air() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 air_states.push(state_id);
             }
             if state.is_liquid() {
-                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 liquid_states.push(state_id);
             }
 
             let mut matched_be_id = 1;
 
-            if let Some(be_variants) = be_state_list {
-                let mut temp_index = i as u16;
-                let mut java_props_for_this_state = BTreeMap::new();
+            if let Some(geyser_entry) = bedrock_mappings_list.get(state.id.0 as usize) {
+                let (bedrock_name, bedrock_props) = parse_geyser_entry(geyser_entry, &block.name);
 
-                for mapping in property_mapping.iter().rev() {
-                    match &mapping.property_type {
-                        PropertyType::Bool => {
-                            let val = temp_index % 2;
-                            temp_index /= 2;
-                            java_props_for_this_state.insert(
-                                mapping.original_name.clone(),
-                                if val == 0 { "true" } else { "false" }.to_string(),
-                            );
-                        }
-                        PropertyType::Int { min, max } => {
-                            let count = (*max - *min + 1) as u16;
-                            let val = (temp_index % count) as u8;
-                            temp_index /= count;
-                            java_props_for_this_state
-                                .insert(mapping.original_name.clone(), (val + *min).to_string());
-                        }
-                        PropertyType::Enum { name } => {
-                            let enum_info = property_enums.get(name).unwrap();
-                            let count = enum_info.values.len() as u16;
-                            let val_idx = temp_index % count;
-                            temp_index /= count;
-
-                            let raw_val = &enum_info.values[val_idx as usize];
-                            let val_str = if raw_val.starts_with('L') {
-                                raw_val.strip_prefix('L').unwrap().to_string()
-                            } else {
-                                raw_val.clone()
-                            };
-                            java_props_for_this_state
-                                .insert(mapping.original_name.clone(), val_str);
-                        }
-                    }
+                if let Some(be_variants) = be_blocks.get(&bedrock_name) {
+                    matched_be_id = be_variants
+                        .iter()
+                        .find(|(_, be_props)| {
+                            bedrock_props
+                                .iter()
+                                .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
+                        })
+                        .map_or_else(
+                            || be_variants.first().map_or(1, |(id, _)| *id),
+                            |(id, _)| *id,
+                        );
+                } else if let Some(be_variants) = be_blocks.get(&block.name) {
+                    matched_be_id = be_variants.first().map_or(1, |(id, _)| *id);
                 }
-
-                matched_be_id = be_variants
-                    .iter()
-                    .find(|(_, be_props)| {
-                        java_props_for_this_state
-                            .iter()
-                            .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
-                    })
-                    .map_or_else(
-                        || be_variants.first().map_or(1, |(id, _)| *id),
-                        |(id, _)| *id,
-                    );
+            } else if let Some(be_variants) = be_blocks.get(&block.name) {
+                matched_be_id = be_variants.first().map_or(1, |(id, _)| *id);
             }
 
-            block_state_to_bedrock.push((state.id, matched_be_id));
-            raw_id_from_state_id_array.push((state.id, id_lit.clone()));
-            state_from_state_id_array.push((const_ident.clone(), i, state.id));
+            block_state_to_bedrock.push((state.id.0, matched_be_id));
+            raw_id_from_state_id_array.push((state.id.0, quote! { BlockId::#const_ident }));
+            state_from_state_id_array.push((const_ident.clone(), i, state.id.0));
         }
 
         if !property_collection.is_empty() {
@@ -1027,7 +1013,7 @@ pub fn build() -> TokenStream {
             property_collection_map
                 .entry(property_collection_vec)
                 .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
-                .add_block(block.name.clone(), block.id);
+                .add_block(block.name.clone(), block.id.0);
         }
 
         if existing_item_ids.insert(item_id) {
@@ -1122,21 +1108,13 @@ pub fn build() -> TokenStream {
         #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
-        use crate::{BlockState, Block, blocks::Flammable};
+        use crate::{BlockState, BlockStateId, Block, BlockId, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
-
-        /// manual `const` indexing implementation to replace the currently used &[T].get_unchecked() as it is not `const`
-        /// Safety: calls with `index < N` are sound, `index >= N` is UB!
-        #[inline]
-        #[must_use]
-        const unsafe fn unchecked_index<T: Copy, const N: usize>(array: &[T; N], index: usize) -> T {
-            unsafe { *(array.as_ptr().add(index)) }
-        }
 
         #items
 
@@ -1149,9 +1127,9 @@ pub fn build() -> TokenStream {
         pub trait BlockProperties where Self: 'static {
             fn to_index(&self) -> u16;
             fn from_index(index: u16) -> Self where Self: Sized;
-            fn handles_block_id(block_id: u16) -> bool where Self: Sized;
-            fn to_state_id(&self, block: &Block) -> u16;
-            fn from_state_id(state_id: u16, block: &Block) -> Self where Self: Sized;
+            fn handles_block_id(id: BlockId) -> bool where Self: Sized;
+            fn to_state_id(&self, block: &Block) -> BlockStateId;
+            fn from_state_id(id: BlockStateId, block: &Block) -> Self where Self: Sized;
             fn default(block: &Block) -> Self where Self: Sized;
             fn to_props(&self) -> Vec<(&'static str, &'static str)>;
             fn from_props(props: &[(&str, &str)], block: &Block) -> Self where Self: Sized;
@@ -1175,28 +1153,25 @@ pub fn build() -> TokenStream {
 
         #[inline(always)]
         #[must_use]
-        pub const fn is_air(state_id: u16) -> bool {
-            matches!(state_id, #air_state_ids)
+        pub const fn is_air(id: BlockStateId) -> bool {
+            matches!(id.as_u16(), #air_state_ids)
         }
 
          #[inline(always)]
          #[must_use]
-        pub const fn is_liquid(state_id: u16) -> bool {
-            matches!(state_id, #liquid_state_ids)
+        pub const fn is_liquid(id: BlockStateId) -> bool {
+            matches!(id.as_u16(), #liquid_state_ids)
         }
 
         #[inline(always)]
         #[must_use]
-        pub fn has_random_ticks(state_id: u16) -> bool {
-            #mod_ident::#contains_ident(state_id)
+        pub fn has_random_ticks(id: BlockStateId) -> bool {
+            #mod_ident::#contains_ident(id.as_u16())
         }
 
         #[must_use]
-        pub const fn blocks_movement(block_state: &BlockState, block: u16) -> bool {
-            if block_state.is_solid() {
-                return block != Block::COBWEB.id && block != Block::BAMBOO_SAPLING.id;
-            }
-            false
+        pub const fn blocks_movement(block_state: &BlockState, id: BlockId) -> bool {
+            block_state.is_solid() && !matches!(id, BlockId::COBWEB | BlockId::BAMBOO_SAPLING)
         }
 
         impl BlockState {
@@ -1204,41 +1179,62 @@ pub fn build() -> TokenStream {
                 #block_state_to_bedrock_t
             ];
 
-            #[doc = r" Get a block state from a state id."]
-            #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
+            /// Get a [`BlockState`] from a [`BlockStateId`].
+            /// If you need access to the block use `BlockState::from_id_with_block` instead.
             #[inline]
             #[must_use]
-            pub const fn from_id(id: u16) -> &'static Self {
-                // In debug, this avoids the slow range-checking logic
-                unsafe {
-                    unchecked_index(&mappings::STATE_FROM_STATE_ID, id as usize)
-                }
+            pub const fn from_id(id: BlockStateId) -> &'static Self {
+                // Safety: We always check this condition when creating a BlockStateId.
+                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
+                // If the condition held once, it will always hold.
+                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
+                // This hint guarantees that bound checks can be optimized away in release builds.
+                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
+                // bound checks-panics are replaced with ub-checks on profile.dev
+                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
+
+                mappings::STATE_FROM_STATE_ID[id.as_u16() as usize]
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
             #[inline]
             #[must_use]
-            pub const fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
+            pub const fn from_id_with_block(id: BlockStateId) -> (&'static Block, &'static Self) {
                 let block = Block::from_state_id(id);
-                let state: &Self = mappings::STATE_FROM_STATE_ID[id as usize];
+                let state = Self::from_id(id);
                 (block, state)
             }
 
             #[must_use]
-            pub const fn to_be_network_id(id: u16) -> u16 {
-                Self::STATE_ID_TO_BEDROCK[id as usize]
+            pub const fn to_be_network_id(id: BlockStateId) -> u16 {
+                // Safety: We always check this condition when creating a BlockStateId.
+                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
+                // If the condition held once, it will always hold.
+                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
+                // This hint guarantees that bound checks can be optimized away in release builds.
+                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
+                // bound checks-panics are replaced with ub-checks on profile.dev
+                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
+
+                Self::STATE_ID_TO_BEDROCK[id.as_u16() as usize]
             }
         }
 
+        impl BlockStateId {
+            pub const AIR: Self = Block::AIR.default_state.id;
+
+            pub(crate) const STATE_COUNT: u16 = mappings::STATE_FROM_STATE_ID.len() as u16;
+        }
+
         mod mappings {
-            use crate::{Block, BlockState};
+            use crate::{Block, BlockId, BlockState, BlockStateId};
             use phf;
 
             pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
                 #(#block_from_name_entries)*
             };
 
-            pub(super) static RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
+            pub(super) static BLOCK_ID_FROM_STATE_ID: [BlockId; #max_state_id] = [
                 #raw_id_from_state_id
             ];
 
@@ -1269,34 +1265,27 @@ pub fn build() -> TokenStream {
                 mappings::BLOCK_FROM_NAME_MAP.get(key)
             }
 
-            #[doc = r" Get a block from a raw block id."]
+            /// Get a [`Block`] from a [`BlockId`]
             #[inline]
             #[must_use]
-            pub const fn from_id(id: u16) -> &'static Self {
-                if id as usize >= mappings::TYPE_FROM_RAW_ID.len() {
-                    &Self::AIR
-                } else {
-                    mappings::TYPE_FROM_RAW_ID[id as usize]
-                }
+            pub const fn from_id(id: BlockId) -> &'static Self {
+                // Safety: We always check this condition when creating a BlockId.
+                // the u16 field is private and immutable. BlockId::BLOCK_COUNT is a const u16.
+                // If the condition held once, it will always hold.
+                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockId::BLOCK_COUNT) }
+                // This hint guarantees that bound checks can be optimized away in release builds.
+                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
+                // bound checks-panics are replaced with ub-checks on profile.dev
+                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
+
+                mappings::TYPE_FROM_RAW_ID[id.as_u16() as usize]
             }
 
-            #[doc = r" Get a raw ID from an State ID."]
+            /// Get a [`Block`] from a state id
             #[inline]
             #[must_use]
-            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
-                let index = state_id as usize;
-                if index >= mappings::RAW_ID_FROM_STATE_ID.len() {
-                    0
-                } else {
-                    unsafe { unchecked_index(&mappings::RAW_ID_FROM_STATE_ID, index) }
-                }
-            }
-
-            #[doc = r" Get a block from a state id."]
-            #[inline]
-            #[must_use]
-            pub const fn from_state_id(id: u16) -> &'static Self {
-                Self::from_id(Self::get_raw_id_from_state_id(id))
+            pub const fn from_state_id(id: BlockStateId) -> &'static Self {
+                Self::from_id(BlockId::from_state_id(id))
             }
 
             #[doc = r" Try to parse a block from an item id."]
@@ -1311,8 +1300,8 @@ pub fn build() -> TokenStream {
 
             #[track_caller]
             #[doc = r" Get the properties of the block."]
-            pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
-                Some(match self.id {
+            pub fn properties(&self, state_id: BlockStateId) -> Option<Box<dyn BlockProperties>> {
+                Some(match self.id.as_u16() {
                     #(#block_properties_from_state_and_block_id_arms)*
                     _ => return None,
                 })
@@ -1321,10 +1310,32 @@ pub fn build() -> TokenStream {
             #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
-                match self.id {
+                match self.id.as_u16() {
                     #(#block_properties_from_props_and_name_arms)*
                     _ => panic!("Invalid props")
                 }
+            }
+        }
+
+        impl BlockId {
+            #(#block_id_constants)*
+
+            pub(crate) const BLOCK_COUNT: u16 = mappings::TYPE_FROM_RAW_ID.len() as u16;
+
+            /// Get a [`BlockId`] from a [`BlockStateId`]
+            #[inline]
+            #[must_use]
+            pub const fn from_state_id(id: BlockStateId) -> BlockId {
+                // Safety: We always check this condition when creating a BlockStateId.
+                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
+                // If the condition held once, it will always hold.
+                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
+                // This hint guarantees that bound checks can be optimized away in release builds.
+                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
+                // bound checks-panics are replaced with ub-checks on profile.dev
+                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
+
+                mappings::BLOCK_ID_FROM_STATE_ID[id.as_u16() as usize]
             }
         }
 
@@ -1443,7 +1454,7 @@ fn get_be_data_from_nbt<R: Read + Seek>(
 
     let data_start = reader.stream_position().unwrap();
     let data_end = reader.seek(SeekFrom::End(0)).unwrap();
-    reader.seek(SeekFrom::Start(data_start));
+    let _ = reader.seek(SeekFrom::Start(data_start));
 
     let nbt_reader = &mut NbtReadHelperBedrock::new(&mut *reader);
 
@@ -1479,7 +1490,7 @@ fn get_be_data_from_nbt<R: Read + Seek>(
                     pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
                     pumpkin_nbt::tag::NbtTag::String(v) => v.into(),
                     _ => {
-                        panic!("Unexpected type for {}. Value: {val:?}", &key);
+                        panic!("Unexpected type for {}. Value: {val:?}", key);
                     }
                 };
 
@@ -1498,4 +1509,51 @@ fn get_be_data_from_nbt<R: Read + Seek>(
     }
 
     block_data
+}
+
+fn parse_geyser_entry(
+    entry: &pumpkin_nbt::tag::NbtTag,
+    java_block_name: &str,
+) -> (String, BTreeMap<String, String>) {
+    let compound = match entry {
+        pumpkin_nbt::tag::NbtTag::Compound(c) => c,
+        _ => panic!("Expected NbtCompound in Geyser bedrock_mappings list"),
+    };
+
+    let bedrock_identifier = compound
+        .get_string("bedrock_identifier")
+        .unwrap_or(java_block_name)
+        .strip_prefix("minecraft:")
+        .unwrap_or_else(|| {
+            compound
+                .get_string("bedrock_identifier")
+                .unwrap_or(java_block_name)
+        })
+        .to_string();
+
+    let mut properties = BTreeMap::new();
+    if let Some(state_comp) = compound.get_compound("state") {
+        for (key, val) in state_comp.clone() {
+            let unpacked = match val {
+                pumpkin_nbt::tag::NbtTag::Byte(v) => {
+                    if v == 1 {
+                        "true".to_string()
+                    } else {
+                        "false".to_string()
+                    }
+                }
+                pumpkin_nbt::tag::NbtTag::Int(v) => v.to_string(),
+                pumpkin_nbt::tag::NbtTag::String(v) => v.to_string(),
+                _ => {
+                    panic!(
+                        "Unexpected NBT type in Geyser state tag for {}. Value: {:?}",
+                        key, val
+                    );
+                }
+            };
+            properties.insert(key.to_string(), unpacked);
+        }
+    }
+
+    (bedrock_identifier, properties)
 }

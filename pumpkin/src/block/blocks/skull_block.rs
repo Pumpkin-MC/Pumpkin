@@ -1,9 +1,9 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
-use pumpkin_data::Block;
+use pumpkin_data::BlockId;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 type SkeletonSkullLikeProperties = pumpkin_data::block_properties::SkeletonSkullLikeProperties;
@@ -11,20 +11,31 @@ type SkeletonSkullLikeProperties = pumpkin_data::block_properties::SkeletonSkull
 pub struct SkullBlock;
 
 impl BlockMetadata for SkullBlock {
-    fn ids() -> Box<[u16]> {
+    fn ids() -> Box<[BlockId]> {
         [
-            Block::SKELETON_SKULL.id,
-            Block::PLAYER_HEAD.id,
-            Block::ZOMBIE_HEAD.id,
-            Block::CREEPER_HEAD.id,
-            Block::PIGLIN_HEAD.id,
-            Block::DRAGON_HEAD.id,
+            BlockId::SKELETON_SKULL,
+            BlockId::PLAYER_HEAD,
+            BlockId::ZOMBIE_HEAD,
+            BlockId::CREEPER_HEAD,
+            BlockId::PIGLIN_HEAD,
+            BlockId::DRAGON_HEAD,
         ]
         .into()
     }
 }
 
+use crate::block::PlacedArgs;
+use crate::block::entities::skull::SkullBlockEntity;
+use std::sync::Arc;
+
 impl BlockBehaviour for SkullBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = SkullBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = SkeletonSkullLikeProperties::default(args.block);

@@ -1,18 +1,29 @@
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    PlacedArgs,
 };
 use crate::entity::EntityBase;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, WhiteBannerLikeProperties};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+use crate::block::entities::banner::BannerBlockEntity;
+use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:banners")]
 pub struct BannerBlock;
 
 impl BlockBehaviour for BannerBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = BannerBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = WhiteBannerLikeProperties::default(args.block);

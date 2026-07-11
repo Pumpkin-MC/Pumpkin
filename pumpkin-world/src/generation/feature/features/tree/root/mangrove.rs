@@ -4,9 +4,9 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeFeature;
 use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::block_state_provider::BlockStateProvider, world::WorldPortalExt};
 
 pub struct AboveRootPlacement {
     pub above_root_provider: BlockStateProvider,
@@ -37,6 +37,7 @@ impl MangroveRootPlacer {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         pos: BlockPos,
         trunk_pos: BlockPos,
@@ -65,7 +66,7 @@ impl MangroveRootPlacer {
 
         let mut placed: Vec<BlockPos> = Vec::new();
         for root_pos in roots {
-            if self.place_roots(chunk, random, root_pos) {
+            if self.place_roots(chunk, block_registry, random, root_pos) {
                 placed.push(root_pos);
             }
         }
@@ -141,12 +142,13 @@ impl MangroveRootPlacer {
             || self
                 .mangrove_root_placement
                 .can_grow_through
-                .contains(&block_id)
+                .contains(&block_id.as_u16())
     }
 
     fn place_roots<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -154,12 +156,14 @@ impl MangroveRootPlacer {
         if self
             .mangrove_root_placement
             .muddy_roots_in
-            .contains(&existing_id)
+            .contains(&existing_id.as_u16())
         {
-            let state = self
-                .mangrove_root_placement
-                .muddy_roots_provider
-                .get(random, pos);
+            let state = self.mangrove_root_placement.muddy_roots_provider.get(
+                random,
+                pos,
+                chunk,
+                block_registry,
+            );
             let state = Self::apply_waterlogging(chunk, pos, state);
             chunk.set_block_state(&pos.0, state);
             return true;
@@ -167,13 +171,16 @@ impl MangroveRootPlacer {
         if !self.can_grow_through(chunk, pos) {
             return false;
         }
-        let state = self.root_provider.get(random, pos);
+        let state = self.root_provider.get(random, pos, chunk, block_registry);
         let state = Self::apply_waterlogging(chunk, pos, state);
         chunk.set_block_state(&pos.0, state);
         if let Some(above) = &self.above_root_placement {
             let above_pos = pos.up();
             if random.next_f32() < above.above_root_placement_chance && chunk.is_air(&above_pos.0) {
-                let above_state = above.above_root_provider.get(random, above_pos);
+                let above_state =
+                    above
+                        .above_root_provider
+                        .get(random, above_pos, chunk, block_registry);
                 let above_state = Self::apply_waterlogging(chunk, above_pos, above_state);
                 chunk.set_block_state(&above_pos.0, above_state);
             }

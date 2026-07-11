@@ -3,7 +3,6 @@ use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use pumpkin_util::math::position::BlockPos;
 
-#[inline(always)]
 const fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<usize> {
     let rel_x = chunk_x - cache.x;
     let rel_z = chunk_z - cache.z;
@@ -22,7 +21,6 @@ fn get_section_y(cache: &Cache, pos_y: i32) -> Option<usize> {
     Some(section)
 }
 
-#[inline(always)]
 #[must_use]
 pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;

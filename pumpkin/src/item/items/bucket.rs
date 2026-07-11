@@ -5,7 +5,7 @@ use crate::{
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockStateId,
     dimension::Dimension,
     fluid::Fluid,
     item::Item,
@@ -68,7 +68,7 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(block: &Block, state: u16) -> Option<bool> {
+fn waterlogged_check(block: &Block, state: BlockStateId) -> Option<bool> {
     block.properties(state).and_then(|properties| {
         properties
             .to_props()
@@ -78,11 +78,11 @@ fn waterlogged_check(block: &Block, state: u16) -> Option<bool> {
     })
 }
 
-fn is_waterlogged(block: &Block, state: u16) -> bool {
+fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
     waterlogged_check(block, state).unwrap_or(false)
 }
 
-fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
+fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
     let original_props = &block.properties(state).unwrap().to_props();
     let waterlogged = waterlogged.to_string();
     let props: Vec<(&str, &str)> = original_props
@@ -112,10 +112,19 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
             .await;
     } else {
         let item_stack = ItemStack::new(1, item);
-        player
-            .inventory
-            .set_stack(player.inventory.get_selected_slot().into(), item_stack)
-            .await;
+        let held_item = player.inventory.held_item();
+        let mut held_stack = held_item.lock().await;
+
+        if held_stack.item_count == 1 {
+            *held_stack = item_stack;
+        } else {
+            held_stack.decrement(1);
+            drop(held_stack);
+            player
+                .inventory
+                .offer_or_drop_stack(item_stack, player)
+                .await;
+        }
     }
 }
 
@@ -328,7 +337,7 @@ impl ItemBehaviour for FilledBucketItem {
                 if Fluid::from_state_id(state_id).is_some() {
                     return false;
                 }
-                state_id != Block::AIR.id
+                state_id != Block::AIR.default_state.id
             };
 
             let Some((pos, direction)) = world.raycast(start_pos, end_pos, checker).await else {

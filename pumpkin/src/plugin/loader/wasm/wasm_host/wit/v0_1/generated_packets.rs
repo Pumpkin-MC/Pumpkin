@@ -911,7 +911,7 @@ pub fn deserialize_java_serverbound_packet(
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::play::SPickItemFromEntity as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
             Some(ServerboundPacket::SPickItemFromEntity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPickItemFromEntity {
-                id: p.id.try_into().unwrap(),
+                id: p.id.0,
                 include_data: p.include_data.try_into().unwrap(),
             }))
         }

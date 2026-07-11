@@ -187,6 +187,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             }
         })
     }
+    fn set_variant_name(&self, _name: &str) {}
 
     // This method takes ownership of Arc<Self>, so the lifetime bounds are different.
     fn teleport(

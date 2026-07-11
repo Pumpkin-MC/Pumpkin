@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos},
@@ -136,7 +136,7 @@ impl StructurePieceBase for BuriedTreasurePiece {
 }
 
 impl BuriedTreasurePiece {
-    fn is_liquid(block: u16) -> bool {
-        block == Block::WATER || block == Block::LAVA
+    fn is_liquid(id: BlockId) -> bool {
+        id == BlockId::WATER || id == BlockId::LAVA
     }
 }

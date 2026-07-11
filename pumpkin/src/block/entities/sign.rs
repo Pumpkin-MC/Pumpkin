@@ -196,7 +196,8 @@ impl From<NbtTag> for Text {
 }
 
 impl Text {
-    fn new(messages: [Box<str>; 4]) -> Self {
+    #[must_use]
+    pub fn new(messages: [Box<str>; 4]) -> Self {
         Self {
             has_glowing_text: AtomicBool::new(false),
             color: AtomicI8::new(DyeColor::default() as i8),

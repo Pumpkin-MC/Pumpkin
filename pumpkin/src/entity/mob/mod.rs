@@ -487,8 +487,34 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_base_experience_reward(&self) -> u32 {
         self.get_entity().entity_type.experience_reward
     }
+
+    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
+            if is_baby {
+                entity.send_meta_data(&[Metadata::new(
+                    TrackedData::BABY_ID,
+                    MetaDataType::BOOLEAN,
+                    true,
+                )]);
+            }
+        })
+    }
+
+    fn mob_set_variant_name(&self, _name: &str) {}
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.mob_init_data_tracker().await;
+        })
+    }
+
+    fn set_variant_name(&self, name: &str) {
+        self.mob_set_variant_name(name);
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,

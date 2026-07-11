@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState, tag};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand},
@@ -17,7 +17,7 @@ pub enum StructureProcessor {
 
 #[derive(Clone)]
 pub struct ProcessorRule {
-    input_block: u16,
+    input_block: BlockId,
     probability: f32,
     output_state: &'static BlockState,
 }
@@ -37,19 +37,11 @@ impl BlockTag {
         }
     }
 
-    fn contains(self, block_id: u16) -> bool {
-        match self {
-            Self::AncientCityReplaceable => {
-                pumpkin_data::tag::Block::MINECRAFT_ANCIENT_CITY_REPLACEABLE
-                    .1
-                    .contains(&block_id)
-            }
-            Self::FeaturesCannotReplace => {
-                pumpkin_data::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE
-                    .1
-                    .contains(&block_id)
-            }
-        }
+    fn contains(self, block_id: BlockId) -> bool {
+        block_id.has_tag(match self {
+            Self::AncientCityReplaceable => tag::Block::MINECRAFT_ANCIENT_CITY_REPLACEABLE,
+            Self::FeaturesCannotReplace => tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE,
+        })
     }
 }
 
@@ -61,7 +53,7 @@ impl StructureProcessor {
         pos: Vector3<i32>,
         state: &'static BlockState,
     ) -> Option<&'static BlockState> {
-        let input_block = Block::get_raw_id_from_state_id(state.id);
+        let input_block = state.id.to_block_id();
         match self {
             Self::BlockRot { integrity, blocks } => {
                 if !blocks.contains(input_block) {

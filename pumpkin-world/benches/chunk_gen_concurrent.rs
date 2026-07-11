@@ -1,4 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::chunk_system::{StagedChunkEnum, generate_single_chunk};
@@ -28,7 +29,7 @@ impl WorldPortalExt for BlockRegistry {
     fn mirror(
         &self,
         block: &pumpkin_data::Block,
-        state_id: u16,
+        state_id: BlockStateId,
         mirror: pumpkin_data::Mirror,
     ) -> &'static pumpkin_data::BlockState {
         block.mirror(state_id, mirror)
@@ -37,7 +38,7 @@ impl WorldPortalExt for BlockRegistry {
     fn rotate(
         &self,
         block: &pumpkin_data::Block,
-        state_id: u16,
+        state_id: BlockStateId,
         rotation: pumpkin_data::Rotation,
     ) -> &'static pumpkin_data::BlockState {
         block.rotate(state_id, rotation)
@@ -53,8 +54,8 @@ impl WorldPortalExt for BlockRegistry {
     }
 }
 
-/// Benchmarks the full pipeline for a GRID_SIZE^2 chunks grid running in parallel
-/// across THREAD_COUNT rayon threads.
+/// Benchmarks the full pipeline for a `GRID_SIZE^2` chunks grid running in parallel
+/// across `THREAD_COUNT` rayon threads.
 fn bench_concurrent_chunk_generation(c: &mut Criterion) {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(THREAD_COUNT)

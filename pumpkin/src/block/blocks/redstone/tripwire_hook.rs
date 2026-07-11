@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, HorizontalFacingExt,
+    Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::BlockProperties,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
-    BlockStateId,
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };

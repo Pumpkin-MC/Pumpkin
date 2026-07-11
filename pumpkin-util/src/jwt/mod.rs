@@ -93,7 +93,10 @@ pub fn decode_b64_standard(s: &str) -> Result<Vec<u8>, base64::DecodeError> {
 ///
 /// A `Result` containing the `p384::PublicKey` or an `AuthError`.
 pub fn build_public_key_from_b64(b64: &str) -> Result<PublicKey, AuthError> {
-    let bytes = decode_b64_standard(b64)?;
+    let bytes = decode_b64_standard(b64)
+        .or_else(|_| general_purpose::URL_SAFE.decode(b64))
+        .or_else(|_| general_purpose::URL_SAFE_NO_PAD.decode(b64))
+        .map_err(AuthError::Base64Decode)?;
 
     if !bytes.is_empty() && bytes[0] == 0x30 {
         PublicKey::from_public_key_der(&bytes).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
@@ -499,4 +502,68 @@ fn xuid_to_uuid(xuid: &str) -> String {
     bytes[6] = (bytes[6] & 0x0f) | 0x30;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     uuid::Uuid::from_bytes(bytes).to_string()
+}
+
+pub fn extract_cpk_from_token(token: &str) -> Result<PublicKey, AuthError> {
+    let mut parts = token.split('.');
+    parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+    let payload_b64 = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+
+    let payload_bytes = decode_b64_url_nopad(payload_b64)?;
+    let v: Value = serde_json::from_slice(&payload_bytes)?;
+
+    let cpk_b64 = v
+        .get("cpk")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing cpk".into()))?;
+
+    build_public_key_from_b64(cpk_b64)
+}
+
+pub fn generate_handshake_jwt(
+    signing_key: &p384::ecdsa::SigningKey,
+    salt: &[u8],
+) -> Result<String, AuthError> {
+    use p384::ecdsa::signature::Signer;
+    use p384::pkcs8::EncodePublicKey;
+
+    let public_key = p384::PublicKey::from(signing_key.verifying_key());
+    let der_bytes = public_key
+        .to_public_key_der()
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?;
+
+    let x5u = general_purpose::STANDARD.encode(der_bytes.as_bytes());
+    let salt_b64 = general_purpose::STANDARD_NO_PAD.encode(salt);
+
+    let header_json = serde_json::json!({
+        "alg": "ES384",
+        "x5u": x5u
+    });
+    let payload_json = serde_json::json!({
+        "salt": salt_b64
+    });
+
+    let header_b64 = general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header_json)?);
+    let payload_b64 = general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload_json)?);
+
+    let signing_input = format!("{header_b64}.{payload_b64}");
+
+    let signature: p384::ecdsa::Signature = signing_key.sign(signing_input.as_bytes());
+    let signature_bytes = signature.to_bytes();
+    let signature_b64 = general_purpose::URL_SAFE_NO_PAD.encode(signature_bytes);
+
+    Ok(format!("{signing_input}.{signature_b64}"))
+}
+
+#[must_use]
+pub fn compute_shared_secret(
+    signing_key: &p384::ecdsa::SigningKey,
+    client_public_key: &p384::PublicKey,
+) -> [u8; 48] {
+    let secret = p384::SecretKey::from(signing_key);
+    let shared_secret =
+        p384::ecdh::diffie_hellman(secret.to_nonzero_scalar(), client_public_key.as_affine());
+    let mut secret_bytes = [0u8; 48];
+    secret_bytes.copy_from_slice(&shared_secret.raw_secret_bytes()[..]);
+    secret_bytes
 }

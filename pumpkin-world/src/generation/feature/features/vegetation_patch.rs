@@ -173,7 +173,9 @@ impl VegetationPatchFeature {
         depth: i32,
     ) -> bool {
         for i in 0..depth {
-            let state_to_place = self.ground_state.get(random, below_pos);
+            let state_to_place = self
+                .ground_state
+                .get(random, below_pos, chunk, block_registry);
             let below_state_raw = GenerationCache::get_block_state(chunk, &below_pos.0);
 
             let state_block_id = pumpkin_data::Block::from_state_id(state_to_place.id).id;

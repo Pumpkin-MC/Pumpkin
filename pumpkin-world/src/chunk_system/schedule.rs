@@ -32,7 +32,7 @@ impl PartialEq for TaskHeapNode {
 }
 impl TaskHeapNode {
     #[cfg(test)]
-    pub(crate) fn node_key(&self) -> NodeKey {
+    pub(crate) const fn node_key(&self) -> NodeKey {
         self.1
     }
 }
@@ -129,7 +129,7 @@ impl GenerationSchedule {
                 let handle = thread::Builder::new()
                     .name(format!("Gen-{i}"))
                     .spawn(move || {
-                        generation_work(recv_gen, send_chunk, level_clone);
+                        generation_work(&recv_gen, &send_chunk, &level_clone);
                     })
                     .expect("Failed to spawn Generation Thread");
 
@@ -168,11 +168,11 @@ impl GenerationSchedule {
                     send_chunk,
                     gen_pool,
                     listener,
-                    chunk_map: Default::default(),
+                    chunk_map: HashMap::default(),
                     lighting_config,
                     last_unload: std::time::Instant::now(),
                 };
-                scheduler.work(level_sched);
+                scheduler.work(&level_sched);
             })
             .expect("Failed to spawn Scheduler Thread");
 
@@ -201,7 +201,7 @@ impl GenerationSchedule {
                 }
                 chunk.dirty.store(true, Relaxed);
             }
-            _ => {}
+            LightingEngineConfig::Default => {}
         }
     }
 
@@ -242,6 +242,49 @@ impl GenerationSchedule {
             }
         }
         self.queue = BinaryHeap::from(tasks);
+    }
+
+    /// TODO: will remove at some point
+    pub(crate) fn restore_ready_tasks(
+        graph: &mut DAG,
+        queue: &mut BinaryHeap<TaskHeapNode>,
+        chunk_map: &HashMap<ChunkPos, ChunkHolder>,
+        last_level: &ChunkLevel,
+        last_high_priority: &[ChunkPos],
+        waiting_for_chunks: &HashSetType<NodeKey>,
+    ) -> usize {
+        debug_assert!(queue.is_empty());
+
+        let mut ready = Vec::new();
+        for (key, node) in &mut graph.nodes {
+            node.in_queue = false;
+            if node.stage == StagedChunkEnum::None
+                || node.in_degree != 0
+                || waiting_for_chunks.contains(&key)
+            {
+                continue;
+            }
+            let Some(holder) = chunk_map.get(&node.pos) else {
+                continue;
+            };
+            if holder.current_stage >= node.stage || holder.tasks[node.stage as usize] != key {
+                continue;
+            }
+            ready.push((key, node.pos, node.stage));
+        }
+
+        for (key, pos, stage) in &ready {
+            let Some(node) = graph.nodes.get_mut(*key) else {
+                continue;
+            };
+            node.in_queue = true;
+            queue.push(TaskHeapNode(
+                Self::calc_priority(last_level, last_high_priority, *pos, *stage),
+                *key,
+            ));
+        }
+
+        ready.len()
     }
 
     /// Ensure that the dependency chain for `req_stage` exists on `holder` (for chunk at
@@ -412,6 +455,7 @@ impl GenerationSchedule {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn resort_work(&mut self, new_data: (Option<LevelChange>, Option<Vec<ChunkPos>>)) -> bool {
         if new_data.0.is_none() && new_data.1.is_none() {
             return false;
@@ -719,6 +763,17 @@ impl GenerationSchedule {
         }
     }
 
+    fn drop_satisfied_tasks(&mut self, holder: &mut ChunkHolder, stage: StagedChunkEnum) {
+        for task_idx in (holder.current_stage as usize + 1)..=(stage as usize) {
+            if !holder.tasks[task_idx].is_null() {
+                self.waiting_for_chunks.remove(&holder.tasks[task_idx]);
+                self.drop_node(holder.tasks[task_idx]);
+                holder.tasks[task_idx] = NodeKey::null();
+            }
+        }
+    }
+
+    #[expect(clippy::too_many_lines)]
     fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
         match data {
             RecvChunk::IO(chunk) => {
@@ -731,11 +786,9 @@ impl GenerationSchedule {
                 }
                 debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
 
-                for i in (holder.current_stage as usize + 1)..=(chunk.get_stage_id() as usize) {
-                    self.drop_node(holder.tasks[i]);
-                    holder.tasks[i] = NodeKey::null();
-                }
-                holder.current_stage = StagedChunkEnum::from(chunk.get_stage_id());
+                let stage = StagedChunkEnum::from(chunk.get_stage_id());
+                self.drop_satisfied_tasks(&mut holder, stage);
+                holder.current_stage = stage;
                 debug_assert!(self.graph.nodes.contains_key(holder.occupied));
                 self.drop_node(holder.occupied);
                 holder.occupied = NodeKey::null();
@@ -782,6 +835,7 @@ impl GenerationSchedule {
                     match chunk {
                         Chunk::Level(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
+                            let stage = StagedChunkEnum::Full;
                             if new_pos == pos {
                                 if holder.current_stage != StagedChunkEnum::Spawn {
                                     warn!(
@@ -792,18 +846,16 @@ impl GenerationSchedule {
                                     );
                                     holder.current_stage = StagedChunkEnum::Spawn;
                                 }
-                                self.drop_node(holder.tasks[StagedChunkEnum::Full as usize]);
-                                holder.tasks[StagedChunkEnum::Full as usize] = NodeKey::null();
+                                self.drop_satisfied_tasks(&mut holder, stage);
                                 if self.graph.nodes.contains_key(holder.occupied) {
                                     self.drop_node(holder.occupied);
                                 }
-                                holder.current_stage = StagedChunkEnum::Full;
+                                holder.current_stage = stage;
 
                                 let was_public = holder.public;
-
+                                self.apply_lighting_override(&chunk);
+                                let public_chunk = chunk.clone();
                                 if was_public {
-                                    self.apply_lighting_override(&chunk);
-                                    let public_chunk = chunk.clone();
                                     self.public_chunk_map.insert(new_pos, public_chunk);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
@@ -812,8 +864,6 @@ impl GenerationSchedule {
                                     self.listener.process_new_chunk(new_pos, &chunk);
                                     holder.chunk = Some(Chunk::Level(chunk));
                                 } else {
-                                    self.apply_lighting_override(&chunk);
-                                    let public_chunk = chunk.clone();
                                     holder.chunk = Some(Chunk::Level(chunk));
                                     let result =
                                         self.public_chunk_map.insert(new_pos, public_chunk);
@@ -837,7 +887,8 @@ impl GenerationSchedule {
                                     }
                                 }
                             } else {
-                                holder.current_stage = StagedChunkEnum::Full;
+                                self.drop_satisfied_tasks(&mut holder, stage);
+                                holder.current_stage = stage;
                                 holder.chunk = Some(Chunk::Level(chunk));
                             }
 
@@ -862,26 +913,18 @@ impl GenerationSchedule {
                         Chunk::Proto(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
 
-                            let stage = chunk.stage_id();
-                            for task_idx in (holder.current_stage as usize + 1)
-                                ..=(stage as usize).min(holder.tasks.len() - 1)
-                            {
-                                if !holder.tasks[task_idx].is_null() {
-                                    self.waiting_for_chunks.remove(&holder.tasks[task_idx]);
-                                    self.drop_node(holder.tasks[task_idx]);
-                                    holder.tasks[task_idx] = NodeKey::null();
-                                }
-                            }
+                            let stage = StagedChunkEnum::from(chunk.stage_id());
+                            self.drop_satisfied_tasks(&mut holder, stage);
 
                             if new_pos == pos {
                                 debug_assert_ne!(holder.current_stage, StagedChunkEnum::None);
                                 if self.graph.nodes.contains_key(holder.occupied) {
                                     self.drop_node(holder.occupied);
                                 }
-                                holder.current_stage = StagedChunkEnum::from(stage);
+                                holder.current_stage = stage;
                             } else {
-                                if holder.current_stage < StagedChunkEnum::from(stage) {
-                                    holder.current_stage = StagedChunkEnum::from(stage);
+                                if holder.current_stage < stage {
+                                    holder.current_stage = stage;
                                 }
                                 if !holder.occupied.is_null()
                                     && self.graph.nodes.contains_key(holder.occupied)
@@ -985,7 +1028,8 @@ impl GenerationSchedule {
         self.running_task_count -= 1;
     }
 
-    fn work(mut self, level: Arc<Level>) {
+    #[expect(clippy::too_many_lines)]
+    fn work(mut self, level: &Arc<Level>) {
         debug!(
             "schedule thread start id: {:?} name: {}",
             thread::current().id(),
@@ -1175,12 +1219,11 @@ impl GenerationSchedule {
                                 let holder = self.chunk_map.get_mut(&new_pos).unwrap();
                                 let mut tmp = None;
                                 swap(&mut tmp, &mut holder.chunk);
-                                let tmp = match tmp {
-                                    Some(v) => v,
-                                    None => panic!(
+                                let Some(tmp) = tmp else {
+                                    panic!(
                                         "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
                                         new_pos, node.pos, node.stage
-                                    ),
+                                    )
                                 };
                                 match tmp {
                                     Chunk::Level(chunk) => {
@@ -1268,19 +1311,27 @@ impl GenerationSchedule {
                         }
                         Err(crossfire::compat::RecvTimeoutError::Disconnected) => break,
                     }
-                    if self.queue_dirty {
-                        self.sort_queue();
-                        self.queue_dirty = false;
-                    }
                 } else {
                     // No tasks in flight, wait indefinitely for LevelChannel changes
+                    let restored = Self::restore_ready_tasks(
+                        &mut self.graph,
+                        &mut self.queue,
+                        &self.chunk_map,
+                        &self.last_level,
+                        &self.last_high_priority,
+                        &self.waiting_for_chunks,
+                    );
+                    if restored > 0 {
+                        warn!("Restored {restored} stranded ready chunk tasks to generation queue");
+                        continue;
+                    }
                     debug_assert!(self.debug_check());
                     debug_assert_eq!(self.running_task_count, 0);
-                    self.resort_work(self.send_level.wait_and_get(&level));
-                    if self.queue_dirty {
-                        self.sort_queue();
-                        self.queue_dirty = false;
-                    }
+                    self.resort_work(self.send_level.wait_and_get(level));
+                }
+                if self.queue_dirty {
+                    self.sort_queue();
+                    self.queue_dirty = false;
                 }
             }
         }

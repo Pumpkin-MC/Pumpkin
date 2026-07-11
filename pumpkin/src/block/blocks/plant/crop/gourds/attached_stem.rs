@@ -1,10 +1,10 @@
 use pumpkin_data::{
-    Block,
+    Block, BlockId, BlockStateId,
     block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
@@ -17,12 +17,8 @@ type StemProperties = WheatLikeProperties;
 pub struct AttachedStemBlock;
 
 impl BlockMetadata for AttachedStemBlock {
-    fn ids() -> Box<[u16]> {
-        [
-            Block::ATTACHED_PUMPKIN_STEM.id,
-            Block::ATTACHED_MELON_STEM.id,
-        ]
-        .into()
+    fn ids() -> Box<[BlockId]> {
+        [BlockId::ATTACHED_PUMPKIN_STEM, BlockId::ATTACHED_MELON_STEM].into()
     }
 }
 

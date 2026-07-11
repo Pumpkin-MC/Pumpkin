@@ -4,11 +4,18 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    BundleContentsImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl,
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
-    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, IDSet, IDSetContent, IdOr,
-    ItemModelImpl, MapIdImpl, MaxStackSizeImpl, PotionContentsImpl, SoundEvent,
-    StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, UseCooldownImpl, get,
+    AxolotlVariantImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl, CatVariantImpl,
+    ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect,
+    CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
+    DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl,
+    FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
+    IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
+    MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
+    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
+    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
+    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
+    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
+    WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -337,14 +344,14 @@ impl DataComponentCodec<Self> for UnbreakableImpl {
 
 impl DataComponentCodec<Self> for ItemModelImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
-        seq.serialize_field::<String>("", &self.id)
+        seq.serialize_field("", &self.id)
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         let id = seq
             .next_element::<String>()?
             .ok_or(de::Error::custom("No ItemModelImpl id string!"))?;
-        Ok(Self { id })
+        Ok(Self { id: Cow::Owned(id) })
     }
 }
 
@@ -363,6 +370,18 @@ impl DataComponentCodec<Self> for CustomNameImpl {
     }
 }
 
+impl DataComponentCodec<Self> for CustomDataImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field("", &NetworkNbtTag(NbtTag::Compound(self.data.clone())))
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(_seq: &mut A) -> Result<Self, A::Error> {
+        Err(de::Error::custom(
+            "CustomData raw component decoding is not supported; use the custom-data item-stack API",
+        ))
+    }
+}
+
 struct NetworkTextNbtString(String);
 
 impl serde::Serialize for NetworkTextNbtString {
@@ -375,10 +394,23 @@ impl serde::Serialize for NetworkTextNbtString {
     }
 }
 
+struct NetworkNbtTag(NbtTag);
+
+impl serde::Serialize for NetworkNbtTag {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut bytes = Vec::new();
+        self.0
+            .clone()
+            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
+            .map_err(serde::ser::Error::custom)?;
+        serializer.serialize_bytes(&bytes)
+    }
+}
+
 impl DataComponentCodec<Self> for ConsumableImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
         seq.serialize_field::<f32>("", &self.consume_seconds)?;
-        seq.serialize_field::<VarInt>("", &VarInt(self.animation.clone() as i32))?;
+        seq.serialize_field::<VarInt>("", &VarInt(self.animation as i32))?;
         seq.serialize_field::<crate::IdOr<crate::SoundEvent>>(
             "",
             &data_to_proto_sound(&self.sound_event),
@@ -847,6 +879,9 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
 ) -> Result<Box<dyn DataComponentImpl>, A::Error> {
     match id {
         DataComponent::MaxStackSize => Ok(MaxStackSizeImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CustomData => Err(serde::de::Error::custom(
+            "CustomData raw component decoding is not supported; use the custom-data item-stack API",
+        )),
         DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
@@ -871,6 +906,7 @@ pub fn serialize<T: SerializeStruct>(
 ) -> Result<(), T::Error> {
     match id {
         DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
+        DataComponent::CustomData => get::<CustomDataImpl>(value).serialize(seq),
         DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
         DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
@@ -1059,3 +1095,55 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
         Ok(Self { items })
     }
 }
+
+macro_rules! codec_string_variant {
+    ($struct_name:ident) => {
+        impl DataComponentCodec<Self> for $struct_name {
+            fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+                seq.serialize_field("", &self.value)
+            }
+            fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+                let value = seq
+                    .next_element::<String>()?
+                    .ok_or(de::Error::custom(concat!(
+                        "No ",
+                        stringify!($struct_name),
+                        " value string!"
+                    )))?;
+                Ok(Self {
+                    value: Cow::Owned(value),
+                })
+            }
+        }
+    };
+}
+
+codec_string_variant!(VillagerVariantImpl);
+codec_string_variant!(WolfVariantImpl);
+codec_string_variant!(WolfSoundVariantImpl);
+codec_string_variant!(WolfCollarImpl);
+codec_string_variant!(FoxVariantImpl);
+codec_string_variant!(SalmonSizeImpl);
+codec_string_variant!(ParrotVariantImpl);
+codec_string_variant!(TropicalFishPatternImpl);
+codec_string_variant!(TropicalFishBaseColorImpl);
+codec_string_variant!(TropicalFishPatternColorImpl);
+codec_string_variant!(MooshroomVariantImpl);
+codec_string_variant!(RabbitVariantImpl);
+codec_string_variant!(PigVariantImpl);
+codec_string_variant!(PigSoundVariantImpl);
+codec_string_variant!(CowVariantImpl);
+codec_string_variant!(CowSoundVariantImpl);
+codec_string_variant!(ChickenVariantImpl);
+codec_string_variant!(ChickenSoundVariantImpl);
+codec_string_variant!(ZombieNautilusVariantImpl);
+codec_string_variant!(FrogVariantImpl);
+codec_string_variant!(HorseVariantImpl);
+codec_string_variant!(PaintingVariantImpl);
+codec_string_variant!(LlamaVariantImpl);
+codec_string_variant!(AxolotlVariantImpl);
+codec_string_variant!(CatVariantImpl);
+codec_string_variant!(CatSoundVariantImpl);
+codec_string_variant!(CatCollarImpl);
+codec_string_variant!(SheepColorImpl);
+codec_string_variant!(ShulkerColorImpl);

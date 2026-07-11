@@ -1,10 +1,16 @@
 use std::pin::Pin;
 
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use pumpkin_data::data_component_impl::{
+    AxolotlVariantImpl, CatVariantImpl, ChickenVariantImpl, CowVariantImpl, FoxVariantImpl,
+    FrogVariantImpl, HorseVariantImpl, LlamaVariantImpl, MooshroomVariantImpl, PigVariantImpl,
+    RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl, WolfVariantImpl,
+};
 use pumpkin_data::entity::entity_from_egg;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
@@ -18,6 +24,40 @@ pub struct SpawnEggItem;
 impl ItemMetadata for SpawnEggItem {
     fn ids() -> Box<[u16]> {
         pumpkin_data::entity::spawn_egg_ids()
+    }
+}
+
+fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
+    if let Some(comp) = item.get_data_component::<ChickenVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<FrogVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<WolfVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<CatVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<VillagerVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<FoxVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<MooshroomVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<RabbitVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<PigVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<CowVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<HorseVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<LlamaVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<AxolotlVariantImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<SheepColorImpl>() {
+        mob.set_variant_name(&comp.value);
+    } else if let Some(comp) = item.get_data_component::<ShulkerColorImpl>() {
+        mob.set_variant_name(&comp.value);
     }
 }
 
@@ -60,10 +100,11 @@ impl ItemBehaviour for SpawnEggItem {
                 // Set the rotation
                 mob.get_entity().set_rotation(yaw, 0.0);
 
+                apply_entity_variant(item, mob.as_ref());
+
                 // Broadcast the new mob to all players
                 world.spawn_entity(mob).await;
                 item.decrement_unless_creative(player.gamemode.load(), 1);
-                // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
             }
         })
     }

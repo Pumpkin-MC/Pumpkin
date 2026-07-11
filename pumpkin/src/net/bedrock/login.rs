@@ -5,13 +5,13 @@ use crate::{
     server::Server,
 };
 use arc_swap::ArcSwap;
+use pumpkin_protocol::bedrock::client::handshake::CHandshake;
 use pumpkin_protocol::bedrock::{
     client::{
         network_settings::CNetworkSettings, play_status::CPlayStatus,
         resource_pack_stack::CResourcePackStackPacket, resource_packs_info::CResourcePacksInfo,
         start_game::Experiments,
     },
-    frame_set::FrameSet,
     server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
 };
 use pumpkin_protocol::bedrock::{
@@ -21,8 +21,10 @@ use pumpkin_protocol::bedrock::{
 use pumpkin_util::jwt::AuthError;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
+use rand::RngExt;
 use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;
@@ -123,15 +125,16 @@ impl BedrockClient {
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<PacketHandlerResult, LoginError> {
+    ) -> Result<Option<PacketHandlerResult>, LoginError> {
         self.try_handle_login(packet, server).await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn try_handle_login(
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<PacketHandlerResult, LoginError> {
+    ) -> Result<Option<PacketHandlerResult>, LoginError> {
         let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
         let player_data = if server.basic_config.online_mode {
             match auth_payload.authentication_type {
@@ -178,9 +181,81 @@ impl BedrockClient {
             profile_actions: None,
         };
 
-        let mut frame_set = FrameSet::default();
+        if server.basic_config.bedrock_encryption {
+            let client_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
+                .map_err(LoginError::ChainValidationFailed)?;
 
-        self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
+            let (server_private_key, salt) = {
+                let server_key_arc = server
+                    .bedrock_private_key
+                    .get_or_init(|| async {
+                        let mut rng = rand::rng();
+                        loop {
+                            let mut private_key_bytes = [0u8; 48];
+                            for b in &mut private_key_bytes {
+                                *b = rng.random();
+                            }
+                            if let Ok(key) = pumpkin_util::p384::ecdsa::SigningKey::from_slice(
+                                &private_key_bytes,
+                            ) {
+                                break Arc::new(key);
+                            }
+                        }
+                    })
+                    .await
+                    .clone();
+
+                let mut salt = [0u8; 16];
+                for b in &mut salt {
+                    *b = rand::rng().random();
+                }
+
+                (server_key_arc, salt)
+            };
+
+            let handshake_jwt =
+                pumpkin_util::jwt::generate_handshake_jwt(&server_private_key, &salt)
+                    .map_err(LoginError::ChainValidationFailed)?;
+            let handshake_packet = CHandshake::new(handshake_jwt);
+            self.send_game_packet(&handshake_packet).await;
+
+            let shared_secret =
+                pumpkin_util::jwt::compute_shared_secret(&server_private_key, &client_public_key);
+            let mut hasher = Sha256::new();
+            hasher.update(salt);
+            hasher.update(shared_secret);
+            let key_bytes: [u8; 32] = hasher.finalize().into();
+
+            self.network_reader
+                .lock()
+                .await
+                .set_encryption(&key_bytes)
+                .map_err(|_| {
+                    LoginError::ChainValidationFailed(AuthError::PublicKeyBuild(
+                        "encryption enable error".into(),
+                    ))
+                })?;
+            self.network_writer
+                .write()
+                .await
+                .set_encryption(&key_bytes)
+                .map_err(|_| {
+                    LoginError::ChainValidationFailed(AuthError::PublicKeyBuild(
+                        "encryption enable error".into(),
+                    ))
+                })?;
+
+            let new_config = PlayerConfig {
+                locale: client_data.language_code.clone(),
+                ..Default::default()
+            };
+            self.client_data
+                .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
+            *self.pending_profile.lock().await = Some((profile, new_config));
+            return Ok(None);
+        }
+
+        self.enqueue_packet_internal(&CPlayStatus::LoginSuccess)
             .await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
@@ -211,10 +286,7 @@ impl BedrockClient {
             world_template_version: String::new(),
             resource_packs: entries,
         };
-        self.write_game_packet_to_set(&packs_info, &mut frame_set)
-            .await;
-
-        self.send_frame_set(frame_set, 0x84).await;
+        self.enqueue_packet_internal(&packs_info).await;
 
         let new_config = PlayerConfig {
             locale: client_data.language_code.clone(),
@@ -224,7 +296,7 @@ impl BedrockClient {
         self.client_data
             .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
-        Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
+        Ok(Some(PacketHandlerResult::ReadyToPlay(profile, new_config)))
     }
 
     pub async fn handle_resource_pack_response(
@@ -249,10 +321,7 @@ impl BedrockClient {
             }
             SResourcePackResponse::STATUS_HAVE_ALL_PACKS => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
-                let mut frame_set = FrameSet::default();
-
                 let br_config = &server.advanced_config.resource_pack.bedrock;
-
                 // Convert your config packs into protocol stack entries
                 let resource_packs = if br_config.enabled {
                     br_config
@@ -268,22 +337,17 @@ impl BedrockClient {
                     Vec::new()
                 };
 
-                self.write_game_packet_to_set(
-                    &CResourcePackStackPacket::new(
-                        br_config.force,
-                        resource_packs,
-                        CURRENT_BEDROCK_MC_VERSION.to_string(),
-                        Experiments {
-                            names_size: 0,
-                            experiments_ever_toggled: false,
-                        },
-                        false,
-                    ),
-                    &mut frame_set,
-                )
+                self.enqueue_packet_internal(&CResourcePackStackPacket::new(
+                    br_config.force,
+                    resource_packs,
+                    CURRENT_BEDROCK_MC_VERSION.to_string(),
+                    Experiments {
+                        names_size: 0,
+                        experiments_ever_toggled: false,
+                    },
+                    false,
+                ))
                 .await;
-
-                self.send_frame_set(frame_set, 0x84).await;
             }
             SResourcePackResponse::STATUS_COMPLETED => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");

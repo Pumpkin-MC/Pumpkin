@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockState, BlockStateId,
     chunk::{Biome, DoublePerlinNoiseParameters},
 };
 use pumpkin_util::{
@@ -12,7 +12,6 @@ use pumpkin_util::{
 
 use crate::{
     ProtoChunk,
-    block::RawBlockState,
     generation::noise::{
         WATER_BLOCK, perlin::DoublePerlinNoiseSampler,
         router::proto_noise_router::DoublePerlinNoiseBuilder,
@@ -21,7 +20,7 @@ use crate::{
 
 pub struct SurfaceTerrainBuilder {
     // Badlands stuff
-    terracotta_bands: Box<[RawBlockState]>,
+    terracotta_bands: Box<[BlockStateId]>,
     terracotta_bands_offset_noise: DoublePerlinNoiseSampler,
     badlands_pillar_noise: DoublePerlinNoiseSampler,
     badlands_surface_noise: DoublePerlinNoiseSampler,
@@ -69,18 +68,15 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    const ORANGE_TERRACOTTA: RawBlockState =
-        RawBlockState(Block::ORANGE_TERRACOTTA.default_state.id);
-    const YELLOW_TERRACOTTA: RawBlockState =
-        RawBlockState(Block::YELLOW_TERRACOTTA.default_state.id);
-    const BROWN_TERRACOTTA: RawBlockState = RawBlockState(Block::BROWN_TERRACOTTA.default_state.id);
-    const RED_TERRACOTTA: RawBlockState = RawBlockState(Block::RED_TERRACOTTA.default_state.id);
-    const WHITE_TERRACOTTA: RawBlockState = RawBlockState(Block::WHITE_TERRACOTTA.default_state.id);
-    const LIGHT_GRAY_TERRACOTTA: RawBlockState =
-        RawBlockState(Block::LIGHT_GRAY_TERRACOTTA.default_state.id);
-    const TERRACOTTA: RawBlockState = RawBlockState(Block::TERRACOTTA.default_state.id);
+    const ORANGE_TERRACOTTA: BlockStateId = Block::ORANGE_TERRACOTTA.default_state.id;
+    const YELLOW_TERRACOTTA: BlockStateId = Block::YELLOW_TERRACOTTA.default_state.id;
+    const BROWN_TERRACOTTA: BlockStateId = Block::BROWN_TERRACOTTA.default_state.id;
+    const RED_TERRACOTTA: BlockStateId = Block::RED_TERRACOTTA.default_state.id;
+    const WHITE_TERRACOTTA: BlockStateId = Block::WHITE_TERRACOTTA.default_state.id;
+    const LIGHT_GRAY_TERRACOTTA: BlockStateId = Block::LIGHT_GRAY_TERRACOTTA.default_state.id;
+    const TERRACOTTA: BlockStateId = Block::TERRACOTTA.default_state.id;
 
-    fn create_terracotta_bands(mut random: Xoroshiro) -> Box<[RawBlockState]> {
+    fn create_terracotta_bands(mut random: Xoroshiro) -> Box<[BlockStateId]> {
         let mut block_states = [Self::TERRACOTTA; 192];
 
         let mut i = 0;
@@ -121,9 +117,9 @@ impl SurfaceTerrainBuilder {
 
     fn add_terracotta_bands(
         random: &mut Xoroshiro,
-        terracotta_bands: &mut [RawBlockState],
+        terracotta_bands: &mut [BlockStateId],
         min_band_size: i32,
-        state: RawBlockState,
+        state: BlockStateId,
     ) {
         let band_count = random.next_inbetween_i32(6, 15);
 
@@ -177,7 +173,7 @@ impl SurfaceTerrainBuilder {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
                     let block_id = chunk.get_block_state(&pos).to_block_id();
-                    if block_id == chunk.default_block.id {
+                    if block_id == chunk.default_block.id.to_block_id() {
                         break;
                     }
 

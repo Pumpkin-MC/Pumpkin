@@ -341,6 +341,10 @@ impl JavaClient {
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         let player = self.player.lock().await.clone();
         let Some(player) = player.as_ref() else {
+            debug!(
+                "send_chunks: player not set yet, dropping {} chunks",
+                chunks.len()
+            );
             return;
         };
         let Some(server) = player.world().server.upgrade() else {
@@ -989,6 +993,17 @@ impl JavaClient {
                 self.handle_pick_item_from_block(
                     player,
                     SPickItemFromBlock::read(payload, &version)?,
+                )
+                .await;
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SPickItemFromEntity::to_id(version) =>
+            {
+                self.handle_pick_item_from_entity(
+                    player,
+                    pumpkin_protocol::java::server::play::SPickItemFromEntity::read(
+                        payload, &version,
+                    )?,
                 )
                 .await;
             }

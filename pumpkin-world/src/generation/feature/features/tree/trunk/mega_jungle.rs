@@ -56,7 +56,7 @@ impl MegaJungleTrunkPlacer {
 
                 let block_pos = start_pos.add(j_val, i - 3 + l / 2, k_val);
 
-                if placer.try_place(chunk, &block_pos, trunk_block) {
+                if TrunkPlacer::try_place(chunk, &block_pos, trunk_block) {
                     trunk_poses.push(block_pos);
                 }
             }

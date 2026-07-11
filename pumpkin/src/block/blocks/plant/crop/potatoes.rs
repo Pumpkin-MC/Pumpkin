@@ -1,5 +1,5 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;

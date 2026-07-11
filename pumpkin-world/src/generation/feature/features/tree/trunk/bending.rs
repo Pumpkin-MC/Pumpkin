@@ -23,7 +23,7 @@ impl BendingTrunkPlacer {
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
-        placer: &TrunkPlacer,
+        _placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
@@ -36,7 +36,7 @@ impl BendingTrunkPlacer {
         let log_height = height as i32 - 1;
         let mut pos = start_pos;
 
-        placer.set_dirt(
+        TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
@@ -52,7 +52,7 @@ impl BendingTrunkPlacer {
                 pos = pos.offset(direction.to_offset());
             }
 
-            if placer.place(chunk, &pos, trunk_block) {
+            if TrunkPlacer::place(chunk, &pos, trunk_block) {
                 trunk_poses.push(pos);
             }
 
@@ -70,7 +70,7 @@ impl BendingTrunkPlacer {
         let dir_length = self.bend_length.get(random);
 
         for _ in 0..=dir_length {
-            if placer.place(chunk, &pos, trunk_block) {
+            if TrunkPlacer::place(chunk, &pos, trunk_block) {
                 trunk_poses.push(pos);
             }
 

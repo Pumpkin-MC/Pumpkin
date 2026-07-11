@@ -44,6 +44,7 @@ impl PacketRead for NetworkItemDescriptor {
 
         let has_net_id = bool::read(buf)?;
         if has_net_id {
+            let _variant = VarUInt::read(buf)?;
             let _net_id = VarInt::read(buf)?;
         }
 

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
+use crate::block::entities::enchanting_table::EnchantingTableBlockEntity;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
-use pumpkin_data::{Block, translation};
+use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, PlacedArgs};
+use pumpkin_data::{Block, BlockStateId, translation};
 use pumpkin_inventory::enchanting::enchanting_screen_handler::EnchantingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -18,6 +19,13 @@ use tokio::sync::Mutex;
 pub struct EnchantingTableBlock;
 
 impl BlockBehaviour for EnchantingTableBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = EnchantingTableBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let mut bookshelf_count = 0;
@@ -25,8 +33,16 @@ impl BlockBehaviour for EnchantingTableBlock {
             for off_z in -1..=1 {
                 for off_x in -1..=1 {
                     if (off_z != 0 || off_x != 0)
-                        && args.world.get_block_state(&args.position.add(off_x, 0, off_z)).id == 0 // Air
-                        && args.world.get_block_state(&args.position.add(off_x, 1, off_z)).id == 0
+                        && args
+                            .world
+                            .get_block_state(&args.position.add(off_x, 0, off_z))
+                            .id
+                            == BlockStateId::AIR
+                        && args
+                            .world
+                            .get_block_state(&args.position.add(off_x, 1, off_z))
+                            .id
+                            == BlockStateId::AIR
                     // Air
                     {
                         for off_y in 0..=1 {

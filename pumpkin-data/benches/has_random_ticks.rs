@@ -1,15 +1,15 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use pumpkin_data::block_properties::has_random_ticks;
+use pumpkin_data::{BlockStateId, block_properties::has_random_ticks};
 
 const MAX_ID: u16 = 30000;
 
 #[inline(never)]
-fn run_all<F: Fn(u16) -> bool>(f: F) -> u32 {
+fn run_all<F: Fn(BlockStateId) -> bool>(f: F) -> u32 {
     let mut acc = 0u32;
     for id in 0..=MAX_ID {
-        if f(black_box(id)) {
+        if f(black_box(BlockStateId::new_or_air(id))) {
             acc += 1;
         }
     }
@@ -18,6 +18,7 @@ fn run_all<F: Fn(u16) -> bool>(f: F) -> u32 {
 
 fn assert_same_outputs() {
     for id in 0..=MAX_ID {
+        let id = BlockStateId::new_or_air(id);
         let a = has_random_ticks(id);
         let b = has_random_ticks_matches(id);
         if a != b {
@@ -41,9 +42,9 @@ pub fn bench_has_random_ticks(c: &mut Criterion) {
 criterion_group!(benches, bench_has_random_ticks);
 criterion_main!(benches);
 
-pub fn has_random_ticks_matches(state_id: u16) -> bool {
+pub fn has_random_ticks_matches(state_id: BlockStateId) -> bool {
     matches!(
-        state_id,
+        state_id.as_u16(),
         8 | 9
             | 29
             | 30

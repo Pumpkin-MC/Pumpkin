@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, HorizontalFacingExt,
+    Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt,
     block_properties::{BlockProperties, HorizontalFacing},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
-use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
     block::{

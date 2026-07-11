@@ -1,30 +1,35 @@
 use pumpkin_data::{
-    Block, BlockDirection, Enchantment,
+    Block, BlockDirection, BlockStateId, Enchantment,
     block_properties::{BlockProperties, CampfireLikeProperties},
     damage::DamageType,
     data_component_impl::EquipmentSlot,
     effect::StatusEffect,
     fluid::Fluid,
 };
-use pumpkin_world::{BlockStateId, tick::TickPriority};
+use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_world::tick::TickPriority;
 
+use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockIsReplacing, BlockMetadata,
-        GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
+        BlockBehaviour, BlockFuture, BlockIsReplacing, GetStateForNeighborUpdateArgs,
+        OnEntityCollisionArgs, OnPlaceArgs, PlacedArgs,
     },
     entity::EntityBase,
 };
+use std::sync::Arc;
 
+#[pumpkin_block_from_tag("minecraft:campfires")]
 pub struct CampfireBlock;
 
-impl BlockMetadata for CampfireBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::CAMPFIRE.id, Block::SOUL_CAMPFIRE.id].into()
-    }
-}
-
 impl BlockBehaviour for CampfireBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = CampfireBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     // TODO: cooking food on campfire (CampfireBlockEntity)
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {

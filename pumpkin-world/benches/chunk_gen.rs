@@ -1,5 +1,6 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use pumpkin_config::lighting::LightingEngineConfig;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::ProtoChunk;
@@ -28,7 +29,7 @@ impl WorldPortalExt for BlockRegistry {
     fn mirror(
         &self,
         block: &pumpkin_data::Block,
-        state_id: u16,
+        state_id: BlockStateId,
         mirror: pumpkin_data::Mirror,
     ) -> &'static pumpkin_data::BlockState {
         block.mirror(state_id, mirror)
@@ -37,7 +38,7 @@ impl WorldPortalExt for BlockRegistry {
     fn rotate(
         &self,
         block: &pumpkin_data::Block,
-        state_id: u16,
+        state_id: BlockStateId,
         rotation: pumpkin_data::Rotation,
     ) -> &'static pumpkin_data::BlockState {
         block.rotate(state_id, rotation)

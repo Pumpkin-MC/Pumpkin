@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState, Rotation, tag};
+use pumpkin_data::{Block, BlockState, Mirror, Rotation, tag};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
@@ -177,10 +177,10 @@ fn place_fossil_template<T: GenerationCache>(
             continue;
         }
 
-        let current_state = GenerationCache::get_block_state(chunk, &world_pos).to_state();
+        let current_state = GenerationCache::get_block_state(chunk, &world_pos);
         if tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE
             .1
-            .contains(&current_state.id)
+            .contains(&current_state.to_block_id().as_u16())
         {
             continue;
         }
@@ -190,8 +190,7 @@ fn place_fossil_template<T: GenerationCache>(
             continue;
         }
 
-        if let Some(state) =
-            BlockStateResolver::resolve(palette_entry, rotation, Default::default())
+        if let Some(state) = BlockStateResolver::resolve(palette_entry, rotation, Mirror::default())
         {
             chunk.set_block_state(&world_pos, processor.process(state));
         }

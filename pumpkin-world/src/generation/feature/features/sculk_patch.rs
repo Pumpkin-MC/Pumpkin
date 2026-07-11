@@ -1,8 +1,11 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
+
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockId, BlockState,
     block_properties::{BlockProperties, GlowLichenLikeProperties, SculkShriekerLikeProperties},
 };
+
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -29,7 +32,7 @@ impl SculkPatchFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        if !self.can_spread_from(chunk, pos) {
+        if !Self::can_spread_from(chunk, pos) {
             return false;
         }
 
@@ -129,7 +132,7 @@ impl SculkPatchFeature {
         true
     }
 
-    fn can_spread_from<T: GenerationCache>(&self, chunk: &T, pos: BlockPos) -> bool {
+    fn can_spread_from<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
         let state = GenerationCache::get_block_state(chunk, &pos.0);
         let block_id = state.to_block_id();
         if is_sculk_behaviour(block_id) {
@@ -159,13 +162,20 @@ impl SculkPatchFeature {
     }
 }
 
-fn is_sculk_behaviour(block_id: u16) -> bool {
-    block_id == Block::SCULK.id
-        || block_id == Block::SCULK_VEIN.id
-        || block_id == Block::SCULK_CATALYST.id
-        || block_id == Block::SCULK_SHRIEKER.id
-        || block_id == Block::SCULK_SENSOR.id
-        || block_id == Block::CALIBRATED_SCULK_SENSOR.id
+const fn is_sculk_behaviour(id: BlockId) -> bool {
+    matches!(
+        id,
+        BlockId::SCULK
+            | BlockId::SCULK_VEIN
+            | BlockId::SCULK_CATALYST
+            | BlockId::SCULK_SHRIEKER
+            | BlockId::SCULK_SENSOR
+            | BlockId::CALIBRATED_SCULK_SENSOR
+    )
+}
+
+fn is_sculk_replaceable(id: BlockId) -> bool {
+    id.has_tag(MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN)
 }
 
 fn ancient_city_shrieker_state() -> &'static BlockState {
@@ -174,29 +184,25 @@ fn ancient_city_shrieker_state() -> &'static BlockState {
     BlockState::from_id(properties.to_state_id(&Block::SCULK_SHRIEKER))
 }
 
-fn is_sculk_replaceable(block_id: u16) -> bool {
-    MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN.1.contains(&block_id)
-}
-
 /// Resolves the sculk-vein block state to place at a position so that it clings to a sturdy
 /// neighbour on `face` (the direction from the vein position toward that neighbour). Existing
 /// sculk-vein states are merged; replaceable/air/water blocks become a fresh vein.
 fn sculk_vein_state_with_face(
-    existing: &'static BlockState,
+    existing: BlockStateId,
     face: pumpkin_data::BlockDirection,
 ) -> Option<&'static BlockState> {
-    let existing_block_id = Block::get_raw_id_from_state_id(existing.id);
-    let is_vein = existing_block_id == Block::SCULK_VEIN.id;
+    let existing_block_id = existing.to_block_id();
+    let is_vein = existing_block_id == BlockId::SCULK_VEIN;
     if !(is_vein || is_sculk_replaceable(existing_block_id) || existing_block_id == Block::WATER.id)
     {
         return None;
     }
 
     let mut properties = if is_vein {
-        GlowLichenLikeProperties::from_state_id(existing.id, &Block::SCULK_VEIN)
+        GlowLichenLikeProperties::from_state_id(existing, &Block::SCULK_VEIN)
     } else {
         let mut properties = GlowLichenLikeProperties::default(&Block::SCULK_VEIN);
-        properties.r#waterlogged = existing_block_id == Block::WATER.id;
+        properties.r#waterlogged = existing_block_id == BlockId::WATER;
         properties
     };
 
@@ -306,7 +312,7 @@ impl SculkSpreader {
                 }
                 cursor.pos = target_pos;
                 cursor.charge -= 1;
-            } else if target_block_id == Block::SCULK.id {
+            } else if target_block_id == BlockId::SCULK {
                 cursor.pos = target_pos;
                 cursor.charge -= 1;
             }
@@ -319,10 +325,7 @@ impl SculkSpreader {
     }
 }
 
-fn proto_chunk_state(
-    chunk: &crate::ProtoChunk,
-    pos: BlockPos,
-) -> Option<crate::block::RawBlockState> {
+fn proto_chunk_state(chunk: &crate::ProtoChunk, pos: BlockPos) -> Option<BlockStateId> {
     ((pos.0.x >> 4) == chunk.x && (pos.0.z >> 4) == chunk.z).then(|| chunk.get_block_state(&pos.0))
 }
 
@@ -339,7 +342,7 @@ fn set_proto_chunk_state(
 fn grow_sculk_veins<T: GenerationCache>(chunk: &mut T, sculk_pos: BlockPos) {
     for dir in pumpkin_data::BlockDirection::all() {
         let vein_pos = sculk_pos.offset(dir.to_offset());
-        let existing = GenerationCache::get_block_state(chunk, &vein_pos.0).to_state();
+        let existing = GenerationCache::get_block_state(chunk, &vein_pos.0);
         if let Some(state) = sculk_vein_state_with_face(existing, dir.opposite()) {
             chunk.set_block_state(&vein_pos.0, state);
         }
@@ -352,7 +355,7 @@ fn grow_sculk_veins_in_proto_chunk(chunk: &mut crate::ProtoChunk, sculk_pos: Blo
         let Some(existing) = proto_chunk_state(chunk, vein_pos) else {
             continue;
         };
-        if let Some(state) = sculk_vein_state_with_face(existing.to_state(), dir.opposite()) {
+        if let Some(state) = sculk_vein_state_with_face(existing, dir.opposite()) {
             set_proto_chunk_state(chunk, vein_pos, state);
         }
     }
