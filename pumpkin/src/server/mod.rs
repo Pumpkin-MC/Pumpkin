@@ -26,6 +26,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::generation::generator::find_overworld_spawn_position;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -189,7 +190,17 @@ impl Server {
         }
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
-            let default_data = LevelData::default(basic_config.seed);
+            let mut default_data = LevelData::default(basic_config.seed);
+
+            // Pick a real vanilla-style spawn point instead of leaving the
+            // world spawn at the default (0, 0), which can just as easily be
+            // in the middle of an ocean as on dry land (see #1303).
+            // Note: `Vector2::y` holds the world Z coordinate here, matching
+            // the `Vector2::new(x, z)` convention used throughout the spawn
+            // search and its other callers.
+            let spawn_position = find_overworld_spawn_position(basic_config.seed);
+            default_data.set_pos(spawn_position.x, spawn_position.y);
+
             if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
                 error!("Failed to save level.dat: {err}");
             }

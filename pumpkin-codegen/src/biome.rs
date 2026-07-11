@@ -501,6 +501,16 @@ pub fn build() -> TokenStream {
         }
 
         impl ParameterRange {
+            /// Constructs a parameter range directly. Not used by the biome
+            /// codegen output itself (which builds ranges as struct literals),
+            /// but needed by hand-written code that builds standalone climate
+            /// targets outside of the generated biome tree, such as the
+            /// world-spawn search.
+            #[must_use]
+            pub const fn new(min: i64, max: i64) -> Self {
+                Self { min, max }
+            }
+
             pub fn calc_distance(&self, noise: i64) -> i64 {
                 if noise > self.max {
                     noise - self.max
