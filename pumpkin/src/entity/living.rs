@@ -440,6 +440,63 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    /// Recomputes the blended potion-swirl particle color and ambience flag
+    /// from all currently active effects that have `show_particles` set, then
+    /// syncs them to nearby clients via entity metadata.
+    ///
+    /// The client renders the swirling particles around an entity purely
+    /// based on this metadata (mirrors vanilla's `PotionUtils.getColor` /
+    /// `LivingEntity` ambience blending); the `CUpdateMobEffect` packet alone
+    /// only updates the HUD icon and does not drive the particle visuals.
+    async fn sync_effect_particles(&self) {
+        let (color, ambient) = {
+            let effects = self.active_effects.lock().await;
+
+            let mut r: u32 = 0;
+            let mut g: u32 = 0;
+            let mut b: u32 = 0;
+            let mut weight_sum: u32 = 0;
+            let mut all_ambient = true;
+            let mut any_visible = false;
+
+            for effect in effects.values() {
+                if !effect.show_particles {
+                    continue;
+                }
+
+                any_visible = true;
+                if !effect.ambient {
+                    all_ambient = false;
+                }
+
+                let weight = u32::from(effect.amplifier) + 1;
+                let c = effect.effect_type.color as u32;
+                r += weight * ((c >> 16) & 0xFF);
+                g += weight * ((c >> 8) & 0xFF);
+                b += weight * (c & 0xFF);
+                weight_sum += weight;
+            }
+
+            if any_visible {
+                let blended = ((r / weight_sum) << 16) | ((g / weight_sum) << 8) | (b / weight_sum);
+                (blended as i32, all_ambient)
+            } else {
+                (0, false)
+            }
+        };
+
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::POTION_SWIRLS,
+            MetaDataType::INTEGER,
+            VarInt(color),
+        )]);
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::POTION_SWIRLS_AMBIENT,
+            MetaDataType::BOOLEAN,
+            ambient,
+        )]);
+    }
+
     pub async fn add_effect(&self, effect: Effect) {
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
@@ -547,6 +604,10 @@ impl LivingEntity {
         );
 
         self.entity.world.load().broadcast_packet_all(&packet);
+
+        // Sync the swirl particle color/ambience so the client actually renders
+        // particles around the entity for the newly applied effect.
+        self.sync_effect_particles().await;
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -615,6 +676,10 @@ impl LivingEntity {
         if effect_type == &StatusEffect::GLOWING {
             self.entity.set_glowing(false).await;
         }
+
+        // Recompute the swirl particle color/ambience now that this effect is gone,
+        // so particles stop (or reblend) correctly on the client.
+        self.sync_effect_particles().await;
 
         succeeded
     }
