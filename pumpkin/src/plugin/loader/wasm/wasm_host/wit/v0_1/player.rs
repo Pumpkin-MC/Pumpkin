@@ -772,7 +772,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.set_gamemode(from_wasm_game_mode(mode)).await)
     }
 
-    async fn get_locale(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
+    async fn get_player_locale(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.config.load().locale.clone())
     }

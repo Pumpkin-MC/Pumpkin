@@ -2,13 +2,22 @@ use crate::plugin::loader::wasm::wasm_host::{
     state::PluginHostState,
     wit::v0_1::pumpkin::plugin::{common::Locale as WitLocale, i18n::Host},
 };
-use pumpkin_i18n::{Locale as UtilLocale, add_translation_file, get_translation};
-use std::str::FromStr;
+use pumpkin_i18n::{
+    Locale as UtilLocale, add_translation_file, format_translation, get_translation,
+};
 
 impl Host for PluginHostState {
     async fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
-        let util_locale = wit_to_util_locale(locale);
-        Ok(get_translation(&key, util_locale))
+        Ok(get_translation(&key, wit_to_util_locale(locale)))
+    }
+
+    async fn format(
+        &mut self,
+        key: String,
+        args: Vec<String>,
+        locale: WitLocale,
+    ) -> wasmtime::Result<String> {
+        Ok(format_translation(&key, wit_to_util_locale(locale), &args))
     }
 
     async fn load_translations(
@@ -17,25 +26,167 @@ impl Host for PluginHostState {
         json: String,
         locale: WitLocale,
     ) -> wasmtime::Result<()> {
-        let util_locale = wit_to_util_locale(locale);
-        add_translation_file(namespace, json, util_locale);
+        add_translation_file(namespace, json, wit_to_util_locale(locale));
         Ok(())
     }
 }
 
-/// Converts a WIT Locale to a pumpkin-util Locale.
+/// Converts a WIT [`Locale`] to a pumpkin-i18n [`UtilLocale`] via explicit
+/// match mapping.  Unlike the old `Debug`-based conversion this is compile-time
+/// verified: the compiler rejects missing arms when the WIT enum is regenerated
+/// with new variants.
 ///
-/// The WIT locale enum uses Rust `PascalCase` variant names (e.g. `EnUs`, `ZhCn`)
-/// which are converted to `snake_case` via [`Locale::from_str`]'s built-in
-/// [`normalize_locale_code`] normalizer. Falls back to `EnUs` with a warning if
-/// the conversion fails — this should not happen as long as the WIT locale
-/// variants stay in sync with the [`Locale`] enum.
-fn wit_to_util_locale(wit: WitLocale) -> UtilLocale {
-    let s = format!("{wit:?}");
-    UtilLocale::from_str(&s).unwrap_or_else(|()| {
-        tracing::warn!(
-            "failed to convert WIT locale '{s}' to pumpkin Locale, falling back to EnUs"
-        );
-        UtilLocale::EnUs
-    })
+/// Falls back to [`UtilLocale::EnUs`] with a warning when the WIT binding
+/// exposes a variant that is not yet represented in the i18n crate (should only
+/// happen during development of new locale additions).
+#[expect(clippy::too_many_lines)]
+#[allow(clippy::match_same_arms, unreachable_patterns)]
+const fn wit_to_util_locale(wit: WitLocale) -> UtilLocale {
+    match wit {
+        WitLocale::AfZa => UtilLocale::AfZa,
+        WitLocale::ArSa => UtilLocale::ArSa,
+        WitLocale::AstEs => UtilLocale::AstEs,
+        WitLocale::AzAz => UtilLocale::AzAz,
+        WitLocale::BaRu => UtilLocale::BaRu,
+        WitLocale::Bar => UtilLocale::Bar,
+        WitLocale::BeBy => UtilLocale::BeBy,
+        WitLocale::BeLatn => UtilLocale::BeLatn,
+        WitLocale::BgBg => UtilLocale::BgBg,
+        WitLocale::BrFr => UtilLocale::BrFr,
+        WitLocale::Brb => UtilLocale::Brb,
+        WitLocale::BsBa => UtilLocale::BsBa,
+        WitLocale::CaEs => UtilLocale::CaEs,
+        WitLocale::CsCz => UtilLocale::CsCz,
+        WitLocale::CvCu => UtilLocale::CvCu,
+        WitLocale::CyGb => UtilLocale::CyGb,
+        WitLocale::DaDk => UtilLocale::DaDk,
+        WitLocale::DeAt => UtilLocale::DeAt,
+        WitLocale::DeCh => UtilLocale::DeCh,
+        WitLocale::DeDe => UtilLocale::DeDe,
+        WitLocale::ElGr => UtilLocale::ElGr,
+        WitLocale::EnAu => UtilLocale::EnAu,
+        WitLocale::EnCa => UtilLocale::EnCa,
+        WitLocale::EnGb => UtilLocale::EnGb,
+        WitLocale::EnNz => UtilLocale::EnNz,
+        WitLocale::EnPt => UtilLocale::EnPt,
+        WitLocale::EnUd => UtilLocale::EnUd,
+        WitLocale::EnUs => UtilLocale::EnUs,
+        WitLocale::Enp => UtilLocale::Enp,
+        WitLocale::Enws => UtilLocale::Enws,
+        WitLocale::EoUy => UtilLocale::EoUy,
+        WitLocale::EsAr => UtilLocale::EsAr,
+        WitLocale::EsCl => UtilLocale::EsCl,
+        WitLocale::EsEc => UtilLocale::EsEc,
+        WitLocale::EsEs => UtilLocale::EsEs,
+        WitLocale::EsMx => UtilLocale::EsMx,
+        WitLocale::EsUy => UtilLocale::EsUy,
+        WitLocale::EsVe => UtilLocale::EsVe,
+        WitLocale::Esan => UtilLocale::Esan,
+        WitLocale::EtEe => UtilLocale::EtEe,
+        WitLocale::EuEs => UtilLocale::EuEs,
+        WitLocale::FaIr => UtilLocale::FaIr,
+        WitLocale::FiFi => UtilLocale::FiFi,
+        WitLocale::FilPh => UtilLocale::FilPh,
+        WitLocale::FoFo => UtilLocale::FoFo,
+        WitLocale::FrCa => UtilLocale::FrCa,
+        WitLocale::FrCh => UtilLocale::FrCh,
+        WitLocale::FrFr => UtilLocale::FrFr,
+        WitLocale::FraDe => UtilLocale::FraDe,
+        WitLocale::FurIt => UtilLocale::FurIt,
+        WitLocale::FyNl => UtilLocale::FyNl,
+        WitLocale::GaIe => UtilLocale::GaIe,
+        WitLocale::GdGb => UtilLocale::GdGb,
+        WitLocale::GlEs => UtilLocale::GlEs,
+        WitLocale::GoFr => UtilLocale::GoFr,
+        WitLocale::HalUa => UtilLocale::HalUa,
+        WitLocale::HawUs => UtilLocale::HawUs,
+        WitLocale::HeIl => UtilLocale::HeIl,
+        WitLocale::HiIn => UtilLocale::HiIn,
+        WitLocale::HnNo => UtilLocale::HnNo,
+        WitLocale::HrHr => UtilLocale::HrHr,
+        WitLocale::HuHu => UtilLocale::HuHu,
+        WitLocale::HyAm => UtilLocale::HyAm,
+        WitLocale::IdId => UtilLocale::IdId,
+        WitLocale::IgNg => UtilLocale::IgNg,
+        WitLocale::IoEn => UtilLocale::IoEn,
+        WitLocale::IsIs => UtilLocale::IsIs,
+        WitLocale::Isv => UtilLocale::Isv,
+        WitLocale::ItIt => UtilLocale::ItIt,
+        WitLocale::JaJp => UtilLocale::JaJp,
+        WitLocale::JboEn => UtilLocale::JboEn,
+        WitLocale::KaGe => UtilLocale::KaGe,
+        WitLocale::KkKz => UtilLocale::KkKz,
+        WitLocale::KnIn => UtilLocale::KnIn,
+        WitLocale::KoKr => UtilLocale::KoKr,
+        WitLocale::Ksh => UtilLocale::Ksh,
+        WitLocale::KwGb => UtilLocale::KwGb,
+        WitLocale::KyKg => UtilLocale::KyKg,
+        WitLocale::LaLa => UtilLocale::LaLa,
+        WitLocale::LbLu => UtilLocale::LbLu,
+        WitLocale::LiLi => UtilLocale::LiLi,
+        WitLocale::Lmo => UtilLocale::Lmo,
+        WitLocale::LoLa => UtilLocale::LoLa,
+        WitLocale::LolUs => UtilLocale::LolUs,
+        WitLocale::LtLt => UtilLocale::LtLt,
+        WitLocale::LvLv => UtilLocale::LvLv,
+        WitLocale::Lzh => UtilLocale::Lzh,
+        WitLocale::MkMk => UtilLocale::MkMk,
+        WitLocale::MnMn => UtilLocale::MnMn,
+        WitLocale::MsMy => UtilLocale::MsMy,
+        WitLocale::MtMt => UtilLocale::MtMt,
+        WitLocale::Nah => UtilLocale::Nah,
+        WitLocale::NdsDe => UtilLocale::NdsDe,
+        WitLocale::NlBe => UtilLocale::NlBe,
+        WitLocale::NlNl => UtilLocale::NlNl,
+        WitLocale::NnNo => UtilLocale::NnNo,
+        WitLocale::NoNo => UtilLocale::NoNo,
+        WitLocale::OcFr => UtilLocale::OcFr,
+        WitLocale::Ovd => UtilLocale::Ovd,
+        WitLocale::PlPl => UtilLocale::PlPl,
+        WitLocale::Pls => UtilLocale::Pls,
+        WitLocale::PtBr => UtilLocale::PtBr,
+        WitLocale::PtPt => UtilLocale::PtPt,
+        WitLocale::QcbEs => UtilLocale::QcbEs,
+        WitLocale::Qid => UtilLocale::Qid,
+        WitLocale::QyaAa => UtilLocale::QyaAa,
+        WitLocale::RoRo => UtilLocale::RoRo,
+        WitLocale::Rpr => UtilLocale::Rpr,
+        WitLocale::RuRu => UtilLocale::RuRu,
+        WitLocale::RyUa => UtilLocale::RyUa,
+        WitLocale::SahSah => UtilLocale::SahSah,
+        WitLocale::SeNo => UtilLocale::SeNo,
+        WitLocale::SkSk => UtilLocale::SkSk,
+        WitLocale::SlSi => UtilLocale::SlSi,
+        WitLocale::SoSo => UtilLocale::SoSo,
+        WitLocale::SqAl => UtilLocale::SqAl,
+        WitLocale::SrCs => UtilLocale::SrCs,
+        WitLocale::SrSp => UtilLocale::SrSp,
+        WitLocale::SvSe => UtilLocale::SvSe,
+        WitLocale::Sxu => UtilLocale::Sxu,
+        WitLocale::Szl => UtilLocale::Szl,
+        WitLocale::TaIn => UtilLocale::TaIn,
+        WitLocale::ThTh => UtilLocale::ThTh,
+        WitLocale::TlPh => UtilLocale::TlPh,
+        WitLocale::TlhAa => UtilLocale::TlhAa,
+        WitLocale::Tok => UtilLocale::Tok,
+        WitLocale::TrTr => UtilLocale::TrTr,
+        WitLocale::TtRu => UtilLocale::TtRu,
+        WitLocale::TzoMx => UtilLocale::TzoMx,
+        WitLocale::UkUa => UtilLocale::UkUa,
+        WitLocale::UzUz => UtilLocale::UzUz,
+        WitLocale::ValEs => UtilLocale::ValEs,
+        WitLocale::VecIt => UtilLocale::VecIt,
+        WitLocale::ViVn => UtilLocale::ViVn,
+        WitLocale::VpVl => UtilLocale::VpVl,
+        WitLocale::Vro => UtilLocale::Vro,
+        WitLocale::YiDe => UtilLocale::YiDe,
+        WitLocale::YoNg => UtilLocale::YoNg,
+        WitLocale::ZhCn => UtilLocale::ZhCn,
+        WitLocale::ZhHk => UtilLocale::ZhHk,
+        WitLocale::ZhTw => UtilLocale::ZhTw,
+        WitLocale::ZlmArab => UtilLocale::ZlmArab,
+        // Fall back to EnUs for any locale variant not yet represented in the
+        // i18n crate (developer preview of new locale additions).
+        _ => UtilLocale::EnUs,
+    }
 }

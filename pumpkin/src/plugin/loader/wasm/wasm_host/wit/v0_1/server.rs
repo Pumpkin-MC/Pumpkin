@@ -6,6 +6,7 @@ use crate::command::CommandSender;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 
+use super::commands::map_util_locale_to_wit;
 use super::player::text_component_from_resource;
 use crate::plugin::{
     loader::wasm::wasm_host::{
@@ -76,6 +77,13 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             pumpkin_util::Difficulty::Normal => Difficulty::Normal,
             pumpkin_util::Difficulty::Hard => Difficulty::Hard,
         })
+    }
+
+    async fn get_server_locale(
+        &mut self,
+        _res: Resource<Server>,
+    ) -> wasmtime::Result<pumpkin::plugin::common::Locale> {
+        Ok(map_util_locale_to_wit(pumpkin_i18n::server_global_locale()))
     }
 
     async fn get_player_count(&mut self, _res: Resource<Server>) -> wasmtime::Result<u32> {
