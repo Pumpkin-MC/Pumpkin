@@ -499,3 +499,30 @@ impl BlockIsReplacing {
         }
     }
 }
+
+pub async fn calculate_comparator_output(
+    inventory: &dyn pumpkin_world::inventory::Inventory,
+) -> u8 {
+    let size = inventory.size();
+    if size == 0 {
+        return 0;
+    }
+    let mut fill_sum = 0.0;
+    let mut non_empty_count = 0;
+    for i in 0..size {
+        let stack_mutex = inventory.get_stack(i).await;
+        let stack = stack_mutex.lock().await;
+        if !stack.is_empty() {
+            let max_stack = stack.get_max_stack_size() as f32;
+            let count = stack.item_count as f32;
+            fill_sum += count / max_stack;
+            non_empty_count += 1;
+        }
+    }
+    if non_empty_count == 0 {
+        return 0;
+    }
+    let percentage = fill_sum / (size as f32);
+    let output = 1.0 + percentage * 14.0;
+    output.floor() as u8
+}

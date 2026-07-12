@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::{BlockFuture, PlacedArgs};
+use crate::block::{BlockFuture, GetComparatorOutputArgs, PlacedArgs};
 use crate::block::{
     registry::BlockActionResult,
     {BlockBehaviour, NormalUseArgs},
@@ -76,6 +76,29 @@ impl BlockBehaviour for BrewingStandBlock {
         Box::pin(async move {
             let be = BrewingStandBlockEntity::new(*args.position);
             args.world.add_block_entity(Arc::new(be));
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                let mut bottles = 0u8;
+                // Bottle slots are 0, 1, 2 in brewing stands
+                for slot in 0..3 {
+                    let stack = inventory.get_stack(slot).await;
+                    if !stack.lock().await.is_empty() {
+                        bottles += 1;
+                    }
+                }
+                Some(bottles)
+            } else {
+                None
+            }
         })
     }
 }

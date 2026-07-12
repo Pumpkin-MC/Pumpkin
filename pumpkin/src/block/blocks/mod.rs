@@ -92,7 +92,9 @@ pub mod sponge;
 
 // Entities, hazards & misc gameplay blocks
 pub mod anvil;
+pub mod beehive;
 pub mod cake;
+pub mod cauldron;
 pub mod composter;
 pub mod ladder;
 pub mod slime;

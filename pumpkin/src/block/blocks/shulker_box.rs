@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::block::{BlockFuture, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
+use crate::block::{
+    BlockFuture, GetComparatorOutputArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
+};
 use crate::block::{
     registry::BlockActionResult,
     {BlockBehaviour, NormalUseArgs},
@@ -96,6 +98,21 @@ impl BlockBehaviour for ShulkerBoxBlock {
             }
 
             BlockActionResult::Success
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                Some(crate::block::calculate_comparator_output(inventory.as_ref()).await)
+            } else {
+                None
+            }
         })
     }
 }

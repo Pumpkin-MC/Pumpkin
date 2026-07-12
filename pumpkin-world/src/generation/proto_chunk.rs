@@ -1350,6 +1350,9 @@ impl ProtoChunk {
         );
 
         let mut references = Vec::new();
+        // Constant across every chunk in the dimension, so hoist it out of the loop
+        // and out of the (cached) structure-start computation below.
+        let chunk_min_y = self.bottom_y() as i32;
 
         for set in StructureSet::ALL {
             let mut candidate_chunks = Vec::new();
@@ -1396,26 +1399,43 @@ impl ProtoChunk {
                     for entry in set.structures {
                         let structure = Structure::get(&entry.structure);
 
-                        let context = StructureGeneratorContext {
-                            seed,
-                            chunk_x: candidate_chunk_x,
-                            chunk_z: candidate_chunk_z,
-                            random: create_chunk_random(seed, candidate_chunk_x, candidate_chunk_z),
-                            sea_level: settings.sea_level,
-                            min_y: self.bottom_y() as i32,
-                            height_sampler: Some(&mut height_sampler),
-                            structure_key: Some(entry.structure),
-                        };
+                        // A structure's placement depends only on its start chunk and the
+                        // world seed, so cache it: otherwise every surrounding chunk whose
+                        // references overlap it would re-run the (expensive) jigsaw
+                        // expansion. `context` is only built on a cache miss.
+                        let start_data = global_cache.get_or_compute_structure_start(
+                            entry.structure,
+                            candidate_chunk_x,
+                            candidate_chunk_z,
+                            || {
+                                let context = StructureGeneratorContext {
+                                    seed,
+                                    chunk_x: candidate_chunk_x,
+                                    chunk_z: candidate_chunk_z,
+                                    random: create_chunk_random(
+                                        seed,
+                                        candidate_chunk_x,
+                                        candidate_chunk_z,
+                                    ),
+                                    sea_level: settings.sea_level,
+                                    min_y: chunk_min_y,
+                                    height_sampler: Some(&mut height_sampler),
+                                    structure_key: Some(entry.structure),
+                                };
+                                lazily_generate_structure(
+                                    &entry.structure,
+                                    structure,
+                                    context,
+                                    &biome_supplier,
+                                    &mut multi_noise_sampler,
+                                )
+                            },
+                        );
 
-                        if let Some(start_data) = lazily_generate_structure(
-                            &entry.structure,
-                            structure,
-                            context,
-                            &biome_supplier,
-                            &mut multi_noise_sampler,
-                        ) && start_data
-                            .get_bounding_box()
-                            .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                        if let Some(start_data) = start_data
+                            && start_data
+                                .get_bounding_box()
+                                .intersects_raw_xz(start_x, start_z, end_x, end_z)
                         {
                             references.push((entry.structure, start_data.collector.clone()));
                             break;

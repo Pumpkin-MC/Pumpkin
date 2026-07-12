@@ -100,10 +100,19 @@ pub enum LootCondition {
         enchantment: &'static str,
         chances: Option<&'static [f32]>,
     },
-    /// Checks properties of the entity (e.g. type, attributes).
+    /// Checks properties of the entity (e.g. type, flags, equipment).
+    /// Mirrors vanilla `LootItemEntityPropertyCondition`.
     EntityProperties {
+        /// The entity target to check: "this", "attacker", or "`direct_attacker`".
         entity: &'static str,
+        /// Expected entity type (e.g. "minecraft:cow").
         expected_type: Option<&'static str>,
+        /// When `Some`, the entity must be on fire for the condition to pass.
+        /// Mirrors vanilla `EntityFlagsPredicate.isOnFire`.
+        is_on_fire: Option<bool>,
+        /// When `Some`, the entity's mainhand item must have an enchantment in this tag.
+        /// Mirrors vanilla `EntityEquipmentPredicate.mainhand` with enchantment tag lookup.
+        mainhand_enchantment_tag: Option<&'static str>,
     },
     /// Requires the entity to have been killed by a player.
     KilledByPlayer,

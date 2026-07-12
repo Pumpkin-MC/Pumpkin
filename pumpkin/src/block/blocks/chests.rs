@@ -24,8 +24,8 @@ use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
 use crate::block::{
-    BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs, NormalUseArgs,
-    OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, RandomTickArgs,
+    BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs, GetRedstonePowerArgs,
+    NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, RandomTickArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -125,6 +125,35 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
                 BlockFlags::NOTIFY_LISTENERS,
             )
             .await;
+    }
+}
+
+async fn get_chest_comparator_output(args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+    let state = args.world.get_block_state_id(args.position);
+    let first_chest = args.world.get_block_entity(args.position);
+    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
+
+    let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+    let connected_towards = match chest_props.r#type {
+        ChestType::Single => None,
+        ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
+        ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
+    };
+
+    if let Some(direction) = connected_towards
+        && let Some(second_inventory) = args
+            .world
+            .get_block_entity(&args.position.offset(direction.to_offset()))
+            .and_then(BlockEntity::get_inventory)
+    {
+        let double_inventory = if matches!(chest_props.r#type, ChestType::Right) {
+            DoubleInventory::new(first_inventory, second_inventory)
+        } else {
+            DoubleInventory::new(second_inventory, first_inventory)
+        };
+        Some(crate::block::calculate_comparator_output(double_inventory.as_ref()).await)
+    } else {
+        Some(crate::block::calculate_comparator_output(first_inventory.as_ref()).await)
     }
 }
 
@@ -259,6 +288,13 @@ impl BlockBehaviour for ChestBlock {
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(broken_chest_impl(args))
     }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move { get_chest_comparator_output(args).await })
+    }
 }
 
 /// Copper chests have the same behavior as wooden chests but also oxidize over time.
@@ -310,6 +346,13 @@ impl BlockBehaviour for CopperChestBlock {
             // Try to oxidize the copper chest
             try_oxidize_copper_chest(args.world, args.position, args.block, chest_props).await;
         })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move { get_chest_comparator_output(args).await })
     }
 }
 
@@ -521,6 +564,13 @@ impl BlockBehaviour for TrappedChestBlock {
                 0
             }
         })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move { get_chest_comparator_output(args).await })
     }
 }
 

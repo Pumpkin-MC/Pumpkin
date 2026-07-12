@@ -21,8 +21,8 @@ use tokio::sync::Mutex;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-        registry::BlockActionResult,
+        BlockBehaviour, BlockFuture, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs,
+        OnPlaceArgs, PlacedArgs, registry::BlockActionResult,
     },
     entity::experience_orb::ExperienceOrbEntity,
 };
@@ -141,6 +141,21 @@ impl BlockBehaviour for SmokerBlock {
                 }
             }
             args.world.remove_block_entity(args.position);
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                Some(crate::block::calculate_comparator_output(inventory.as_ref()).await)
+            } else {
+                None
+            }
         })
     }
 }

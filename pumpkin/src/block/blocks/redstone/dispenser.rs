@@ -1,15 +1,105 @@
-use crate::block::entities::dispenser::DispenserBlockEntity;
-use crate::block::{BlockBehaviour, BlockFuture, OnPlaceArgs, PlacedArgs};
-use crate::entity::EntityBase;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, DispenserLikeProperties};
-use pumpkin_macros::pumpkin_block;
+use rand::{Rng, RngExt, rng};
 use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+};
+use crate::entity::item::ItemEntity;
+use crate::entity::{Entity, EntityBase};
+
+use crate::block::entities::dispenser::DispenserBlockEntity;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::translation;
+use pumpkin_data::world::WorldEvent;
+use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{
+    BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
+};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::inventory::Inventory;
+use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockFlags;
+
+struct DispenserScreenFactory(Arc<dyn Inventory>);
+
+impl ScreenHandlerFactory for DispenserScreenFactory {
+    fn create_screen_handler<'a>(
+        &'a self,
+        sync_id: u8,
+        player_inventory: &'a Arc<PlayerInventory>,
+        _player: &'a dyn InventoryPlayer,
+    ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
+        Box::pin(async move {
+            let handler = create_generic_3x3(sync_id, player_inventory, self.0.clone()).await;
+            let screen_handler_arc = Arc::new(Mutex::new(handler));
+
+            Some(screen_handler_arc as SharedScreenHandler)
+        })
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_DISPENSER,
+            translation::bedrock::CONTAINER_DISPENSER,
+            &[],
+        )
+    }
+}
 
 #[pumpkin_block("minecraft:dispenser")]
 pub struct DispenserBlock;
 
+type DispenserLikeProperties = pumpkin_data::block_properties::DispenserLikeProperties;
+
+fn triangle<R: Rng>(rng: &mut R, min: f64, max: f64) -> f64 {
+    (rng.random::<f64>() - rng.random::<f64>()).mul_add(max, min)
+}
+
+const fn to_normal(facing: Facing) -> Vector3<f64> {
+    match facing {
+        Facing::North => Vector3::new(0., 0., -1.),
+        Facing::East => Vector3::new(1., 0., 0.),
+        Facing::South => Vector3::new(0., 0., 1.),
+        Facing::West => Vector3::new(-1., 0., 0.),
+        Facing::Up => Vector3::new(0., 1., 0.),
+        Facing::Down => Vector3::new(0., -1., 0.),
+    }
+}
+
+const fn to_data3d(facing: Facing) -> i32 {
+    match facing {
+        Facing::North => 2,
+        Facing::East => 5,
+        Facing::South => 3,
+        Facing::West => 4,
+        Facing::Up => 1,
+        Facing::Down => 0,
+    }
+}
+
 impl BlockBehaviour for DispenserBlock {
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                args.player
+                    .open_handled_screen(&DispenserScreenFactory(inventory), Some(*args.position))
+                    .await;
+            }
+            BlockActionResult::Success
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = DispenserLikeProperties::default(args.block);
@@ -23,6 +113,112 @@ impl BlockBehaviour for DispenserBlock {
             let dispenser_block_entity = DispenserBlockEntity::new(*args.position);
             args.world
                 .add_block_entity(Arc::new(dispenser_block_entity));
+        })
+    }
+
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let powered = block_receives_redstone_power(args.world, args.position).await
+                || block_receives_redstone_power(args.world, &args.position.up()).await;
+
+            let mut props = DispenserLikeProperties::from_state_id(
+                args.world.get_block_state(args.position).id,
+                args.block,
+            );
+
+            if powered && !props.triggered {
+                args.world
+                    .schedule_block_tick(args.block, *args.position, 4, TickPriority::Normal);
+                props.triggered = true;
+                args.world
+                    .set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            } else if !powered && props.triggered {
+                props.triggered = false;
+                args.world
+                    .set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            }
+        })
+    }
+
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position) {
+                let Some(dispenser) = block_entity.as_any().downcast_ref::<DispenserBlockEntity>()
+                else {
+                    return;
+                };
+
+                if let Some(mut item) = dispenser.get_random_slot().await {
+                    let props = DispenserLikeProperties::from_state_id(
+                        args.world.get_block_state(args.position).id,
+                        args.block,
+                    );
+
+                    // No specific dispenser behaviors are registered yet, so dispense item into the world
+                    let drop_item = item.split(1);
+                    let facing = to_normal(props.facing);
+                    let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
+
+                    position.y -= match props.facing {
+                        Facing::Up | Facing::Down => 0.125,
+                        _ => 0.15625,
+                    };
+
+                    let entity = Entity::new(args.world.clone(), position, &EntityType::ITEM);
+                    let rd = rng().random::<f64>().mul_add(0.1, 0.2);
+
+                    let velocity = Vector3::new(
+                        triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
+                        triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
+                        triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
+                    );
+
+                    let item_entity = Arc::new(ItemEntity::new_with_velocity(
+                        entity, drop_item, velocity, 40,
+                    ));
+                    args.world.spawn_entity(item_entity).await;
+
+                    args.world.sync_world_event(
+                        WorldEvent::SoundDispenserDispense,
+                        *args.position,
+                        0,
+                    );
+
+                    args.world.sync_world_event(
+                        WorldEvent::ParticlesShootSmoke,
+                        *args.position,
+                        to_data3d(props.facing),
+                    );
+                } else {
+                    args.world
+                        .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
+                }
+            }
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
+                && let Some(inventory) = block_entity.get_inventory()
+            {
+                Some(crate::block::calculate_comparator_output(inventory.as_ref()).await)
+            } else {
+                None
+            }
         })
     }
 }
