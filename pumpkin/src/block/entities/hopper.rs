@@ -195,8 +195,28 @@ impl HopperBlockEntity {
         }
         let (block, state) = world.get_block_and_state(pos_up);
         if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
-            // TODO getItemsAtAndAbove(level, hopper)
-            return false;
+            let pos_up_f = pos_up.to_f64();
+            let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
+                pos_up_f,
+                pos_up_f.add_raw(1.0, 1.0, 1.0),
+            );
+            let entities = world.get_entities_at_box(&search_box);
+            for entity_base in entities {
+                if let Some(item_entity) = entity_base.clone().get_item_entity() {
+                    let mut stack = item_entity.get_item_stack().lock().await;
+                    if !stack.is_empty() {
+                        let backup = stack.clone();
+                        let one_item = stack.split(1);
+                        if Self::add_one_item(self, self, one_item).await {
+                            if stack.is_empty() {
+                                item_entity.get_entity().remove().await;
+                            }
+                            return true;
+                        }
+                        *stack = backup;
+                    }
+                }
+            }
         }
         false
     }

@@ -36,7 +36,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Server Status/Ping
   - [x] Encryption
   - [x] Packet Compression
-  - [x] Java/Bedrock
+  - [x] Java Edition
+  - [x] Bedrock Edition (W.I.P)
   - ...
 - [Tracking: World](https://github.com/Pumpkin-MC/Pumpkin/issues/1403)
   - [x] Player Tab-list
@@ -64,7 +65,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Experience
   - [x] Hunger
   - [X] Off Hand
-  - [ ] Advancements
+  - [X] Advancements (W.I.P)
   - [x] Eating
   - ...
 - Entities
@@ -74,8 +75,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
   - [Entity AI](https://github.com/Pumpkin-MC/Pumpkin/issues/1406)
-  - [x] Boss
-  - [ ] Villagers
+  - [x] Boss (W.I.P)
+  - [x] Villagers (W.I.P)
   - [X] Entity Saving
 - Server
   - [Plugins](https://github.com/Pumpkin-MC/Pumpkin/issues/1407)

@@ -80,6 +80,23 @@ pub async fn create_generic_3x3(
     .await
 }
 
+/// Creates a crafter container (9 slots, 3x3 layout).
+pub async fn create_crafter_3x3(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::Crafter3x3,
+        sync_id,
+        player_inventory,
+        inventory,
+        3,
+        3,
+    )
+    .await
+}
+
 /// Creates a hopper container (5 slots).
 ///
 /// Hoppers have a single row of 5 slots.

@@ -3,6 +3,8 @@ use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use serde::Deserialize;
 
+use crate::codec::var_int::VarInt;
+
 #[derive(Deserialize)]
 #[java_packet(PLAY_PICK_ITEM_FROM_BLOCK)]
 pub struct SPickItemFromBlock {
@@ -13,6 +15,6 @@ pub struct SPickItemFromBlock {
 #[derive(Deserialize)]
 #[java_packet(PLAY_PICK_ITEM_FROM_ENTITY)]
 pub struct SPickItemFromEntity {
-    pub id: i32,
+    pub id: VarInt,
     pub include_data: bool,
 }

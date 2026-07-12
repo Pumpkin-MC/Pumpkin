@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use crate::block::entities::hanging_sign::HangingSignBlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
@@ -308,8 +309,13 @@ impl BlockBehaviour for SignBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            args.world
-                .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)));
+            if args.block.name.contains("hanging") {
+                args.world
+                    .add_block_entity(Arc::new(HangingSignBlockEntity::empty(*args.position)));
+            } else {
+                args.world
+                    .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)));
+            }
         })
     }
 

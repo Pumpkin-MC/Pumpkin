@@ -227,7 +227,7 @@ impl PlayerAdvancement {
     pub fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
         Self {
             progress: AdvancementProgressMap::default(),
-            path: manager.advancement_path.join(format!("{}.json", &uuid)),
+            path: manager.advancement_path.join(format!("{uuid}.json")),
             manager,
             player: Weak::new(),
             is_first_packet: true,

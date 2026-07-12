@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        OnPlaceArgs, OnScheduledTickArgs, UseWithItemArgs, blocks::candle_cakes::cake_from_candle,
-        registry::BlockActionResult,
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetComparatorOutputArgs,
+        GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs,
+        UseWithItemArgs, blocks::candle_cakes::cake_from_candle, registry::BlockActionResult,
     },
     entity::player::Player,
     world::World,
@@ -198,6 +198,21 @@ impl BlockBehaviour for CakeBlock {
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             args.state_id
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position);
+            let properties = CakeLikeProperties::from_state_id(state_id, args.block);
+            if properties.bites <= 6 {
+                Some((7 - properties.bites) * 2)
+            } else {
+                Some(0)
+            }
         })
     }
 }

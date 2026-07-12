@@ -203,13 +203,7 @@ impl ScreenHandler for AnvilScreenHandler {
                             }
 
                             // Consume inputs
-                            let input_a = self.inventory.get_stack(0).await;
-                            let mut input_a = input_a.lock().await;
-                            input_a.decrement(1); // Usually consumes 1
-                            if input_a.is_empty() {
-                                *input_a = ItemStack::EMPTY.clone();
-                            }
-                            drop(input_a);
+                            self.inventory.set_stack(0, ItemStack::EMPTY.clone()).await;
                             self.get_behaviour().slots[0].mark_dirty().await;
                         } else {
                             // Cancel click

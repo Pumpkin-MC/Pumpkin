@@ -13,13 +13,14 @@ use crate::{
     world::World,
 };
 
-use std::{collections::HashMap, sync::Arc};
+use rustc_hash::FxHashMap;
+use std::sync::Arc;
 
 pub struct PathfindingContext {
     path_type_cache: Option<PathTypeCache>,
     mob_position: Vector3<i32>,
     world: Arc<World>,
-    collision_cache: HashMap<Vector3<i32>, bool>,
+    collision_cache: FxHashMap<Vector3<i32>, bool>,
 }
 
 impl PathfindingContext {
@@ -28,7 +29,7 @@ impl PathfindingContext {
             path_type_cache: Some(PathTypeCache::new()),
             mob_position,
             world,
-            collision_cache: HashMap::new(),
+            collision_cache: FxHashMap::default(),
         }
     }
 
@@ -37,7 +38,7 @@ impl PathfindingContext {
             path_type_cache: Some(cache),
             mob_position,
             world,
-            collision_cache: HashMap::new(),
+            collision_cache: FxHashMap::default(),
         }
     }
 

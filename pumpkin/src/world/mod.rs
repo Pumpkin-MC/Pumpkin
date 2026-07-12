@@ -374,32 +374,17 @@ impl World {
         self.level.shutdown().await;
     }
 
+    /// Serializes a live entity into its current chunk's entity data. The live
+    /// entity list is the source of truth while a chunk is loaded (its saved NBT
+    /// is consumed on load), so this simply appends the entity to the chunk it is
+    /// currently in; the chunk is rewritten from scratch every unload cycle, so
+    /// there is nothing stale to deduplicate.
     async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        // First lets see if the entity was saved on an other chunk, and if the current chunk does not match we remove it
-        // Otherwise we just update the nbt data
-        let base_entity = entity.get_entity();
-        let current_chunk_coordinate = base_entity.block_pos.load().chunk_position();
+        let current_chunk = entity.get_entity().block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
         entity.write_nbt(&mut nbt).await;
-        if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
-            let old_chunk = old_chunk.to_vec2_i32();
-
-            let chunk = self.level.get_entity_chunk(old_chunk).await;
-            chunk.mark_dirty(true);
-            let mut data = chunk.data.lock().await;
-            if old_chunk == current_chunk_coordinate {
-                data.push(nbt);
-                return;
-            }
-
-            // The chunk has changed, lets remove the entity from the old chunk
-            // TODO?
-            data.clear();
-        }
-        // We did not continue, so lets save data in a new chunk
-        let chunk = self.level.get_entity_chunk(current_chunk_coordinate).await;
-        let mut data = chunk.data.lock().await;
-        data.push(nbt);
+        let chunk = self.level.get_entity_chunk(current_chunk).await;
+        chunk.data.lock().await.push(nbt);
         chunk.mark_dirty(true);
     }
 
@@ -3546,7 +3531,6 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
-    #[expect(clippy::too_many_lines)]
     fn spawn_world_entity_chunks(
         self: &Arc<Self>,
         player: Arc<Player>,
@@ -3591,104 +3575,80 @@ impl World {
                 let position = Vector2::new(chunk.x, chunk.z);
 
                 if !level.is_chunk_watched(&position) {
+                    // No longer watched: don't make its entities live. Leave the
+                    // serialized data untouched so the normal unload path persists
+                    // it as-is (nothing went live, so there is nothing to save).
                     trace!(
-                        "Received chunk {:?}, but it is no longer watched... cleaning",
+                        "Received entity chunk {:?}, but it is no longer watched; leaving it for the unload path",
                         &position
                     );
-
-                    if first_load {
-                        for entity_nbt in chunk.data.lock().await.iter() {
-                            let Some(id) = entity_nbt.get_string("id") else {
-                                continue;
-                            };
-                            let Some(entity_type) =
-                                EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-                            else {
-                                continue;
-                            };
-
-                            let entity = from_type(
-                                entity_type,
-                                Vector3::new(0.0, 0.0, 0.0),
-                                &world,
-                                Uuid::new_v4(),
-                            );
-                            entity.read_nbt_non_mut(entity_nbt).await;
-                            let base_entity = entity.get_entity();
-
-                            let mut nbt = NbtCompound::new();
-                            entity.write_nbt(&mut nbt).await;
-
-                            if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load()
-                            {
-                                let old_chunk = old_chunk.to_vec2_i32();
-                                let chunk = world.level.get_entity_chunk(old_chunk).await;
-                                chunk.mark_dirty(true);
-                                let current_chunk_coordinate =
-                                    base_entity.block_pos.load().chunk_position();
-
-                                let mut data = chunk.data.lock().await;
-                                if old_chunk == current_chunk_coordinate {
-                                    data.push(nbt);
-                                    continue;
-                                }
-
-                                // The chunk has changed, lets remove the entity from the old chunk
-                                data.clear();
-                            }
-                        }
-                    }
                     continue 'main;
                 }
 
-                // Add all new Entities to the world
-                let mut entities_to_add: Vec<Arc<dyn EntityBase>> = Vec::new();
-                for entity_nbt in chunk.data.lock().await.iter() {
-                    let Some(id) = entity_nbt.get_string("id") else {
-                        debug!("Entity has no ID");
-                        continue;
-                    };
-                    let Some(entity_type) =
-                        EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-                    else {
-                        warn!("Entity has no valid Entity Type {id}");
-                        continue;
-                    };
+                if first_load {
+                    // First watcher: consume the serialized entities and make them
+                    // live. The live entity list becomes the single source of
+                    // truth, so the chunk's NBT is taken (cleared) to avoid keeping
+                    // a duplicate copy that would be re-appended on the next unload
+                    // and doubled on every reload.
+                    let entity_nbts = std::mem::take(&mut *chunk.data.lock().await);
+                    let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
+                        Vec::with_capacity(entity_nbts.len());
+                    for entity_nbt in &entity_nbts {
+                        let Some(id) = entity_nbt.get_string("id") else {
+                            debug!("Entity has no ID");
+                            continue;
+                        };
+                        let Some(entity_type) =
+                            EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+                        else {
+                            warn!("Entity has no valid Entity Type {id}");
+                            continue;
+                        };
 
-                    // Pos is zero since it will read from nbt
-                    let entity = from_type(
-                        entity_type,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        &world,
-                        Uuid::new_v4(),
-                    );
-                    entity.read_nbt_non_mut(entity_nbt).await;
+                        // Keep the persisted UUID so the entity keeps its identity
+                        // across reloads (matching vanilla); only fall back to a
+                        // fresh one if it is missing/corrupt.
+                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
+                        // Pos is zero since it will be read from nbt.
+                        let entity =
+                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
+                        entity.read_nbt_non_mut(entity_nbt).await;
+                        entity.init_data_tracker().await;
 
-                    entity.init_data_tracker().await;
+                        let base_entity = entity.get_entity();
+                        // Clear velocity so the client does not replay the drop
+                        // animation; residual velocity from the original drop is
+                        // stale data.
+                        base_entity.velocity.store(Vector3::default());
 
-                    let base_entity = entity.get_entity();
-
-                    // Clear velocity so the client does not replay the drop animation.
-                    // Items at rest on the ground should have zero velocity; any
-                    // residual velocity from the original drop is stale data.
-                    base_entity.velocity.store(Vector3::default());
-
-                    player
-                        .client
-                        .enqueue_packet(&base_entity.create_spawn_packet())
-                        .await;
-
-                    if first_load {
+                        player
+                            .client
+                            .enqueue_packet(&base_entity.create_spawn_packet())
+                            .await;
                         entities_to_add.push(entity);
                     }
-                }
 
-                if first_load && !entities_to_add.is_empty() {
-                    world.entities.rcu(|current_entities| {
-                        let mut new_entities = (**current_entities).clone();
-                        new_entities.extend(entities_to_add.iter().cloned());
-                        new_entities
-                    });
+                    if !entities_to_add.is_empty() {
+                        world.entities.rcu(|current_entities| {
+                            let mut new_entities = (**current_entities).clone();
+                            new_entities.extend(entities_to_add.iter().cloned());
+                            new_entities
+                        });
+                    }
+                } else {
+                    // The chunk's entities are already live (another watcher loaded
+                    // them). Just send this player the spawn packets for the live
+                    // entities currently in this chunk.
+                    for entity in world.entities.load().iter() {
+                        let base_entity = entity.get_entity();
+                        if base_entity.chunk_pos.load() == position {
+                            player
+                                .client
+                                .enqueue_packet(&base_entity.create_spawn_packet())
+                                .await;
+                        }
+                    }
                 }
             }
 
@@ -4143,6 +4103,7 @@ impl World {
         }
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
 
@@ -4158,16 +4119,10 @@ impl World {
             return;
         }
 
-        let block_pos = base_entity.block_pos.load();
-        let chunk_coordinate = block_pos.chunk_position();
-        let mut nbt = NbtCompound::new();
-        entity.write_nbt(&mut nbt).await;
-
+        // The entity stays live-only: it is written to its chunk's saved data on
+        // unload (see `save_entity`), never at spawn, so it can't be both live and
+        // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
-
-        let chunk = self.level.get_entity_chunk(chunk_coordinate).await;
-        chunk.data.lock().await.push(nbt);
-        chunk.mark_dirty(true);
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();

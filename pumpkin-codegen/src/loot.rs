@@ -312,15 +312,74 @@ pub struct ItemPredicateStruct {
     pub items: Option<StringOrVec>,
 }
 
+/// Entity flags predicate from loot table JSON.
+/// Mirrors vanilla `EntityFlagsPredicate`. Only `is_on_fire` is extracted;
+/// other flags (is_on_ground, is_baby, etc.) are ignored until needed.
+#[derive(Deserialize, Clone, Debug)]
+pub struct EntityFlagsPredicateStruct {
+    /// Whether the entity must be on fire. Mirrors vanilla `isOnFire: Optional<Boolean>`.
+    #[serde(default)]
+    pub is_on_fire: Option<bool>,
+}
+
+/// Entity equipment predicate from loot table JSON.
+/// Mirrors vanilla `EntityEquipmentPredicate`. Only mainhand enchantment tag is extracted;
+/// other slots (head, chest, legs, feet, offhand) and full item predicates are ignored.
+#[derive(Deserialize, Clone, Debug)]
+pub struct EntityEquipmentPredicatesStruct {
+    /// Mainhand slot predicate. Only enchantment tag is forwarded to runtime.
+    /// Mirrors vanilla `EntityEquipmentPredicate.mainhand`.
+    #[serde(default)]
+    pub mainhand: Option<EntityMainhandPredicateStruct>,
+}
+
+/// Mainhand item predicate for equipment slot checks.
+/// Mirrors vanilla `ItemPredicate` used inside `EntityEquipmentPredicate.mainhand`.
+#[derive(Deserialize, Clone, Debug)]
+pub struct EntityMainhandPredicateStruct {
+    /// Component predicates for the item. Mirrors vanilla `DataComponentMatchers`.
+    #[serde(default)]
+    pub predicates: Option<EntityEquipmentPredicatesInner>,
+}
+
+/// Inner predicates structure for equipment slot checks.
+/// Contains the actual enchantment tag to match against.
+#[derive(Deserialize, Clone, Debug)]
+pub struct EntityEquipmentPredicatesInner {
+    /// Enchantment tag to match (e.g. `"minecraft:smelts_loot"` → Fire Aspect).
+    /// Mirrors vanilla `EnchantmentPredicate.enchantments` as a `HolderSet` reference.
+    #[serde(default, rename = "minecraft:enchantments")]
+    pub minecraft_enchantments: Option<Vec<EntityEnchantmentPredicate>>,
+}
+
+/// Single enchantment predicate entry from loot table JSON.
+/// Mirrors one entry in vanilla's `EnchantmentPredicate.enchantments` array.
+#[derive(Deserialize, Clone, Debug)]
+pub struct EntityEnchantmentPredicate {
+    /// The enchantment(s) to check — single ID or tag reference (e.g. `"#minecraft:smelts_loot"`).
+    pub enchantments: Option<StringOrVec>,
+}
+
+/// Entity predicate from loot table JSON.
+/// Mirrors vanilla `EntityPredicate` — a conjunction of sub-predicates.
+/// Currently extracts entity_type, flags.is_on_fire, and equipment.mainhand.
+/// Other sub-predicates (effects, distance, location, nbt) are silently ignored.
 #[derive(Deserialize, Clone, Debug)]
 pub struct EntityPredicateStruct {
-    #[serde(rename = "type")]
+    /// Entity type to match. Mirrors vanilla `EntityTypePredicate`.
+    #[serde(rename = "minecraft:entity_type")]
     pub entity_type: Option<StringOrVec>,
+    /// Entity state flags. Mirrors vanilla `EntityFlagsPredicate`.
+    #[serde(rename = "minecraft:flags")]
+    pub flags: Option<EntityFlagsPredicateStruct>,
+    /// Equipment slot predicates. Mirrors vanilla `EntityEquipmentPredicate`.
+    #[serde(rename = "minecraft:equipment")]
+    pub equipment: Option<EntityEquipmentPredicatesStruct>,
 }
 
 impl ToTokens for EntityPredicateStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(quote! { () });
+        tokens.extend(quote! {});
     }
 }
 
@@ -479,13 +538,32 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|p| p.entity_type.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => {
-                            let s = &v[0];
-                            quote! { Some(#s) }
-                        }
+                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
                     })
                     .unwrap_or(quote! { None });
-                quote! { LootCondition::EntityProperties { entity: #e, expected_type: #expected_type } }
+
+                let is_on_fire = predicate
+                    .as_ref()
+                    .and_then(|p| p.flags.as_ref())
+                    .and_then(|f| f.is_on_fire)
+                    .map(|v| quote! { Some(#v) })
+                    .unwrap_or(quote! { None });
+
+                let mainhand_enchantment_tag = predicate
+                    .as_ref()
+                    .and_then(|p| p.equipment.as_ref())
+                    .and_then(|eq| eq.mainhand.as_ref())
+                    .and_then(|mh| mh.predicates.as_ref())
+                    .and_then(|pred| pred.minecraft_enchantments.as_ref())
+                    .and_then(|enchs| enchs.first())
+                    .and_then(|ench| ench.enchantments.as_ref())
+                    .map(|t| match t {
+                        StringOrVec::String(s) => quote! { Some(#s) },
+                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
+                    })
+                    .unwrap_or(quote! { None });
+
+                quote! { LootCondition::EntityProperties { entity: #e, expected_type: #expected_type, is_on_fire: #is_on_fire, mainhand_enchantment_tag: #mainhand_enchantment_tag } }
             }
             Self::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
             Self::EntityScores { entity, scores: _ } => {
@@ -535,10 +613,7 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|e| e.entity_type.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => {
-                            let s = &v[0];
-                            quote! { Some(#s) }
-                        }
+                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
                     })
                     .unwrap_or(quote! { None });
 
@@ -548,10 +623,7 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|e| e.entity_type.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => {
-                            let s = &v[0];
-                            quote! { Some(#s) }
-                        }
+                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
                     })
                     .unwrap_or(quote! { None });
 
@@ -571,10 +643,7 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|p| p.biome.as_ref())
                     .map(|b| match b {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => {
-                            let s = &v[0];
-                            quote! { Some(#s) }
-                        }
+                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
                     })
                     .unwrap_or(quote! { None });
                 quote! { LootCondition::LocationCheck { offset_x: #ox, offset_y: #oy, offset_z: #oz, expected_biome: #expected_biome } }

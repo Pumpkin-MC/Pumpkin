@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crate::block::entities::enchanting_table::EnchantingTableBlockEntity;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
+use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, PlacedArgs};
 use pumpkin_data::{Block, BlockStateId, translation};
 use pumpkin_inventory::enchanting::enchanting_screen_handler::EnchantingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -18,6 +19,13 @@ use tokio::sync::Mutex;
 pub struct EnchantingTableBlock;
 
 impl BlockBehaviour for EnchantingTableBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = EnchantingTableBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let mut bookshelf_count = 0;

@@ -74,6 +74,92 @@ pub struct ItemComponents {
     pub weapon: Option<WeaponComponent>,
     #[serde(rename = "minecraft:enchantable")]
     pub enchantable: Option<EnchantableComponent>,
+    #[serde(rename = "minecraft:attack_range")]
+    pub attack_range: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:banner_patterns")]
+    pub banner_patterns: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:bees")]
+    pub bees: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:block_state")]
+    pub block_state: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:break_sound")]
+    pub break_sound: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:bucket_entity_data")]
+    pub bucket_entity_data: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:bundle_contents")]
+    pub bundle_contents: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:charged_projectiles")]
+    pub charged_projectiles: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:chicken/variant")]
+    pub chicken_variant: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:container")]
+    pub container: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:damage_type")]
+    pub damage_type: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:debug_stick_state")]
+    pub debug_stick_state: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:dye")]
+    pub dye: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:enchantment_glint_override")]
+    pub enchantment_glint_override: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:enchantments")]
+    pub enchantments: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:entity_data")]
+    pub entity_data: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:fireworks")]
+    pub fireworks: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:glider")]
+    pub glider: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:instrument")]
+    pub instrument: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:item_model")]
+    pub item_model: Option<String>,
+    #[serde(rename = "minecraft:kinetic_weapon")]
+    pub kinetic_weapon: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:lore")]
+    pub lore: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:map_color")]
+    pub map_color: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:map_decorations")]
+    pub map_decorations: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:minimum_attack_charge")]
+    pub minimum_attack_charge: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:ominous_bottle_amplifier")]
+    pub ominous_bottle_amplifier: Option<i32>,
+    #[serde(rename = "minecraft:piercing_weapon")]
+    pub piercing_weapon: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:pot_decorations")]
+    pub pot_decorations: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:potion_contents")]
+    pub potion_contents: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:potion_duration_scale")]
+    pub potion_duration_scale: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:provides_banner_patterns")]
+    pub provides_banner_patterns: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:provides_trim_material")]
+    pub provides_trim_material: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:rarity")]
+    pub rarity: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:recipes")]
+    pub recipes: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:repair_cost")]
+    pub repair_cost: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:repairable")]
+    pub repairable: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:stored_enchantments")]
+    pub stored_enchantments: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:suspicious_stew_effects")]
+    pub suspicious_stew_effects: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:swing_animation")]
+    pub swing_animation: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:tooltip_display")]
+    pub tooltip_display: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:use_effects")]
+    pub use_effects: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:use_remainder")]
+    pub use_remainder: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:writable_book_content")]
+    pub writable_book_content: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -611,6 +697,180 @@ impl ToTokens for ItemComponents {
         if let Some(enchantable) = &self.enchantable {
             let value = LitInt::new(&enchantable.value.to_string(), Span::call_site());
             tokens.extend(quote! { (Enchantable, &EnchantableImpl { value: #value }), });
+        }
+
+        if self.attack_range.is_some() {
+            tokens.extend(quote! { (AttackRange, &AttackRangeImpl), });
+        }
+        if self.banner_patterns.is_some() {
+            tokens.extend(quote! { (BannerPatterns, &BannerPatternsImpl), });
+        }
+        if self.bees.is_some() {
+            tokens.extend(quote! { (Bees, &BeesImpl), });
+        }
+        if let Some(block_state) = &self.block_state {
+            let mut entries = TokenStream::new();
+            if let serde_json::Value::Object(map) = block_state {
+                for (k, v) in map {
+                    let v_str = match v {
+                        serde_json::Value::String(s) => s.clone(),
+                        _ => v.to_string(),
+                    };
+                    let k_lit = LitStr::new(k, Span::call_site());
+                    let v_lit = LitStr::new(&v_str, Span::call_site());
+                    entries.extend(quote! {
+                        (Cow::Borrowed(#k_lit), Cow::Borrowed(#v_lit)),
+                    });
+                }
+            }
+            tokens.extend(quote! {
+                (BlockState, &BlockStateImpl {
+                    properties: Cow::Borrowed(&[#entries])
+                }),
+            });
+        }
+        if self.break_sound.is_some() {
+            tokens.extend(quote! { (BreakSound, &BreakSoundImpl), });
+        }
+        if self.bucket_entity_data.is_some() {
+            tokens.extend(quote! { (BucketEntityData, &BucketEntityDataImpl), });
+        }
+        if self.bundle_contents.is_some() {
+            tokens.extend(quote! { (BundleContents, &BundleContentsImpl { items: Vec::new() }), });
+        }
+        if self.charged_projectiles.is_some() {
+            tokens.extend(quote! { (ChargedProjectiles, &ChargedProjectilesImpl { projectiles: Vec::new() }), });
+        }
+        if let Some(val) = &self.chicken_variant {
+            let val_str = match val {
+                serde_json::Value::String(s) => s.clone(),
+                _ => val.to_string(),
+            };
+            let val_lit = LitStr::new(&val_str, Span::call_site());
+            tokens.extend(quote! { (ChickenVariant, &ChickenVariantImpl { value: Cow::Borrowed(#val_lit) }), });
+        }
+        if self.container.is_some() {
+            tokens.extend(quote! { (Container, &ContainerImpl { items: Vec::new() }), });
+        }
+        if self.damage_type.is_some() {
+            tokens.extend(quote! { (DamageType, &DamageTypeImpl), });
+        }
+        if self.debug_stick_state.is_some() {
+            tokens.extend(quote! { (DebugStickState, &DebugStickStateImpl), });
+        }
+        if self.dye.is_some() {
+            tokens.extend(quote! { (Dye, &DyeImpl), });
+        }
+        if self.enchantment_glint_override.is_some() {
+            tokens.extend(quote! { (EnchantmentGlintOverride, &EnchantmentGlintOverrideImpl), });
+        }
+        if self.enchantments.is_some() {
+            tokens.extend(quote! { (Enchantments, &EnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
+        }
+        if self.entity_data.is_some() {
+            tokens.extend(quote! { (EntityData, &EntityDataImpl), });
+        }
+        if let Some(fireworks) = &self.fireworks {
+            let flight_duration = if let serde_json::Value::Object(map) = fireworks
+                && let Some(serde_json::Value::Number(num)) = map.get("flight_duration")
+            {
+                num.as_i64().unwrap_or(1) as i32
+            } else {
+                1
+            };
+            tokens.extend(quote! {
+                (Fireworks, &FireworksImpl {
+                    flight_duration: #flight_duration,
+                    explosions: Vec::new(),
+                }),
+            });
+        }
+        if self.glider.is_some() {
+            tokens.extend(quote! { (Glider, &GliderImpl), });
+        }
+        if self.instrument.is_some() {
+            tokens.extend(quote! { (Instrument, &InstrumentImpl), });
+        }
+        if let Some(model) = &self.item_model {
+            let model_lit = LitStr::new(model, Span::call_site());
+            tokens.extend(quote! { (ItemModel, &ItemModelImpl { id: Cow::Borrowed(#model_lit) }), });
+        }
+        if self.kinetic_weapon.is_some() {
+            tokens.extend(quote! { (KineticWeapon, &KineticWeaponImpl), });
+        }
+        if self.lore.is_some() {
+            tokens.extend(quote! { (Lore, &LoreImpl), });
+        }
+        if self.map_color.is_some() {
+            tokens.extend(quote! { (MapColor, &MapColorImpl), });
+        }
+        if self.map_decorations.is_some() {
+            tokens.extend(quote! { (MapDecorations, &MapDecorationsImpl), });
+        }
+        if self.minimum_attack_charge.is_some() {
+            tokens.extend(quote! { (MinimumAttackCharge, &MinimumAttackChargeImpl), });
+        }
+        if let Some(amp) = self.ominous_bottle_amplifier {
+            let amp_lit = LitInt::new(&amp.to_string(), Span::call_site());
+            tokens.extend(quote! { (OminousBottleAmplifier, &OminousBottleAmplifierImpl { amplifier: #amp_lit }), });
+        }
+        if self.piercing_weapon.is_some() {
+            tokens.extend(quote! { (PiercingWeapon, &PiercingWeaponImpl), });
+        }
+        if self.pot_decorations.is_some() {
+            tokens.extend(quote! { (PotDecorations, &PotDecorationsImpl), });
+        }
+        if self.potion_contents.is_some() {
+            tokens.extend(quote! {
+                (PotionContents, &PotionContentsImpl {
+                    potion_id: None,
+                    custom_color: None,
+                    custom_effects: Vec::new(),
+                    custom_name: None,
+                }),
+            });
+        }
+        if self.potion_duration_scale.is_some() {
+            tokens.extend(quote! { (PotionDurationScale, &PotionDurationScaleImpl), });
+        }
+        if self.provides_banner_patterns.is_some() {
+            tokens.extend(quote! { (ProvidesBannerPatterns, &ProvidesBannerPatternsImpl), });
+        }
+        if self.provides_trim_material.is_some() {
+            tokens.extend(quote! { (ProvidesTrimMaterial, &ProvidesTrimMaterialImpl), });
+        }
+        if self.rarity.is_some() {
+            tokens.extend(quote! { (Rarity, &RarityImpl), });
+        }
+        if self.recipes.is_some() {
+            tokens.extend(quote! { (Recipes, &RecipesImpl), });
+        }
+        if self.repair_cost.is_some() {
+            tokens.extend(quote! { (RepairCost, &RepairCostImpl), });
+        }
+        if self.repairable.is_some() {
+            tokens.extend(quote! { (Repairable, &RepairableImpl), });
+        }
+        if self.stored_enchantments.is_some() {
+            tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
+        }
+        if self.suspicious_stew_effects.is_some() {
+            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl), });
+        }
+        if self.swing_animation.is_some() {
+            tokens.extend(quote! { (SwingAnimation, &SwingAnimationImpl), });
+        }
+        if self.tooltip_display.is_some() {
+            tokens.extend(quote! { (TooltipDisplay, &TooltipDisplayImpl), });
+        }
+        if self.use_effects.is_some() {
+            tokens.extend(quote! { (UseEffects, &UseEffectsImpl), });
+        }
+        if self.use_remainder.is_some() {
+            tokens.extend(quote! { (UseRemainder, &UseRemainderImpl), });
+        }
+        if self.writable_book_content.is_some() {
+            tokens.extend(quote! { (WritableBookContent, &WritableBookContentImpl { pages: Vec::new() }), });
         }
     }
 }

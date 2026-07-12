@@ -156,6 +156,11 @@ impl Server {
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher =
             RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
+
+        crate::command::set_broadcast_console_to_ops(
+            advanced_config.commands.broadcast_console_to_ops,
+        );
+
         let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();

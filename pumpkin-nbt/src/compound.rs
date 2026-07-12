@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use uuid::Uuid;
 
 use crate::deserializer::NbtReadHelper;
 use crate::serializer::NbtWriteHelper;
@@ -146,6 +147,21 @@ impl NbtCompound {
         self.put(name, NbtTag::Compound(value));
     }
 
+    /// Stores a UUID as a 4-element int array, most significant bits first
+    /// (the vanilla `UUID` layout).
+    pub fn put_uuid(&mut self, name: &str, value: Uuid) {
+        let value = value.as_u128();
+        self.put(
+            name,
+            NbtTag::IntArray(vec![
+                (value >> 96) as i32,
+                ((value >> 64) & 0xFFFF_FFFF) as i32,
+                ((value >> 32) & 0xFFFF_FFFF) as i32,
+                (value & 0xFFFF_FFFF) as i32,
+            ]),
+        );
+    }
+
     #[must_use]
     pub fn get_byte(&self, name: &str) -> Option<i8> {
         self.get(name).and_then(super::tag::NbtTag::extract_byte)
@@ -216,6 +232,21 @@ impl NbtCompound {
     #[must_use]
     pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
         self.get(name).and_then(|tag| tag.extract_long_array())
+    }
+
+    /// Reads a UUID stored as a 4-element int array, most significant bits
+    /// first (the vanilla `UUID` layout written by [`Self::put_uuid`]).
+    #[must_use]
+    pub fn get_uuid(&self, name: &str) -> Option<Uuid> {
+        let &[a, b, c, d] = self.get_int_array(name)? else {
+            return None;
+        };
+        Some(Uuid::from_u128(
+            ((a as u32 as u128) << 96)
+                | ((b as u32 as u128) << 64)
+                | ((c as u32 as u128) << 32)
+                | (d as u32 as u128),
+        ))
     }
 }
 
@@ -386,5 +417,25 @@ impl Display for NbtTag {
                 f.write_str("]")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NbtCompound;
+    use uuid::Uuid;
+
+    #[test]
+    fn uuid_int_array_round_trip() {
+        let original = Uuid::from_u128(0x0123_4567_89ab_cdef_fedc_ba98_7654_3210);
+        let mut nbt = NbtCompound::new();
+        nbt.put_uuid("UUID", original);
+        assert_eq!(nbt.get_uuid("UUID"), Some(original));
+
+        // Missing or malformed entries fall back to None.
+        assert_eq!(nbt.get_uuid("missing"), None);
+        let mut short = NbtCompound::new();
+        short.put("UUID", crate::tag::NbtTag::IntArray(vec![1, 2, 3]));
+        assert_eq!(short.get_uuid("UUID"), None);
     }
 }

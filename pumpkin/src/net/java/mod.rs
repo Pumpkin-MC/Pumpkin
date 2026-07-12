@@ -996,6 +996,17 @@ impl JavaClient {
                 )
                 .await;
             }
+            id if id
+                == pumpkin_protocol::java::server::play::SPickItemFromEntity::to_id(version) =>
+            {
+                self.handle_pick_item_from_entity(
+                    player,
+                    pumpkin_protocol::java::server::play::SPickItemFromEntity::read(
+                        payload, &version,
+                    )?,
+                )
+                .await;
+            }
             id if id == SPlayerAbilities::to_id(version) => {
                 self.handle_player_abilities(
                     player,

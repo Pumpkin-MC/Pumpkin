@@ -494,6 +494,78 @@ impl BiomePalette {
     }
 
     #[must_use]
+    pub fn convert_be_network(&self) -> BeNetworkSerialization<u8> {
+        match self {
+            Self::Homogeneous(registry_id) => BeNetworkSerialization {
+                bits_per_entry: 0,
+                palette: NetworkPalette::Single(
+                    pumpkin_data::biome::Biome::from_id(*registry_id)
+                        .map_or(1, |b| b.be_network_id),
+                ),
+                packed_data: Box::new([]),
+            },
+            Self::Heterogeneous(data) => {
+                let bits_per_entry = encompassing_bits(data.palette.len());
+
+                let key_to_index_map: HashMap<_, usize> = data
+                    .palette
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| (*key, index))
+                    .collect();
+
+                let biomes_per_word = 32 / bits_per_entry;
+                let volume: usize = 4096;
+                let expected_word_count = volume.div_ceil(biomes_per_word as usize);
+                let mut packed_data = Vec::with_capacity(expected_word_count);
+
+                let mut current_word: u32 = 0;
+                let mut current_index_in_word = 0;
+
+                for x in 0..16 {
+                    for y in 0..16 {
+                        for z in 0..16 {
+                            let key = self.get(x / 4, z / 4, y / 4);
+                            let key_index = key_to_index_map.get(&key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > *key_index);
+
+                            current_word |= (*key_index as u32)
+                                << (bits_per_entry as u32 * current_index_in_word);
+                            current_index_in_word += 1;
+
+                            if current_index_in_word == biomes_per_word as u32 {
+                                packed_data.push(current_word);
+                                current_word = 0;
+                                current_index_in_word = 0;
+                            }
+                        }
+                    }
+                }
+
+                // Push any remaining bits if the volume isn't a multiple of biomes_per_word
+                if current_index_in_word > 0 {
+                    packed_data.push(current_word);
+                }
+
+                BeNetworkSerialization {
+                    bits_per_entry,
+                    palette: NetworkPalette::Indirect(
+                        data.palette
+                            .iter()
+                            .map(|&id| {
+                                pumpkin_data::biome::Biome::from_id(id)
+                                    .map_or(1, |b| b.be_network_id)
+                            })
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    ),
+                    packed_data: packed_data.into_boxed_slice(),
+                }
+            }
+        }
+    }
+
+    #[must_use]
     pub fn from_disk_nbt(nbt: ChunkSectionBiomes) -> Self {
         let palette = nbt.palette;
 

@@ -2,6 +2,7 @@ use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -38,6 +39,19 @@ pub mod snbt;
 pub mod string_reader;
 pub mod suggestion;
 pub mod tree;
+
+/// Whether console and RCON command output is broadcast to online operators.
+///
+/// Set from [`CommandsConfig::broadcast_console_to_ops`] during server startup.
+/// Defaults to `true` for vanilla compatibility.
+static BROADCAST_CONSOLE_TO_OPS: AtomicBool = AtomicBool::new(true);
+
+/// Initializes the console broadcast setting from server configuration.
+///
+/// Called once during server startup. Subsequent calls are ignored.
+pub fn set_broadcast_console_to_ops(value: bool) {
+    BROADCAST_CONSOLE_TO_OPS.store(value, std::sync::atomic::Ordering::Relaxed);
+}
 
 /// Represents the source of a command execution.
 ///
@@ -249,8 +263,10 @@ impl CommandSender {
     pub fn should_broadcast_console_to_ops(&self) -> bool {
         match self {
             Self::CommandBlock(_, world) => world.level_info.load().game_rules.command_block_output,
-            // TODO: should Console and Rcon be decided by server config?
-            Self::Player(..) | Self::Console | Self::Rcon(_) => true,
+            Self::Player(..) => true,
+            Self::Console | Self::Rcon(_) => {
+                BROADCAST_CONSOLE_TO_OPS.load(std::sync::atomic::Ordering::Relaxed)
+            }
             Self::Dummy => false,
         }
     }

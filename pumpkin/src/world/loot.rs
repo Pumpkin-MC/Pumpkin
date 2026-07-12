@@ -27,6 +27,9 @@ pub struct LootContextParameters {
     pub tool: Option<ItemStack>,
     pub is_raining: Option<bool>,
     pub is_thundering: Option<bool>,
+    /// Whether the killed entity was on fire at death time.
+    /// Computed from `Entity.fire_ticks > 0`.
+    pub is_on_fire: Option<bool>,
 }
 
 pub trait LootTableExt {
@@ -255,14 +258,24 @@ impl LootFunctionExt for LootFunction {
                     if !properties_to_copy.is_empty() {
                         for stack in stacks.iter_mut() {
                             if let Some(block_state_comp) = stack.get_data_component_mut::<pumpkin_data::data_component_impl::BlockStateImpl>() {
+                                    let mut props = block_state_comp.properties.to_mut().clone();
                                     for (k, v) in &properties_to_copy {
-                                        block_state_comp.properties.insert(k.clone(), v.clone());
+                                        if let Some(pos) = props.iter().position(|(pk, _)| pk.as_ref() == k) {
+                                            props[pos].1 = std::borrow::Cow::Owned(v.clone());
+                                        } else {
+                                            props.push((std::borrow::Cow::Owned(k.clone()), std::borrow::Cow::Owned(v.clone())));
+                                        }
                                     }
+                                    block_state_comp.properties = std::borrow::Cow::Owned(props);
                                 } else {
+                                    let properties: Vec<(std::borrow::Cow<'static, str>, std::borrow::Cow<'static, str>)> = properties_to_copy
+                                        .iter()
+                                        .map(|(k, v)| (std::borrow::Cow::Owned(k.clone()), std::borrow::Cow::Owned(v.clone())))
+                                        .collect();
                                     stack.patch.push((
                                         pumpkin_data::data_component::DataComponent::BlockState,
                                         Some(Box::new(pumpkin_data::data_component_impl::BlockStateImpl {
-                                            properties: properties_to_copy.clone(),
+                                            properties: std::borrow::Cow::Owned(properties),
                                         })),
                                     ));
                                 }
@@ -518,15 +531,47 @@ impl LootConditionExt for LootCondition {
             Self::EntityProperties {
                 entity,
                 expected_type,
+                is_on_fire,
+                mainhand_enchantment_tag,
             } => {
+                // Mirrors vanilla `EntityTarget` resolution from `LootContext.java:148-186`.
                 let target = match *entity {
                     "this" => params.this_entity,
-                    "killer" | "direct_killer" => params.killer_entity,
+                    "attacker" | "killer" | "attacking_player" => params.killer_entity,
+                    "direct_attacker" | "direct_killer" => params.direct_killer_entity,
                     _ => None,
                 };
                 if let Some(target) = target {
-                    if let Some(expected_type) = expected_type {
-                        return compare_entity_type(expected_type, target);
+                    if let Some(expected) = expected_type
+                        && !compare_entity_type(expected, target)
+                    {
+                        return false;
+                    }
+                    // Mirrors vanilla `EntityFlagsPredicate.isOnFire` check.
+                    if let Some(expected_fire) = is_on_fire {
+                        let actual_fire = params.is_on_fire.unwrap_or(false);
+                        if actual_fire != *expected_fire {
+                            return false;
+                        }
+                    }
+                    // Mirrors vanilla enchantment tag lookup for smelts_loot.
+                    if let Some(tag_name) = mainhand_enchantment_tag {
+                        let tag = tag_name.strip_prefix('#').unwrap_or(tag_name);
+                        let has_enchant = params.tool.as_ref().is_some_and(|tool| {
+                            pumpkin_data::tag::get_tag_ids(
+                                pumpkin_data::tag::RegistryKey::Enchantment,
+                                tag,
+                            )
+                            .is_some_and(|tag_ids| {
+                                tag_ids.iter().any(|&ench_id| {
+                                    pumpkin_data::Enchantment::from_id(ench_id as u8)
+                                        .is_some_and(|enc| tool.get_enchantment_level(enc) > 0)
+                                })
+                            })
+                        });
+                        if !has_enchant {
+                            return false;
+                        }
                     }
                     true
                 } else {
@@ -807,5 +852,317 @@ fn shuffle_and_split_items(
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         result.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Enchantment;
+    use pumpkin_data::damage::DamageType;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    fn base_params() -> LootContextParameters {
+        LootContextParameters {
+            killed_by_player: Some(true),
+            this_entity: Some(&EntityType::PIG),
+            killer_entity: Some(&EntityType::PLAYER),
+            direct_killer_entity: Some(&EntityType::PLAYER),
+            damage_type: Some(DamageType::GENERIC),
+            ..Default::default()
+        }
+    }
+
+    fn fire_aspect_sword(level: i32) -> ItemStack {
+        let mut sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
+        sword.enchant(&Enchantment::FIRE_ASPECT, level);
+        sword
+    }
+
+    #[test]
+    fn entity_properties_this_matches_expected_type() {
+        let params = base_params();
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: Some("minecraft:pig"),
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn entity_properties_this_rejects_wrong_type() {
+        let params = base_params();
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: Some("minecraft:cow"),
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn entity_properties_direct_attacker_resolves() {
+        let params = base_params();
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn entity_properties_direct_attacker_no_direct_killer() {
+        let mut params = base_params();
+        params.direct_killer_entity = None;
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn entity_properties_unknown_entity_returns_false() {
+        let params = base_params();
+        let cond = LootCondition::EntityProperties {
+            entity: "target_entity",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn is_on_fire_true_when_burning() {
+        let params = LootContextParameters {
+            is_on_fire: Some(true),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: None,
+            is_on_fire: Some(true),
+            mainhand_enchantment_tag: None,
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn is_on_fire_true_fails_when_not_burning() {
+        let params = LootContextParameters {
+            is_on_fire: Some(false),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: None,
+            is_on_fire: Some(true),
+            mainhand_enchantment_tag: None,
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn is_on_fire_false_matches_not_burning() {
+        let params = LootContextParameters {
+            is_on_fire: Some(false),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: None,
+            is_on_fire: Some(false),
+            mainhand_enchantment_tag: None,
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn is_on_fire_true_fails_when_context_none() {
+        let params = LootContextParameters {
+            is_on_fire: None,
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: None,
+            is_on_fire: Some(true),
+            mainhand_enchantment_tag: None,
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn none_is_on_fire_skips_check() {
+        let params = LootContextParameters {
+            is_on_fire: Some(true),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "this",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn enchantment_tag_matches_fire_aspect() {
+        let params = LootContextParameters {
+            tool: Some(fire_aspect_sword(1)),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn enchantment_tag_fails_without_enchantment() {
+        let params = LootContextParameters {
+            tool: Some(ItemStack::new(1, &Item::DIAMOND_SWORD)),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn enchantment_tag_rejects_unrelated_enchantment() {
+        let mut sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
+        sword.enchant(&Enchantment::SHARPNESS, 5);
+        let params = LootContextParameters {
+            tool: Some(sword),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn enchantment_tag_fails_with_no_tool() {
+        let params = LootContextParameters {
+            tool: None,
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+        };
+        assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn none_enchantment_tag_skips_check() {
+        let params = LootContextParameters {
+            tool: Some(fire_aspect_sword(2)),
+            ..base_params()
+        };
+        let cond = LootCondition::EntityProperties {
+            entity: "direct_attacker",
+            expected_type: None,
+            is_on_fire: None,
+            mainhand_enchantment_tag: None,
+        };
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn anyof_passes_when_entity_on_fire() {
+        let params = LootContextParameters {
+            is_on_fire: Some(true),
+            tool: Some(ItemStack::new(1, &Item::DIAMOND_SWORD)),
+            ..base_params()
+        };
+        let cond = LootCondition::AnyOf(&[
+            LootCondition::EntityProperties {
+                entity: "this",
+                expected_type: None,
+                is_on_fire: Some(true),
+                mainhand_enchantment_tag: None,
+            },
+            LootCondition::EntityProperties {
+                entity: "direct_attacker",
+                expected_type: None,
+                is_on_fire: None,
+                mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+            },
+        ]);
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn anyof_passes_when_weapon_has_fire_aspect() {
+        let params = LootContextParameters {
+            is_on_fire: Some(false),
+            tool: Some(fire_aspect_sword(1)),
+            ..base_params()
+        };
+        let cond = LootCondition::AnyOf(&[
+            LootCondition::EntityProperties {
+                entity: "this",
+                expected_type: None,
+                is_on_fire: Some(true),
+                mainhand_enchantment_tag: None,
+            },
+            LootCondition::EntityProperties {
+                entity: "direct_attacker",
+                expected_type: None,
+                is_on_fire: None,
+                mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+            },
+        ]);
+        assert!(cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn anyof_fails_without_fire_or_fire_aspect() {
+        let params = LootContextParameters {
+            is_on_fire: Some(false),
+            tool: Some(ItemStack::new(1, &Item::DIAMOND_SWORD)),
+            ..base_params()
+        };
+        let cond = LootCondition::AnyOf(&[
+            LootCondition::EntityProperties {
+                entity: "this",
+                expected_type: None,
+                is_on_fire: Some(true),
+                mainhand_enchantment_tag: None,
+            },
+            LootCondition::EntityProperties {
+                entity: "direct_attacker",
+                expected_type: None,
+                is_on_fire: None,
+                mainhand_enchantment_tag: Some("minecraft:smelts_loot"),
+            },
+        ]);
+        assert!(!cond.is_fulfilled(&params));
     }
 }

@@ -1,5 +1,5 @@
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::entity::ai::pathfinder::{
     node::{Coordinate, Node, PathType, Target},
@@ -14,7 +14,7 @@ const DEFAULT_MOB_JUMP_HEIGHT: f64 = 1.125;
 
 pub struct WalkNodeEvaluator {
     base: BaseNodeEvaluator,
-    path_types_cache: HashMap<Vector3<i32>, PathType>,
+    path_types_cache: FxHashMap<Vector3<i32>, PathType>,
     reusable_neighbors: [Option<Node>; 4],
 }
 
@@ -23,7 +23,7 @@ impl WalkNodeEvaluator {
     pub fn new() -> Self {
         Self {
             base: BaseNodeEvaluator::new(),
-            path_types_cache: HashMap::new(),
+            path_types_cache: FxHashMap::default(),
             reusable_neighbors: [None, None, None, None],
         }
     }

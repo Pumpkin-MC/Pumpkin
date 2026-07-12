@@ -19,6 +19,9 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            let entity = crate::block::entities::skull::SkullBlockEntity::new(*args.position);
+            args.world.add_block_entity(std::sync::Arc::new(entity));
+
             let world = args.world;
             let pos = args.position;
 

@@ -128,11 +128,11 @@ colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8", default-features = false }
-crossbeam-utils = { version = "0.8.21", default-features = false, features = ["std"] }
-crossfire = { version = "3.1.18", default-features = false, features = ["compat"] }
+crossbeam-utils = { version = "0.8.22", default-features = false, features = ["std"] }
+crossfire = { version = "3.1.19", default-features = false, features = ["compat"] }
 crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
-ecdsa = { version = "0.16.9", default-features = false, features = ["std"] }
+ecdsa = { version = "0.17.0", default-features = false, features = ["std"] }
 either = { version = "1.16.0", default-features = false }
 enum_dispatch = { version = "0.3.13", default-features = false }
 flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
@@ -141,13 +141,13 @@ hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
 itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
-lru = { version = "0.18.0", default-features = false }
+lru = { version = "0.18.1", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
 md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }
 num-derive = { version = "0.4", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
-p384 = { version = "0.13.1", default-features = false, features = ["std", "arithmetic", "pkcs8", "ecdh"] }
+p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8", "ecdh"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
@@ -179,7 +179,7 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 ] }
 slotmap = { version = "1.1", default-features = false, features = ["std"] }
 temp-dir = { version = "0.2.0", default-features = false }
-thread_local = { version = "1.1.9", default-features = false }
+thread_local = { version = "1.1.10", default-features = false }
 time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.18", default-features = false }
@@ -197,7 +197,7 @@ wasmtime-wasi = { version = "46.0", default-features = false, features = ["p2"] 
 wasmtime-wasi-http = { version = "46.0", default-features = false, features = ["p2", "default-send-request"] }
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.10", default-features = false }
-wit-bindgen = { version = "0.58", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.59", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }

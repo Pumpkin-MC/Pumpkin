@@ -29,7 +29,7 @@ impl GUIBuilder {
             WindowType::Generic9x4 => (4, 9),
             WindowType::Generic9x5 => (5, 9),
             WindowType::Generic9x6 => (6, 9),
-            WindowType::Generic3x3 => (3, 3),
+            WindowType::Generic3x3 | WindowType::Crafter3x3 => (3, 3),
             WindowType::Hopper => (1, 5),
             _ => (3, 9), // Default to 9x3
         };

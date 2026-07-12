@@ -24,7 +24,18 @@ impl BlockMetadata for SkullBlock {
     }
 }
 
+use crate::block::PlacedArgs;
+use crate::block::entities::skull::SkullBlockEntity;
+use std::sync::Arc;
+
 impl BlockBehaviour for SkullBlock {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = SkullBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity));
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut props = SkeletonSkullLikeProperties::default(args.block);

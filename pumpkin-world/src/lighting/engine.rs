@@ -8,12 +8,14 @@ use pumpkin_data::BlockDirection;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::RandomState;
+use std::collections::VecDeque;
 //use std::time::Instant;
 
-type FastHashSet<K> = HashSet<K>;
-type FastHashMap<K, V> = HashMap<K, V>;
+// These are hit on every neighbour of every propagated block, so the hash
+// function dominates. Use rustc-hash's fast hasher instead of the std default
+// (SipHash), which is what "Fast" was meant to imply.
+type FastHashSet<K> = rustc_hash::FxHashSet<K>;
+type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
 /// Trait to unify Block and Sky light logic
 pub trait LightProvider {
@@ -62,10 +64,6 @@ pub struct LightPropagator<P: LightProvider> {
     pub(crate) queue: VecDeque<PropagationEntry>,
     pub(crate) visited: FastHashSet<BlockPos>,
     pub(crate) decrease_queue: VecDeque<(BlockPos, u8)>,
-
-    // Batched updates
-    pending_updates: FastHashMap<(i32, i32), Vec<(BlockPos, u8)>>,
-    shadow_cache: FastHashMap<BlockPos, u8>,
     _marker: std::marker::PhantomData<P>,
 }
 
@@ -76,8 +74,6 @@ impl<P: LightProvider> LightPropagator<P> {
             queue: VecDeque::with_capacity(4096),
             visited: FastHashSet::default(),
             decrease_queue: VecDeque::new(),
-            pending_updates: FastHashMap::default(),
-            shadow_cache: FastHashMap::default(),
             _marker: std::marker::PhantomData,
         }
     }
@@ -86,42 +82,25 @@ impl<P: LightProvider> LightPropagator<P> {
         self.queue.clear();
         self.visited.clear();
         self.decrease_queue.clear();
-        self.pending_updates.clear();
-        self.shadow_cache.clear();
     }
 
-    /// Flushes pending updates to chunk storage
-    fn apply_updates(&mut self, cache: &mut Cache) {
-        if self.pending_updates.is_empty() {
-            return;
-        }
-
-        for (_, updates) in self.pending_updates.drain() {
-            for (pos, val) in updates {
-                P::set_light(cache, pos, val);
-            }
-        }
-    }
-
-    /// Core Propagation Logic (BFS)
+    /// Core Propagation Logic (BFS).
+    ///
+    /// Reads and writes light directly through the light storage (a fast array
+    /// lookup) instead of maintaining a separate hashed shadow cache and batched
+    /// write buffer; the storage is the single source of truth.
     pub fn propagate(&mut self, cache: &mut Cache) {
-        self.shadow_cache.clear();
-
         // Cache metadata for bounds checking
         let cache_x = cache.x;
         let cache_z = cache.z;
         let cache_size = cache.size;
+        let min_y = cache.bottom_y() as i32;
+        let max_y = min_y + cache.height() as i32;
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
 
-            // Check shadow cache first, fall back to storage
-            let current_light = self
-                .shadow_cache
-                .get(&pos)
-                .copied()
-                .unwrap_or_else(|| P::get_light(cache, pos));
-
+            let current_light = P::get_light(cache, pos);
             if current_light <= 1 {
                 continue;
             }
@@ -142,8 +121,6 @@ impl<P: LightProvider> LightPropagator<P> {
                 }
 
                 // Skip neighbor if it's outside world bounds
-                let min_y = cache.bottom_y() as i32;
-                let max_y = min_y + cache.height() as i32;
                 if neighbor_pos.0.y < min_y || neighbor_pos.0.y >= max_y {
                     continue;
                 }
@@ -160,25 +137,10 @@ impl<P: LightProvider> LightPropagator<P> {
                 let opacity = state.to_state().opacity;
 
                 let new_level = P::propagate_level(current_light, opacity, dir);
-
-                // Check shadow cache first, fall back to storage
-                let neighbor_light = self
-                    .shadow_cache
-                    .get(&neighbor_pos)
-                    .copied()
-                    .unwrap_or_else(|| P::get_light(cache, neighbor_pos));
+                let neighbor_light = P::get_light(cache, neighbor_pos);
 
                 if new_level > neighbor_light {
-                    // Update shadow cache for this propagation cycle
-                    self.shadow_cache.insert(neighbor_pos, new_level);
-
-                    // Queue for batch write
-                    let chunk_x = neighbor_pos.0.x >> 4;
-                    let chunk_z = neighbor_pos.0.z >> 4;
-                    self.pending_updates
-                        .entry((chunk_x, chunk_z))
-                        .or_default()
-                        .push((neighbor_pos, new_level));
+                    P::set_light(cache, neighbor_pos, new_level);
 
                     // Add to propagation queue if bright enough
                     if new_level > 1 && self.visited.insert(neighbor_pos) {
@@ -189,15 +151,7 @@ impl<P: LightProvider> LightPropagator<P> {
                     }
                 }
             }
-
-            // Batch write every 64 chunks worth of updates
-            if self.pending_updates.len() > 64 {
-                self.apply_updates(cache);
-            }
         }
-
-        // Final flush of any remaining updates
-        self.apply_updates(cache);
     }
 
     /// Handle light removal
@@ -327,7 +281,7 @@ impl SkyLightPropagator {
         // Pre-allocate with exact size needed
         let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
         let mut surface_heights =
-            FastHashMap::with_capacity_and_hasher(capacity, RandomState::default());
+            FastHashMap::with_capacity_and_hasher(capacity, rustc_hash::FxBuildHasher);
 
         // Process in Z-outer, X-inner order for better cache locality
         for z in start_z..end_z {
