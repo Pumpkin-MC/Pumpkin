@@ -91,6 +91,9 @@ pub struct Level {
     pub shut_down_chunk_system: AtomicBool,
     pub should_save: AtomicBool,
     pub should_unload: AtomicBool,
+    /// Whether periodic autosaving is enabled. Toggled by `/save-off` and `/save-on`;
+    /// a manual `/save-all` still saves while this is `false`.
+    pub save_enabled: AtomicBool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     pub autosave_ticks: u64,
 
@@ -200,6 +203,7 @@ impl Level {
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
+            save_enabled: AtomicBool::new(true),
             autosave_ticks: level_config.autosave_ticks,
             pending_entity_generations,
             level_channel: level_channel.clone(),
