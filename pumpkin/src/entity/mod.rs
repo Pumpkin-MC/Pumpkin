@@ -69,7 +69,7 @@ use pumpkin_util::math::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
     Arc,
@@ -104,6 +104,9 @@ pub mod vehicle;
 
 mod combat;
 pub mod predicate;
+
+/// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
+pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
@@ -795,6 +798,9 @@ pub struct Entity {
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
     pub custom_name_visible: AtomicBool,
+    /// Scoreboard tags attached to this entity, managed with `/tag`.
+    /// Vanilla allows at most [`MAX_SCOREBOARD_TAGS`] tags per entity.
+    pub scoreboard_tags: Mutex<HashSet<String>>,
     /// The data send in the Entity Spawn packet
     pub data: AtomicI32,
     /// Stores entity boolean flags (on fire, sneaking, invisible, glowing, etc.)
@@ -928,6 +934,7 @@ impl Entity {
             portal_manager: Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
             custom_name_visible: AtomicBool::new(false),
+            scoreboard_tags: Mutex::new(HashSet::new()),
             no_clip: AtomicBool::new(false),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
@@ -1010,6 +1017,22 @@ impl Entity {
     /// Negative values indicate that the entity is a baby.
     pub fn set_age(&self, age: i32) {
         self.age.store(age, Relaxed);
+    }
+
+    /// Adds a scoreboard tag to this entity.
+    ///
+    /// Returns `false` if the entity already has the tag or already carries
+    /// [`MAX_SCOREBOARD_TAGS`] tags.
+    pub async fn add_scoreboard_tag(&self, tag: &str) -> bool {
+        let mut tags = self.scoreboard_tags.lock().await;
+        tags.len() < MAX_SCOREBOARD_TAGS && tags.insert(tag.to_owned())
+    }
+
+    /// Removes a scoreboard tag from this entity.
+    ///
+    /// Returns `false` if the entity did not have the tag.
+    pub async fn remove_scoreboard_tag(&self, tag: &str) -> bool {
+        self.scoreboard_tags.lock().await.remove(tag)
     }
 
     /// Sets a custom name for the entity, typically used with nametags
@@ -3299,6 +3322,18 @@ impl NBTStorage for Entity {
             }
             nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
 
+            let tags = self.scoreboard_tags.lock().await;
+            if !tags.is_empty() {
+                nbt.put(
+                    "Tags",
+                    NbtTag::List(
+                        tags.iter()
+                            .map(|tag| NbtTag::String(tag.as_str().into()))
+                            .collect(),
+                    ),
+                );
+            }
+
             // todo more...
         })
     }
@@ -3346,6 +3381,18 @@ impl NBTStorage for Entity {
             }
             self.custom_name_visible
                 .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
+
+            if let Some(tag_list) = nbt.get_list("Tags") {
+                let mut tags = self.scoreboard_tags.lock().await;
+                tags.clear();
+                tags.extend(
+                    tag_list
+                        .iter()
+                        .filter_map(|tag| tag.extract_string().map(str::to_owned))
+                        .take(MAX_SCOREBOARD_TAGS),
+                );
+            }
+
             // todo more...
         })
     }
