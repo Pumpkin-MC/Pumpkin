@@ -45,6 +45,7 @@ mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
@@ -154,6 +155,7 @@ pub async fn default_dispatcher(
     list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
+    spreadplayers::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
     tick::register(&mut dispatcher, registry);
     advancement::register(&mut dispatcher, registry);
