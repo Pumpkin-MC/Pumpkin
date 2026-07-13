@@ -38,6 +38,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod random;
 mod rotate;
 mod say;
 mod seed;
@@ -151,6 +152,7 @@ pub async fn default_dispatcher(
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);
+    random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
