@@ -71,3 +71,53 @@ impl CUnconnectedPong {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bedrock::RAKNET_MAGIC;
+
+    #[test]
+    fn unconnected_pong_writes_raknet_wire_format() {
+        let mut bytes = Vec::new();
+        CUnconnectedPong::new(
+            123_456,
+            0x0102_0304_0506_0708,
+            RAKNET_MAGIC,
+            "MCPE;Pumpkin".to_string(),
+        )
+        .write(&mut bytes)
+        .unwrap();
+
+        // time (u64 BE), server GUID (u64 BE), magic, u16 BE length-prefixed server ID
+        let mut expected = 123_456u64.to_be_bytes().to_vec();
+        expected.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        expected.extend_from_slice(&RAKNET_MAGIC);
+        expected.extend_from_slice(&12u16.to_be_bytes());
+        expected.extend_from_slice(b"MCPE;Pumpkin");
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn server_info_formats_bedrock_motd_string() {
+        let info = ServerInfo {
+            edition: "MCPE",
+            motd_line_1: "A Blazingly fast Server".to_string(),
+            protocol_version: 819,
+            version_name: "1.21.90",
+            player_count: 3,
+            max_player_count: 20,
+            server_unique_id: 0x0102_0304_0506_0708,
+            motd_line_2: "world".to_string(),
+            game_mode: "Survival",
+            game_mode_numeric: 1,
+            port_ipv4: 19132,
+            port_ipv6: 19133,
+        };
+
+        assert_eq!(
+            info.to_string(),
+            "MCPE;A Blazingly fast Server;819;1.21.90;3;20;72623859790382856;world;Survival;1;19132;19133;0;"
+        );
+    }
+}
