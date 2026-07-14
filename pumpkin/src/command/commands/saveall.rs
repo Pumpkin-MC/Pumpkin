@@ -4,6 +4,7 @@ use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_log_format;
 use tracing::error;
 
 use crate::command::argument_builder::{ArgumentBuilder, command};
@@ -12,7 +13,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const DESCRIPTION: &str = "Saves the server to disk.";
+const DESCRIPTION: &str = "commands.save-all.description";
 
 const PERMISSION: &str = "minecraft:command.save-all";
 
@@ -41,7 +42,13 @@ impl CommandExecutor for SaveAllExecutor {
             let server = context.server();
 
             if let Err(err) = server.player_data_storage.save_all_players(server).await {
-                error!("Failed to save player data: {err}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.save_all_player_data_failed",
+                        &[err.to_string()]
+                    )
+                );
                 return Err(SAVE_FAILED_ERROR_TYPE.create_without_context());
             }
 
@@ -50,7 +57,13 @@ impl CommandExecutor for SaveAllExecutor {
                 .save_all_players(&server.get_all_players())
                 .await
             {
-                error!("Failed to save player advancements: {err}");
+                error!(
+                    "{}",
+                    localized_log_format(
+                        "server.log.save_all_player_advancements_failed",
+                        &[err.to_string()]
+                    )
+                );
                 return Err(SAVE_FAILED_ERROR_TYPE.create_without_context());
             }
 

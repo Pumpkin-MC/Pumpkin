@@ -11,7 +11,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const DESCRIPTION: &str = "Disables automatic server saves.";
+const DESCRIPTION: &str = "commands.save-off.description";
 
 const PERMISSION: &str = "minecraft:command.save-off";
 

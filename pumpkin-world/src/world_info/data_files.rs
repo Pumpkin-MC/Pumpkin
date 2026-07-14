@@ -10,6 +10,7 @@ use pumpkin_nbt::{
     nbt_compress::{from_gzip_bytes, read_gzip_compound_tag, to_gzip_bytes},
     tag::NbtTag,
 };
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -137,12 +138,21 @@ pub fn read_weather(level_folder: &Path) -> WeatherData {
         Ok(f) => match from_gzip_bytes::<DataFileRoot<WeatherData>, _>(f) {
             Ok(root) => root.data,
             Err(e) => {
-                warn!("Failed to deserialize weather.dat, using defaults: {e}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.info.data_file.deserialize_weather_failed",
+                        &[e.to_string()]
+                    )
+                );
                 WeatherData::default()
             }
         },
         Err(e) => {
-            warn!("Failed to open weather.dat, using defaults: {e}");
+            warn!(
+                "{}",
+                localized_log_format("world.info.data_file.open_weather_failed", &[e.to_string()])
+            );
             WeatherData::default()
         }
     }
@@ -166,12 +176,24 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
         Ok(f) => match from_gzip_bytes::<DataFileRoot<WorldGenSettingsData>, _>(f) {
             Ok(root) => Some(root.data.settings),
             Err(e) => {
-                warn!("Failed to deserialize world_gen_settings.dat: {e}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.info.data_file.deserialize_world_gen_settings_failed",
+                        &[e.to_string()]
+                    )
+                );
                 None
             }
         },
         Err(e) => {
-            warn!("Failed to open world_gen_settings.dat: {e}");
+            warn!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.open_world_gen_settings_failed",
+                    &[e.to_string()]
+                )
+            );
             None
         }
     }
@@ -212,7 +234,10 @@ pub fn game_rules_from_nbt(root: &NbtCompound) -> GameRuleRegistry {
     let mut registry = GameRuleRegistry::default();
 
     let Some(inner) = root.get_compound("data") else {
-        warn!("game_rules.dat missing 'data' compound, using defaults");
+        warn!(
+            "{}",
+            localized_log("world.info.data_file.missing_data_compound")
+        );
         return registry;
     };
 
@@ -245,12 +270,24 @@ pub fn read_game_rules(level_folder: &Path) -> GameRuleRegistry {
         Ok(f) => match read_gzip_compound_tag(f) {
             Ok(compound) => game_rules_from_nbt(&compound),
             Err(e) => {
-                warn!("Failed to parse game_rules.dat: {e}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.info.data_file.parse_game_rules_failed",
+                        &[e.to_string()]
+                    )
+                );
                 GameRuleRegistry::default()
             }
         },
         Err(e) => {
-            warn!("Failed to open game_rules.dat: {e}");
+            warn!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.open_game_rules_failed",
+                    &[e.to_string()]
+                )
+            );
             GameRuleRegistry::default()
         }
     }
@@ -281,12 +318,24 @@ pub fn read_world_clocks(level_folder: &Path) -> WorldClocksData {
         Ok(f) => match read_gzip_compound_tag(f) {
             Ok(compound) => world_clocks_from_nbt(&compound),
             Err(e) => {
-                warn!("Failed to parse world_clocks.dat: {e}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.info.data_file.parse_world_clocks_failed",
+                        &[e.to_string()]
+                    )
+                );
                 WorldClocksData::default()
             }
         },
         Err(e) => {
-            warn!("Failed to open world_clocks.dat: {e}");
+            warn!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.open_world_clocks_failed",
+                    &[e.to_string()]
+                )
+            );
             WorldClocksData::default()
         }
     }
@@ -349,12 +398,24 @@ pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
         Ok(f) => match from_gzip_bytes::<DataFileRoot<WanderingTraderData>, _>(f) {
             Ok(root) => root.data,
             Err(e) => {
-                warn!("Failed to deserialize wandering_trader.dat, using defaults: {e}");
+                warn!(
+                    "{}",
+                    localized_log_format(
+                        "world.info.data_file.deserialize_wandering_trader_failed",
+                        &[e.to_string()]
+                    )
+                );
                 WanderingTraderData::default()
             }
         },
         Err(e) => {
-            warn!("Failed to open wandering_trader.dat: {e}");
+            warn!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.open_wandering_trader_failed",
+                    &[e.to_string()]
+                )
+            );
             WanderingTraderData::default()
         }
     }

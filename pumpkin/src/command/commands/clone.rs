@@ -14,7 +14,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
-const DESCRIPTION: &str = "Clones blocks from one region to another.";
+const DESCRIPTION: &str = "commands.clone.description";
 const PERMISSION: &str = "minecraft:command.clone";
 
 const ARG_BEGIN: &str = "begin";

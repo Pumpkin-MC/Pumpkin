@@ -14,7 +14,7 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "Manages scoreboard objectives and players.";
+const DESCRIPTION: &str = "commands.scoreboard.description";
 const PERMISSION: &str = "minecraft:command.scoreboard";
 
 const ARG_OBJECTIVE: &str = "objective";

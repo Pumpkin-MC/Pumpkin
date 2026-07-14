@@ -11,7 +11,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "Modifies a trigger scoreboard objective.";
+const DESCRIPTION: &str = "commands.trigger.description";
 const PERMISSION: &str = "minecraft:command.trigger";
 
 const ARG_OBJECTIVE: &str = "objective";

@@ -15,7 +15,7 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "Queries or modifies attributes of an entity.";
+const DESCRIPTION: &str = "commands.attribute.description";
 const PERMISSION: &str = "minecraft:command.attribute";
 
 const ARG_TARGET: &str = "target";

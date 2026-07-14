@@ -367,9 +367,7 @@ pub enum WorldInfoError {
     IoError(std::io::ErrorKind),
     InfoNotFound,
     DeserializationError(String),
-    #[error("Serialization error: {0}")]
     SerializationError(String),
-    #[error("Unsupported world data version: {0}")]
     UnsupportedDataVersion(i32),
     UnsupportedLevelVersion(i32),
 }
@@ -390,6 +388,11 @@ impl std::fmt::Display for WorldInfoError {
                     "world.info.error.deserialization",
                     std::slice::from_ref(msg)
                 )
+            ),
+            Self::SerializationError(msg) => write!(
+                f,
+                "{}",
+                localized_log_format("world.info.error.serialization", std::slice::from_ref(msg))
             ),
             Self::UnsupportedDataVersion(version) => write!(
                 f,

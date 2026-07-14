@@ -1,4 +1,4 @@
-use pumpkin_util::translation::localized_log;
+use pumpkin_util::translation::{localized_log, localized_log_format};
 use std::{
     fs::File,
     io::{Cursor, Read},
@@ -173,14 +173,26 @@ impl WorldInfoWriter for AnvilLevelInfo {
 
         // game_rules.dat
         if let Err(e) = write_game_rules(level_folder, &info.game_rules, data_version) {
-            error!("Failed to write game_rules.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_game_rules_failed",
+                    &[e.to_string()]
+                )
+            );
         }
 
         // world_gen_settings.dat
         if let Err(e) =
             write_world_gen_settings(level_folder, &info.world_gen_settings, data_version)
         {
-            error!("Failed to write world_gen_settings.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_world_gen_settings_failed",
+                    &[e.to_string()]
+                )
+            );
         }
 
         // world_clocks.dat – persist the overworld day_time; preserve other
@@ -195,7 +207,13 @@ impl WorldInfoWriter for AnvilLevelInfo {
             });
 
         if let Err(e) = write_world_clocks(level_folder, &clocks) {
-            error!("Failed to write world_clocks.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_world_clocks_failed",
+                    &[e.to_string()]
+                )
+            );
         }
 
         // weather.dat
@@ -203,24 +221,48 @@ impl WorldInfoWriter for AnvilLevelInfo {
         weather.clear_weather_time = info.clear_weather_time;
         weather.data_version = data_version;
         if let Err(e) = write_weather(level_folder, &weather) {
-            error!("Failed to write weather.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_weather_failed",
+                    &[e.to_string()]
+                )
+            );
         }
 
         // wandering_trader.dat (stub / load-save)
         let mut wandering_trader = read_wandering_trader(level_folder);
         wandering_trader.data_version = data_version;
         if let Err(e) = write_wandering_trader(level_folder, &wandering_trader) {
-            error!("Failed to write wandering_trader.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_wandering_trader_failed",
+                    &[e.to_string()]
+                )
+            );
         }
 
         // custom_boss_events.dat
         if let Err(e) = write_custom_boss_events_stub(level_folder, data_version) {
-            error!("Failed to write custom_boss_events.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_custom_boss_events_failed",
+                    &[e.to_string()]
+                )
+            );
         }
 
         // scheduled_events.dat
         if let Err(e) = write_scheduled_events_stub(level_folder, data_version) {
-            error!("Failed to write scheduled_events.dat: {e}");
+            error!(
+                "{}",
+                localized_log_format(
+                    "world.info.data_file.write_scheduled_events_failed",
+                    &[e.to_string()]
+                )
+            );
         }
         Ok(())
     }
@@ -235,7 +277,6 @@ pub struct LevelDat {
 
 #[cfg(test)]
 mod test {
-
     use flate2::read::GzDecoder;
     use pumpkin_data::game_rules::GameRuleRegistry;
     use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};

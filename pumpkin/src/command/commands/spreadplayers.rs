@@ -16,7 +16,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::world::World;
 
-const DESCRIPTION: &str = "Teleports entities to random surface locations within an area.";
+const DESCRIPTION: &str = "commands.spreadplayers.description";
 
 const PERMISSION: &str = "minecraft:command.spreadplayers";
 

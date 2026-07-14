@@ -216,7 +216,9 @@ async fn main() {
                 } else {
                     TextComponent::text(String::new()).to_pretty_console()
                 },
-                if advanced_config.networking.java.enabled && advanced_config.networking.bedrock.enabled {
+                if advanced_config.networking.java.enabled
+                    && advanced_config.networking.bedrock.enabled
+                {
                     " | ".to_owned()
                 } else {
                     String::new()
@@ -227,9 +229,12 @@ async fn main() {
                         TextComponent::text(localized_log("server.log.bedrock_edition_label"))
                             .color_named(NamedColor::Gold)
                             .to_pretty_console(),
-                        TextComponent::text(format!("{}", advanced_config.networking.bedrock.address))
-                            .color_named(NamedColor::DarkBlue)
-                            .to_pretty_console()
+                        TextComponent::text(format!(
+                            "{}",
+                            advanced_config.networking.bedrock.address
+                        ))
+                        .color_named(NamedColor::DarkBlue)
+                        .to_pretty_console()
                     )
                 } else {
                     TextComponent::text(String::new()).to_pretty_console()
