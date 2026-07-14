@@ -11,9 +11,9 @@ pub use client::{
     try_player_locale,
 };
 pub use download::{
-    DownloadConfig, DownloadedTranslations, download_locale, ensure_locale_translations,
-    init_translation_loader, load_cached_translations, load_downloaded, mark_locale_loaded,
-    save_checksums, save_downloaded_translations,
+    DownloadConfig, DownloadedTranslations, bootstrap_server_translations, download_locale,
+    ensure_locale_translations, init_translation_loader, load_cached_translations, load_downloaded,
+    mark_locale_loaded, save_checksums, save_downloaded_translations,
 };
 pub use engine::{ResolvedTranslation, TranslationEngine, format_tokens};
 pub use locale::Locale;

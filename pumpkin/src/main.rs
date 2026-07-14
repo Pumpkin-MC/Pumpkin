@@ -28,9 +28,7 @@ use pumpkin_util::translation::{localized_log, localized_log_format, localized_t
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_i18n::{
-    self, DownloadConfig, download_locale, init_translation_loader, load_cached_translations,
-    load_downloaded, mark_locale_loaded, resolve_server_locale, save_checksums,
-    save_downloaded_translations, set_server_global_locale,
+    DownloadConfig, bootstrap_server_translations, resolve_server_locale, set_server_global_locale,
 };
 use pumpkin_util::text::{
     TextComponent,
@@ -83,17 +81,15 @@ async fn main() {
         )
     );
 
-    // Try loading cached translations from disk first.
-    // If the cache is missing or incomplete, download from the mirror and
-    // save the result to disk for subsequent starts.
+    // Download/load translations for the server's global locale.
+    // Cached files are preferred; missing locales are fetched from the
+    // configured mirror and saved to disk for subsequent starts.
     let locale_config = &config.advanced.locale;
     let download_config = DownloadConfig {
         mirror_url: locale_config.mirror_url.clone(),
         timeout_ms: locale_config.timeout,
         skip_checksum: locale_config.skip_checksum,
     };
-    // Resolve cache root: absolute paths are used as-is;
-    // relative paths are resolved against the working directory.
     let cache_root: std::path::PathBuf =
         if std::path::Path::new(&locale_config.translation_cache_dir).is_absolute() {
             std::path::PathBuf::from(&locale_config.translation_cache_dir)
@@ -101,47 +97,11 @@ async fn main() {
             exec_dir.join(&locale_config.translation_cache_dir)
         };
 
-    // Clone before moving into spawn_blocking — needed for init_translation_loader
-    let loader_config = download_config.clone();
-    let loader_cache_root = cache_root.clone();
-
-    let downloaded = tokio::task::spawn_blocking(move || {
-        // 1. Try disk cache — only accept if both namespaces are present.
-        //    Partial caches are skipped so missing namespaces can be fetched.
-        if let Some(cached) = load_cached_translations(server_global_locale, &cache_root) {
-            let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
-            if complete {
-                return cached;
-            }
-        }
-
-        // 2. Download from remote mirror
-        let downloaded = download_locale(&download_config, server_global_locale);
-
-        // 3. Save to disk for future runs (only non-empty namespaces are written)
-        if downloaded.has_any() {
-            save_downloaded_translations(&downloaded, server_global_locale, &cache_root);
-            save_checksums(&cache_root, &download_config, server_global_locale);
-        }
-
-        downloaded
+    tokio::task::spawn_blocking(move || {
+        bootstrap_server_translations(download_config, cache_root, server_global_locale);
     })
     .await
     .unwrap_or_default();
-
-    if downloaded.has_any() {
-        load_downloaded(&downloaded, server_global_locale);
-        mark_locale_loaded(server_global_locale);
-    } else if server_global_locale != pumpkin_i18n::Locale::EnUs {
-        warn!(
-            "No translations downloaded for {} — using embedded English fallback",
-            server_global_locale.to_code()
-        );
-    }
-
-    // Initialise the background translation loader for on-demand player
-    // locale downloads. Must be called before any player joins.
-    init_translation_loader(loader_config, loader_cache_root);
 
     info!(
         "{}",

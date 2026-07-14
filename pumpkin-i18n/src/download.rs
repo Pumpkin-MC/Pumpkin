@@ -484,6 +484,66 @@ pub fn ensure_locale_translations(locale: Locale) {
 }
 
 // ---------------------------------------------------------------------------
+// Bootstrap: server-startup translation loading
+// ---------------------------------------------------------------------------
+
+/// Bootstrap translations for the server's global locale at startup.
+///
+/// Performs the complete startup translation workflow in a single call:
+/// 1. Try loading cached translations from disk
+/// 2. If cache is missing or incomplete, download from the configured mirror
+/// 3. Save downloaded translations to disk for future runs
+/// 4. Inject translations into the global engine
+/// 5. Mark the locale as loaded to prevent duplicate downloads
+/// 6. Initialise the background translation loader for per-player locales
+///
+/// This function performs blocking I/O (disk reads, HTTP downloads).
+/// Callers should invoke it inside `tokio::task::spawn_blocking` or
+/// an equivalent off-thread mechanism.
+///
+/// On failure, falls back silently to embedded English translations.
+///
+/// # Arguments
+/// * `config` — Download configuration (mirror URL, timeout, checksum settings).
+/// * `cache_root` — Directory for cached translation files.
+/// * `locale` — The server's global locale to bootstrap (from config).
+pub fn bootstrap_server_translations(config: DownloadConfig, cache_root: PathBuf, locale: Locale) {
+    // 1. Try disk cache — only accept if both namespaces are present.
+    if let Some(cached) = load_cached_translations(locale, &cache_root) {
+        let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
+        if complete {
+            load_downloaded(&cached, locale);
+            mark_locale_loaded(locale);
+            init_translation_loader(config, cache_root);
+            return;
+        }
+    }
+
+    // 2. Download from remote mirror
+    let downloaded = download_locale(&config, locale);
+
+    // 3. Save to disk for future runs (only non-empty namespaces)
+    if downloaded.has_any() {
+        save_downloaded_translations(&downloaded, locale, &cache_root);
+        save_checksums(&cache_root, &config, locale);
+    }
+
+    // 4. Inject into engine + mark loaded
+    if downloaded.has_any() {
+        load_downloaded(&downloaded, locale);
+        mark_locale_loaded(locale);
+    } else if locale != Locale::EnUs {
+        warn!(
+            "No translations downloaded for {} — using embedded English fallback",
+            locale.to_code()
+        );
+    }
+
+    // 5. Background loader init (must be called before any player joins)
+    init_translation_loader(config, cache_root);
+}
+
+// ---------------------------------------------------------------------------
 // Cache freshness helpers (local checksums — zero network on restart)
 // ---------------------------------------------------------------------------
 
