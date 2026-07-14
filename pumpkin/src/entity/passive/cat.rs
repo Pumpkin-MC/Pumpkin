@@ -137,17 +137,23 @@ impl Mob for CatEntity {
             let entity = self.get_entity();
             let is_baby = entity.age.load(Ordering::Relaxed) < 0;
             if is_baby {
-                entity.send_meta_data(&[Metadata::new(
-                    TrackedData::BABY_ID,
-                    MetaDataType::BOOLEAN,
-                    true,
-                )]);
+                entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
             }
-            entity.send_meta_data(&[Metadata::new(
-                TrackedData::CAT_VARIANT,
-                MetaDataType::CAT_VARIANT,
-                VarInt(self.variant.load(Ordering::Relaxed) as i32),
-            )]);
+            entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::CAT_VARIANT,
+                    MetaDataType::CAT_VARIANT,
+                    VarInt(self.variant.load(Ordering::Relaxed) as i32),
+                )],
+                None,
+            );
         })
     }
 }

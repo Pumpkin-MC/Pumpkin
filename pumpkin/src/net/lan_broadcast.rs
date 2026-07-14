@@ -1,4 +1,4 @@
-use pumpkin_config::{BasicConfiguration, LANBroadcastConfig};
+use pumpkin_config::LANBroadcastConfig;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -23,7 +23,7 @@ pub struct LANBroadcast {
 impl LANBroadcast {
     /// Creates a new LAN broadcast instance from the provided configuration
     #[must_use]
-    pub fn new(config: &LANBroadcastConfig, basic_config: &BasicConfiguration) -> Self {
+    pub fn new(config: &LANBroadcastConfig, server_motd: &str) -> Self {
         let port = config.port.unwrap_or(0);
 
         let advanced_motd = config.motd.clone().unwrap_or_default();
@@ -33,7 +33,7 @@ impl LANBroadcast {
                 "{}",
                 localized_log("server.log.lan_broadcast_using_server_motd")
             );
-            basic_config.motd.replace('\n', " ")
+            server_motd.replace('\n', " ")
         } else {
             advanced_motd
         };

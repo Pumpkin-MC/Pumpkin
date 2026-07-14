@@ -9,11 +9,13 @@ use pumpkin_util::{
 use tokio::sync::RwLock;
 
 mod advancement;
+mod attribute;
 mod ban;
 mod banip;
 mod banlist;
 mod bossbar;
 mod clear;
+mod clone;
 mod damage;
 mod data;
 pub mod defaultgamemode;
@@ -40,16 +42,23 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod random;
 mod rotate;
+mod saveall;
+mod saveoff;
+mod saveon;
 mod say;
+mod scoreboard;
 mod seed;
 mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
+mod tag;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -57,6 +66,7 @@ mod time;
 mod title;
 mod tps;
 mod transfer;
+mod trigger;
 mod weather;
 mod whitelist;
 mod worldborder;
@@ -153,12 +163,22 @@ pub async fn default_dispatcher(
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);
+    random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
+    saveall::register(&mut dispatcher, registry);
+    saveoff::register(&mut dispatcher, registry);
+    saveon::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
+    spreadplayers::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
+    tag::register(&mut dispatcher, registry);
     tick::register(&mut dispatcher, registry);
     advancement::register(&mut dispatcher, registry);
+    trigger::register(&mut dispatcher, registry);
+    scoreboard::register(&mut dispatcher, registry);
+    clone::register(&mut dispatcher, registry);
+    attribute::register(&mut dispatcher, registry);
     dispatcher
 }
 

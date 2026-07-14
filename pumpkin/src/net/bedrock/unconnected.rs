@@ -30,12 +30,12 @@ impl BedrockClient {
         let motd_string = ServerInfo {
             edition: "MCPE",
             // TODO The default motd is to long to be displayed completely
-            motd_line_1: "Pumpkin Server",
+            motd_line_1: server.advanced_config.networking.bedrock.motd.clone(),
             protocol_version: CURRENT_BEDROCK_MC_PROTOCOL,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
             // A large number looks wreird on the client worlds window
-            max_player_count: server.basic_config.max_players,
+            max_player_count: server.advanced_config.networking.bedrock.max_players,
             server_unique_id: server.server_guid,
             motd_line_2: server.basic_config.default_level_name.clone(),
             game_mode: server.defaultgamemode.lock().await.gamemode.to_str(),

@@ -242,10 +242,10 @@ async fn resolve_profiles_from_token(
         return Ok(vec![profile]);
     }
 
-    if server.basic_config.online_mode {
+    if server.advanced_config.networking.java.online_mode {
         match lookup_profile_by_name(
             raw_arg.value,
-            &server.advanced_config.networking.authentication,
+            &server.advanced_config.networking.java.authentication,
         ) {
             Ok(Some((uuid, resolved_name))) => {
                 server

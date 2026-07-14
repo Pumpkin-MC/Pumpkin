@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for packet compression.
 ///
 /// Controls whether network packet compression is enabled and the compression parameters.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct CompressionConfig {
     /// Whether compression is enabled.

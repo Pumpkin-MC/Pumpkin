@@ -329,7 +329,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             ))
         })?;
 
-        Ok(server.basic_config.max_players)
+        Ok(server.advanced_config.networking.java.max_players)
     }
 
     async fn is_hardcore(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
@@ -349,7 +349,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             ))
         })?;
 
-        Ok(server.advanced_config.networking.authentication.enabled)
+        Ok(server
+            .advanced_config
+            .networking
+            .java
+            .authentication
+            .enabled)
     }
 
     async fn get_motd(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
@@ -359,7 +364,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             ))
         })?;
 
-        Ok(server.basic_config.motd.clone())
+        Ok(server.advanced_config.networking.java.motd.clone())
     }
 
     async fn has_whitelist(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
@@ -399,7 +404,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             ))
         })?;
 
-        Ok(server.basic_config.view_distance.get())
+        Ok(server.advanced_config.networking.java.view_distance.get())
     }
 
     async fn get_simulation_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
@@ -409,7 +414,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             ))
         })?;
 
-        Ok(server.basic_config.simulation_distance.get())
+        Ok(server
+            .advanced_config
+            .networking
+            .java
+            .simulation_distance
+            .get())
     }
 
     async fn get_default_gamemode(

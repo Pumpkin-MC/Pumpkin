@@ -80,14 +80,14 @@ impl SheepEntity {
 
     fn set_packed_and_sync(&self, byte: u8) {
         self.color_and_sheared.store(byte, Ordering::Relaxed);
-        self.mob_entity
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
                 TrackedData::WOOL_ID,
                 MetaDataType::BYTE,
                 byte as i8,
-            )]);
+            )],
+            None,
+        );
     }
 
     pub fn set_color(&self, color: u8) {

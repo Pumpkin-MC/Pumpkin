@@ -251,8 +251,8 @@ impl PumpkinServer {
             });
         }
 
-        let tcp_listener = if server.basic_config.java_edition {
-            let address = server.basic_config.java_edition_address;
+        let tcp_listener = if server.advanced_config.networking.java.enabled {
+            let address = server.advanced_config.networking.java.address;
             // Setup the TCP server socket.
             let listener = match TcpListener::bind(address).await {
                 Ok(l) => l,
@@ -319,7 +319,7 @@ impl PumpkinServer {
 
                 let lan_broadcast = LANBroadcast::new(
                     &server.advanced_config.networking.lan_broadcast,
-                    &server.basic_config,
+                    &server.advanced_config.networking.java.motd,
                 );
                 server.spawn_task(lan_broadcast.start(addr));
             }
@@ -337,9 +337,9 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = if server.basic_config.bedrock_edition {
+        let udp_socket = if server.advanced_config.networking.bedrock.enabled {
             Some(Arc::new(
-                UdpSocket::bind(server.basic_config.bedrock_edition_address)
+                UdpSocket::bind(server.advanced_config.networking.bedrock.address)
                     .await
                     .unwrap_or_else(|_| panic!("{}", localized_log("server.log.udp_bind_failed"))),
             ))

@@ -152,11 +152,21 @@ impl BreathManager {
     pub fn send_air_supply(&self, player: &Player) {
         let air = self.air_supply.load(Ordering::Relaxed).clamp(0, MAX_AIR);
 
-        player.get_entity().send_meta_data(&[Metadata::new(
-            TrackedData::AIR_SUPPLY_ID,
-            MetaDataType::INT,
-            VarInt(air),
-        )]);
+        let mut bedrock_meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+        bedrock_meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::AIR_SUPPLY,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(air as i16),
+        );
+
+        player.get_entity().send_meta_data(
+            &[Metadata::new(
+                TrackedData::AIR_SUPPLY_ID,
+                MetaDataType::INT,
+                VarInt(air),
+            )],
+            Some(&bedrock_meta),
+        );
     }
 
     pub fn reset(&self, player: &Player) {

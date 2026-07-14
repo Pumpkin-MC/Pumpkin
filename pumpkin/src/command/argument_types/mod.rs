@@ -217,6 +217,8 @@ impl FromStringReader for Identifier {
 }
 
 pub mod argument_type;
+pub mod attribute;
+pub mod block;
 pub mod coordinates;
 pub mod core;
 pub mod entity;
@@ -226,6 +228,7 @@ pub mod game_profile;
 pub mod hex_color;
 pub mod identifier;
 pub mod nbt;
+pub mod objective;
 pub mod range;
 pub mod resource_key;
 pub mod slot;

@@ -93,11 +93,14 @@ impl EntityBase for FallingEntity {
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            self.entity.send_meta_data(&[Metadata::new(
-                TrackedData::START_POS,
-                MetaDataType::BLOCK_POS,
-                self.entity.block_pos.load(),
-            )]);
+            self.entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::START_POS,
+                    MetaDataType::BLOCK_POS,
+                    self.entity.block_pos.load(),
+                )],
+                None,
+            );
         })
     }
 

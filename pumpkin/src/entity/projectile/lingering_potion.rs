@@ -69,13 +69,16 @@ impl EntityBase for LingeringPotionEntity {
             let stack = self.item_stack.read().await;
 
             // Sync the item stack so the client renders the correct potion type
-            entity.send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
-                pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
-                &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
-                    stack.clone(),
-                ),
-            )]);
+            entity.send_meta_data(
+                &[pumpkin_protocol::java::client::play::Metadata::new(
+                    pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
+                    pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
+                    &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
+                        stack.clone(),
+                    ),
+                )],
+                None,
+            );
         })
     }
 

@@ -85,6 +85,7 @@ impl PacketWrite for EntityMetadata {
     }
 }
 
+#[derive(Clone)]
 pub enum MetadataValue {
     Byte(i8),
     Short(i16),

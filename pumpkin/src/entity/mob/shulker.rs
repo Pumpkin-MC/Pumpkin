@@ -110,11 +110,14 @@ impl ShulkerEntity {
     fn set_attach_face(&self, face: BlockDirection) {
         self.attach_face.store(face as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(&[Metadata::new(
-            TrackedData::ATTACH_FACE_ID,
-            MetaDataType::DIRECTION,
-            VarInt(face as i32),
-        )]);
+        entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::ATTACH_FACE_ID,
+                MetaDataType::DIRECTION,
+                VarInt(face as i32),
+            )],
+            None,
+        );
     }
 
     pub fn get_raw_peek(&self) -> u8 {
@@ -148,11 +151,14 @@ impl ShulkerEntity {
 
         self.peek_amount.store(amount, Ordering::Relaxed);
 
-        entity.send_meta_data(&[Metadata::new(
-            TrackedData::PEEK_ID,
-            MetaDataType::BYTE,
-            amount,
-        )]);
+        entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::PEEK_ID,
+                MetaDataType::BYTE,
+                amount,
+            )],
+            None,
+        );
     }
 
     pub fn is_closed(&self) -> bool {

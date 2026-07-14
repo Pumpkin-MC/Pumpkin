@@ -365,11 +365,14 @@ fn with_carve_run_options<F>(
 ) where
     F: FnOnce(&mut CarveRun<'_, '_>),
 {
-    use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+    use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
     use pumpkin_util::world_seed::Seed;
 
-    let generator = VanillaGenerator::new(Seed(42), dimension);
-    let mut chunk = ProtoChunk::new(0, 0, &generator);
+    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(Seed(42), dimension)));
+    let WorldGenerator::Noise(generator) = &world_gen else {
+        unreachable!()
+    };
+    let mut chunk = ProtoChunk::new(0, 0, &world_gen);
 
     let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
     let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);

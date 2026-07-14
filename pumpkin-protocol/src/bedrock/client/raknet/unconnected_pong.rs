@@ -26,7 +26,7 @@ impl PacketWrite for CUnconnectedPong {
 pub struct ServerInfo {
     /// (BE or MCEE for Education Edition)
     pub edition: &'static str,
-    pub motd_line_1: &'static str,
+    pub motd_line_1: String,
     pub protocol_version: u32,
     pub version_name: &'static str,
     pub player_count: i32,

@@ -1138,7 +1138,7 @@ impl World {
                     }
                 }
             }
-            if self.level.autosave_ticks > 0 {
+            if self.level.autosave_ticks > 0 && self.level.save_enabled.load(Relaxed) {
                 let autosave = self.level.autosave_ticks as i64;
                 if autosave > 0 && level_time.world_age % autosave == 0 {
                     self.level.should_save.store(true, Relaxed);
@@ -1855,7 +1855,13 @@ impl World {
             has_start_with_map_enabled: false,
             // TODO Bedrock permission level are different
             permission_level: VarInt(2),
-            server_simulation_distance: base_config.simulation_distance.get().into(),
+            server_simulation_distance: server
+                .advanced_config
+                .networking
+                .bedrock
+                .simulation_distance
+                .get()
+                .into(),
             has_locked_behavior_pack: false,
             has_locked_resource_pack: false,
             is_from_locked_world_template: false,
@@ -2540,9 +2546,27 @@ impl World {
                 entity_id,
                 base_config.hardcore,
                 dimensions,
-                base_config.max_players.try_into().unwrap(),
-                base_config.view_distance.get().into(), //  TODO: view distance
-                base_config.simulation_distance.get().into(), // TODO: sim view dinstance
+                server
+                    .advanced_config
+                    .networking
+                    .java
+                    .max_players
+                    .try_into()
+                    .unwrap(),
+                server
+                    .advanced_config
+                    .networking
+                    .java
+                    .view_distance
+                    .get()
+                    .into(), //  TODO: view distance
+                server
+                    .advanced_config
+                    .networking
+                    .java
+                    .simulation_distance
+                    .get()
+                    .into(), // TODO: sim view dinstance
                 false,
                 true,
                 false,
@@ -2560,7 +2584,7 @@ impl World {
                     VarInt(player.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                     self.sea_level.into(),
                 ),
-                base_config.online_mode,
+                server.advanced_config.networking.java.online_mode,
                 // This should stay true even when reports are disabled.
                 // It prevents the annoying popup when joining the server.
                 true,

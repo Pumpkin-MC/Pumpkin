@@ -39,10 +39,13 @@ impl BoatEntity {
         self.left_paddle_moving.store(left, Ordering::Relaxed);
         self.right_paddle_moving.store(right, Ordering::Relaxed);
 
-        self.vehicle.entity.send_meta_data(&[
-            Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
-            Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
-        ]);
+        self.vehicle.entity.send_meta_data(
+            &[
+                Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
+                Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
+            ],
+            None,
+        );
     }
 
     fn send_wobble_metadata(&self) {

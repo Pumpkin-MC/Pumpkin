@@ -96,6 +96,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
 // Errors of packets that don't meet the format aren't returned since we won't handle them anyway
 // The only errors that are thrown are because of a null terminator in a CString
 // since those errors need to be corrected by server owner
+#[expect(clippy::too_many_lines)]
 #[inline]
 async fn handle_packet(
     buf: Vec<u8>,
@@ -165,7 +166,9 @@ async fn handle_packet(
 
                         let response = CFullStatus {
                             session_id: packet.session_id,
-                            hostname: CString::new(server.basic_config.motd.as_str())?,
+                            hostname: CString::new(
+                                server.advanced_config.networking.java.motd.as_str(),
+                            )?,
                             version: CString::new(CURRENT_MC_VERSION)?,
                             plugins: CString::new(plugins)?,
                             map: CString::new(
@@ -176,7 +179,8 @@ async fn handle_packet(
                                     .map_or("world", |w| w.get_world_name()),
                             )?,
                             num_players: server.get_player_count(),
-                            max_players: server.basic_config.max_players as usize,
+                            max_players: server.advanced_config.networking.java.max_players
+                                as usize,
                             host_port: bound_addr.port(),
                             host_ip: CString::new(bound_addr.ip().to_string())?,
                             players,
@@ -188,7 +192,9 @@ async fn handle_packet(
                     } else {
                         let response = CBasicStatus {
                             session_id: packet.session_id,
-                            motd: CString::new(server.basic_config.motd.as_str())?,
+                            motd: CString::new(
+                                server.advanced_config.networking.java.motd.as_str(),
+                            )?,
                             map: CString::new(
                                 server
                                     .worlds
@@ -197,7 +203,8 @@ async fn handle_packet(
                                     .map_or("world", |w| w.get_world_name()),
                             )?,
                             num_players: server.get_player_count(),
-                            max_players: server.basic_config.max_players as usize,
+                            max_players: server.advanced_config.networking.java.max_players
+                                as usize,
                             host_port: bound_addr.port(),
                             host_ip: CString::new(bound_addr.ip().to_string())?,
                         };

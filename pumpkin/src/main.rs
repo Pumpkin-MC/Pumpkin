@@ -197,37 +197,37 @@ async fn main() {
             ],
         )
     );
-    let basic_config = &pumpkin_server.server.basic_config;
+    let advanced_config = &pumpkin_server.server.advanced_config;
     info!(
         "{}",
         localized_log_format(
             "server.log.server_running",
             &[
-                if basic_config.java_edition {
+                if advanced_config.networking.java.enabled {
                     format!(
                         "{} {}",
                         TextComponent::text(localized_log("server.log.java_edition_label"))
                             .color_named(NamedColor::Yellow)
                             .to_pretty_console(),
-                        TextComponent::text(format!("{}", basic_config.java_edition_address))
+                        TextComponent::text(format!("{}", advanced_config.networking.java.address))
                             .color_named(NamedColor::DarkBlue)
                             .to_pretty_console()
                     )
                 } else {
                     TextComponent::text(String::new()).to_pretty_console()
                 },
-                if basic_config.java_edition && basic_config.bedrock_edition {
+                if advanced_config.networking.java.enabled && advanced_config.networking.bedrock.enabled {
                     " | ".to_owned()
                 } else {
                     String::new()
                 },
-                if basic_config.bedrock_edition {
+                if advanced_config.networking.bedrock.enabled {
                     format!(
                         "{} {}",
                         TextComponent::text(localized_log("server.log.bedrock_edition_label"))
                             .color_named(NamedColor::Gold)
                             .to_pretty_console(),
-                        TextComponent::text(format!("{}", basic_config.bedrock_edition_address))
+                        TextComponent::text(format!("{}", advanced_config.networking.bedrock.address))
                             .color_named(NamedColor::DarkBlue)
                             .to_pretty_console()
                     )

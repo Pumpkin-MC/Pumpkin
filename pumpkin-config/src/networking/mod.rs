@@ -1,13 +1,16 @@
-use auth::AuthenticationConfig;
 use proxy::ProxyConfig;
 use query::QueryConfig;
 use rcon::RCONConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::{CompressionConfig, LANBroadcastConfig};
+use crate::LANBroadcastConfig;
+use bedrock::BedrockConfig;
+use java::JavaConfig;
 
 pub mod auth;
+pub mod bedrock;
 pub mod compression;
+pub mod java;
 pub mod lan_broadcast;
 pub mod proxy;
 pub mod query;
@@ -18,19 +21,18 @@ pub mod rcon;
 /// Covers authentication, query, RCON, proxying, packet compression,
 /// and LAN broadcast behaviour.
 #[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct NetworkingConfig {
-    /// Authentication settings for client connections.
-    pub authentication: AuthenticationConfig,
     /// Query protocol settings for server status requests.
     pub query: QueryConfig,
     /// RCON (remote console) configuration.
     pub rcon: RCONConfig,
     /// Proxy-related networking settings.
     pub proxy: ProxyConfig,
-    /// Java Edition packet compression settings.
-    pub java_compression: CompressionConfig,
-    /// Bedrock Edition packet compression settings.
-    pub bedrock_compression: CompressionConfig,
     /// LAN broadcast settings.
     pub lan_broadcast: LANBroadcastConfig,
+    /// Java Edition configuration settings.
+    pub java: JavaConfig,
+    /// Bedrock Edition configuration settings.
+    pub bedrock: BedrockConfig,
 }

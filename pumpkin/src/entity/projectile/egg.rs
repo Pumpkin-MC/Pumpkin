@@ -73,11 +73,14 @@ impl EntityBase for EggEntity {
             let stack = self.item_stack.read().await;
 
             // Sync the item stack so the client renders the correct color/variant
-            entity.send_meta_data(&[Metadata::new(
-                TrackedData::ITEM_STACK,
-                MetaDataType::ITEM_STACK,
-                &ItemStackSerializer::from(stack.clone()),
-            )]);
+            entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::ITEM_STACK,
+                    MetaDataType::ITEM_STACK,
+                    &ItemStackSerializer::from(stack.clone()),
+                )],
+                None,
+            );
         })
     }
 
