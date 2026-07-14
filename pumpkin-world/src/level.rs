@@ -47,6 +47,10 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+/// Upper bound used when reserving space for random ticks, so that an extreme
+/// `randomTickSpeed` game rule cannot ask for a huge allocation every tick.
+const MAX_PREALLOCATED_RANDOM_TICKS_PER_CHUNK: usize = 8;
+
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
 /// Key features include:
@@ -508,12 +512,21 @@ impl Level {
         });
     }
 
-    pub fn get_tick_data(&self, active_chunks: &FxHashSet<Vector2<i32>>) -> TickData {
-        let mut ticks = TickData {
-            block_ticks: Vec::new(),
-            fluid_ticks: Vec::new(),
-            random_ticks: Vec::with_capacity(active_chunks.len() * 3),
-        };
+    pub fn get_tick_data(
+        &self,
+        active_chunks: &FxHashSet<Vector2<i32>>,
+        random_tick_speed: usize,
+    ) -> TickData {
+        let mut ticks =
+            TickData {
+                block_ticks: Vec::new(),
+                fluid_ticks: Vec::new(),
+                // Scale with the game rule, but cap the guess so an extreme
+                // `randomTickSpeed` can't ask for a huge allocation up front.
+                random_ticks: Vec::with_capacity(active_chunks.len().saturating_mul(
+                    random_tick_speed.min(MAX_PREALLOCATED_RANDOM_TICKS_PER_CHUNK),
+                )),
+            };
 
         // 1. Process active chunks (random ticks, block entities)
         for pos in active_chunks {
@@ -525,7 +538,7 @@ impl Level {
 
                 // Use the bitmask to skip sections
                 let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
-                if mask != 0 {
+                if mask != 0 && random_tick_speed != 0 {
                     let sections = chunk.section.block_sections.read().unwrap();
                     let min_y = chunk.section.min_y;
 
@@ -534,7 +547,7 @@ impl Level {
                             continue;
                         }
                         let y_base = min_y + (i as i32 * 16);
-                        for _ in 0..3 {
+                        for _ in 0..random_tick_speed {
                             let r = rand::random::<u32>();
                             let x_offset = (r & 0xF) as usize;
                             let z_offset = (r >> 8 & 0xF) as usize;

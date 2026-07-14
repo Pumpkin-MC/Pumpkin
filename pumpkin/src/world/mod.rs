@@ -320,11 +320,27 @@ impl World {
     }
 
     pub fn update_active_chunks(self: &Arc<Self>) {
+        let players = self.players.load();
+        if players.is_empty() {
+            // No players to build a ticking area around, but `/forceload`ed
+            // chunks must keep ticking regardless, so they stay active. Mob
+            // spawning is driven by players, so the spawn state is empty.
+            let forced = self
+                .forced_chunks
+                .lock()
+                .map_or_else(|_| FxHashSet::default(), |forced| forced.clone());
+            if **self.active_chunks.load() != forced {
+                self.active_chunks.store(Arc::new(forced));
+                self.spawn_state.store(Arc::new(SpawnState::empty()));
+            }
+            return;
+        }
+
         let mut active_chunks = FxHashSet::default();
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
-        for player in self.players.load().iter() {
+        for player in players.iter() {
             let center = player.get_entity().chunk_pos.load();
             for dx in -sim_dist..=sim_dist {
                 for dy in -sim_dist..=sim_dist {
@@ -883,14 +899,26 @@ impl World {
         self.update_active_chunks();
         self.tick_environment().await;
 
+        let active_chunks = self.active_chunks.load();
+        let players = self.players.load();
+        if active_chunks.is_empty() && players.is_empty() {
+            // Nothing to tick, but still hand any queued ticket changes to the
+            // chunk loader so they can't sit in the queue while the server is
+            // empty. It is a no-op when there is nothing pending.
+            self.level.chunk_loading.lock().unwrap().send_change();
+            return;
+        }
+
         let world_for_chunks = self.clone();
+        let active_chunks_for_chunks = active_chunks.clone();
         let chunk_future = async move {
             let t = tokio::time::Instant::now();
-            world_for_chunks.tick_chunks().await;
+            world_for_chunks
+                .tick_chunks(&active_chunks_for_chunks)
+                .await;
             t.elapsed()
         };
 
-        let players = self.players.load();
         let player_count = players.len();
         let players_cache = Arc::new(
             players
@@ -926,11 +954,14 @@ impl World {
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
         let server_for_entities = server.clone();
-        let active_chunks = self.active_chunks.load();
+        let active_chunks_for_entities = active_chunks.clone();
 
         let entity_future = async move {
             let t = tokio::time::Instant::now();
             let mut tasks = tokio::task::JoinSet::new();
+            if active_chunks_for_entities.is_empty() {
+                return t.elapsed();
+            }
             for entity in entities_to_tick.iter() {
                 // Only tick entities that sit in an active (ticking) chunk — the
                 // same set block-entity ticking and mob spawning already use, and
@@ -943,7 +974,7 @@ impl World {
                     get_section_cord(entity_pos.x.floor() as i32),
                     get_section_cord(entity_pos.z.floor() as i32),
                 );
-                if !active_chunks.contains(&entity_chunk) {
+                if !active_chunks_for_entities.contains(&entity_chunk) {
                     continue;
                 }
 
@@ -979,7 +1010,6 @@ impl World {
             t.elapsed()
         };
 
-        let active_chunks = self.active_chunks.load();
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         for chunk_pos in active_chunks.iter() {
             if let Some(chunk_block_entities) = self.block_entities.get(chunk_pos) {
@@ -1193,9 +1223,9 @@ impl World {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub async fn tick_chunks(self: &Arc<Self>) {
-        let active_chunks = self.active_chunks.load();
-        let tick_data = self.level.get_tick_data(&active_chunks);
+    pub async fn tick_chunks(self: &Arc<Self>, active_chunks: &FxHashSet<Vector2<i32>>) {
+        let random_tick_speed = self.level_info.load().game_rules.random_tick_speed.max(0) as usize;
+        let tick_data = self.level.get_tick_data(active_chunks, random_tick_speed);
 
         // ONE JoinSet for all chunk operations
         let mut chunk_tasks = tokio::task::JoinSet::new();
@@ -1292,7 +1322,7 @@ impl World {
         // 5. Spawn Chunk Spawners into the SAME JoinSet
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
-            for pos in active_chunks.iter() {
+            for pos in active_chunks {
                 if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
                     spawning_chunks.push((*pos, chunk));
                 }
@@ -1321,7 +1351,7 @@ impl World {
 
         // Update chunk inhabited time for active chunks
         let loaded_chunks = self.level.loaded_chunks.clone();
-        for pos in active_chunks.iter() {
+        for pos in active_chunks {
             if let Some(chunk) = loaded_chunks.get(pos) {
                 chunk.inhabited_time.fetch_add(1, Relaxed);
             }
