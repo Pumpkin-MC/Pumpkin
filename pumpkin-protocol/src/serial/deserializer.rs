@@ -204,7 +204,7 @@ impl PacketRead for SocketAddr {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         match u8::read(reader)? {
             4 => {
-                let ip = u32::read_be(reader)?;
+                let ip = !u32::read_be(reader)?;
                 let port = u16::read_be(reader)?;
                 Ok(Self::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)))
             }

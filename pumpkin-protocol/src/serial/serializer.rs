@@ -158,7 +158,7 @@ impl PacketWrite for SocketAddr {
             // version, addr, port
             Self::V4(addr) => {
                 4u8.write(writer)?;
-                writer.write_all(&addr.ip().octets())?;
+                writer.write_all(&addr.ip().octets().map(|octet| !octet))?;
                 addr.port().write_be(writer)
             }
             // version, addr_family, port, flow_info, addr, scope_id
