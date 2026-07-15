@@ -5,7 +5,6 @@ use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
 use recipe::RecipeConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
 use tracing::{debug, warn};
@@ -20,7 +19,9 @@ pub mod resource_pack;
 pub use chat::ChatConfig;
 pub use commands::CommandsConfig;
 pub use networking::auth::AuthenticationConfig;
+pub use networking::bedrock::BedrockConfig;
 pub use networking::compression::CompressionConfig;
+pub use networking::java::JavaConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
 pub use plugins::PluginsConfig;
@@ -64,6 +65,48 @@ impl LoadConfiguration for PumpkinConfig {
     fn validate(&self) {
         self.basic.validate();
         self.advanced.validate();
+
+        let min_vd = NonZeroU8::new(2).unwrap();
+        let max_vd = NonZeroU8::new(64).unwrap();
+
+        // Validate Java
+        assert!(
+            self.advanced.networking.java.view_distance >= min_vd,
+            "Java View distance must be at least 2"
+        );
+        assert!(
+            self.advanced.networking.java.view_distance <= max_vd,
+            "Java View distance must be less than 64"
+        );
+        if self.advanced.networking.java.online_mode {
+            assert!(
+                self.advanced.networking.java.encryption,
+                "When online mode is enabled, encryption must be enabled"
+            );
+        }
+
+        // Validate Bedrock
+        assert!(
+            self.advanced.networking.bedrock.view_distance >= min_vd,
+            "Bedrock View distance must be at least 2"
+        );
+        assert!(
+            self.advanced.networking.bedrock.view_distance <= max_vd,
+            "Bedrock View distance must be less than 64"
+        );
+        if self.advanced.networking.bedrock.online_mode {
+            assert!(
+                self.advanced.networking.bedrock.encryption,
+                "When online mode is enabled, bedrock_encryption must be enabled"
+            );
+        }
+
+        if self.basic.allow_chat_reports {
+            assert!(
+                self.advanced.networking.java.online_mode,
+                "When allow_chat_reports is enabled, java.online_mode must be enabled"
+            );
+        }
     }
 }
 
@@ -110,24 +153,8 @@ pub struct AdvancedConfiguration {
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct BasicConfiguration {
-    /// Whether Java Edition Clients are Accepted.
-    pub java_edition: bool,
-    /// The address and port to which the Java Edition server will bind.
-    pub java_edition_address: SocketAddr,
-    /// Whether Bedrock Edition Clients are Accepted.
-    pub bedrock_edition: bool,
-    /// Whether Bedrock Edition Clients are Accepted.
-    pub bedrock_edition_address: SocketAddr,
-    /// Whether packet encryption is enabled for Bedrock Edition.
-    pub bedrock_encryption: bool,
     /// The seed for the world generation.
     pub seed: Seed,
-    /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
-    pub max_players: u32,
-    /// The maximum view distance for players.
-    pub view_distance: NonZeroU8,
-    /// The maximum simulated view distance.
-    pub simulation_distance: NonZeroU8,
     /// The default game difficulty.
     pub default_difficulty: Difficulty,
     /// The op level assigned by the /op command.
@@ -138,12 +165,6 @@ pub struct BasicConfiguration {
     pub allow_end: bool,
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
-    /// Whether online mode is enabled. Requires valid Minecraft accounts.
-    pub online_mode: bool,
-    /// Whether packet encryption is enabled. Required when online mode is enabled.
-    pub encryption: bool,
-    /// Message of the Day; the server's description displayed on the status screen.
-    pub motd: String,
     /// The server's ticks per second.
     pub tps: f32,
     /// The default gamemode for players.
@@ -169,23 +190,12 @@ pub struct BasicConfiguration {
 impl Default for BasicConfiguration {
     fn default() -> Self {
         Self {
-            java_edition: true,
-            java_edition_address: "0.0.0.0:25565".parse().unwrap(),
-            bedrock_edition: true,
-            bedrock_edition_address: "0.0.0.0:19132".parse().unwrap(),
-            bedrock_encryption: true,
             seed: Seed(random::get_seed()),
-            max_players: 1000,
-            view_distance: NonZeroU8::new(16).unwrap(),
-            simulation_distance: NonZeroU8::new(10).unwrap(),
             default_difficulty: Difficulty::Normal,
             op_permission_level: PermissionLvl::Four,
             allow_nether: true,
             allow_end: true,
             hardcore: false,
-            online_mode: true,
-            encryption: true,
-            motd: "A blazingly fast Pumpkin server!".to_string(),
             tps: 20.0,
             default_gamemode: GameMode::Survival,
             force_gamemode: false,
@@ -207,35 +217,7 @@ impl BasicConfiguration {
         PathBuf::from(&self.default_level_name)
     }
 
-    pub fn validate(&self) {
-        let min = NonZeroU8::new(2).unwrap();
-        let max = NonZeroU8::new(64).unwrap();
-
-        assert!(
-            self.view_distance.ge(&min),
-            "View distance must be at least 2"
-        );
-        assert!(
-            self.view_distance.le(&max),
-            "View distance must be less than 64"
-        );
-        if self.online_mode {
-            assert!(
-                self.encryption,
-                "When online mode is enabled, encryption must be enabled"
-            );
-            assert!(
-                self.bedrock_encryption,
-                "When online mode is enabled, bedrock_encryption must be enabled"
-            );
-        }
-        if self.allow_chat_reports {
-            assert!(
-                self.online_mode,
-                "When allow_chat_reports is enabled, online_mode must be enabled"
-            );
-        }
-    }
+    pub const fn validate(&self) {}
 }
 
 impl AdvancedConfiguration {

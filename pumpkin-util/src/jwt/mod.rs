@@ -227,8 +227,24 @@ pub const OIDC_AUDIENCE: &str = "api://auth-minecraft-services/multiplayer";
 pub const OIDC_DISCOVERY_URL: &str =
     "https://client.discovery.minecraft-services.net/api/v1.0/discovery/MinecraftPE/builds/1.0.0.0";
 
-pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
-    let discovery: Value = ureq::get(OIDC_DISCOVERY_URL)
+pub fn fetch_oidc_jwks(
+    discovery_url: Option<&str>,
+    connect_timeout_ms: u32,
+    read_timeout_ms: u32,
+) -> Result<(String, Jwks), AuthError> {
+    let url = discovery_url.unwrap_or(OIDC_DISCOVERY_URL);
+    let config = ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_millis(
+            connect_timeout_ms as u64,
+        )))
+        .timeout_recv_response(Some(std::time::Duration::from_millis(
+            read_timeout_ms as u64,
+        )))
+        .build();
+    let agent: ureq::Agent = config.into();
+
+    let discovery: Value = agent
+        .get(url)
         .call()
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
@@ -248,7 +264,8 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .ok_or_else(|| AuthError::PublicKeyBuild("Discovery missing serviceUri".into()))?;
 
     let openid_config_url = format!("{service_uri}/.well-known/openid-configuration");
-    let openid_config: Value = ureq::get(&openid_config_url)
+    let openid_config: Value = agent
+        .get(&openid_config_url)
         .call()
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
@@ -269,7 +286,8 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .ok_or_else(|| AuthError::PublicKeyBuild("OpenID config missing issuer".into()))?
         .to_string();
 
-    let jwks: Jwks = ureq::get(jwks_uri)
+    let jwks: Jwks = agent
+        .get(jwks_uri)
         .call()
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod anvil;
+pub mod data_files;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
@@ -48,20 +49,13 @@ pub struct LevelData {
     pub border_warning_blocks: f64,
     #[serde(default = "default_border_warning_time")]
     pub border_warning_time: f64,
-    #[serde(rename = "clearWeatherTime", default)]
-    pub clear_weather_time: i32,
     #[serde(default = "default_data_packs")]
     pub data_packs: DataPacks,
     pub data_version: i32,
-    #[serde(default)]
-    pub day_time: i64,
     #[serde(with = "serde_enum_as_integer", default = "default_difficulty")]
     pub difficulty: Difficulty,
     #[serde(default)]
     pub difficulty_locked: bool,
-    #[serde(default)]
-    pub game_rules: GameRuleRegistry,
-    pub world_gen_settings: WorldGenSettings,
     #[serde(default)]
     pub last_played: i64,
     #[serde(default = "default_level_name")]
@@ -82,6 +76,26 @@ pub struct LevelData {
     pub level_version: i32,
     #[serde(rename = "map_id", default)]
     pub map_id: i32,
+
+    // These are NOT serialized to level.dat, but are still deserialized from it if present.
+    // They are loaded and saved by AnvilLevelInfo via the data_files module.
+    /// Game rules – persisted to `data/minecraft/game_rules.dat`.
+    #[serde(skip_serializing, default)]
+    pub game_rules: GameRuleRegistry,
+
+    /// World generation settings – persisted to `data/minecraft/world_gen_settings.dat`.
+    #[serde(skip_serializing, default)]
+    pub world_gen_settings: WorldGenSettings,
+
+    /// In-game time of day (overworld dimension clock).
+    /// Persisted to `data/minecraft/world_clocks.dat`.
+    #[serde(skip_serializing, default)]
+    pub day_time: i64,
+
+    /// Remaining ticks of forced-clear weather.
+    /// Persisted to `data/minecraft/weather.dat`.
+    #[serde(rename = "clearWeatherTime", skip_serializing, default)]
+    pub clear_weather_time: i32,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -134,6 +148,13 @@ pub struct WorldGenSettings {
     pub dimensions: Dimensions,
 }
 
+impl Default for WorldGenSettings {
+    fn default() -> Self {
+        // Use seed 0 as placeholder; actual seed comes from config or world_gen_settings.dat
+        Self::new(pumpkin_util::world_seed::Seed(0))
+    }
+}
+
 pub type Dimensions = HashMap<String, Dimension>;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Dimension {
@@ -144,7 +165,8 @@ pub struct Dimension {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Generator {
-    pub settings: GeneratorSettings,
+    #[serde(default)]
+    pub settings: Option<GeneratorSettings>,
     #[serde(default)]
     pub biome_source: Option<BiomeSource>,
     #[serde(rename = "type")]
@@ -227,7 +249,9 @@ impl WorldGenSettings {
             "minecraft:overworld".to_string(),
             Dimension {
                 generator: Generator {
-                    settings: GeneratorSettings::Reference("minecraft:overworld".to_string()),
+                    settings: Some(GeneratorSettings::Reference(
+                        "minecraft:overworld".to_string(),
+                    )),
                     biome_source: Some(BiomeSource::WithPreset {
                         preset: "minecraft:overworld".to_string(),
                         biome_type: "minecraft:multi_noise".to_string(),
@@ -241,7 +265,7 @@ impl WorldGenSettings {
             "minecraft:the_nether".to_string(),
             Dimension {
                 generator: Generator {
-                    settings: GeneratorSettings::Reference("minecraft:nether".to_string()),
+                    settings: Some(GeneratorSettings::Reference("minecraft:nether".to_string())),
                     biome_source: Some(BiomeSource::WithPreset {
                         preset: "minecraft:nether".to_string(),
                         biome_type: "minecraft:multi_noise".to_string(),
@@ -255,7 +279,7 @@ impl WorldGenSettings {
             "minecraft:the_end".to_string(),
             Dimension {
                 generator: Generator {
-                    settings: GeneratorSettings::Reference("minecraft:end".to_string()),
+                    settings: Some(GeneratorSettings::Reference("minecraft:end".to_string())),
                     biome_source: Some(BiomeSource::Simple {
                         biome_type: "minecraft:the_end".to_string(),
                     }),
@@ -310,14 +334,10 @@ impl LevelData {
             border_size_lerp_time: 0,
             border_warning_blocks: DEFAULT_BORDER_WARNING_BLOCKS,
             border_warning_time: DEFAULT_BORDER_WARNING_TIME,
-            clear_weather_time: -1,
             data_packs: default_data_packs(),
             data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
-            day_time: 0,
             difficulty: DEFAULT_DIFFICULTY,
             difficulty_locked: false,
-            game_rules: GameRuleRegistry::default(),
-            world_gen_settings: WorldGenSettings::new(seed),
             last_played: -1,
             level_name: DEFAULT_LEVEL_NAME.to_string(),
             spawn_x: 0,
@@ -328,6 +348,11 @@ impl LevelData {
             world_version: WorldVersion::default(),
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
             map_id: 0,
+            // fields now in data/minecraft/*.dat
+            game_rules: GameRuleRegistry::default(),
+            world_gen_settings: WorldGenSettings::new(seed),
+            day_time: 0,
+            clear_weather_time: -1,
         }
     }
 
@@ -345,6 +370,8 @@ pub enum WorldInfoError {
     InfoNotFound,
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
     #[error("Unsupported world data version: {0}")]
     UnsupportedDataVersion(i32),
     #[error("Unsupported world level version: {0}")]

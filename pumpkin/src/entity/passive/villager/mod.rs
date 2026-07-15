@@ -155,11 +155,14 @@ impl VillagerEntity {
         };
 
         // Send initial metadata
-        mob_arc.get_entity().send_meta_data(&[Metadata::new(
-            TrackedData::VILLAGER_DATA,
-            MetaDataType::VILLAGER_DATA,
-            villager_data,
-        )]);
+        mob_arc.get_entity().send_meta_data(
+            &[Metadata::new(
+                TrackedData::VILLAGER_DATA,
+                MetaDataType::VILLAGER_DATA,
+                villager_data,
+            )],
+            None,
+        );
 
         mob_arc
     }
@@ -210,11 +213,14 @@ impl VillagerEntity {
             *villager_data = data;
             old_profession
         };
-        self.get_entity().send_meta_data(&[Metadata::new(
-            TrackedData::VILLAGER_DATA,
-            MetaDataType::VILLAGER_DATA,
-            data,
-        )]);
+        self.get_entity().send_meta_data(
+            &[Metadata::new(
+                TrackedData::VILLAGER_DATA,
+                MetaDataType::VILLAGER_DATA,
+                data,
+            )],
+            None,
+        );
 
         if old_profession != data.profession {
             self.generate_trades(data.profession_enum(), data.level.0)
@@ -760,11 +766,14 @@ impl Mob for VillagerEntity {
                     if is_sleeping {
                         // Wake up if bed was broken
                         self.get_entity().set_pose(EntityPose::Standing);
-                        self.get_entity().send_meta_data(&[Metadata::new(
-                            TrackedData::SLEEPING_POS_ID,
-                            MetaDataType::OPTIONAL_BLOCK_POS,
-                            None::<BlockPos>,
-                        )]);
+                        self.get_entity().send_meta_data(
+                            &[Metadata::new(
+                                TrackedData::SLEEPING_POS_ID,
+                                MetaDataType::OPTIONAL_BLOCK_POS,
+                                None::<BlockPos>,
+                            )],
+                            None,
+                        );
                     }
                 }
             }
@@ -857,11 +866,14 @@ impl Mob for VillagerEntity {
                                     .await;
 
                                     self.get_entity().set_pose(EntityPose::Sleeping);
-                                    self.get_entity().send_meta_data(&[Metadata::new(
-                                        TrackedData::SLEEPING_POS_ID,
-                                        MetaDataType::OPTIONAL_BLOCK_POS,
-                                        Some(home_pos),
-                                    )]);
+                                    self.get_entity().send_meta_data(
+                                        &[Metadata::new(
+                                            TrackedData::SLEEPING_POS_ID,
+                                            MetaDataType::OPTIONAL_BLOCK_POS,
+                                            Some(home_pos),
+                                        )],
+                                        None,
+                                    );
                                 }
                             }
                         }
@@ -877,11 +889,14 @@ impl Mob for VillagerEntity {
                     }
 
                     self.get_entity().set_pose(EntityPose::Standing);
-                    self.get_entity().send_meta_data(&[Metadata::new(
-                        TrackedData::SLEEPING_POS_ID,
-                        MetaDataType::OPTIONAL_BLOCK_POS,
-                        None::<BlockPos>,
-                    )]);
+                    self.get_entity().send_meta_data(
+                        &[Metadata::new(
+                            TrackedData::SLEEPING_POS_ID,
+                            MetaDataType::OPTIONAL_BLOCK_POS,
+                            None::<BlockPos>,
+                        )],
+                        None,
+                    );
                 }
             }
 

@@ -18,6 +18,47 @@ pub trait GeneratorInit {
 use pumpkin_data::structures::{StructurePlacementCalculator, StructureSet};
 use rustc_hash::FxHashMap;
 
+pub mod flat;
+
+#[derive(Clone, Debug)]
+pub struct FlatLayer {
+    pub block: String,
+    pub height: i32,
+}
+
+pub enum WorldGenerator {
+    Noise(Box<VanillaGenerator>),
+    Flat(flat::FlatGenerator),
+}
+
+impl WorldGenerator {
+    #[must_use]
+    pub const fn dimension(&self) -> &Dimension {
+        match self {
+            Self::Noise(noise_gen) => &noise_gen.dimension,
+            Self::Flat(flat_gen) => &flat_gen.dimension,
+        }
+    }
+
+    #[must_use]
+    pub const fn seed(&self) -> u64 {
+        match self {
+            Self::Noise(noise_gen) => noise_gen.random_config.seed,
+            Self::Flat(flat_gen) => flat_gen.seed,
+        }
+    }
+
+    #[must_use]
+    pub const fn global_structure_cache(
+        &self,
+    ) -> Option<&crate::generation::structure::placement::GlobalStructureCache> {
+        match self {
+            Self::Noise(noise_gen) => Some(&noise_gen.global_structure_cache),
+            Self::Flat(_) => None,
+        }
+    }
+}
+
 pub struct VanillaGenerator {
     pub random_config: GlobalRandomConfig,
     pub base_router: ProtoNoiseRouters,

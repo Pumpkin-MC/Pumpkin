@@ -34,7 +34,7 @@ impl JavaClient {
         // Don't allow new logons when the server is full.
         // If `max_players` is set to zero, then there is no max player count enforced.
         // TODO: If client is an operator or has otherwise suitable elevated permissions, allow the client to bypass this requirement.
-        let max_players = server.basic_config.max_players;
+        let max_players = server.advanced_config.networking.java.max_players;
         if max_players > 0 && server.get_player_count() >= max_players as usize {
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
@@ -74,7 +74,7 @@ impl JavaClient {
                 }
             }
         } else {
-            let id = if server.basic_config.online_mode {
+            let id = if server.advanced_config.networking.java.online_mode {
                 login_start.uuid
             } else {
                 offline_uuid(&login_start.name).expect("This is very not safe and bad")
@@ -87,16 +87,19 @@ impl JavaClient {
                 profile_actions: None,
             };
 
-            if server.advanced_config.networking.java_compression.enabled {
+            if server.advanced_config.networking.java.compression.enabled {
                 self.enable_compression(server).await;
             }
 
-            if server.basic_config.encryption {
+            if server.advanced_config.networking.java.encryption {
                 let verify_token: [u8; 4] = rand::random();
                 // Wait until we have sent the encryption packet to the client
                 self.send_packet_now(
                     &server
-                        .encryption_request(&verify_token, server.basic_config.online_mode)
+                        .encryption_request(
+                            &verify_token,
+                            server.advanced_config.networking.java.online_mode,
+                        )
                         .await,
                 )
                 .await;
@@ -132,7 +135,7 @@ impl JavaClient {
             return;
         };
 
-        if server.basic_config.online_mode {
+        if server.advanced_config.networking.java.online_mode {
             // Online mode auth
             match self
                 .authenticate(server, &shared_secret, &profile.name)
@@ -201,7 +204,8 @@ impl JavaClient {
         let compression = server
             .advanced_config
             .networking
-            .java_compression
+            .java
+            .compression
             .info
             .clone();
         // We want to wait until we have sent the compression packet to the client
@@ -236,7 +240,7 @@ impl JavaClient {
             username,
             &hash,
             &ip,
-            &server.advanced_config.networking.authentication,
+            &server.advanced_config.networking.java.authentication,
         )?;
 
         // Check if the player should join
@@ -244,6 +248,7 @@ impl JavaClient {
             if server
                 .advanced_config
                 .networking
+                .java
                 .authentication
                 .player_profile
                 .allow_banned_players
@@ -251,6 +256,7 @@ impl JavaClient {
                 for allowed in &server
                     .advanced_config
                     .networking
+                    .java
                     .authentication
                     .player_profile
                     .allowed_actions
@@ -270,7 +276,12 @@ impl JavaClient {
         for property in profile.properties.load().iter() {
             authentication::validate_textures(
                 property,
-                &server.advanced_config.networking.authentication.textures,
+                &server
+                    .advanced_config
+                    .networking
+                    .java
+                    .authentication
+                    .textures,
             )
             .map_err(AuthError::TextureError)?;
         }

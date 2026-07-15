@@ -3,7 +3,7 @@ use std::num::NonZeroI32;
 
 use pumpkin_data::item::{BedrockItem, JavaToBedrockItemMapping};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_nbt::Nbt;
+use pumpkin_nbt::{Nbt, deserializer::NbtReadHelperBedrock};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -54,12 +54,45 @@ impl PacketRead for NetworkItemDescriptor {
         let mut user_data = vec![0u8; user_data_len as usize];
         buf.read_exact(&mut user_data)?;
 
+        let mut nbt_data = Nbt::default();
+        let mut place_on_blocks = Vec::new();
+        let mut destroy_blocks = Vec::new();
+        let mut shield_blocking_tick = 0;
+
+        if !user_data.is_empty() {
+            let mut cursor = std::io::Cursor::new(user_data);
+            let nbt_version = i16::read(&mut cursor)?;
+            if nbt_version == -1 {
+                let _version = i8::read(&mut cursor)?;
+                let mut nbt_reader = NbtReadHelperBedrock::new(&mut cursor);
+                nbt_data = Nbt::read(&mut nbt_reader)
+                    .map_err(|e| Error::new(std::io::ErrorKind::InvalidData, e))?;
+            }
+
+            let place_on_len = VarUInt::read(&mut cursor)?.0;
+            for _ in 0..place_on_len {
+                place_on_blocks.push(String::read(&mut cursor)?);
+            }
+
+            let destroy_len = VarUInt::read(&mut cursor)?.0;
+            for _ in 0..destroy_len {
+                destroy_blocks.push(String::read(&mut cursor)?);
+            }
+
+            if id.0 == (BedrockItem::SHIELD.id as i32) {
+                shield_blocking_tick = i64::read(&mut cursor)?;
+            }
+        }
+
         Ok(Self {
             id,
             stack_size,
             aux_value,
             block_runtime_id,
-            ..Default::default()
+            nbt_data,
+            place_on_blocks,
+            destroy_blocks,
+            shield_blocking_tick,
         })
     }
 }
@@ -217,13 +250,46 @@ impl PacketRead for ItemStackWrapper {
         let mut user_data = vec![0u8; user_data_len as usize];
         buf.read_exact(&mut user_data)?;
 
+        let mut nbt_data = Nbt::default();
+        let mut place_on_blocks = Vec::new();
+        let mut destroy_blocks = Vec::new();
+        let mut shield_blocking_tick = 0;
+
+        if !user_data.is_empty() {
+            let mut cursor = std::io::Cursor::new(user_data);
+            let nbt_version = i16::read(&mut cursor)?;
+            if nbt_version == -1 {
+                let _version = i8::read(&mut cursor)?;
+                let mut nbt_reader = NbtReadHelperBedrock::new(&mut cursor);
+                nbt_data = Nbt::read(&mut nbt_reader)
+                    .map_err(|e| Error::new(std::io::ErrorKind::InvalidData, e))?;
+            }
+
+            let place_on_len = VarUInt::read(&mut cursor)?.0;
+            for _ in 0..place_on_len {
+                place_on_blocks.push(String::read(&mut cursor)?);
+            }
+
+            let destroy_len = VarUInt::read(&mut cursor)?.0;
+            for _ in 0..destroy_len {
+                destroy_blocks.push(String::read(&mut cursor)?);
+            }
+
+            if id == (BedrockItem::SHIELD.id) {
+                shield_blocking_tick = i64::read(&mut cursor)?;
+            }
+        }
+
         Ok(Self {
             id,
             stack_size,
             aux_value,
             block_runtime_id,
+            nbt_data,
+            place_on_blocks,
+            destroy_blocks,
+            shield_blocking_tick,
             net_id,
-            ..Default::default()
         })
     }
 }

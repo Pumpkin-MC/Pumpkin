@@ -13,11 +13,15 @@ use std::pin::Pin;
 use std::string::ToString;
 
 pub static ADVANCEMENT_REGISTRY: Identifier = Identifier::vanilla_static("advancement");
+pub static BIOME_REGISTRY: Identifier = Identifier::vanilla_static("worldgen/biome");
 
 pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND,
     translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND,
 );
+
+pub const ERROR_INVALID_BIOME: CommandErrorType<1> =
+    CommandErrorType::new("commands.fillbiome.invalid", "commands.fillbiome.invalid");
 
 /// Represents an argument type used to get a resource key from an identifier.
 ///
@@ -53,6 +57,13 @@ impl ArgumentType for ResourceKeyArgument {
                 suggestions_builder
                     .filter_and_suggest_iter(advancements.iter().map(ToString::to_string))
                     .build()
+            })
+        } else if self.0 == BIOME_REGISTRY {
+            Box::pin(async move {
+                let biomes = pumpkin_data::biome::Biome::ALL
+                    .iter()
+                    .map(|biome| format!("minecraft:{}", biome.registry_id));
+                suggestions_builder.filter_and_suggest_iter(biomes).build()
             })
         } else {
             Box::pin(async move { Suggestions::empty() })
@@ -91,6 +102,20 @@ impl ResourceKeyArgument {
             ERROR_INVALID_ADVANCEMENT.create_without_context(TextComponent::text(
                 resource_key.identifier.path().to_string(),
             ))
+        })
+    }
+
+    /// Returns a [`CommandContext`]'s parsed resource key argument as a [`Biome`].
+    pub fn get_biome(
+        context: &CommandContext,
+        name: &str,
+    ) -> Result<&'static pumpkin_data::biome::Biome, CommandSyntaxError> {
+        let resource_key: &ResourceKey =
+            Self::get_registry_key(context, name, &BIOME_REGISTRY, &ERROR_INVALID_BIOME)?;
+        let path = resource_key.identifier.path();
+        pumpkin_data::biome::Biome::from_name(path).ok_or_else(|| {
+            ERROR_INVALID_BIOME
+                .create_without_context(TextComponent::text(resource_key.identifier.to_string()))
         })
     }
 

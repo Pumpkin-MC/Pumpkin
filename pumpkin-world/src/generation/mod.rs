@@ -25,9 +25,22 @@ use pumpkin_util::{
 };
 
 #[must_use]
-pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> {
-    // TODO decide which WorldGenerator to pick based on config.
-    Box::new(VanillaGenerator::new(seed, dimension))
+pub fn get_world_gen(
+    seed: Seed,
+    dimension: Dimension,
+    is_flat: bool,
+    flat_layers: Vec<generator::FlatLayer>,
+    flat_biome: String,
+) -> Box<generator::WorldGenerator> {
+    if is_flat {
+        Box::new(generator::WorldGenerator::Flat(
+            generator::flat::FlatGenerator::new(seed, dimension, flat_layers, flat_biome),
+        ))
+    } else {
+        Box::new(generator::WorldGenerator::Noise(Box::new(
+            VanillaGenerator::new(seed, dimension),
+        )))
+    }
 }
 
 pub struct GlobalRandomConfig {

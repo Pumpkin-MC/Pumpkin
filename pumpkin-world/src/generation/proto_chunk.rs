@@ -176,17 +176,28 @@ impl TerrainCache {
 
 impl ProtoChunk {
     #[must_use]
-    pub fn new(x: i32, z: i32, generator: &super::generator::VanillaGenerator) -> Self {
-        let dimension = &generator.dimension;
+    pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
+        let dimension = generator.dimension();
         let height = dimension.logical_height as u16;
         let section_count = (height as usize) / 16;
+
+        let default_block = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => noise_gen.default_block,
+            super::generator::WorldGenerator::Flat(_) => Block::AIR.default_state,
+        };
+        let biome_mixer_seed = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => noise_gen.biome_mixer_seed,
+            super::generator::WorldGenerator::Flat(flat_gen) => {
+                crate::biome::hash_seed(flat_gen.seed)
+            }
+        };
 
         let default_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
             x,
             z,
-            default_block: generator.default_block,
-            biome_mixer_seed: generator.biome_mixer_seed,
+            default_block,
+            biome_mixer_seed,
             flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
             flat_biome_map: vec![
@@ -225,7 +236,7 @@ impl ProtoChunk {
     #[must_use]
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
-        generator: &super::generator::VanillaGenerator,
+        generator: &super::generator::WorldGenerator,
     ) -> Self {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
@@ -518,7 +529,6 @@ impl ProtoChunk {
     #[expect(clippy::too_many_lines)]
     pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureReferences);
-
         let settings = generator.settings;
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
@@ -717,7 +727,6 @@ impl ProtoChunk {
 
     pub fn step_to_carvers(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Surface);
-
         super::carver::carve(self, generator);
 
         self.stage = StagedChunkEnum::Carvers;

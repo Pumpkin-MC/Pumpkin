@@ -68,8 +68,8 @@ impl<'a> CachedBranding {
 
 impl CachedStatus {
     #[must_use]
-    pub fn new(config: &BasicConfiguration) -> Self {
-        let status_response = Self::build_response(config);
+    pub fn new(config: &BasicConfiguration, motd: &str, max_players: u32) -> Self {
+        let status_response = Self::build_response(config, motd, max_players);
 
         Self {
             status_response,
@@ -135,7 +135,11 @@ impl CachedStatus {
         }
     }
 
-    pub fn build_response(config: &BasicConfiguration) -> StatusResponse {
+    pub fn build_response(
+        config: &BasicConfiguration,
+        motd: &str,
+        max_players: u32,
+    ) -> StatusResponse {
         let favicon = if config.use_favicon {
             config.favicon_path.as_ref().map_or_else(
                 || {
@@ -185,11 +189,11 @@ impl CachedStatus {
                 protocol: LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {
-                max: config.max_players,
+                max: max_players,
                 online: 0,
                 sample: vec![],
             }),
-            description: config.motd.clone(),
+            description: motd.to_string(),
             favicon,
             // This should stay true even when reports are disabled.
             // It prevents the annoying popup when joining the server.
@@ -200,6 +204,10 @@ impl CachedStatus {
 
 impl Default for CachedStatus {
     fn default() -> Self {
-        Self::new(&BasicConfiguration::default())
+        Self::new(
+            &BasicConfiguration::default(),
+            "A blazingly fast Pumpkin server!",
+            1000,
+        )
     }
 }

@@ -70,10 +70,10 @@ impl GameProfileResult {
                     return Ok(vec![profile]);
                 }
 
-                if server.basic_config.online_mode {
+                if server.advanced_config.networking.java.online_mode {
                     return match lookup_profile_by_name(
                         name,
-                        &server.advanced_config.networking.authentication,
+                        &server.advanced_config.networking.java.authentication,
                     ) {
                         Ok(Some((uuid, resolved_name))) => {
                             server

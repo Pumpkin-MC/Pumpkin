@@ -165,11 +165,14 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity.entity.send_meta_data(&[Metadata::new(
-                TrackedData::MOB_FLAGS_ID,
-                MetaDataType::BYTE,
-                new_b,
-            )]);
+            self.living_entity.entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::MOB_FLAGS_ID,
+                    MetaDataType::BYTE,
+                    new_b,
+                )],
+                None,
+            );
         }
     }
 
@@ -493,11 +496,14 @@ pub trait Mob: EntityBase + Send + Sync {
             let entity = self.get_entity();
             let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
             if is_baby {
-                entity.send_meta_data(&[Metadata::new(
-                    TrackedData::BABY_ID,
-                    MetaDataType::BOOLEAN,
-                    true,
-                )]);
+                entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
             }
         })
     }

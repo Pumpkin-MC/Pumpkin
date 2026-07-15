@@ -1,7 +1,7 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
-use crate::generation::generator::VanillaGenerator;
+use crate::generation::generator::WorldGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
     chunk::{
@@ -77,7 +77,7 @@ pub struct Level {
     pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
     entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
-    pub world_gen: Arc<VanillaGenerator>,
+    pub world_gen: Arc<WorldGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -91,6 +91,9 @@ pub struct Level {
     pub shut_down_chunk_system: AtomicBool,
     pub should_save: AtomicBool,
     pub should_unload: AtomicBool,
+    /// Whether periodic autosaving is enabled. Toggled by `/save-off` and `/save-on`;
+    /// a manual `/save-all` still saves while this is `false`.
+    pub save_enabled: AtomicBool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     pub autosave_ticks: u64,
 
@@ -125,6 +128,7 @@ pub struct LevelFolder {
 
 impl Level {
     #[must_use]
+    #[expect(clippy::too_many_lines)]
     pub fn from_root_folder(
         level_config: &LevelConfig,
         root_folder: PathBuf,
@@ -132,11 +136,18 @@ impl Level {
         dimension: Dimension,
         gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
-        let (namespace, name) = match dimension.minecraft_name.split_once(':') {
-            Some((ns, n)) => (ns, n),
-            None => ("minecraft", dimension.minecraft_name),
+        let dim_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
+            || dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name
+            || dimension.minecraft_name == Dimension::THE_END.minecraft_name
+        {
+            root_folder.clone()
+        } else {
+            let (namespace, name) = match dimension.minecraft_name.split_once(':') {
+                Some((ns, n)) => (ns, n),
+                None => ("minecraft", dimension.minecraft_name),
+            };
+            root_folder.join("dimensions").join(namespace).join(name)
         };
-        let dim_folder = root_folder.join("dimensions").join(namespace).join(name);
 
         let region_folder = dim_folder.join("region");
         let entities_folder = dim_folder.join("entities");
@@ -154,8 +165,62 @@ impl Level {
             poi_folder,
         });
 
+        let main_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
+            level_folder.root_folder.clone()
+        } else {
+            level_folder
+                .root_folder
+                .parent()
+                .unwrap_or(&level_folder.root_folder)
+                .to_path_buf()
+        };
+
+        let mut is_flat = false;
+        let mut flat_layers = Vec::new();
+        let mut flat_biome = "minecraft:plains".to_string();
+
+        if let Some(wgs) = crate::world_info::data_files::read_world_gen_settings(&main_folder)
+            && let Some(dim_settings) = wgs.dimensions.get(dimension.minecraft_name)
+            && dim_settings.generator.generator_type == "minecraft:flat"
+        {
+            is_flat = true;
+            if let Some(crate::world_info::GeneratorSettings::Compound(nbt)) =
+                &dim_settings.generator.settings
+            {
+                if let Some(pumpkin_nbt::tag::NbtTag::String(b)) = nbt.child_tags.get("biome") {
+                    flat_biome = b.to_string();
+                }
+                if let Some(pumpkin_nbt::tag::NbtTag::List(list)) = nbt.child_tags.get("layers") {
+                    for tag in list {
+                        if let pumpkin_nbt::tag::NbtTag::Compound(layer_compound) = tag {
+                            let mut block = "minecraft:air".to_string();
+                            let mut height = 1;
+                            if let Some(pumpkin_nbt::tag::NbtTag::String(bl)) =
+                                layer_compound.child_tags.get("block")
+                            {
+                                block = bl.to_string();
+                            }
+                            if let Some(pumpkin_nbt::tag::NbtTag::Int(h)) =
+                                layer_compound.child_tags.get("height")
+                            {
+                                height = *h;
+                            }
+                            flat_layers
+                                .push(crate::generation::generator::FlatLayer { block, height });
+                        }
+                    }
+                }
+            }
+        }
+
         let seed = Seed(seed as u64);
-        let world_gen = get_world_gen(seed, dimension).into();
+        let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen(
+            seed,
+            dimension,
+            is_flat,
+            flat_layers,
+            flat_biome,
+        ));
 
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
             ChunkConfig::Linear => Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(())),
@@ -200,6 +265,7 @@ impl Level {
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
+            save_enabled: AtomicBool::new(true),
             autosave_ticks: level_config.autosave_ticks,
             pending_entity_generations,
             level_channel: level_channel.clone(),

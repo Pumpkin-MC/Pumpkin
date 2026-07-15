@@ -177,7 +177,7 @@ impl PoiRegion {
     /// Compress chunk data to bytes
     fn compress_chunk_data(chunk_data: &PoiChunkData) -> std::io::Result<Vec<u8>> {
         let mut uncompressed = Vec::new();
-        pumpkin_nbt::to_bytes_unnamed(chunk_data, &mut uncompressed)
+        pumpkin_nbt::to_bytes(chunk_data, &mut uncompressed)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
@@ -191,8 +191,16 @@ impl PoiRegion {
         let mut uncompressed = Vec::new();
         decoder.read_to_end(&mut uncompressed)?;
 
-        pumpkin_nbt::from_bytes_unnamed(Cursor::new(uncompressed))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+        let is_named = uncompressed.len() >= 3
+            && uncompressed[0] == 0x0a
+            && uncompressed[1] == 0x00
+            && uncompressed[2] == 0x00;
+        if is_named {
+            pumpkin_nbt::from_bytes(Cursor::new(uncompressed))
+        } else {
+            pumpkin_nbt::from_bytes_unnamed(Cursor::new(uncompressed))
+        }
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
     }
 
     pub fn save(&mut self, path: &Path) -> std::io::Result<()> {

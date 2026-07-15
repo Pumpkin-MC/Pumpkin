@@ -26,6 +26,21 @@ pub struct Scoreboard {
 }
 
 impl Scoreboard {
+    #[must_use]
+    pub const fn get_objectives(&self) -> &HashMap<String, ScoreboardObjective<'static>> {
+        &self.objectives
+    }
+
+    #[must_use]
+    pub const fn get_scores(&self) -> &HashMap<String, HashMap<String, ScoreboardScore<'static>>> {
+        &self.scores
+    }
+
+    #[must_use]
+    pub const fn get_teams(&self) -> &HashMap<String, Team> {
+        &self.teams
+    }
+
     async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
         world: &World,
         je_packet: &J,
@@ -281,6 +296,7 @@ pub struct ScoreboardObjective<'a> {
     pub display_name: TextComponent,
     pub render_type: RenderType,
     pub number_format: Option<NumberFormat>,
+    pub criterion: &'a str,
 }
 
 impl<'a> ScoreboardObjective<'a> {
@@ -290,12 +306,14 @@ impl<'a> ScoreboardObjective<'a> {
         display_name: TextComponent,
         render_type: RenderType,
         number_format: Option<NumberFormat>,
+        criterion: &'a str,
     ) -> Self {
         Self {
             name,
             display_name,
             render_type,
             number_format,
+            criterion,
         }
     }
 }
@@ -306,6 +324,7 @@ pub struct ScoreboardScore<'a> {
     pub value: VarInt,
     pub display_name: Option<TextComponent>,
     pub number_format: Option<NumberFormat>,
+    pub locked: bool,
 }
 
 impl<'a> ScoreboardScore<'a> {
@@ -323,10 +342,12 @@ impl<'a> ScoreboardScore<'a> {
             value,
             display_name,
             number_format,
+            locked: true,
         }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameTagVisibility {
     Always,
     Never,
@@ -346,6 +367,7 @@ impl NameTagVisibility {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollisionRule {
     Always,
     Never,
@@ -365,6 +387,7 @@ impl CollisionRule {
     }
 }
 
+#[derive(Clone)]
 pub struct Team {
     pub name: String,
     pub display_name: TextComponent,

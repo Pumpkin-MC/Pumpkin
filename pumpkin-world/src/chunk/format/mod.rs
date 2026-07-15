@@ -78,9 +78,16 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data =
+        let is_named = chunk_data.len() >= 3
+            && chunk_data[0] == 0x0a
+            && chunk_data[1] == 0x00
+            && chunk_data[2] == 0x00;
+        let chunk_data = if is_named {
+            pumpkin_nbt::from_bytes::<ChunkNbt>(std::io::Cursor::new(chunk_data))
+        } else {
             pumpkin_nbt::from_bytes_unnamed::<ChunkNbt>(std::io::Cursor::new(chunk_data))
-                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+        }
+        .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
@@ -222,7 +229,7 @@ impl ChunkData {
         };
 
         let mut result = Vec::new();
-        pumpkin_nbt::to_bytes_unnamed(&nbt_ref, &mut result)
+        pumpkin_nbt::to_bytes(&nbt_ref, &mut result)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
 
         Ok(result.into())
@@ -272,9 +279,16 @@ impl ChunkEntityData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_entity_data =
+        let is_named = chunk_data.len() >= 3
+            && chunk_data[0] == 0x0a
+            && chunk_data[1] == 0x00
+            && chunk_data[2] == 0x00;
+        let chunk_entity_data = if is_named {
+            pumpkin_nbt::from_bytes::<EntityNbt>(std::io::Cursor::new(chunk_data))
+        } else {
             pumpkin_nbt::from_bytes_unnamed::<EntityNbt>(std::io::Cursor::new(chunk_data))
-                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+        }
+        .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x
             || chunk_entity_data.position[1] != position.y
@@ -304,7 +318,7 @@ impl ChunkEntityData {
         };
 
         let mut result = Vec::new();
-        pumpkin_nbt::to_bytes_unnamed(&nbt, &mut result)
+        pumpkin_nbt::to_bytes(&nbt, &mut result)
             .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
         Ok(result.into())
     }
@@ -476,12 +490,13 @@ struct ChunkNbt {
     status: ChunkStatus,
     #[serde(rename = "sections")]
     sections: Vec<ChunkSectionNBT>,
+    #[serde(default)]
     heightmaps: ChunkHeightmaps,
-    #[serde(rename = "block_ticks")]
+    #[serde(rename = "block_ticks", default)]
     block_ticks: Vec<ScheduledTick<&'static Block>>,
-    #[serde(rename = "fluid_ticks")]
+    #[serde(rename = "fluid_ticks", default)]
     fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
-    #[serde(rename = "block_entities")]
+    #[serde(rename = "block_entities", default)]
     block_entities: Vec<NbtCompound>,
     #[serde(rename = "isLightOn", default)]
     light_correct: bool,

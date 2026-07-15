@@ -37,6 +37,23 @@ impl CommandExecutor for ListCommandExecutor {
                 ListMode::Uuids => get_player_names_and_ids(&players),
             };
 
+            let max_players = context.source.output.as_player().map_or_else(
+                || context.server().advanced_config.networking.java.max_players,
+                |player| match player.client.as_ref() {
+                    crate::net::ClientPlatform::Java(_) => {
+                        context.server().advanced_config.networking.java.max_players
+                    }
+                    crate::net::ClientPlatform::Bedrock(_) => {
+                        context
+                            .server()
+                            .advanced_config
+                            .networking
+                            .bedrock
+                            .max_players
+                    }
+                },
+            );
+
             context
                 .source
                 .send_feedback(
@@ -45,9 +62,7 @@ impl CommandExecutor for ListCommandExecutor {
                         COMMANDS_LIST_PLAYERS,
                         [
                             TextComponent::text(players_len.to_string()),
-                            TextComponent::text(
-                                context.server().basic_config.max_players.to_string(),
-                            ),
+                            TextComponent::text(max_players.to_string()),
                             list,
                         ],
                     ),

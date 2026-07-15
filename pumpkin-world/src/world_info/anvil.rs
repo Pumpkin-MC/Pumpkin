@@ -12,6 +12,12 @@ use serde::{Deserialize, Serialize};
 use crate::world_info::{
     MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
+    data_files::{
+        minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
+        read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
+        write_game_rules, write_scheduled_events_stub, write_wandering_trader, write_weather,
+        write_world_clocks, write_world_gen_settings,
+    },
 };
 
 use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
@@ -89,10 +95,43 @@ impl WorldInfoReader for AnvilLevelInfo {
 
         check_file_data_version(&buf)?;
         check_file_level_version(&buf)?;
-        let info = pumpkin_nbt::from_bytes::<LevelDat>(Cursor::new(buf))
+        let mut info = pumpkin_nbt::from_bytes::<LevelDat>(Cursor::new(buf))
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
 
-        // TODO: check version
+        // game_rules.dat – prefer the new file; fall back to level.dat values
+        if minecraft_data_dir(level_folder)
+            .join("game_rules.dat")
+            .exists()
+        {
+            info.data.game_rules = read_game_rules(level_folder);
+        }
+
+        // world_gen_settings.dat
+        if let Some(wgs) = read_world_gen_settings(level_folder) {
+            info.data.world_gen_settings = wgs;
+        }
+
+        // world_clocks.dat – read the overworld day_time
+        if minecraft_data_dir(level_folder)
+            .join("world_clocks.dat")
+            .exists()
+        {
+            let clocks = read_world_clocks(level_folder);
+            if let Some(overworld) = clocks.clocks.get("minecraft:overworld") {
+                info.data.day_time = overworld.total_ticks;
+            }
+        }
+
+        // weather.dat
+        if minecraft_data_dir(level_folder)
+            .join("weather.dat")
+            .exists()
+        {
+            let weather = read_weather(level_folder);
+            info.data.clear_weather_time = weather.clear_weather_time;
+        }
+
+        // (wandering_trader.dat is not part of LevelData; stored separately when needed)
 
         Ok(info.data)
     }
@@ -112,20 +151,76 @@ impl WorldInfoWriter for AnvilLevelInfo {
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };
 
-        // open file
+        // ── Write level.dat ───────────────────────────────────────────────────
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
         let world_info_file = File::create(path)?;
 
-        // write compressed data into file
         let compression_writer = GzEncoder::new(world_info_file, Compression::best());
         // TODO: Proper error handling
         pumpkin_nbt::to_bytes(&level, compression_writer)
             .expect("Failed to write level.dat to disk");
+
+        let data_version = info.data_version;
+
+        // ── Write data/minecraft/*.dat files ─────────────────────────────────
+
+        // game_rules.dat
+        if let Err(e) = write_game_rules(level_folder, &info.game_rules, data_version) {
+            error!("Failed to write game_rules.dat: {e}");
+        }
+
+        // world_gen_settings.dat
+        if let Err(e) =
+            write_world_gen_settings(level_folder, &info.world_gen_settings, data_version)
+        {
+            error!("Failed to write world_gen_settings.dat: {e}");
+        }
+
+        // world_clocks.dat – persist the overworld day_time; preserve other
+        let mut clocks = read_world_clocks(level_folder);
+        clocks.data_version = data_version;
+        clocks
+            .clocks
+            .entry("minecraft:overworld".to_string())
+            .and_modify(|c| c.total_ticks = info.day_time)
+            .or_insert(crate::world_info::data_files::DimensionClock {
+                total_ticks: info.day_time,
+            });
+
+        if let Err(e) = write_world_clocks(level_folder, &clocks) {
+            error!("Failed to write world_clocks.dat: {e}");
+        }
+
+        // weather.dat
+        let mut weather = read_weather(level_folder);
+        weather.clear_weather_time = info.clear_weather_time;
+        weather.data_version = data_version;
+        if let Err(e) = write_weather(level_folder, &weather) {
+            error!("Failed to write weather.dat: {e}");
+        }
+
+        // wandering_trader.dat (stub / load-save)
+        let mut wandering_trader = read_wandering_trader(level_folder);
+        wandering_trader.data_version = data_version;
+        if let Err(e) = write_wandering_trader(level_folder, &wandering_trader) {
+            error!("Failed to write wandering_trader.dat: {e}");
+        }
+
+        // custom_boss_events.dat
+        if let Err(e) = write_custom_boss_events_stub(level_folder, data_version) {
+            error!("Failed to write custom_boss_events.dat: {e}");
+        }
+
+        // scheduled_events.dat
+        if let Err(e) = write_scheduled_events_stub(level_folder, data_version) {
+            error!("Failed to write scheduled_events.dat: {e}");
+        }
+
         Ok(())
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct LevelDat {
     // This tag contains all the level data.
     #[serde(rename = "Data")]
@@ -267,7 +362,13 @@ mod test {
         let level_dat_again: LevelDat =
             from_bytes(Cursor::new(serialized)).expect("Failed to decode from bytes");
 
-        assert_eq!(level_dat_again, *LEVEL_DAT);
+        let mut expected = (*LEVEL_DAT).clone();
+        expected.data.game_rules = GameRuleRegistry::default();
+        expected.data.world_gen_settings = WorldGenSettings::default();
+        expected.data.day_time = 0;
+        expected.data.clear_weather_time = 0;
+
+        assert_eq!(level_dat_again, expected);
     }
 
     #[test]

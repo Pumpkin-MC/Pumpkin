@@ -470,11 +470,14 @@ impl EntityBase for ItemEntity {
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
-            self.entity.send_meta_data(&[Metadata::new(
-                TrackedData::ITEM,
-                MetaDataType::ITEM_STACK,
-                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-            )]);
+            self.entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::ITEM,
+                    MetaDataType::ITEM_STACK,
+                    &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                )],
+                None,
+            );
         })
     }
 

@@ -282,14 +282,14 @@ impl EndermanEntity {
 
     pub fn set_angry(&self, angry: bool) {
         self.angry.store(angry, Ordering::Relaxed);
-        self.mob_entity
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
                 TrackedData::CREEPY,
                 MetaDataType::BOOLEAN,
                 angry,
-            )]);
+            )],
+            None,
+        );
     }
 
     pub fn is_angry(&self) -> bool {
@@ -298,27 +298,27 @@ impl EndermanEntity {
 
     pub fn set_provoked(&self, provoked: bool) {
         self.provoked.store(provoked, Ordering::Relaxed);
-        self.mob_entity
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
                 TrackedData::STARED_AT,
                 MetaDataType::BOOLEAN,
                 provoked,
-            )]);
+            )],
+            None,
+        );
     }
 
     pub fn set_carried_block(&self, block_state: Option<BlockStateId>) {
         self.carried_block.store(block_state);
         let value = block_state.map_or(VarInt(0), |id| VarInt(id.as_u16() as i32));
-        self.mob_entity
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
                 TrackedData::CARRY_STATE,
                 MetaDataType::OPTIONAL_BLOCK_STATE,
                 value,
-            )]);
+            )],
+            None,
+        );
     }
 
     pub fn get_carried_block(&self) -> Option<BlockStateId> {

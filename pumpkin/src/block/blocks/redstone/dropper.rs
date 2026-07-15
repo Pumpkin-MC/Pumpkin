@@ -153,7 +153,6 @@ impl BlockBehaviour for DropperBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if let Some(block_entity) = args.world.get_block_entity(args.position) {
-                // Safely extract the dropper instead of unwrap()
                 let Some(dropper) = block_entity.as_any().downcast_ref::<DropperBlockEntity>()
                 else {
                     return;

@@ -46,6 +46,7 @@ pub enum OwnedArg {
 
 impl OwnedArg {
     #[must_use]
+    #[expect(clippy::unreachable)]
     pub fn from_arg(arg: &crate::command::args::Arg<'_>) -> Self {
         use crate::command::args::Arg;
         match arg {
@@ -80,6 +81,7 @@ impl OwnedArg {
             Arg::Enchantment(e) => Self::Enchantment(e),
             Arg::EntityAnchor(a) => Self::EntityAnchor(*a),
             Arg::Advancement(a) => Self::Advancement(a),
+            Arg::Slot(_, _) | Arg::Slots(_, _) => unreachable!(),
         }
     }
 }

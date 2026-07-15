@@ -41,8 +41,13 @@ impl scoreboard::HostScoreboard for PluginHostState {
             RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
         };
 
-        let objective =
-            ScoreboardObjective::new(Box::leak(name.into_boxed_str()), display_name, rt, None);
+        let objective = ScoreboardObjective::new(
+            Box::leak(name.into_boxed_str()),
+            display_name,
+            rt,
+            None,
+            "dummy",
+        );
         world
             .scoreboard
             .lock()

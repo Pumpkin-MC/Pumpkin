@@ -207,11 +207,14 @@ impl FishingBobberEntity {
             if ebb.intersects(&search_box) {
                 self.hooked_entity_id
                     .store(cand.get_entity().entity_id, Ordering::Relaxed);
-                entity.send_meta_data(&[Metadata::new(
-                    TrackedData::HOOKED_ENTITY,
-                    MetaDataType::INT,
-                    cand.get_entity().entity_id + 1,
-                )]);
+                entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::HOOKED_ENTITY,
+                        MetaDataType::INT,
+                        cand.get_entity().entity_id + 1,
+                    )],
+                    None,
+                );
                 return;
             }
         }

@@ -40,7 +40,7 @@ impl ItemMetadata for ArmorStandItem {
 impl ItemBehaviour for ArmorStandItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
@@ -90,6 +90,7 @@ impl ItemBehaviour for ArmorStandItem {
                 let armor_stand = ArmorStandEntity::new(entity);
 
                 world.spawn_entity(Arc::new(armor_stand)).await;
+                item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })
     }

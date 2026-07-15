@@ -237,11 +237,26 @@ impl LivingEntity {
             b &= !index;
         }
         self.livings_flags.store(b, Ordering::Relaxed);
-        self.entity.send_meta_data(&[Metadata::new(
-            TrackedData::LIVING_ENTITY_FLAGS,
-            MetaDataType::BYTE,
-            b,
-        )]);
+
+        let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
+            let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+            meta.set_flag(
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM
+                    as u8,
+                value,
+            );
+            meta
+        });
+
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::LIVING_ENTITY_FLAGS,
+                MetaDataType::BYTE,
+                b,
+            )],
+            bedrock_meta.as_ref(),
+        );
     }
 
     pub async fn clear_active_hand(&self) {
@@ -274,11 +289,14 @@ impl LivingEntity {
         let clamped = health.max(0.0).min(max_health);
         self.health.store(clamped);
         // tell everyone entities health changed
-        self.entity.send_meta_data(&[Metadata::new(
-            TrackedData::HEALTH_ID,
-            MetaDataType::FLOAT,
-            clamped,
-        )]);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::HEALTH_ID,
+                MetaDataType::FLOAT,
+                clamped,
+            )],
+            None,
+        );
     }
 
     /// Returns the current maximum health for this entity
@@ -328,8 +346,10 @@ impl LivingEntity {
 
         // Send absorption metadata for players (visual yellow hearts)
         if let Some(tracked_id) = self.player_absorption_id() {
-            self.entity
-                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)]);
+            self.entity.send_meta_data(
+                &[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)],
+                None,
+            );
         }
     }
 
@@ -1791,11 +1811,14 @@ impl LivingEntity {
         // Clear any absorption
         self.absorption.store(0.0);
         // Send health metadata
-        self.entity.send_meta_data(&[Metadata::new(
-            TrackedData::HEALTH_ID,
-            MetaDataType::FLOAT,
-            max_health,
-        )]);
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::HEALTH_ID,
+                MetaDataType::FLOAT,
+                max_health,
+            )],
+            None,
+        );
 
         self.reset_effects_and_attributes().await;
 

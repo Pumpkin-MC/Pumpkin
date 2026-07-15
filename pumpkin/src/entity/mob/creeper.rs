@@ -86,14 +86,14 @@ impl CreeperEntity {
 
     pub fn set_fuse_speed(&self, speed: i32) {
         self.fuse_speed.store(speed, Ordering::Relaxed);
-        self.mob_entity
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
                 TrackedData::FUSE_ID,
                 MetaDataType::INTEGER,
                 VarInt(speed),
-            )]);
+            )],
+            None,
+        );
     }
 
     async fn explode(&self) {
@@ -219,11 +219,14 @@ impl Mob for CreeperEntity {
             );
 
             self.ignited.store(true, Ordering::Relaxed);
-            entity.send_meta_data(&[Metadata::new(
-                TrackedData::IS_IGNITED,
-                MetaDataType::BOOLEAN,
-                true,
-            )]);
+            entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::IS_IGNITED,
+                    MetaDataType::BOOLEAN,
+                    true,
+                )],
+                None,
+            );
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.

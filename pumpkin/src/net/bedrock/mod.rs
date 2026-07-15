@@ -1290,7 +1290,7 @@ impl BedrockClient {
                     .as_ref()
                     .map_or(0, |p| p.online) as u32
             };
-            if player_count >= server.basic_config.max_players {
+            if player_count >= server.advanced_config.networking.bedrock.max_players {
                 Self::send_offline_packet(
                     &CNoFreeIncomingConnections::new(server.server_guid),
                     addr,

@@ -3,7 +3,12 @@ use std::{
     sync::{Arc, atomic::Ordering},
 };
 
-use pumpkin_data::{data_component_impl::EquipmentSlot, item_stack::ItemStack};
+use pumpkin_data::{
+    data_component_impl::{
+        BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+    },
+    item_stack::ItemStack,
+};
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::bedrock::{
@@ -37,7 +42,7 @@ use pumpkin_protocol::{
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::client::play::{Animation, CEntityAnimation, CSetSelectedSlot, CSystemChatMessage},
 };
-use pumpkin_util::{GameMode, math::position::BlockPos, text::TextComponent};
+use pumpkin_util::{GameMode, Hand, math::position::BlockPos, text::TextComponent};
 
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
@@ -47,8 +52,10 @@ use crate::{
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
-        item_held::PlayerItemHeldEvent, player_chat::PlayerChatEvent,
+        item_held::PlayerItemHeldEvent,
+        player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
+        player_interact_event::{InteractAction, PlayerInteractEvent},
         player_toggle_flight_event::PlayerToggleFlightEvent,
     },
     server::{Server, seasonal_events},
@@ -152,8 +159,10 @@ impl BedrockClient {
         }
         let server = player.world().server.upgrade().unwrap();
 
-        let view_distance =
-            chunk_radius.clamp(2, NonZeroI32::from(server.basic_config.view_distance).get());
+        let view_distance = chunk_radius.clamp(
+            2,
+            NonZeroI32::from(server.advanced_config.networking.bedrock.view_distance).get(),
+        );
 
         self.enqueue_packet(&CChunkRadiusUpdate {
             chunk_radius: VarInt(view_distance),
@@ -733,6 +742,105 @@ impl BedrockClient {
                             }
                         }
                     }
+                } else if data.action_type.0 == 1 {
+                    // Click air / Use item
+                    let is_creative = player.gamemode.load() == GameMode::Creative;
+                    let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
+
+                    let held_item = player.inventory.held_item();
+                    if !client_stack.is_empty() {
+                        let mut server_stack = held_item.lock().await;
+                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
+                            *server_stack = client_stack.clone();
+                        }
+                    }
+
+                    let event = PlayerInteractEvent::new(
+                        player,
+                        InteractAction::RightClickAir,
+                        &pumpkin_data::Block::AIR,
+                        None,
+                    );
+
+                    let stack_for_use = held_item.lock().await.clone();
+
+                    {
+                        let mut held = held_item.lock().await;
+                        let mut cooldown_active = false;
+                        if let Some(cooldown) = held.get_use_cooldown() {
+                            let group = cooldown
+                                .cooldown_group
+                                .clone()
+                                .unwrap_or_else(|| held.item.registry_key.to_string());
+                            if player.is_on_cooldown(&group).await {
+                                cooldown_active = true;
+                            }
+                        }
+
+                        if !cooldown_active {
+                            if held.get_data_component::<ConsumableImpl>().is_some()
+                                || held.get_data_component::<BlocksAttacksImpl>().is_some()
+                            {
+                                if let Some(food) = held.get_data_component::<FoodImpl>() {
+                                    if player.abilities.lock().await.invulnerable
+                                        || food.can_always_eat
+                                        || player.hunger_manager.level.load() < 20
+                                    {
+                                        player
+                                            .living_entity
+                                            .set_active_hand(
+                                                Hand::Left,
+                                                held.clone(),
+                                                held.get_max_use_time(),
+                                            )
+                                            .await;
+                                    }
+                                } else {
+                                    player
+                                        .living_entity
+                                        .set_active_hand(
+                                            Hand::Left,
+                                            held.clone(),
+                                            held.get_max_use_time(),
+                                        )
+                                        .await;
+                                }
+                            }
+                            if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+                                let inventory = player.inventory();
+                                if !inventory
+                                    .is_already_equipped(&held_item, equippable.slot)
+                                    .await
+                                {
+                                    player
+                                        .enqueue_equipment_change(equippable.slot, &held)
+                                        .await;
+
+                                    let binding = {
+                                        let mut equipment = inventory.entity_equipment.lock().await;
+                                        equipment.get_or_insert(equippable.slot)
+                                    };
+                                    let mut equip_item = binding.lock().await;
+                                    if equip_item.is_empty() {
+                                        *equip_item = held.clone();
+                                        held.decrement_unless_creative(player.gamemode.load(), 1);
+                                    } else {
+                                        let binding = held.clone();
+                                        *held = equip_item.clone();
+                                        *equip_item = binding;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    send_cancellable! {{
+                        server;
+                        event;
+                        'after: {
+                            server.item_registry.on_use(&stack_for_use, player).await;
+                        }
+                    }}
                 }
             }
             TransactionData::UseItemOnEntity(data) => {

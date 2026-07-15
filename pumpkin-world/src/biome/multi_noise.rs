@@ -45,7 +45,7 @@ mod test {
 
     #[test]
     fn sample_value() {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
@@ -59,9 +59,16 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
+        let generator = Box::new(VanillaGenerator::new(
+            Seed(seed as u64),
+            Dimension::OVERWORLD,
+        ));
+        let world_gen = WorldGenerator::Noise(generator);
+        let WorldGenerator::Noise(generator) = &world_gen else {
+            unreachable!()
+        };
 
-        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
+        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
 
         let start_x = chunk_pos::start_block_x(chunk_x);
         let start_z = chunk_pos::start_block_z(chunk_z);

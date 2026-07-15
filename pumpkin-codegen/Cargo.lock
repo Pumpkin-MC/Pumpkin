@@ -803,6 +803,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

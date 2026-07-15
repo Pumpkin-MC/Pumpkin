@@ -273,6 +273,16 @@ impl AttachedNode {
         }
     }
 
+    /// Sets the redirection of this node.
+    pub const fn set_redirect(&mut self, redirect: Option<Redirection>) {
+        match self {
+            Self::Root(_) => {}
+            Self::Literal(node) => node.redirect = redirect,
+            Self::Command(node) => node.redirect = redirect,
+            Self::Argument(node) => node.redirect = redirect,
+        }
+    }
+
     /// Gets all the requirements required for this node to be run.
     #[must_use]
     pub const fn requirements(&self) -> &Requirements {

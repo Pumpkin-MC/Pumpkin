@@ -141,11 +141,13 @@ fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
     let generator = &level.world_gen;
     let seed = level.seed.0;
 
+    let global_cache = generator.global_structure_cache()?;
+
     find_nearest_structure(
         origin,
         &[&StructureSet::get("strongholds").unwrap().placement],
         100, // max search radius in chunks, matches vanilla default
         seed as i64,
-        &generator.global_structure_cache,
+        global_cache,
     )
 }

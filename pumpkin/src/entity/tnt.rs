@@ -85,18 +85,21 @@ impl EntityBase for TNTEntity {
             self.entity
                 .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02));
 
-            self.entity.send_meta_data(&[
-                Metadata::new(
-                    TrackedData::FUSE_ID,
-                    MetaDataType::INTEGER,
-                    VarInt(self.fuse.load(Relaxed) as i32),
-                ),
-                Metadata::new(
-                    TrackedData::BLOCK_STATE_ID,
-                    MetaDataType::BLOCK_STATE,
-                    VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
-                ),
-            ]);
+            self.entity.send_meta_data(
+                &[
+                    Metadata::new(
+                        TrackedData::FUSE_ID,
+                        MetaDataType::INTEGER,
+                        VarInt(self.fuse.load(Relaxed) as i32),
+                    ),
+                    Metadata::new(
+                        TrackedData::BLOCK_STATE_ID,
+                        MetaDataType::BLOCK_STATE,
+                        VarInt(i32::from(Block::TNT.default_state.id.as_u16())),
+                    ),
+                ],
+                None,
+            );
         })
     }
 

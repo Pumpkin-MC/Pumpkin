@@ -350,7 +350,7 @@ impl Cache {
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
-        generator: &generator::VanillaGenerator,
+        generator: &generator::WorldGenerator,
         block_registry: &dyn WorldPortalExt,
         lighting_config: &LightingEngineConfig,
     ) {
@@ -362,35 +362,74 @@ impl Cache {
         }
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
-            StagedChunkEnum::StructureStart => {
-                self.chunks[mid]
-                    .get_proto_chunk_mut()
-                    .set_structure_starts(generator);
-            }
-            StagedChunkEnum::StructureReferences => {
-                self.chunks[mid]
-                    .get_proto_chunk_mut()
-                    .set_structure_references(generator);
-            }
-            StagedChunkEnum::Biomes => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_biomes(generator),
-            StagedChunkEnum::Noise => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_noise(generator),
-            StagedChunkEnum::Surface => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_surface(generator),
-            StagedChunkEnum::Carvers => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .step_to_carvers(generator),
-            StagedChunkEnum::Features => {
-                ProtoChunk::generate_features_and_structure(
-                    self,
-                    block_registry,
-                    &generator.random_config,
-                );
-            }
+            StagedChunkEnum::StructureStart => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[mid]
+                        .get_proto_chunk_mut()
+                        .set_structure_starts(noise_gen);
+                }
+                generator::WorldGenerator::Flat(_) => {}
+            },
+            StagedChunkEnum::StructureReferences => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[mid]
+                        .get_proto_chunk_mut()
+                        .set_structure_references(noise_gen);
+                }
+                generator::WorldGenerator::Flat(_) => {}
+            },
+            StagedChunkEnum::Biomes => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[mid]
+                        .get_proto_chunk_mut()
+                        .step_to_biomes(noise_gen);
+                }
+                generator::WorldGenerator::Flat(flat_gen) => {
+                    flat_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
+                }
+            },
+            StagedChunkEnum::Noise => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[mid]
+                        .get_proto_chunk_mut()
+                        .step_to_noise(noise_gen);
+                }
+                generator::WorldGenerator::Flat(flat_gen) => {
+                    flat_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
+                }
+            },
+            StagedChunkEnum::Surface => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[mid]
+                        .get_proto_chunk_mut()
+                        .step_to_surface(noise_gen);
+                }
+                generator::WorldGenerator::Flat(flat_gen) => {
+                    flat_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
+                }
+            },
+            StagedChunkEnum::Carvers => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[mid]
+                        .get_proto_chunk_mut()
+                        .step_to_carvers(noise_gen);
+                }
+                generator::WorldGenerator::Flat(flat_gen) => {
+                    flat_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
+                }
+            },
+            StagedChunkEnum::Features => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    ProtoChunk::generate_features_and_structure(
+                        self,
+                        block_registry,
+                        &noise_gen.random_config,
+                    );
+                }
+                generator::WorldGenerator::Flat(_) => {
+                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::Features;
+                }
+            },
             StagedChunkEnum::Lighting => {
                 let mut engine = crate::lighting::LightEngine::new();
                 engine.initialize_light(self, lighting_config);
@@ -410,7 +449,7 @@ impl Cache {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
                 debug_assert_eq!(chunk.stage, StagedChunkEnum::Spawn);
                 chunk.stage = StagedChunkEnum::Full;
-                self.chunks[mid].upgrade_to_level_chunk(&generator.dimension, lighting_config);
+                self.chunks[mid].upgrade_to_level_chunk(generator.dimension(), lighting_config);
             }
             StagedChunkEnum::None => {}
         }

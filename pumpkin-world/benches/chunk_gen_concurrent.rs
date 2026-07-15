@@ -63,7 +63,13 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
         .build()
         .expect("Failed to build rayon thread pool");
 
-    let world_gen = Arc::new(get_world_gen(SEED, Dimension::OVERWORLD));
+    let world_gen = Arc::new(get_world_gen(
+        SEED,
+        Dimension::OVERWORLD,
+        false,
+        Vec::new(),
+        String::new(),
+    ));
     let block_registry = Arc::new(BlockRegistry);
 
     let bench_name = format!(

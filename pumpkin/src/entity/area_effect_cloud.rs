@@ -173,29 +173,35 @@ impl EntityBase for AreaEffectCloudEntity {
             };
 
             // Send initial particle and radius
-            self.entity
-                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+            self.entity.send_meta_data(
+                &[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::PARTICLE,
                     pumpkin_data::meta_data_type::MetaDataType::PARTICLE,
                     &meta,
-                )]);
+                )],
+                None,
+            );
 
-            self.entity
-                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+            self.entity.send_meta_data(
+                &[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::RADIUS,
                     pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                     radius,
-                )]);
+                )],
+                None,
+            );
 
             // Initial waiting flag
             let wait_time = *self.wait_time.lock().await;
             let is_waiting = 0 < wait_time;
-            self.entity
-                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+            self.entity.send_meta_data(
+                &[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::WAITING,
                     pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                     is_waiting,
-                )]);
+                )],
+                None,
+            );
         })
     }
 
@@ -225,12 +231,14 @@ impl EntityBase for AreaEffectCloudEntity {
 
             // When the waiting period ends, notify clients so they render full particles
             if age == wait_time && wait_time > 0 {
-                self.entity
-                    .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                self.entity.send_meta_data(
+                    &[pumpkin_protocol::java::client::play::Metadata::new(
                         pumpkin_data::tracked_data::TrackedData::WAITING,
                         pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                         false,
-                    )]);
+                    )],
+                    None,
+                );
             }
 
             if age < wait_time {
@@ -251,12 +259,14 @@ impl EntityBase for AreaEffectCloudEntity {
 
                 // Send new radius
                 drop(radius);
-                self.entity
-                    .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                self.entity.send_meta_data(
+                    &[pumpkin_protocol::java::client::play::Metadata::new(
                         pumpkin_data::tracked_data::TrackedData::RADIUS,
                         pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                         current_radius,
-                    )]);
+                    )],
+                    None,
+                );
             }
 
             // Tick down reapplication map
@@ -380,13 +390,14 @@ impl EntityBase for AreaEffectCloudEntity {
                     drop(radius_lock);
 
                     // Send updated radius to clients
-                    self.entity.send_meta_data(&[
-                        pumpkin_protocol::java::client::play::Metadata::new(
+                    self.entity.send_meta_data(
+                        &[pumpkin_protocol::java::client::play::Metadata::new(
                             pumpkin_data::tracked_data::TrackedData::RADIUS,
                             pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                             current_radius,
-                        ),
-                    ]);
+                        )],
+                        None,
+                    );
                 }
 
                 // Apply duration-on-use (shorten lifespan)

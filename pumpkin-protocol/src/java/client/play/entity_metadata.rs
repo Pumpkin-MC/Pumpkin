@@ -58,7 +58,7 @@ impl ClientPacket for CSetEntityMetadata {
 pub struct Metadata<T> {
     pub index: TrackedId,
     pub r#type: MetaDataType,
-    value: T,
+    pub value: T,
 }
 
 impl<T> Metadata<T> {

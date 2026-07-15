@@ -107,7 +107,8 @@ impl BedrockClient {
         let compression = server
             .advanced_config
             .networking
-            .bedrock_compression
+            .bedrock
+            .compression
             .info
             .clone();
         self.send_game_packet(&CNetworkSettings::new(
@@ -136,13 +137,19 @@ impl BedrockClient {
         server: &Server,
     ) -> Result<Option<PacketHandlerResult>, LoginError> {
         let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
-        let player_data = if server.basic_config.online_mode {
+        let player_data = if server.advanced_config.networking.bedrock.online_mode {
             match auth_payload.authentication_type {
                 AuthenticationType::Full => {
                     verify_oidc_token_path(server, &auth_payload.token, false)?
                 }
                 AuthenticationType::SelfSigned => {
-                    if server.advanced_config.networking.authentication.enabled {
+                    if server
+                        .advanced_config
+                        .networking
+                        .bedrock
+                        .authentication
+                        .enabled
+                    {
                         return Err(LoginError::SelfSignedNotAllowed);
                     }
 
@@ -181,7 +188,7 @@ impl BedrockClient {
             profile_actions: None,
         };
 
-        if server.basic_config.bedrock_encryption {
+        if server.advanced_config.networking.bedrock.encryption {
             let client_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
                 .map_err(LoginError::ChainValidationFailed)?;
 

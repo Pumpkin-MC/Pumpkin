@@ -51,14 +51,14 @@ impl BegGoal {
     }
 
     fn set_begging(mob: &dyn Mob, begging: bool) {
-        mob.get_mob_entity()
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
+        mob.get_mob_entity().living_entity.entity.send_meta_data(
+            &[Metadata::new(
                 TrackedData::INTERESTED_ID,
                 MetaDataType::BOOLEAN,
                 begging,
-            )]);
+            )],
+            None,
+        );
     }
 }
 

@@ -1592,11 +1592,14 @@ impl Player {
         self.living_entity
             .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
-        self.get_entity().send_meta_data(&[Metadata::new(
-            TrackedData::SLEEPING_POS_ID,
-            MetaDataType::OPTIONAL_BLOCK_POS,
-            Some(bed_head_pos),
-        )]);
+        self.get_entity().send_meta_data(
+            &[Metadata::new(
+                TrackedData::SLEEPING_POS_ID,
+                MetaDataType::OPTIONAL_BLOCK_POS,
+                Some(bed_head_pos),
+            )],
+            None,
+        );
         self.get_entity().set_velocity(Vector3::default());
 
         self.sleeping_since.store(Some(0));
@@ -1710,11 +1713,14 @@ impl Player {
 
         self.living_entity.entity.set_pose(EntityPose::Standing);
         self.living_entity.entity.set_pos(self.position());
-        self.living_entity.entity.send_meta_data(&[Metadata::new(
-            TrackedData::SLEEPING_POS_ID,
-            MetaDataType::OPTIONAL_BLOCK_POS,
-            None::<BlockPos>,
-        )]);
+        self.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::SLEEPING_POS_ID,
+                MetaDataType::OPTIONAL_BLOCK_POS,
+                None::<BlockPos>,
+            )],
+            None,
+        );
 
         self.set_stat(
             statistics::StatisticCategory::Custom,
@@ -2952,18 +2958,21 @@ impl Player {
     /// Send the player's skin layers and used hand to all players.
     pub fn send_client_information(&self) {
         let config = self.config.load();
-        self.living_entity.entity.send_meta_data(&[
-            Metadata::new(
-                TrackedData::PLAYER_MODE_CUSTOMISATION,
-                MetaDataType::BYTE,
-                config.skin_parts,
-            ),
-            // Metadata::new(
-            //     TrackedData::DATA_MAIN_ARM_ID,
-            //     MetaDataType::ARM,
-            //     VarInt(config.main_hand as u8 as i32),
-            // ),
-        ]);
+        self.living_entity.entity.send_meta_data(
+            &[
+                Metadata::new(
+                    TrackedData::PLAYER_MODE_CUSTOMISATION,
+                    MetaDataType::BYTE,
+                    config.skin_parts,
+                ),
+                // Metadata::new(
+                //     TrackedData::DATA_MAIN_ARM_ID,
+                //     MetaDataType::ARM,
+                //     VarInt(config.main_hand as u8 as i32),
+                // ),
+            ],
+            None,
+        );
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {

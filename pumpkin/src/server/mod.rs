@@ -199,7 +199,11 @@ impl Server {
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
-        let listing = Mutex::new(CachedStatus::new(&basic_config));
+        let listing = Mutex::new(CachedStatus::new(
+            &basic_config,
+            &advanced_config.networking.java.motd,
+            advanced_config.networking.java.max_players,
+        ));
         let defaultgamemode = Mutex::new(DefaultGamemode {
             gamemode: basic_config.default_gamemode,
         });
@@ -218,7 +222,7 @@ impl Server {
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
         let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.authentication.clone();
+            let auth_config = advanced_config.networking.java.authentication.clone();
             let allow_chat = basic_config.allow_chat_reports;
             async move {
                 if allow_chat {
@@ -351,14 +355,24 @@ impl Server {
 
         info!("All worlds loaded successfully.");
 
-        if server.basic_config.online_mode {
+        if server.advanced_config.networking.bedrock.online_mode {
             let server_clone = server.clone();
             tokio::spawn(async move {
                 server_clone
                     .bedrock_oidc_keys
                     .get_or_init(|| async {
                         tokio::task::block_in_place(|| {
-                            pumpkin_util::jwt::fetch_oidc_jwks().unwrap_or_else(|e| {
+                            let auth = &server_clone
+                                .advanced_config
+                                .networking
+                                .bedrock
+                                .authentication;
+                            pumpkin_util::jwt::fetch_oidc_jwks(
+                                auth.url.as_deref(),
+                                auth.connect_timeout,
+                                auth.read_timeout,
+                            )
+                            .unwrap_or_else(|e| {
                                 error!("Failed to fetch Bedrock OIDC keys: {e}");
                                 (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
                             })
