@@ -41,7 +41,7 @@ pub const USAGE_OR: &str = "|";
 /// Thrown when redirection could not be resolved.
 /// This shouldn't happen, and only happens when the command is incorrectly configured.
 pub const UNRESOLVED_REDIRECT: LiteralCommandErrorType =
-    LiteralCommandErrorType::new("Could not resolve redirect to node");
+    LiteralCommandErrorType::new("commands.dispatcher.unresolved_redirect");
 
 /// Represents the result of parsing.
 pub struct ParsingResult<'a> {

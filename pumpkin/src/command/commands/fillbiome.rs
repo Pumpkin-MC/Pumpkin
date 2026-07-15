@@ -15,7 +15,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use std::collections::HashMap;
 
-const DESCRIPTION: &str = "Changes biomes of an area.";
+const DESCRIPTION: &str = "commands.fillbiome.description";
 const PERMISSION: &str = "minecraft:command.fillbiome";
 
 const MAX_BIOME_BLOCKS: i64 = 32768;

@@ -17,11 +17,13 @@ use pumpkin_util::text::TextComponent;
 use std::future::Future;
 use std::pin::Pin;
 
-const DESCRIPTION: &str = "Gives or takes player recipes.";
+const DESCRIPTION: &str = "commands.recipe.description";
 const PERMISSION: &str = "minecraft:command.recipe";
 
-static ERROR_RECIPE_NOT_FOUND: CommandErrorType<1> =
-    CommandErrorType::new(translation::java::RECIPE_NOTFOUND, "Unknown recipe: %s");
+static ERROR_RECIPE_NOT_FOUND: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::RECIPE_NOTFOUND,
+    "commands.recipe.error.not_found",
+);
 
 fn get_recipe_id(recipe: &DynamicRecipe) -> String {
     match recipe {

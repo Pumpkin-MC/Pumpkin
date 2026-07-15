@@ -12,24 +12,24 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
-const DESCRIPTION: &str = "Constantly load chunks in the world.";
+const DESCRIPTION: &str = "commands.forceload.description";
 const PERMISSION: &str = "minecraft:command.forceload";
 
 static ERROR_FAILED_ADD: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_FORCELOAD_ADDED_FAILURE,
-    "No world in source",
+    "commands.forceload.error.failed",
 );
 static ERROR_FAILED_REMOVE: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_FORCELOAD_REMOVED_FAILURE,
-    "No world in source",
+    "commands.forceload.error.failed",
 );
 static ERROR_FAILED_QUERY: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_FORCELOAD_QUERY_FAILURE,
-    "No world in source",
+    "commands.forceload.error.failed",
 );
 static ERROR_TOO_MANY: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_FORCELOAD_TOOBIG,
-    "Too many chunks",
+    "commands.forceload.error.too_many",
 );
 
 struct ForceloadAddExecutor;

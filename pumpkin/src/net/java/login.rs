@@ -125,8 +125,11 @@ impl JavaClient {
     ) {
         debug!("{}", localized_log("server.log.java_handling_encryption"));
         let Ok(shared_secret) = server.decrypt(&encryption_response.shared_secret).await else {
-            self.kick(TextComponent::text("Failed to decrypt shared secret"))
-                .await;
+            self.kick(localized_text(
+                "network.encryption.decrypt_shared_secret_failed",
+                [],
+            ))
+            .await;
             return;
         };
 

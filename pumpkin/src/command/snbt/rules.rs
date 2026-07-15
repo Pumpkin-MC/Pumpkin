@@ -443,7 +443,7 @@ impl SnbtParser<'_, '_> {
             None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
                 Err(_) => self.store_dynamic_error(
                     &NUMBER_PARSE_FAILURE,
-                    localized_log("commands.snbt.number_parse_failure.invalid_float_literal"),
+                    localized_log("commands.snbt.number_parse_failure.input_string"),
                 ),
                 Ok(value) if value.is_finite() => {
                     return Some(NbtTag::Double(value));
@@ -454,7 +454,7 @@ impl SnbtParser<'_, '_> {
                 Err(_) => {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
-                        localized_log("commands.snbt.number_parse_failure.invalid_float_literal"),
+                        localized_log("commands.snbt.number_parse_failure.input_string"),
                     );
                 }
                 Ok(value) if value.is_finite() => {

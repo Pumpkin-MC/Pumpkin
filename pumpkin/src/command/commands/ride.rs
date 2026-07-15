@@ -10,32 +10,32 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "Mounts or dismounts target entities.";
+const DESCRIPTION: &str = "commands.ride.description";
 const PERMISSION: &str = "minecraft:command.ride";
 
 static ERROR_CANT_RIDE_PLAYERS: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_MOUNT_FAILURE_CANT_RIDE_PLAYERS,
-    "Cannot ride players",
+    "commands.ride.error.cant_ride_players",
 );
 static ERROR_WRONG_DIMENSION: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_MOUNT_FAILURE_WRONG_DIMENSION,
-    "Cannot ride across dimensions",
+    "commands.ride.error.wrong_dimension",
 );
 static ERROR_LOOP: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_MOUNT_FAILURE_LOOP,
-    "Cannot ride recursively",
+    "commands.ride.error.loop",
 );
 static ERROR_ALREADY_RIDING: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_ALREADY_RIDING,
-    "Already riding",
+    "commands.ride.error.already_riding",
 );
 static ERROR_NOT_RIDING: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_NOT_RIDING,
-    "Not riding anything",
+    "commands.ride.error.not_riding",
 );
 static ERROR_GENERIC: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_MOUNT_FAILURE_GENERIC,
-    "Failed to mount",
+    "commands.ride.error.generic",
 );
 
 #[allow(clippy::assigning_clones)]

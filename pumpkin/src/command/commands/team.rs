@@ -18,7 +18,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
-const DESCRIPTION: &str = "Manages teams.";
+const DESCRIPTION: &str = "commands.team.description";
 const PERMISSION: &str = "minecraft:command.team";
 
 const ARG_TEAM_NAME: &str = "name";

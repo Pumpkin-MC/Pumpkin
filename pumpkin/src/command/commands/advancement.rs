@@ -22,7 +22,7 @@ use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
 const NAME: &str = "advancement";
-const DESCRIPTION: &str = "manage advancement of players";
+const DESCRIPTION: &str = "commands.advancement.description";
 const PERMISSION: &str = "minecraft:command.advancement";
 
 const ARG_TARGETS: &str = "targets";

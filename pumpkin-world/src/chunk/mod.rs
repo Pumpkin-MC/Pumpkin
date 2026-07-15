@@ -53,7 +53,7 @@ impl std::fmt::Display for ChunkReadingError {
             Self::Compression(e) => write!(
                 f,
                 "{}",
-                localized_log_format("chunk.reading.error.compression", &[e.to_string()])
+                localized_log_format("chunk.error.compression", &[e.to_string()])
             ),
             Self::ChunkNotExist => write!(f, "{}", localized_log("chunk.reading.error.not_exist")),
             Self::ParsingError(e) => write!(
@@ -85,7 +85,7 @@ impl std::fmt::Display for ChunkWritingError {
             Self::Compression(e) => write!(
                 f,
                 "{}",
-                localized_log_format("chunk.writing.error.compression", &[e.to_string()])
+                localized_log_format("chunk.error.compression", &[e.to_string()])
             ),
             Self::ChunkSerializingError(msg) => write!(
                 f,

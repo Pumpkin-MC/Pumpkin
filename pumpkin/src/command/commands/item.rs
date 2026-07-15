@@ -20,7 +20,7 @@ use crate::command::tree::builder::{argument, argument_default_name, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["item"];
-const DESCRIPTION: &str = "Modifies items in block or entity inventories.";
+const DESCRIPTION: &str = "commands.item.description";
 
 const ARG_POS: &str = "pos";
 const ARG_SLOT: &str = "slot";

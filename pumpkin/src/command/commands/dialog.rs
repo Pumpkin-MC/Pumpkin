@@ -11,8 +11,9 @@ use pumpkin_protocol::java::client::play::{CPlayClearDialog, CPlayShowDialog};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::localized_text;
 
-const DESCRIPTION: &str = "Manages player dialog screens.";
+const DESCRIPTION: &str = "commands.dialog.description";
 const PERMISSION: &str = "minecraft:command.dialog";
 
 const ARG_TARGETS: &str = "targets";
@@ -32,12 +33,15 @@ impl CommandExecutor for DialogClearExecutor {
             }
 
             let msg = if count == 1 {
-                TextComponent::text(format!(
-                    "Cleared dialog for {}",
-                    targets[0].gameprofile.name
-                ))
+                localized_text(
+                    "commands.dialog.clear.success.single",
+                    [TextComponent::text(targets[0].gameprofile.name.clone())],
+                )
             } else {
-                TextComponent::text(format!("Cleared dialogs for {count} players"))
+                localized_text(
+                    "commands.dialog.clear.success.multiple",
+                    [TextComponent::text(count.to_string())],
+                )
             };
             context.source.send_feedback(msg, true).await;
 
@@ -46,9 +50,8 @@ impl CommandExecutor for DialogClearExecutor {
     }
 }
 
-static REGISTRY_ERROR: LiteralCommandErrorType = LiteralCommandErrorType::new(
-    "Registry-defined dialogs are not yet supported. Please specify the dialog inline using SNBT.",
-);
+static REGISTRY_ERROR: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("commands.dialog.error.registry_unsupported");
 
 struct DialogShowExecutor;
 
@@ -69,12 +72,15 @@ impl CommandExecutor for DialogShowExecutor {
                     }
 
                     let msg = if count == 1 {
-                        TextComponent::text(format!(
-                            "Showed dialog to {}",
-                            targets[0].gameprofile.name
-                        ))
+                        localized_text(
+                            "commands.dialog.show.success.single",
+                            [TextComponent::text(targets[0].gameprofile.name.clone())],
+                        )
                     } else {
-                        TextComponent::text(format!("Showed dialog to {count} players"))
+                        localized_text(
+                            "commands.dialog.show.success.multiple",
+                            [TextComponent::text(count.to_string())],
+                        )
                     };
                     context.source.send_feedback(msg, true).await;
 

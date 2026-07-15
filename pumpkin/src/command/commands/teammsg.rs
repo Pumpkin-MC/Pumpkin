@@ -8,7 +8,7 @@ use pumpkin_data::translation;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "Sends a message to your team.";
+const DESCRIPTION: &str = "commands.teammsg.description";
 const PERMISSION: &str = "minecraft:command.teammsg";
 const ARG_MESSAGE: &str = "message";
 

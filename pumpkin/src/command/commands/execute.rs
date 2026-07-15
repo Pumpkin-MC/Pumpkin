@@ -21,7 +21,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "Execute a command with a modified context.";
+const DESCRIPTION: &str = "commands.execute.description";
 const PERMISSION: &str = "minecraft:command.execute";
 
 static ERROR_INVALID_DIMENSION: CommandErrorType<1> =

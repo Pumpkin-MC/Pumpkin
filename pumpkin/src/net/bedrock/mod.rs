@@ -1226,8 +1226,11 @@ impl BedrockClient {
                         return PacketHandlerResult::ReadyToPlay(profile, new_config);
                     }
                     error!("Received ClientToServerHandshake but no pending profile was found.");
-                    self.kick(DisconnectReason::BadPacket, "Handshake error".into())
-                        .await;
+                    self.kick(
+                        DisconnectReason::BadPacket,
+                        localized_log("network.bedrock.handshake_error"),
+                    )
+                    .await;
                     return PacketHandlerResult::Stop;
                 }
                 _ => {

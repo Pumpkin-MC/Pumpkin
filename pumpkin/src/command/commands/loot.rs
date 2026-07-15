@@ -12,23 +12,22 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str =
-    "Drops the given loot table into the specified inventory or into the world.";
+const DESCRIPTION: &str = "commands.loot.description";
 const PERMISSION: &str = "minecraft:command.loot";
 
 static ERROR_INVALID_LOOT_TABLE: CommandErrorType<1> = CommandErrorType::new(
     translation::bedrock::COMMANDS_LOOT_FAILURE_INVALIDLOOTTABLE,
-    "Loot table '%s' not found",
+    "commands.loot.error.invalid_loot_table",
 );
 
 static ERROR_ENTITY_NO_LOOT_TABLE: CommandErrorType<1> = CommandErrorType::new(
     translation::bedrock::COMMANDS_LOOT_FAILURE_ENTITYNOLOOTTABLE,
-    "Entity %s has no loot table",
+    "commands.loot.error.entity_no_loot_table",
 );
 
 static ERROR_NO_CONTAINER: CommandErrorType<1> = CommandErrorType::new(
     translation::bedrock::COMMANDS_LOOT_FAILURE_NOCONTAINER,
-    "Target position %s is not a container",
+    "commands.loot.error.no_container",
 );
 
 #[derive(Clone, Copy)]

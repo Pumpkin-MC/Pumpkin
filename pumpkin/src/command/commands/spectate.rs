@@ -15,7 +15,7 @@ use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["spectate"];
 
-const DESCRIPTION: &str = "Allows a player in spectator mode to spectate a given target entity.";
+const DESCRIPTION: &str = "commands.spectate.description";
 
 const ARG_TARGET: &str = "target";
 const ARG_PLAYER: &str = "player";
