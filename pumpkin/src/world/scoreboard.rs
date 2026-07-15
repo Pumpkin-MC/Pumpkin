@@ -38,6 +38,11 @@ impl Scoreboard {
         &self.scores
     }
 
+    #[must_use]
+    pub const fn get_teams(&self) -> &HashMap<String, Team> {
+        &self.teams
+    }
+
     async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
         world: &World,
         je_packet: &J,
@@ -350,6 +355,7 @@ impl<'a> ScoreboardScore<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameTagVisibility {
     Always,
     Never,
@@ -369,6 +375,7 @@ impl NameTagVisibility {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollisionRule {
     Always,
     Never,
@@ -388,6 +395,7 @@ impl CollisionRule {
     }
 }
 
+#[derive(Clone)]
 pub struct Team {
     pub name: String,
     pub display_name: TextComponent,

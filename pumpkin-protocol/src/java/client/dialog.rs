@@ -2,7 +2,26 @@ use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 
 #[derive(Serialize)]
-pub struct DialogNBT<'a>(pub &'a Dialog);
+pub struct DialogNBT<'a>(pub DialogNBTSource<'a>);
+
+impl<'a> DialogNBT<'a> {
+    #[must_use]
+    pub const fn from_dialog(dialog: &'a Dialog) -> Self {
+        Self(DialogNBTSource::Struct(dialog))
+    }
+
+    #[must_use]
+    pub const fn from_nbt(compound: &'a pumpkin_nbt::compound::NbtCompound) -> Self {
+        Self(DialogNBTSource::Nbt(compound))
+    }
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum DialogNBTSource<'a> {
+    Struct(&'a Dialog),
+    Nbt(&'a pumpkin_nbt::compound::NbtCompound),
+}
 
 #[derive(Serialize)]
 pub struct Dialog {

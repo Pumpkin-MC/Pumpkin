@@ -1840,7 +1840,9 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
                     client
                         .send_packet_now(
                             &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
-                                pumpkin_protocol::IdOr::Value(DialogNBT(&protocol_dialog)),
+                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
+                                    &protocol_dialog,
+                                )),
                             ),
                         )
                         .await;
@@ -1849,7 +1851,9 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
                     client
                         .send_packet_now(
                             &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
-                                pumpkin_protocol::IdOr::Value(DialogNBT(&protocol_dialog)),
+                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
+                                    &protocol_dialog,
+                                )),
                             ),
                         )
                         .await;

@@ -50,6 +50,7 @@ pub mod resource;
 pub mod resource_location;
 pub mod rotation;
 pub mod simple;
+pub mod slot;
 pub mod sound;
 pub mod sound_category;
 pub mod summonable_entities;
@@ -140,6 +141,8 @@ pub enum Arg<'a> {
     Enchantment(&'static Enchantment),
     Advancement(&'static Advancement),
     EntityAnchor(EntityAnchor),
+    Slot(usize, String),
+    Slots(&'static [usize], String),
 }
 
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]

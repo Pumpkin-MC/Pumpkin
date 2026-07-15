@@ -20,18 +20,24 @@ mod damage;
 mod data;
 pub mod defaultgamemode;
 mod deop;
+mod dialog;
 mod difficulty;
 mod effect;
 mod enchant;
+mod execute;
 mod experience;
 mod fill;
+mod fillbiome;
+mod forceload;
 mod gamemode;
 mod gamerule;
 mod give;
 mod help;
+mod item;
 mod kick;
 mod kill;
 mod list;
+mod loot;
 mod me;
 mod msg;
 mod op;
@@ -43,6 +49,8 @@ mod plugin;
 mod plugins;
 mod pumpkin;
 mod random;
+mod recipe;
+mod ride;
 mod rotate;
 mod saveall;
 mod saveoff;
@@ -54,11 +62,14 @@ mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spectate;
 mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
 mod tag;
+mod team;
+mod teammsg;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -71,6 +82,7 @@ mod weather;
 mod whitelist;
 mod worldborder;
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub async fn default_dispatcher(
     registry: &RwLock<PermissionRegistry>,
@@ -96,6 +108,7 @@ pub async fn default_dispatcher(
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
+    dispatcher.register(item::init_command_tree(), "minecraft:command.item");
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
@@ -136,6 +149,7 @@ pub async fn default_dispatcher(
         spawnpoint::init_command_tree(),
         "minecraft:command.spawnpoint",
     );
+    dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -160,11 +174,18 @@ pub async fn default_dispatcher(
 
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
+    dialog::register(&mut dispatcher, registry);
+    execute::register(&mut dispatcher, registry);
+    fillbiome::register(&mut dispatcher, registry);
+    forceload::register(&mut dispatcher, registry);
+    ride::register(&mut dispatcher, registry);
+    recipe::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
     op::register(&mut dispatcher, registry);
     random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
+    loot::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     saveall::register(&mut dispatcher, registry);
     saveoff::register(&mut dispatcher, registry);
@@ -177,6 +198,8 @@ pub async fn default_dispatcher(
     advancement::register(&mut dispatcher, registry);
     trigger::register(&mut dispatcher, registry);
     scoreboard::register(&mut dispatcher, registry);
+    team::register(&mut dispatcher, registry);
+    teammsg::register(&mut dispatcher, registry);
     clone::register(&mut dispatcher, registry);
     attribute::register(&mut dispatcher, registry);
     dispatcher
@@ -338,6 +361,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(translated_permission(
             "minecraft:command.give",
             "permissions.give.description",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.item",
+            "Replace items in inventories",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|_| {
@@ -653,6 +683,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(translated_permission(
             "minecraft:command.spawnpoint",
             "permissions.spawnpoint.description",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission already registered");
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spectate",
+            "Allows a player to spectate another entity",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|_| {

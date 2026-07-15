@@ -226,6 +226,7 @@ pub fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
+    let mut all_variants = TokenStream::new();
 
     for (name, biome) in biomes {
         let full_name = format!("minecraft:{name}");
@@ -359,6 +360,7 @@ pub fn build() -> TokenStream {
 
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
         id_to_type.extend(quote! { #index => Some(&Self::#format_name), });
+        all_variants.extend(quote! { &Self::#format_name, });
     }
 
     let overworld_tree = biome_trees.overworld.into_token_stream();
@@ -463,6 +465,8 @@ pub fn build() -> TokenStream {
 
         impl Biome {
             #variants
+
+            pub const ALL: &'static [&'static Self] = &[#all_variants];
 
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
