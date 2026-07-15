@@ -193,7 +193,33 @@ impl PluginHostState {
     }
 }
 
-impl pumpkin::plugin::world::Host for PluginHostState {}
+impl pumpkin::plugin::world::Host for PluginHostState {
+    async fn resolve_block_state(
+        &mut self,
+        name: String,
+        properties: Vec<(String, String)>,
+    ) -> wasmtime::Result<Option<u16>> {
+        let Some(block) = pumpkin_data::Block::from_name(&name) else {
+            return Ok(None);
+        };
+
+        if properties.is_empty() {
+            return Ok(Some(block.default_state.id.as_u16()));
+        }
+
+        let props: Vec<(&str, &str)> = properties
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        // from_properties/from_value panics on unknown property values,
+        // so catch panics to avoid crashing on schematics from other MC versions.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let block_props = block.from_properties(&props);
+            block_props.to_state_id(block).as_u16()
+        }));
+        Ok(result.ok())
+    }
+}
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
@@ -725,6 +751,35 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let block_entity = world_provider.get_block_entity(&internal_pos);
 
         block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
+    }
+
+    async fn set_block_entity_nbt(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        nbt_data: Vec<u8>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+
+        let mut cursor = std::io::Cursor::new(&nbt_data[..]);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        let mut nbt: pumpkin_nbt::NbtCompound = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+            .map_err(|e| wasmtime::Error::msg(format!("Invalid NBT: {e}")))?
+            .root_tag;
+
+        // Override NBT position with the caller-provided position so tile
+        // entities land at the correct coordinates during schematic pastes.
+        nbt.put_int("x", pos.x);
+        nbt.put_int("y", pos.y);
+        nbt.put_int("z", pos.z);
+
+        // Use add_block_entity_nbt for lazy loading — avoids broadcasting
+        // a packet per tile entity during bulk operations.
+        world_ref.add_block_entity_nbt(internal_pos, &nbt);
+        Ok(Ok(()))
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
