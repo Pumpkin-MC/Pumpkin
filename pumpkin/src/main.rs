@@ -226,9 +226,11 @@ fn print_support_links_and_warning() {
         "{}",
         localized_log_format(
             "server.log.report_issues",
-            &[TextComponent::text(localized_log("server.issues_url"))
-                .color_named(NamedColor::DarkAqua)
-                .to_pretty_console()],
+            &[
+                TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
+                    .color_named(NamedColor::DarkAqua)
+                    .to_pretty_console()
+            ],
         )
     );
     info!(
@@ -239,7 +241,7 @@ fn print_support_links_and_warning() {
                 TextComponent::text(localized_log("server.discord_label"))
                     .color_named(NamedColor::DarkBlue)
                     .to_pretty_console(),
-                TextComponent::text(localized_log("server.discord_url"))
+                TextComponent::text("https://discord.gg/wT8XjrjKkf")
                     .color_named(NamedColor::Aqua)
                     .to_pretty_console(),
             ],

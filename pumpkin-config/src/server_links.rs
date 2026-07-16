@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use pumpkin_util::translation::localized_log;
-
 /// Configuration for server-related links.
 ///
 /// Controls default URLs for bug reports, support, community, and other resources,
@@ -38,7 +36,7 @@ impl Default for ServerLinksConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            bug_report: localized_log("config.server_links.bug_report_url"),
+            bug_report: "https://github.com/Pumpkin-MC/Pumpkin/issues".to_string(),
             support: String::new(),
             status: String::new(),
             feedback: String::new(),

@@ -1,5 +1,5 @@
 use pumpkin_data::packet::CURRENT_MC_VERSION;
-use pumpkin_i18n::{Locale, PUMPKIN_NAMESPACE, pumpkin_translation_key};
+use pumpkin_i18n::{PUMPKIN_NAMESPACE, pumpkin_translation_key};
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::translation::get_translation_text;
@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
-use crate::command::{CommandResult, translate_format, translate_plain};
+use crate::command::{CommandResult, translate_format};
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 
@@ -25,12 +25,11 @@ struct Contributor {
     login: String,
 }
 
-fn fetch_all_contributors(locale: Locale) -> Vec<Contributor> {
+fn fetch_all_contributors() -> Vec<Contributor> {
     let mut all_contributors = Vec::new();
-    let mut next_url = Some(translate_plain(
-        "commands.pumpkin.contributors_api_url",
-        locale,
-    ));
+    let mut next_url = Some(
+        "https://api.github.com/repos/Pumpkin-MC/Pumpkin/contributors?per_page=100".to_string(),
+    );
 
     while let Some(url) = next_url {
         let response = ureq::get(&url).header("User-Agent", "Pumpkin-MC").call();
@@ -78,7 +77,7 @@ impl CommandExecutor for Executor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let locale = sender.get_locale();
-            let contributors = fetch_all_contributors(locale);
+            let contributors = fetch_all_contributors();
             let contributor_names = contributors
                 .iter()
                 .map(|c| c.login.as_str())
@@ -192,13 +191,11 @@ impl CommandExecutor for Executor {
                         )))
                         .color_named(NamedColor::Gold),
                     )
+                    // https://pumpkinmc.org/
                     .add_child(
                         TextComponent::custom("pumpkin", "commands.pumpkin.github", locale, vec![])
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::Owned(translate_plain(
-                                    "commands.pumpkin.github_url",
-                                    locale,
-                                )),
+                                url: Cow::from("https://github.com/Pumpkin-MC/Pumpkin"),
                             })
                             .hover_event(HoverEvent::show_text(TextComponent::custom(
                                 "pumpkin",
@@ -220,7 +217,7 @@ impl CommandExecutor for Executor {
                             [],
                         )
                         .click_event(ClickEvent::OpenUrl {
-                            url: Cow::Owned(translate_plain("commands.pumpkin.donate_url", locale)),
+                            url: Cow::from("https://pumpkinmc.org/donate/"),
                         })
                         .hover_event(HoverEvent::show_text(TextComponent::custom(
                             PUMPKIN_NAMESPACE,
@@ -242,10 +239,7 @@ impl CommandExecutor for Executor {
                             vec![],
                         )
                         .click_event(ClickEvent::OpenUrl {
-                            url: Cow::Owned(translate_plain(
-                                "commands.pumpkin.website_url",
-                                locale,
-                            )),
+                            url: Cow::from("https://pumpkinmc.org/"),
                         })
                         .hover_event(HoverEvent::show_text(TextComponent::custom(
                             "pumpkin",

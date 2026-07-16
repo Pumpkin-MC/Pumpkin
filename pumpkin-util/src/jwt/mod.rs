@@ -459,20 +459,17 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: Option<&str>) -> Result<
     let aud = payload.get("aud").ok_or_else(|| {
         AuthError::PublicKeyBuild(localized_log("auth.jwt.oidc_payload_missing_aud"))
     })?;
-    let oidc_audience = localized_log("auth.jwt.oidc_audience");
     let aud_match = aud.as_str().map_or_else(
         || {
-            aud.as_array().is_some_and(|arr| {
-                arr.iter()
-                    .any(|v| v.as_str() == Some(oidc_audience.as_str()))
-            })
+            aud.as_array()
+                .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE)))
         },
-        |s| s == oidc_audience.as_str(),
+        |s| s == OIDC_AUDIENCE,
     );
     if !aud_match {
         return Err(AuthError::PublicKeyBuild(localized_log_format(
             "auth.jwt.oidc_audience_mismatch",
-            &[oidc_audience, format!("{aud:?}")],
+            &[OIDC_AUDIENCE.to_string(), format!("{aud:?}")],
         )));
     }
 
