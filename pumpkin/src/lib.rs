@@ -552,7 +552,6 @@ impl PumpkinServer {
                                         *client.player.lock().await = Some(player.clone());
                                     }
                                     // Register the player's locale in the i18n cache
-                                    // TODO: For testing use
                                     let resolved_locale = set_player_locale(
                                         &player.gameprofile.id.to_string(),
                                         &player_locale_str,
@@ -567,7 +566,6 @@ impl PumpkinServer {
                                                 player.gameprofile.id.to_string(),
                                                 "Java".to_owned(),
                                                 resolved_locale.to_code().to_owned(),
-                                                player_locale_str.clone(),
                                             ],
                                         )
                                     );
@@ -715,7 +713,6 @@ impl PumpkinServer {
                                                                 player.gameprofile.id.to_string(),
                                                                 "Bedrock".to_owned(),
                                                                 resolved_locale.to_code().to_owned(),
-                                                                player_locale_str.clone(),
                                                             ],
                                                         )
                                                     );
