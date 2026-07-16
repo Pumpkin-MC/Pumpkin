@@ -61,7 +61,7 @@ where
 /// * `namespace`: The namespace applied to all loaded keys.
 /// * `json_content`: A JSON string containing a flat key-value translation map.
 /// * `locale`: The locale the translations belong to.
-pub fn add_translation_file<N, J>(namespace: N, json_content: J, locale: Locale)
+pub fn load_translations<N, J>(namespace: N, json_content: J, locale: Locale)
 where
     N: AsRef<str>,
     J: AsRef<str>,

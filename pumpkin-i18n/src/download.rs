@@ -90,7 +90,10 @@ impl Default for DownloadConfig {
 ///
 /// # Locale code
 /// The locale code is derived from [`Locale::to_code`], e.g. `"en_us"`, `"zh_cn"`.
-pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTranslations {
+pub fn fetch_locale_translations(
+    config: &DownloadConfig,
+    locale: Locale,
+) -> DownloadedTranslations {
     let base_url = if config.mirror_url.is_empty() {
         DEFAULT_MIRROR
     } else {
@@ -147,12 +150,12 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 ///
 /// Feeds translation maps directly into [`TranslationEngine::extend_translations`],
 /// avoiding a serialize‑to‑JSON → parse‑from‑JSON round‑trip through
-/// `add_translation_file`.
+/// `load_translations`.
 ///
 /// Emits a single consolidated log line summarising translation coverage.
 /// Empty namespaces in non‑English locales produce a [`warn!`]; otherwise
 /// the summary is logged at [`info!`] level.
-pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
+pub fn load_downloaded_translations(downloaded: &DownloadedTranslations, locale: Locale) {
     // Feed maps directly into the engine to avoid a pointless
     // serialize‑to‑JSON → parse‑from‑JSON round‑trip.
     let engine = crate::store::translation_engine();
@@ -371,7 +374,7 @@ static LOADED_LOCALES: LazyLock<Mutex<HashSet<Locale>>> =
 /// Call this when the caller has already completed the download → save →
 /// inject workflow outside of [`ensure_locale_translations`] (e.g. server
 /// startup loading the global locale).
-pub fn mark_locale_loaded(locale: Locale) {
+pub fn set_locale_loaded(locale: Locale) {
     LOADED_LOCALES.lock().unwrap().insert(locale);
 }
 
@@ -451,26 +454,26 @@ pub fn ensure_locale_translations(locale: Locale) {
         let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
         if complete && cache_is_fresh(locale, cache_root) {
             // Both namespaces present and up-to-date — no download needed
-            load_downloaded(&cached, locale);
+            load_downloaded_translations(&cached, locale);
             return;
         }
         // Either incomplete or stale — load cached data for immediate use,
         // then download the full set to overwrite.
-        load_downloaded(&cached, locale);
+        load_downloaded_translations(&cached, locale);
         true
     } else {
         false
     };
 
     // 2. Download full set from remote mirror
-    let downloaded = download_locale(config, locale);
+    let downloaded = fetch_locale_translations(config, locale);
 
     // 3. Save to disk and inject.  Always overwrite cached files when fresh
     //    data was downloaded — partial-save optimisations cause stale files to
     //    linger on disk and fail the checksum check on the next restart.
     if downloaded.has_any() {
         save_downloaded_translations(&downloaded, locale, cache_root);
-        load_downloaded(&downloaded, locale);
+        load_downloaded_translations(&downloaded, locale);
         save_checksums(cache_root, config, locale);
     } else if !had_any_cache {
         warn!(
@@ -512,15 +515,15 @@ pub fn bootstrap_server_translations(config: DownloadConfig, cache_root: PathBuf
     if let Some(cached) = load_cached_translations(locale, &cache_root) {
         let complete = !cached.pumpkin.is_empty() && !cached.java.is_empty();
         if complete {
-            load_downloaded(&cached, locale);
-            mark_locale_loaded(locale);
+            load_downloaded_translations(&cached, locale);
+            set_locale_loaded(locale);
             init_translation_loader(config, cache_root);
             return;
         }
     }
 
     // 2. Download from remote mirror
-    let downloaded = download_locale(&config, locale);
+    let downloaded = fetch_locale_translations(&config, locale);
 
     // 3. Save to disk for future runs (only non-empty namespaces)
     if downloaded.has_any() {
@@ -530,8 +533,8 @@ pub fn bootstrap_server_translations(config: DownloadConfig, cache_root: PathBuf
 
     // 4. Inject into engine + mark loaded
     if downloaded.has_any() {
-        load_downloaded(&downloaded, locale);
-        mark_locale_loaded(locale);
+        load_downloaded_translations(&downloaded, locale);
+        set_locale_loaded(locale);
     } else if locale != Locale::EnUs {
         warn!(
             "No translations downloaded for {} — using embedded English fallback",

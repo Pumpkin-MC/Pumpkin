@@ -2,9 +2,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     state::PluginHostState,
     wit::v0_1::pumpkin::plugin::{common::Locale as WitLocale, i18n::Host},
 };
-use pumpkin_i18n::{
-    Locale as UtilLocale, add_translation_file, format_translation, get_translation,
-};
+use pumpkin_i18n::{Locale as UtilLocale, format_translation, get_translation, load_translations};
 
 impl Host for PluginHostState {
     async fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
@@ -26,7 +24,7 @@ impl Host for PluginHostState {
         json: String,
         locale: WitLocale,
     ) -> wasmtime::Result<()> {
-        add_translation_file(namespace, json, wit_to_util_locale(locale));
+        load_translations(namespace, json, wit_to_util_locale(locale));
         Ok(())
     }
 }
