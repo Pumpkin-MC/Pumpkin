@@ -7,7 +7,7 @@ pub mod store;
 pub mod token;
 
 pub use client::{
-    player_locale, remove_player_locale, resolve_client_locale, set_player_locale,
+    player_locale, remove_player_locale, resolve_player_locale, set_player_locale,
     try_player_locale,
 };
 pub use download::{

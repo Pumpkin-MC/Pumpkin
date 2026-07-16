@@ -39,7 +39,7 @@ const MAX_PLAYER_CACHE_SIZE: usize = 100_000;
 /// # Returns
 /// The resolved [`Locale`], which has also been stored in [`PLAYER_CACHE`].
 pub fn set_player_locale(uuid: &str, player_reported_locale: &str, config_value: &str) -> Locale {
-    let locale = resolve_client_locale(player_reported_locale, config_value);
+    let locale = resolve_player_locale(player_reported_locale, config_value);
 
     // Guard against unbounded growth: if the cache exceeds the cap (e.g.
     // because remove_player_locale was never called for many players due to
@@ -95,7 +95,7 @@ pub fn remove_player_locale(uuid: &str) {
 /// The resolved [`Locale`]. If `config_value` is `"auto"`, returns the player's locale.
 /// Otherwise overrides with the configured locale.
 #[must_use]
-pub fn resolve_client_locale(player_locale: &str, config_value: &str) -> Locale {
+pub fn resolve_player_locale(player_locale: &str, config_value: &str) -> Locale {
     let source = if config_value.eq_ignore_ascii_case("auto") {
         player_locale
     } else {
