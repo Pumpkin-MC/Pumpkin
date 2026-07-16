@@ -718,6 +718,27 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
     }
 
+    async fn get_block_entity_nbt(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<Option<Vec<u8>>> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+
+        let Some(entity) = world_ref.get_block_entity(&internal_pos) else {
+            return Ok(None);
+        };
+
+        let mut nbt = pumpkin_nbt::NbtCompound::new();
+        entity.write_internal(&mut nbt).await;
+
+        let mut bytes = Vec::new();
+        pumpkin_nbt::serializer::to_bytes_unnamed(&nbt, &mut bytes)
+            .map_err(|e| wasmtime::Error::msg(format!("NBT serialize error: {e}")))?;
+        Ok(Some(bytes))
+    }
+
     async fn set_block_entity_nbt(
         &mut self,
         world: Resource<World>,
