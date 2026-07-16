@@ -129,7 +129,7 @@ fn text_component(text: &str) -> TextComponentBase {
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_i18n::{Locale, add_translation};
+    use pumpkin_i18n::{Locale, set_translation};
 
     use crate::text::TextComponent;
 
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn formats_explicit_placeholders_and_literal_percent() {
-        add_translation(
+        set_translation(
             "test_util_translation",
             "ordered",
             "%2$s then %1$s %% done",

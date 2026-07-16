@@ -323,7 +323,7 @@ impl TranslationEngine {
     /// Overrides are checked before the immutable built-in FST stores. This
     /// keeps plugin/custom translation loading cheap and avoids rebuilding all
     /// locale data for a single write.
-    pub fn add_translation(&self, locale_idx: usize, key: &str, translation: &str) {
+    pub fn set_translation(&self, locale_idx: usize, key: &str, translation: &str) {
         debug_assert!(
             locale_idx < crate::locale::Locale::COUNT,
             "locale_idx {locale_idx} out of range (COUNT={})",
@@ -345,7 +345,7 @@ impl TranslationEngine {
     ///
     /// Clears the entire per‑locale cache afterwards (O(1)) so that future
     /// lookups pick up the fresh overrides.  Other locales are unaffected.
-    pub fn add_translations<I>(&self, locale_idx: usize, entries: I)
+    pub fn extend_translations<I>(&self, locale_idx: usize, entries: I)
     where
         I: IntoIterator<Item = (String, String)>,
     {

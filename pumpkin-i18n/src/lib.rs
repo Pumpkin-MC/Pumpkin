@@ -21,8 +21,8 @@ pub use server::{
     detect_system_locale, resolve_server_locale, server_global_locale, set_server_global_locale,
 };
 pub use store::{
-    add_translation, add_translation_file, format_translation, get_translation,
-    resolve_translation, translation_engine,
+    add_translation_file, format_translation, get_translation, resolve_translation,
+    set_translation, translation_engine,
 };
 pub use token::{Token, precompile};
 

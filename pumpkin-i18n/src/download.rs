@@ -145,7 +145,7 @@ pub fn download_locale(config: &DownloadConfig, locale: Locale) -> DownloadedTra
 /// Bedrock Edition translations are **not** loaded at runtime; the
 /// compile-time embedded `en_us` Bedrock strings are always used.
 ///
-/// Feeds translation maps directly into [`TranslationEngine::add_translations`],
+/// Feeds translation maps directly into [`TranslationEngine::extend_translations`],
 /// avoiding a serialize‑to‑JSON → parse‑from‑JSON round‑trip through
 /// `add_translation_file`.
 ///
@@ -159,14 +159,14 @@ pub fn load_downloaded(downloaded: &DownloadedTranslations, locale: Locale) {
     let locale_idx = locale as usize;
 
     if !downloaded.pumpkin.is_empty() {
-        engine.add_translations(
+        engine.extend_translations(
             locale_idx,
             namespaced_entries("pumpkin", &downloaded.pumpkin),
         );
     }
 
     if !downloaded.java.is_empty() {
-        engine.add_translations(
+        engine.extend_translations(
             locale_idx,
             namespaced_entries("java_minecraft", &downloaded.java),
         );
@@ -624,7 +624,7 @@ fn sha256_hex(data: &[u8]) -> String {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build namespaced, lowercased key–value pairs ready for [`TranslationEngine::add_translations`].
+/// Build namespaced, lowercased key–value pairs ready for [`TranslationEngine::extend_translations`].
 fn namespaced_entries<'a>(
     namespace: &'a str,
     data: &'a HashMap<String, String>,

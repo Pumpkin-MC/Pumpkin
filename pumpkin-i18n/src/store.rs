@@ -43,7 +43,7 @@ pub fn resolve_translation(key: &str, locale: Locale) -> Arc<ResolvedTranslation
 /// The full key is assembled as `"{namespace}:{key}"` via
 /// [`crate::namespaced_key`]. Passing an already-namespaced key
 /// will produce a double-prefixed key such as `"pumpkin:pumpkin:foo"`.
-pub fn add_translation<N, K, V>(namespace: N, key: K, translation: V, locale: Locale)
+pub fn set_translation<N, K, V>(namespace: N, key: K, translation: V, locale: Locale)
 where
     N: AsRef<str>,
     K: AsRef<str>,
@@ -52,7 +52,7 @@ where
     let namespaced_key = crate::namespaced_key(namespace.as_ref(), key.as_ref());
     let translation = translation.into();
 
-    translation_engine().add_translation(locale as usize, &namespaced_key, &translation);
+    translation_engine().set_translation(locale as usize, &namespaced_key, &translation);
 }
 
 /// Loads translations from a JSON string and registers them under a namespace.
@@ -94,7 +94,7 @@ where
         })
         .collect::<Vec<_>>();
 
-    translation_engine().add_translations(locale as usize, entries);
+    translation_engine().extend_translations(locale as usize, entries);
 }
 
 /// Retrieves a translation for the given key and locale.
@@ -132,11 +132,11 @@ pub fn format_translation(key: &str, locale: Locale, args: &[String]) -> String 
 mod tests {
     use crate::Locale;
 
-    use super::{add_translation, format_translation, get_translation};
+    use super::{format_translation, get_translation, set_translation};
 
     #[test]
     fn runtime_translation_overrides_are_visible_on_hot_path() {
-        add_translation("test_runtime_store", "hello", "Hello %s", Locale::EnUs);
+        set_translation("test_runtime_store", "hello", "Hello %s", Locale::EnUs);
 
         assert_eq!(
             get_translation("TEST_RUNTIME_STORE:HELLO", Locale::ZhCn),
