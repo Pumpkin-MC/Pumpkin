@@ -8,15 +8,16 @@ use pumpkin_data::data_component_impl::{
     AxolotlVariantImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl, CatVariantImpl,
     ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect,
     CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
-    DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl,
-    FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
-    IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
-    MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
-    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
-    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
-    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
-    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
-    WolfVariantImpl, ZombieNautilusVariantImpl, get,
+    DataComponentImpl, DyedColorImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
+    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl,
+    HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl, LlamaVariantImpl,
+    MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl,
+    PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl,
+    SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
+    SuspiciousStewEffect, SuspiciousStewEffectsImpl, TropicalFishBaseColorImpl,
+    TropicalFishPatternColorImpl, TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl,
+    VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl, WolfVariantImpl,
+    ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -330,6 +331,83 @@ impl DataComponentCodec<Self> for CustomNameImpl {
         let name = seq.get_str()?;
         Ok(Self {
             name: pumpkin_util::text::TextComponent::text(String::from(name)),
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for ItemNameImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("translate", self.name.to_string());
+        let mut bytes = Vec::new();
+        NbtTag::Compound(name)
+            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
+            .map_err(|error| WritingError::Message(error.to_string()))?;
+        seq.write_slice(&bytes)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let name = seq.get_str()?;
+        Ok(Self {
+            name: Cow::Owned(name.into()),
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for DyedColorImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_i32(self.rgb)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Ok(Self {
+            rgb: seq.get_i32()?,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for SuspiciousStewEffectsImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let effect_count = i32::try_from(self.effects.len())
+            .map_err(|_| WritingError::Message("Too many suspicious stew effects".into()))?;
+        seq.write_var_int(&VarInt(effect_count))?;
+        for effect in self.effects.iter() {
+            let id = StatusEffect::from_minecraft_name(&effect.effect)
+                .ok_or_else(|| WritingError::Message("Unknown suspicious stew effect".into()))?
+                .id;
+            seq.write_var_int(&VarInt(i32::from(id)))?;
+            seq.write_var_int(&VarInt(effect.duration))?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        const MAX_EFFECTS: i32 = 128;
+
+        let count = seq.get_var_int()?.0;
+        if !(0..=MAX_EFFECTS).contains(&count) {
+            return Err(ReadingError::Message(
+                "Invalid suspicious stew effect count".into(),
+            ));
+        }
+
+        let mut effects =
+            Vec::with_capacity(usize::try_from(count).map_err(|_| {
+                ReadingError::Message("Invalid suspicious stew effect count".into())
+            })?);
+        for _ in 0..count {
+            let id = u16::try_from(seq.get_var_int()?.0)
+                .map_err(|_| ReadingError::Message("Invalid suspicious stew effect id".into()))?;
+            let effect = StatusEffect::from_id(id)
+                .ok_or_else(|| ReadingError::Message("Unknown suspicious stew effect id".into()))?;
+            let duration = seq.get_var_int()?.0;
+            effects.push(SuspiciousStewEffect {
+                effect: Cow::Borrowed(effect.minecraft_name),
+                duration,
+            });
+        }
+        Ok(Self {
+            effects: Cow::Owned(effects),
         })
     }
 }
@@ -767,9 +845,14 @@ pub fn deserialize(
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::DyedColor => Ok(DyedColorImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::SuspiciousStewEffects => {
+            Ok(SuspiciousStewEffectsImpl::deserialize(seq)?.to_dyn())
+        }
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::ItemName => Ok(ItemNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
@@ -792,9 +875,14 @@ pub fn serialize(
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
         DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
         DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
+        DataComponent::DyedColor => get::<DyedColorImpl>(value).serialize(seq),
+        DataComponent::SuspiciousStewEffects => {
+            get::<SuspiciousStewEffectsImpl>(value).serialize(seq)
+        }
         DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
+        DataComponent::ItemName => get::<ItemNameImpl>(value).serialize(seq),
         DataComponent::CustomName => get::<CustomNameImpl>(value).serialize(seq),
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),

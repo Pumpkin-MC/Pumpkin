@@ -29,7 +29,9 @@ pub mod swim;
 pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
+pub mod trade_with_player;
 pub mod wander_around;
+pub mod work_at_job_site;
 pub mod zombie_attack;
 
 #[must_use]

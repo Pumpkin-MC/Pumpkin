@@ -590,7 +590,58 @@ mod tests {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SuspiciousStewEffectsImpl;
+pub struct SuspiciousStewEffect {
+    pub effect: Cow<'static, str>,
+    pub duration: i32,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SuspiciousStewEffectsImpl {
+    pub effects: Cow<'static, [SuspiciousStewEffect]>,
+}
+impl SuspiciousStewEffectsImpl {
+    pub const EMPTY: Self = Self {
+        effects: Cow::Borrowed(&[]),
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            effects: Cow::Owned(
+                data.extract_list()?
+                    .iter()
+                    .filter_map(|tag| {
+                        let effect = tag.extract_compound()?;
+                        Some(SuspiciousStewEffect {
+                            effect: Cow::Owned(effect.get_string("id")?.to_owned()),
+                            duration: effect.get_int("duration").unwrap_or(160),
+                        })
+                    })
+                    .collect(),
+            ),
+        })
+    }
+}
 impl DataComponentImpl for SuspiciousStewEffectsImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.effects
+                .iter()
+                .map(|effect| {
+                    let mut nbt = NbtCompound::new();
+                    nbt.put_string("id", effect.effect.to_string());
+                    nbt.put_int("duration", effect.duration);
+                    NbtTag::Compound(nbt)
+                })
+                .collect(),
+        )
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        for effect in self.effects.iter() {
+            digest.update(&get_str_hash(&effect.effect).to_le_bytes());
+            digest.update(&get_i32_hash(effect.duration).to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
     default_impl!(SuspiciousStewEffects);
 }
