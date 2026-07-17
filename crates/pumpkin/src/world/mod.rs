@@ -3348,6 +3348,20 @@ impl World {
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
+        self.run_explosion(explosion, position, power).await;
+    }
+
+    pub async fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
+        let explosion = Explosion::new(power, position).preserving_rails();
+        self.run_explosion(explosion, position, power).await;
+    }
+
+    async fn run_explosion(
+        self: &Arc<Self>,
+        explosion: Explosion,
+        position: Vector3<f64>,
+        power: f32,
+    ) {
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
