@@ -18,12 +18,34 @@ use super::{BlockFlags, World};
 pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
+    preserve_rails: bool,
 }
 
 impl Explosion {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
-        Self { power, pos }
+        Self {
+            power,
+            pos,
+            preserve_rails: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn preserving_rails(mut self) -> Self {
+        self.preserve_rails = true;
+        self
+    }
+
+    fn protects_rail(&self, world: &World, pos: &BlockPos, block: &Block) -> bool {
+        self.preserve_rails && (Self::is_rail(block) || Self::is_rail(world.get_block(&pos.up())))
+    }
+
+    fn is_rail(block: &Block) -> bool {
+        block.id == Block::RAIL.id
+            || block.id == Block::POWERED_RAIL.id
+            || block.id == Block::DETECTOR_RAIL.id
+            || block.id == Block::ACTIVATOR_RAIL.id
     }
 
     fn get_blocks_to_destroy(
@@ -113,12 +135,16 @@ impl Explosion {
                         );
 
                         if !state.is_air() || !fluid_state.is_empty {
-                            let resistance =
-                                fluid_state.blast_resistance.max(block.blast_resistance);
+                            let protects_rail = self.protects_rail(world, &block_pos, block);
+                            let resistance = if protects_rail {
+                                0.0
+                            } else {
+                                fluid_state.blast_resistance.max(block.blast_resistance)
+                            };
 
                             h -= (resistance + 0.3) * 0.3;
 
-                            if h > 0.0 {
+                            if h > 0.0 && !protects_rail {
                                 map.insert(block_pos, (block, state));
                             }
                         }
@@ -305,5 +331,24 @@ impl Explosion {
         }
         // TODO: fire
         blocks.len() as u32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Explosion;
+    use pumpkin_data::Block;
+
+    #[test]
+    fn tnt_minecart_rail_protection_covers_every_rail_type() {
+        for rail in [
+            &Block::RAIL,
+            &Block::POWERED_RAIL,
+            &Block::DETECTOR_RAIL,
+            &Block::ACTIVATOR_RAIL,
+        ] {
+            assert!(Explosion::is_rail(rail));
+        }
+        assert!(!Explosion::is_rail(&Block::STONE));
     }
 }

@@ -134,16 +134,7 @@ impl VehicleEntity {
             return true;
         }
 
-        let current_side = self.get_hurt_dir();
-        self.set_hurt_dir(-current_side);
-        self.set_hurt_time(10);
-        self.entity.velocity_dirty.store(true, Ordering::SeqCst);
-
-        let current_strength = self.get_damage();
-        let new_strength = current_strength + amount * 10.0;
-        self.set_damage(new_strength);
-
-        self.send_wobble_metadata();
+        let new_strength = self.apply_damage_wobble(amount);
 
         let is_creative = source
             .and_then(|s| s.get_player())
@@ -158,6 +149,22 @@ impl VehicleEntity {
         }
 
         true
+    }
+
+    /// Applies the standard minecart damage wobble without destroying the vehicle.
+    /// TNT minecarts use this before deciding whether damage primes or breaks them.
+    pub fn apply_damage_wobble(&self, amount: f32) -> f32 {
+        let current_side = self.get_hurt_dir();
+        self.set_hurt_dir(-current_side);
+        self.set_hurt_time(10);
+        self.entity.velocity_dirty.store(true, Ordering::SeqCst);
+
+        let current_strength = self.get_damage();
+        let new_strength = current_strength + amount * 10.0;
+        self.set_damage(new_strength);
+
+        self.send_wobble_metadata();
+        new_strength
     }
 }
 
