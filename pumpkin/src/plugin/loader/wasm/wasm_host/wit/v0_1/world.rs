@@ -15,8 +15,8 @@ use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpa
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
-    Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
+    BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
+    BoundingBox as WitBoundingBox, Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
     PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
@@ -220,6 +220,28 @@ impl pumpkin::plugin::world::Host for PluginHostState {
             Ok(id) => Ok(Some(id)),
             Err(_) => Ok(None),
         }
+    }
+
+    async fn block_state_to_info(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Option<WitBlockStateInfo>> {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let bsid = BlockStateId::new_or_air(state_id);
+            let block = pumpkin_data::Block::from_state_id(bsid);
+            let name = format!("minecraft:{}", block.name);
+            let properties = block
+                .properties(bsid)
+                .map(|p| {
+                    p.to_props()
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            WitBlockStateInfo { name, properties }
+        }));
+        Ok(result.ok())
     }
 }
 impl pumpkin::plugin::particles::Host for PluginHostState {}
