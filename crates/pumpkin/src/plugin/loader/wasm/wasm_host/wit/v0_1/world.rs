@@ -16,9 +16,10 @@ use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position as WitPosition;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
-    Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
-    PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
+    BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
+    BoundingBox as WitBoundingBox, Chunk as WitChunk,
+    NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
+    WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{
@@ -216,6 +217,28 @@ impl pumpkin::plugin::world::Host for PluginHostState {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let block_props = block.from_properties(&props);
             block_props.to_state_id(block).as_u16()
+        }));
+        Ok(result.ok())
+    }
+
+    async fn block_state_to_info(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Option<WitBlockStateInfo>> {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let bsid = BlockStateId::new_or_air(state_id);
+            let block = pumpkin_data::Block::from_state_id(bsid);
+            let name = format!("minecraft:{}", block.name);
+            let properties = block
+                .properties(bsid)
+                .map(|p| {
+                    p.to_props()
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            WitBlockStateInfo { name, properties }
         }));
         Ok(result.ok())
     }
