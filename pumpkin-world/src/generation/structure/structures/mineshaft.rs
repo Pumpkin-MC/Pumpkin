@@ -1,19 +1,19 @@
 bwrap: /home/zoliviragh/.local/share/flatpak/app/dev.zed.Zed/x86_64/stable/d723b1334a83e703a7fd9419ba74d4567e26200e5541ac018186b3bc61d69c44/files/lib/libselinux.so.1: no version information available (required by bwrap)
 //! Mineshaft structure generator (normal + mesa variants).
 //!
-//! Procedural, piece-based structure (not jigsaw): a starting room branches out into
-//! corridors, crossings and stairs via a recursive worklist, matching vanilla
-//! `MineshaftPieces`. Normal mineshafts use oak, mesa uses dark oak.
+//! Faithful port of vanilla `MineshaftPieces` / `MineshaftStructure`.
+//! Procedural piece-based structure: a room at Y=50 branches into corridors,
+//! crossings and stairs. Normal uses oak, mesa uses dark oak.
 
 use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockState};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     BlockDirection,
-    math::{block_box::BlockBox, position::BlockPos},
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
-use pumpkin_nbt::compound::NbtCompound;
 
 use crate::{
     ProtoChunk,
@@ -26,10 +26,9 @@ use crate::{
     },
 };
 
-/// Hard cap on recursive depth so generation always terminates.
-const MAX_CHAIN_LENGTH: u32 = 16;
-/// Maximum horizontal radius (blocks) pieces may extend from the start.
-const MAX_RADIUS: i32 = 48;
+const MAX_DEPTH: u32 = 8;
+const BOUND: i32 = 80;
+const MAGIC_START_Y: i32 = 50;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum MineshaftType {
@@ -58,16 +57,14 @@ impl MineshaftType {
     }
 }
 
-/// A point where a child piece should be attached, facing outward from its parent.
 struct Attachment {
     x: i32,
     y: i32,
     z: i32,
     facing: BlockDirection,
-    chain_length: u32,
+    depth: u32,
 }
 
-/// Generator constructed per structure key (normal vs mesa) by the dispatch.
 pub struct MineshaftGenerator {
     pub mineshaft_type: MineshaftType,
 }
@@ -77,37 +74,60 @@ impl StructureGenerator for MineshaftGenerator {
         &self,
         mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
-        // Gating is handled by the structure_set's frequency reduction (0.004, LegacyType3);
-        // every chunk that reaches this generator should produce a mineshaft.
-        let start_x = context.chunk_x * 16 + 8;
-        let start_z = context.chunk_z * 16 + 8;
-        // Vanilla places the start room somewhere underground.
-        let start_y = context.random.next_bounded_i32(40);
+        // Vanilla consumes a double here (leftover from the old probability gate).
+        let _ = context.random.next_f64();
 
+        let west = context.chunk_x * 16 + 2;
+        let north = context.chunk_z * 16 + 2;
         let mut collector = StructurePiecesCollector::default();
 
-        // Start with a room; it seeds the recursive attachments.
-        if let Some(room_attachments) = MineshaftRoomPiece::create_and_add(
-            &mut collector,
-            start_x,
-            start_y,
-            start_z,
-            self.mineshaft_type,
-            &mut context.random,
-        ) {
-            let mut pending = room_attachments;
-            while let Some(attachment) = pending.pop() {
-                if attachment.chain_length >= MAX_CHAIN_LENGTH {
-                    continue;
-                }
-                let children = generate_piece(
-                    &mut collector,
-                    &attachment,
-                    self.mineshaft_type,
-                    &mut context.random,
-                    start_x,
-                    start_z,
-                );
+        // Create the starting room (vanilla: fixed Y=50, random width/depth/height).
+        let room_box = BlockBox::new(
+            west,
+            MAGIC_START_Y,
+            north,
+            west + 7 + context.random.next_bounded_i32(6),
+            54 + context.random.next_bounded_i32(6),
+            north + 7 + context.random.next_bounded_i32(6),
+        );
+        let start_min_x = room_box.min.x;
+        let start_min_z = room_box.min.z;
+
+        let room = MineshaftRoomPiece {
+            piece: StructurePiece::new(StructurePieceType::MineshaftRoom, room_box, 0),
+            mineshaft_type: self.mineshaft_type,
+        };
+        let room_box = room.piece.bounding_box;
+        collector.add_piece(Box::new(room));
+
+        // Recursive assembly: room spawns children on all four walls.
+        let mut pending = room_attachments(&room_box, &mut context.random);
+        while let Some(att) = pending.pop() {
+            if att.depth >= MAX_DEPTH {
+                continue;
+            }
+            if (att.x - start_min_x).abs() > BOUND || (att.z - start_min_z).abs() > BOUND {
+                continue;
+            }
+            let roll = context.random.next_bounded_i32(100);
+            let new_piece: Option<Box<dyn StructurePieceBase>> = if roll >= 80 {
+                MineshaftCrossingPiece::create(&att, self.mineshaft_type, &mut context.random, &collector)
+            } else if roll >= 70 {
+                MineshaftStairsPiece::create(&att, self.mineshaft_type, &mut context.random, &collector)
+            } else {
+                MineshaftCorridorPiece::create(&att, self.mineshaft_type, &mut context.random, &collector)
+            };
+            if let Some(piece) = new_piece {
+                let children = if let Some(p) = piece.as_any().downcast_ref::<MineshaftCorridorPiece>() {
+                    ChildAttachments::child_attachments(p, &mut context.random)
+                } else if let Some(p) = piece.as_any().downcast_ref::<MineshaftCrossingPiece>() {
+                    ChildAttachments::child_attachments(p, &mut context.random)
+                } else if let Some(p) = piece.as_any().downcast_ref::<MineshaftStairsPiece>() {
+                    ChildAttachments::child_attachments(p, &mut context.random)
+                } else {
+                    Vec::new()
+                };
+                collector.add_piece(piece);
                 pending.extend(children);
             }
         }
@@ -117,131 +137,75 @@ impl StructureGenerator for MineshaftGenerator {
         }
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(start_x, start_y, start_z),
+            start_pos: BlockPos::new(west, MAGIC_START_Y, north),
             collector: Arc::new(collector.into()),
         })
     }
 }
 
-/// Picks a piece type for an attachment and creates it, returning any further attachments.
-fn generate_piece(
-    collector: &mut StructurePiecesCollector,
-    attachment: &Attachment,
-    mineshaft_type: MineshaftType,
-    random: &mut RandomGenerator,
-    start_x: i32,
-    start_z: i32,
-) -> Vec<Attachment> {
-    let roll = random.next_bounded_i32(10);
-    if roll < 7 {
-        MineshaftCorridorPiece::create_and_add(
-            collector,
-            attachment,
-            mineshaft_type,
-            random,
-            start_x,
-            start_z,
-        )
-    } else if roll < 9 {
-        MineshaftCrossingPiece::create_and_add(
-            collector,
-            attachment,
-            mineshaft_type,
-            random,
-            start_x,
-            start_z,
-        )
-    } else {
-        MineshaftStairsPiece::create_and_add(
-            collector,
-            attachment,
-            mineshaft_type,
-            random,
-            start_x,
-            start_z,
-        )
+/// Room spawns corridors off all four walls at intervals (vanilla addChildren).
+fn room_attachments(room: &BlockBox, random: &mut RandomGenerator) -> Vec<Attachment> {
+    let mut attachments = Vec::new();
+    let x_span = room.max.x - room.min.x;
+    let z_span = room.max.z - room.min.z;
+    let y_span = room.max.y - room.min.y;
+    let height_space = (y_span - 4).max(1);
+
+    // North and South walls.
+    let mut pos = 0;
+    while pos < x_span {
+        pos += random.next_bounded_i32(x_span + 1);
+        if pos + 3 > x_span {
+            break;
+        }
+        attachments.push(Attachment {
+            x: room.min.x + pos,
+            y: room.min.y + random.next_bounded_i32(height_space) + 1,
+            z: room.min.z - 1,
+            facing: BlockDirection::North,
+            depth: 1,
+        });
+        attachments.push(Attachment {
+            x: room.min.x + pos,
+            y: room.min.y + random.next_bounded_i32(height_space) + 1,
+            z: room.max.z + 1,
+            facing: BlockDirection::South,
+            depth: 1,
+        });
+        pos += 4;
     }
+    // West and East walls.
+    pos = 0;
+    while pos < z_span {
+        pos += random.next_bounded_i32(z_span + 1);
+        if pos + 3 > z_span {
+            break;
+        }
+        attachments.push(Attachment {
+            x: room.min.x - 1,
+            y: room.min.y + random.next_bounded_i32(height_space) + 1,
+            z: room.min.z + pos,
+            facing: BlockDirection::West,
+            depth: 1,
+        });
+        attachments.push(Attachment {
+            x: room.max.x + 1,
+            y: room.min.y + random.next_bounded_i32(height_space) + 1,
+            z: room.min.z + pos,
+            facing: BlockDirection::East,
+            depth: 1,
+        });
+        pos += 4;
+    }
+    attachments
 }
 
-/// Rejects a piece box that collides, lies outside the radius, or is above ground.
-fn reject(
-    collector: &StructurePiecesCollector,
-    bbox: &BlockBox,
-    start_x: i32,
-    start_z: i32,
-) -> bool {
-    if collector.get_intersecting(bbox).is_some() {
-        return true;
-    }
-    let cx = (bbox.min.x + bbox.max.x) / 2;
-    let cz = (bbox.min.z + bbox.max.z) / 2;
-    (cx - start_x).abs() > MAX_RADIUS || (cz - start_z).abs() > MAX_RADIUS
-}
+// ===========================================================================
+// Trait for child attachment computation
+// ===========================================================================
 
-fn facing_step(facing: BlockDirection) -> (i32, i32) {
-    match facing {
-        BlockDirection::North => (0, -1),
-        BlockDirection::South => (0, 1),
-        BlockDirection::East => (1, 0),
-        BlockDirection::West => (-1, 0),
-        _ => (0, 0),
-    }
-}
-
-/// Places a mob spawner block entity (e.g. cave spider) at piece-local coordinates.
-fn place_spawner(
-    chunk: &mut ProtoChunk,
-    piece: &StructurePiece,
-    x: i32,
-    y: i32,
-    z: i32,
-    chunk_box: &BlockBox,
-    entity_id: &str,
-) {
-    let pos = piece.offset_pos(x, y, z);
-    if !chunk_box.contains(pos.x, pos.y, pos.z) {
-        return;
-    }
-    chunk.set_block_state(pos.x, pos.y, pos.z, Block::SPAWNER.default_state);
-    let mut nbt = NbtCompound::new();
-    nbt.put_string("id", "minecraft:mob_spawner".to_string());
-    nbt.put_int("x", pos.x);
-    nbt.put_int("y", pos.y);
-    nbt.put_int("z", pos.z);
-    let mut spawn_data = NbtCompound::new();
-    let mut entity = NbtCompound::new();
-    entity.put_string("id", entity_id.to_string());
-    spawn_data.put_compound("entity", entity);
-    nbt.put_compound("SpawnData", spawn_data);
-    chunk.add_block_entity(nbt);
-}
-
-/// Places a loot chest block entity at piece-local coordinates.
-#[expect(clippy::too_many_arguments)]
-fn place_loot_chest(
-    chunk: &mut ProtoChunk,
-    piece: &StructurePiece,
-    x: i32,
-    y: i32,
-    z: i32,
-    chunk_box: &BlockBox,
-    seed: i64,
-    loot_table: &str,
-) {
-    let pos = piece.offset_pos(x, y, z);
-    if !chunk_box.contains(pos.x, pos.y, pos.z) {
-        return;
-    }
-    chunk.set_block_state(pos.x, pos.y, pos.z, Block::CHEST.default_state);
-    let mut nbt = NbtCompound::new();
-    nbt.put_string("id", "minecraft:chest".to_string());
-    nbt.put_int("x", pos.x);
-    nbt.put_int("y", pos.y);
-    nbt.put_int("z", pos.z);
-    nbt.put_string("LootTable", loot_table.to_string());
-    let loot_seed = seed ^ (pos.x as i64).rotate_left(13) ^ (pos.z as i64).rotate_left(7);
-    nbt.put_long("LootTableSeed", loot_seed);
-    chunk.add_block_entity(nbt);
+trait ChildAttachments {
+    fn child_attachments(&self, random: &mut RandomGenerator) -> Vec<Attachment>;
 }
 
 // ===========================================================================
@@ -250,53 +214,7 @@ fn place_loot_chest(
 
 struct MineshaftRoomPiece {
     piece: StructurePiece,
-    width: i32,
-    depth: i32,
     mineshaft_type: MineshaftType,
-}
-
-impl MineshaftRoomPiece {
-    fn create_and_add(
-        collector: &mut StructurePiecesCollector,
-        x: i32,
-        y: i32,
-        z: i32,
-        mineshaft_type: MineshaftType,
-        random: &mut RandomGenerator,
-    ) -> Option<Vec<Attachment>> {
-        let width = (random.next_bounded_i32(3) * 2 + 3).max(3);
-        let depth = (random.next_bounded_i32(3) * 2 + 3).max(3);
-        let height = 4;
-        let facing = BlockDirection::get_random_horizontal_direction(random);
-        let bbox = BlockBox::rotated(x, y, z, -(width / 2), 0, -(depth / 2), width, height, depth, &facing);
-        if reject(collector, &bbox, x, z) {
-            return None;
-        }
-        let mut piece = StructurePiece::new(StructurePieceType::MineshaftRoom, bbox, 0);
-        piece.set_facing(Some(facing));
-        let room = Self {
-            piece,
-            width,
-            depth,
-            mineshaft_type,
-        };
-        let floor_y = room.piece.bounding_box.min.y;
-        let min_x = room.piece.bounding_box.min.x;
-        let min_z = room.piece.bounding_box.min.z;
-        let max_x = room.piece.bounding_box.max.x;
-        let max_z = room.piece.bounding_box.max.z;
-        collector.add_piece(Box::new(room));
-
-        // Four exits at the centre of each wall, facing outward.
-        let cx = (min_x + max_x) / 2;
-        let cz = (min_z + max_z) / 2;
-        Some(vec![
-            Attachment { x: cx, y: floor_y, z: min_z - 1, facing: BlockDirection::North, chain_length: 1 },
-            Attachment { x: cx, y: floor_y, z: max_z + 1, facing: BlockDirection::South, chain_length: 1 },
-            Attachment { x: min_x - 1, y: floor_y, z: cz, facing: BlockDirection::West, chain_length: 1 },
-            Attachment { x: max_x + 1, y: floor_y, z: cz, facing: BlockDirection::East, chain_length: 1 },
-        ])
-    }
 }
 
 impl StructurePieceBase for MineshaftRoomPiece {
@@ -313,30 +231,31 @@ impl StructurePieceBase for MineshaftRoomPiece {
         &mut self,
         chunk: &mut ProtoChunk,
         _block_registry: &dyn WorldPortalExt,
-        random: &mut RandomGenerator,
+        _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
-        let planks = self.mineshaft_type.planks();
-        let log = self.mineshaft_type.log();
+        if is_in_liquid(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
+        let bb = self.piece.bounding_box;
         let air = Block::AIR.default_state;
-        let w = self.width - 1;
-        let d = self.depth - 1;
-
-        // Floor (with occasional gaps) and clear the interior.
-        for x in 0..=w {
-            for z in 0..=d {
-                let floor = if random.next_f64() < 0.1 { air } else { planks };
-                self.piece.add_block(chunk, floor, x, 0, z, chunk_box);
-                self.piece.add_block(chunk, air, x, 1, z, chunk_box);
-                self.piece.add_block(chunk, air, x, 2, z, chunk_box);
+        // Carve the interior (vanilla: clear lower box + dome ceiling).
+        for x in bb.min.x..=bb.max.x {
+            for y in (bb.min.y + 1)..=bb.max.y {
+                for z in bb.min.z..=bb.max.z {
+                    if chunk_box.contains(x, y, z) {
+                        chunk.set_block_state(x, y, z, air);
+                    }
+                }
             }
         }
-        // Corner support posts.
-        for &(px, pz) in &[(0, 0), (w, 0), (0, d), (w, d)] {
-            self.piece.add_block(chunk, log, px, 1, pz, chunk_box);
-            self.piece.add_block(chunk, log, px, 2, pz, chunk_box);
-        }
+    }
+}
+
+impl ChildAttachments for MineshaftRoomPiece {
+    fn child_attachments(&self, _random: &mut RandomGenerator) -> Vec<Attachment> {
+        Vec::new() // Room's children are spawned by room_attachments before the loop.
     }
 }
 
@@ -346,78 +265,47 @@ impl StructurePieceBase for MineshaftRoomPiece {
 
 struct MineshaftCorridorPiece {
     piece: StructurePiece,
-    length: i32,
-    facing: BlockDirection,
     mineshaft_type: MineshaftType,
-    has_spawner: bool,
-    has_chest: bool,
+    num_sections: i32,
+    has_rails: bool,
+    spider_corridor: bool,
+    has_placed_spider: bool,
 }
 
 impl MineshaftCorridorPiece {
-    fn create_and_add(
-        collector: &mut StructurePiecesCollector,
-        attachment: &Attachment,
+    fn create(
+        att: &Attachment,
         mineshaft_type: MineshaftType,
         random: &mut RandomGenerator,
-        start_x: i32,
-        start_z: i32,
-    ) -> Vec<Attachment> {
-        let length = random.next_bounded_i32(4) * 3 + 3; // 3..15 blocks
-        let facing = attachment.facing;
-        let bbox = BlockBox::rotated(
-            attachment.x,
-            attachment.y,
-            attachment.z,
-            -1,
-            0,
-            0,
-            3,
-            3,
-            length,
-            &facing,
-        );
-        if reject(collector, &bbox, start_x, start_z) {
-            return Vec::new();
+        collector: &StructurePiecesCollector,
+    ) -> Option<Box<dyn StructurePieceBase>> {
+        let mut corridor_length = random.next_bounded_i32(3) + 2;
+        while corridor_length > 0 {
+            let block_length = corridor_length * 5;
+            let bbox = BlockBox::rotated(
+                att.x, att.y, att.z, 0, 0, 0, 3, 3, block_length, &att.facing,
+            );
+            if collector.get_intersecting(&bbox).is_none() {
+                let mut piece = StructurePiece::new(
+                    StructurePieceType::MineshaftCorridor,
+                    bbox,
+                    att.depth,
+                );
+                piece.set_facing(Some(att.facing));
+                let has_rails = random.next_bounded_i32(3) == 0;
+                let spider_corridor = !has_rails && random.next_bounded_i32(23) == 0;
+                return Some(Box::new(Self {
+                    piece,
+                    mineshaft_type,
+                    num_sections: corridor_length,
+                    has_rails,
+                    spider_corridor,
+                    has_placed_spider: false,
+                }));
+            }
+            corridor_length -= 1;
         }
-        let mut piece = StructurePiece::new(
-            StructurePieceType::MineshaftCorridor,
-            bbox,
-            attachment.chain_length,
-        );
-        piece.set_facing(Some(facing));
-
-        // Far-end attachment (continue outward; occasionally turn).
-        let (dx, dz) = facing_step(facing);
-        let turn = random.next_bounded_i32(4) == 0;
-        let next_facing = if turn {
-            BlockDirection::get_random_horizontal_direction(random)
-        } else {
-            facing
-        };
-        let (nx, nz) = facing_step(next_facing);
-        let far_x = attachment.x + dx * (length - 1) + nx;
-        let far_z = attachment.z + dz * (length - 1) + nz;
-        let mut children = Vec::new();
-        if random.next_bounded_i32(3) > 0 {
-            children.push(Attachment {
-                x: far_x,
-                y: attachment.y,
-                z: far_z,
-                facing: next_facing,
-                chain_length: attachment.chain_length + 1,
-            });
-        }
-        let has_spawner = random.next_bounded_i32(3) == 0;
-        let has_chest = random.next_bounded_i32(4) == 0;
-        collector.add_piece(Box::new(Self {
-            piece,
-            length,
-            facing,
-            mineshaft_type,
-            has_spawner,
-            has_chest,
-        }));
-        children
+        None
     }
 }
 
@@ -439,54 +327,187 @@ impl StructurePieceBase for MineshaftCorridorPiece {
         seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_liquid(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
         let planks = self.mineshaft_type.planks();
-        let log = self.mineshaft_type.log();
+        let fence = self.mineshaft_type.fence();
         let air = Block::AIR.default_state;
         let cobweb = Block::COBWEB.default_state;
-        let length = self.length;
+        let length = self.num_sections * 5 - 1;
 
-        for z in 0..length {
-            // Floor (sometimes missing/decayed).
+        // Clear floor area (y=0,1) and ceiling (y=2 ~80%).
+        for z in 0..=length {
             for x in 0..3 {
-                let floor = if random.next_f64() < 0.08 { air } else { planks };
-                self.piece.add_block(chunk, floor, x, 0, z, chunk_box);
+                self.piece.add_block(chunk, air, x, 0, z, chunk_box);
+                self.piece.add_block(chunk, air, x, 1, z, chunk_box);
+                if random.next_f32() < 0.8 {
+                    self.piece.add_block(chunk, air, x, 2, z, chunk_box);
+                }
             }
-            // Clear the walkable interior.
-            self.piece.add_block(chunk, air, 1, 1, z, chunk_box);
-            self.piece.add_block(chunk, air, 1, 2, z, chunk_box);
+        }
 
-            // Supports every 3rd block: vertical posts + side air.
-            if z % 3 == 0 {
-                self.piece.add_block(chunk, log, 0, 1, z, chunk_box);
-                self.piece.add_block(chunk, log, 2, 1, z, chunk_box);
-                self.piece.add_block(chunk, air, 0, 2, z, chunk_box);
-                self.piece.add_block(chunk, air, 2, 2, z, chunk_box);
-                if random.next_f64() < 0.1 {
-                    self.piece.add_block(chunk, cobweb, 1, 2, z, chunk_box);
+        // Spider-corridor cobwebs on the floor (y=0,1 — vanilla generateMaybeBox).
+        if self.spider_corridor {
+            for z in 0..=length {
+                for x in 0..3 {
+                    if random.next_f32() < 0.6 {
+                        self.piece.add_block(chunk, cobweb, x, 0, z, chunk_box);
+                        self.piece.add_block(chunk, cobweb, x, 1, z, chunk_box);
+                    }
+                }
+            }
+        }
+
+        // Per-section: supports + cobwebs + chest + spawner.
+        for section in 0..self.num_sections {
+            let z = 2 + section * 5;
+            // Fence posts + plank beam (vanilla placeSupport).
+            self.piece.add_block(chunk, fence, 0, 0, z, chunk_box);
+            self.piece.add_block(chunk, fence, 0, 1, z, chunk_box);
+            self.piece.add_block(chunk, fence, 2, 0, z, chunk_box);
+            self.piece.add_block(chunk, fence, 2, 1, z, chunk_box);
+            // Beam: 1/4 chance two separate planks, 3/4 chance full beam.
+            if random.next_bounded_i32(4) == 0 {
+                self.piece.add_block(chunk, planks, 0, 2, z, chunk_box);
+                self.piece.add_block(chunk, planks, 2, 2, z, chunk_box);
+            } else {
+                for beam_x in 0..3 {
+                    self.piece.add_block(chunk, planks, beam_x, 2, z, chunk_box);
+                }
+            }
+            // Cobwebs near supports.
+            for &dz in &[-1, 1] {
+                let cz = z + dz;
+                if (0..=length).contains(&cz) {
+                    if random.next_f32() < 0.1 {
+                        self.piece.add_block(chunk, cobweb, 0, 2, cz, chunk_box);
+                    }
+                    if random.next_f32() < 0.1 {
+                        self.piece.add_block(chunk, cobweb, 2, 2, cz, chunk_box);
+                    }
+                }
+            }
+            // Chest (1% — vanilla uses chest-minecart; we use a chest block).
+            if random.next_bounded_i32(100) == 0 {
+                place_loot_chest(chunk, &self.piece, 2, 0, z - 1, chunk_box, seed, "minecraft:chests/abandoned_mineshaft");
+            }
+            if random.next_bounded_i32(100) == 0 {
+                place_loot_chest(chunk, &self.piece, 0, 0, z + 1, chunk_box, seed, "minecraft:chests/abandoned_mineshaft");
+            }
+            // Cave-spider spawner.
+            if self.spider_corridor && !self.has_placed_spider {
+                let spawner_z = z - 1 + random.next_bounded_i32(3);
+                if (0..=length).contains(&spawner_z) {
+                    place_spawner(chunk, &self.piece, 1, 0, spawner_z, chunk_box, "minecraft:cave_spider");
+                    self.has_placed_spider = true;
+                }
+            }
+        }
+
+        // Plank floor at y=-1 (below the box).
+        for z in 0..=length {
+            for x in 0..3 {
+                self.piece.add_block(chunk, planks, x, -1, z, chunk_box);
+            }
+        }
+
+        // Support pillars at z=2 and z=length-2 (wood pillar down to ground).
+        let log_state = self.mineshaft_type.log();
+        self.piece.fill_downwards(chunk, log_state, 0, -1, 2, chunk_box);
+        self.piece.fill_downwards(chunk, log_state, 2, -1, 2, chunk_box);
+        if self.num_sections > 1 {
+            let last = length - 2;
+            self.piece.fill_downwards(chunk, log_state, 0, -1, last, chunk_box);
+            self.piece.fill_downwards(chunk, log_state, 2, -1, last, chunk_box);
+        }
+
+        // Rails.
+        if self.has_rails {
+            // Vanilla always uses NORTH_SOUTH shape; the rail block auto-connects on load.
+            // Pumpkin's proto-chunk doesn't auto-update shapes, so set it explicitly per axis.
+            let rail = if matches!(
+                self.piece.facing,
+                Some(BlockDirection::North | BlockDirection::South)
+            ) {
+                Block::RAIL.default_state
+            } else {
+                let props = Block::RAIL.from_properties(&[("shape", "east_west")]);
+                BlockState::from_id(props.to_state_id(&Block::RAIL))
+            };
+            for z in 0..=length {
+                self.piece.add_block(chunk, rail, 1, 0, z, chunk_box);
+            }
+        }
+    }
+}
+
+impl ChildAttachments for MineshaftCorridorPiece {
+    fn child_attachments(&self, random: &mut RandomGenerator) -> Vec<Attachment> {
+        let bb = self.piece.bounding_box;
+        let mut children = Vec::new();
+
+        // End child (vanilla: one of straight/left/right at the far end).
+        let end_selection = random.next_bounded_i32(4);
+        let y_offset = random.next_bounded_i32(3) - 1;
+        let (end_x, end_z, end_facing) = match self.piece.facing {
+            Some(BlockDirection::North) => {
+                if end_selection <= 1 { (bb.min.x, bb.min.z - 1, BlockDirection::North) }
+                else if end_selection == 2 { (bb.min.x - 1, bb.min.z, BlockDirection::West) }
+                else { (bb.max.x + 1, bb.min.z, BlockDirection::East) }
+            }
+            Some(BlockDirection::South) => {
+                if end_selection <= 1 { (bb.min.x, bb.max.z + 1, BlockDirection::South) }
+                else if end_selection == 2 { (bb.min.x - 1, bb.max.z, BlockDirection::West) }
+                else { (bb.max.x + 1, bb.max.z, BlockDirection::East) }
+            }
+            Some(BlockDirection::West) => {
+                if end_selection <= 1 { (bb.min.x - 1, bb.min.z, BlockDirection::West) }
+                else if end_selection == 2 { (bb.min.x, bb.min.z - 1, BlockDirection::North) }
+                else { (bb.min.x, bb.max.z + 1, BlockDirection::South) }
+            }
+            _ => {
+                if end_selection <= 1 { (bb.max.x + 1, bb.min.z, BlockDirection::East) }
+                else if end_selection == 2 { (bb.max.x, bb.min.z - 1, BlockDirection::North) }
+                else { (bb.max.x, bb.max.z + 1, BlockDirection::South) }
+            }
+        };
+        children.push(Attachment {
+            x: end_x,
+            y: bb.min.y + y_offset,
+            z: end_z,
+            facing: end_facing,
+            depth: self.piece.chain_length + 1,
+        });
+
+        // Side children every 5 blocks (vanilla: 40% each side).
+        if self.piece.chain_length < MAX_DEPTH {
+            let is_ns = matches!(self.piece.facing, Some(BlockDirection::North | BlockDirection::South));
+            if is_ns {
+                let mut z = bb.min.z + 3;
+                while z + 3 <= bb.max.z {
+                    let sel = random.next_bounded_i32(5);
+                    if sel == 0 {
+                        children.push(Attachment { x: bb.min.x - 1, y: bb.min.y, z, facing: BlockDirection::West, depth: self.piece.chain_length + 1 });
+                    } else if sel == 1 {
+                        children.push(Attachment { x: bb.max.x + 1, y: bb.min.y, z, facing: BlockDirection::East, depth: self.piece.chain_length + 1 });
+                    }
+                    z += 5;
                 }
             } else {
-                self.piece.add_block(chunk, air, 0, 1, z, chunk_box);
-                self.piece.add_block(chunk, air, 2, 1, z, chunk_box);
+                let mut x = bb.min.x + 3;
+                while x + 3 <= bb.max.x {
+                    let sel = random.next_bounded_i32(5);
+                    if sel == 0 {
+                        children.push(Attachment { x, y: bb.min.y, z: bb.min.z - 1, facing: BlockDirection::North, depth: self.piece.chain_length + 1 });
+                    } else if sel == 1 {
+                        children.push(Attachment { x, y: bb.min.y, z: bb.max.z + 1, facing: BlockDirection::South, depth: self.piece.chain_length + 1 });
+                    }
+                    x += 5;
+                }
             }
         }
-
-        // Cave-spider spawner (vanilla: corridors may contain one) and a loot chest.
-        let mid = self.length / 2;
-        if self.has_spawner {
-            place_spawner(chunk, &self.piece, 1, 1, mid, chunk_box, "minecraft:cave_spider");
-        }
-        if self.has_chest {
-            place_loot_chest(
-                chunk,
-                &self.piece,
-                1,
-                1,
-                mid + 1,
-                chunk_box,
-                seed,
-                "minecraft:chests/abandoned_mineshaft",
-            );
-        }
+        children
     }
 }
 
@@ -497,100 +518,77 @@ impl StructurePieceBase for MineshaftCorridorPiece {
 struct MineshaftCrossingPiece {
     piece: StructurePiece,
     mineshaft_type: MineshaftType,
-    facing: BlockDirection,
 }
 
 impl MineshaftCrossingPiece {
-    fn create_and_add(
-        collector: &mut StructurePiecesCollector,
-        attachment: &Attachment,
+    fn create(
+        att: &Attachment,
         mineshaft_type: MineshaftType,
         random: &mut RandomGenerator,
-        start_x: i32,
-        start_z: i32,
-    ) -> Vec<Attachment> {
-        let facing = attachment.facing;
-        let bbox = BlockBox::rotated(attachment.x, attachment.y, attachment.z, -2, 0, -2, 5, 4, 5, &facing);
-        if reject(collector, &bbox, start_x, start_z) {
-            return Vec::new();
+        collector: &StructurePiecesCollector,
+    ) -> Option<Box<dyn StructurePieceBase>> {
+        let y1 = if random.next_bounded_i32(4) == 0 { 6 } else { 2 };
+        let bbox = BlockBox::rotated(att.x, att.y, att.z, -1, 0, 0, 5, y1 + 1, 5, &att.facing);
+        if collector.get_intersecting(&bbox).is_some() {
+            return None;
         }
-        let mut piece = StructurePiece::new(
-            StructurePieceType::MineshaftCrossing,
-            bbox,
-            attachment.chain_length,
-        );
-        piece.set_facing(Some(facing));
-        let floor_y = piece.bounding_box.min.y;
-        let min_x = piece.bounding_box.min.x;
-        let min_z = piece.bounding_box.min.z;
-        let max_x = piece.bounding_box.max.x;
-        let max_z = piece.bounding_box.max.z;
-        let cx = (min_x + max_x) / 2;
-        let cz = (min_z + max_z) / 2;
-        collector.add_piece(Box::new(Self {
-            piece,
-            mineshaft_type,
-            facing,
-        }));
-
-        // Openings on each side (continue branching).
-        let mut children = Vec::new();
-        for side_facing in [
-            BlockDirection::North,
-            BlockDirection::South,
-            BlockDirection::East,
-            BlockDirection::West,
-        ] {
-            if random.next_bounded_i32(2) == 0 {
-                let (dx, dz) = facing_step(side_facing);
-                children.push(Attachment {
-                    x: cx + dx * 3,
-                    y: floor_y,
-                    z: cz + dz * 3,
-                    facing: side_facing,
-                    chain_length: attachment.chain_length + 1,
-                });
-            }
-        }
-        children
+        let mut piece = StructurePiece::new(StructurePieceType::MineshaftCrossing, bbox, att.depth);
+        piece.set_facing(Some(att.facing));
+        Some(Box::new(Self { piece, mineshaft_type }))
     }
 }
 
 impl StructurePieceBase for MineshaftCrossingPiece {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece
-    }
-    fn place(
-        &mut self,
-        chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
-        _random: &mut RandomGenerator,
-        _seed: i64,
-        chunk_box: &BlockBox,
-    ) {
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn get_structure_piece(&self) -> &StructurePiece { &self.piece }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece }
+    fn place(&mut self, chunk: &mut ProtoChunk, _br: &dyn WorldPortalExt, _r: &mut RandomGenerator, _s: i64, chunk_box: &BlockBox) {
+        if is_in_liquid(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
         let planks = self.mineshaft_type.planks();
-        let log = self.mineshaft_type.log();
         let air = Block::AIR.default_state;
-
-        // Floor + cleared interior.
+        // Clear interior.
         for x in 0..=4 {
-            for z in 0..=4 {
-                self.piece.add_block(chunk, planks, x, 0, z, chunk_box);
-                self.piece.add_block(chunk, air, x, 1, z, chunk_box);
-                self.piece.add_block(chunk, air, x, 2, z, chunk_box);
+            for y in 0..=4 {
+                for z in 0..=4 {
+                    self.piece.add_block(chunk, air, x, y, z, chunk_box);
+                }
             }
         }
-        // Corner posts.
+        // Corner support pillars.
+        let log = self.mineshaft_type.log();
         for &(px, pz) in &[(0, 0), (4, 0), (0, 4), (4, 4)] {
-            self.piece.add_block(chunk, log, px, 1, pz, chunk_box);
-            self.piece.add_block(chunk, log, px, 2, pz, chunk_box);
+            for py in 0..=4 {
+                self.piece.add_block(chunk, log, px, py, pz, chunk_box);
+            }
         }
+        // Plank floor at y=-1.
+        for x in 0..=4 {
+            for z in 0..=4 {
+                self.piece.add_block(chunk, planks, x, -1, z, chunk_box);
+            }
+        }
+    }
+}
+
+impl ChildAttachments for MineshaftCrossingPiece {
+    fn child_attachments(&self, random: &mut RandomGenerator) -> Vec<Attachment> {
+        let bb = self.piece.bounding_box;
+        let depth = self.piece.chain_length;
+        let mut children = Vec::new();
+        // Spawn on 3 of 4 sides (skip the entry side = facing).
+        for (dir, x, z) in [
+            (BlockDirection::North, bb.min.x + 1, bb.min.z - 1),
+            (BlockDirection::South, bb.min.x + 1, bb.max.z + 1),
+            (BlockDirection::West, bb.min.x - 1, bb.min.z + 1),
+            (BlockDirection::East, bb.max.x + 1, bb.min.z + 1),
+        ] {
+            if dir != self.piece.facing.unwrap_or(BlockDirection::North) && random.next_bounded_i32(2) == 0 {
+                children.push(Attachment { x, y: bb.min.y, z, facing: dir, depth: depth + 1 });
+            }
+        }
+        children
     }
 }
 
@@ -604,72 +602,108 @@ struct MineshaftStairsPiece {
 }
 
 impl MineshaftStairsPiece {
-    fn create_and_add(
-        collector: &mut StructurePiecesCollector,
-        attachment: &Attachment,
+    fn create(
+        att: &Attachment,
         mineshaft_type: MineshaftType,
         _random: &mut RandomGenerator,
-        start_x: i32,
-        start_z: i32,
-    ) -> Vec<Attachment> {
-        let facing = attachment.facing;
-        let bbox = BlockBox::rotated(attachment.x, attachment.y, attachment.z, -1, 0, 0, 3, 6, 3, &facing);
-        if reject(collector, &bbox, start_x, start_z) {
-            return Vec::new();
+        collector: &StructurePiecesCollector,
+    ) -> Option<Box<dyn StructurePieceBase>> {
+        let bbox = BlockBox::rotated(att.x, att.y, att.z, 0, -5, 0, 3, 8, 9, &att.facing);
+        if collector.get_intersecting(&bbox).is_some() {
+            return None;
         }
-        let mut piece = StructurePiece::new(
-            StructurePieceType::MineshaftStairs,
-            bbox,
-            attachment.chain_length,
-        );
-        piece.set_facing(Some(facing));
-        let (dx, dz) = facing_step(facing);
-        let bottom_y = piece.bounding_box.min.y - 5;
-        let children = vec![Attachment {
-            x: attachment.x + dx * 3,
-            y: bottom_y,
-            z: attachment.z + dz * 3,
-            facing,
-            chain_length: attachment.chain_length + 1,
-        }];
-        collector.add_piece(Box::new(Self {
-            piece,
-            mineshaft_type,
-        }));
-        children
+        let mut piece = StructurePiece::new(StructurePieceType::MineshaftStairs, bbox, att.depth);
+        piece.set_facing(Some(att.facing));
+        Some(Box::new(Self { piece, mineshaft_type }))
     }
 }
 
 impl StructurePieceBase for MineshaftStairsPiece {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.piece
-    }
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.piece
-    }
-    fn place(
-        &mut self,
-        chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
-        _random: &mut RandomGenerator,
-        _seed: i64,
-        chunk_box: &BlockBox,
-    ) {
-        let planks = self.mineshaft_type.planks();
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn get_structure_piece(&self) -> &StructurePiece { &self.piece }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece { &mut self.piece }
+    fn place(&mut self, chunk: &mut ProtoChunk, _br: &dyn WorldPortalExt, _r: &mut RandomGenerator, _s: i64, chunk_box: &BlockBox) {
+        if is_in_liquid(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
         let air = Block::AIR.default_state;
-
-        // A simple descending staircase: step down one block per row.
-        for row in 0..3 {
-            let y = 5 - row;
-            for x in 0..3 {
-                self.piece.add_block(chunk, planks, x, y, row, chunk_box);
-                self.piece.add_block(chunk, air, x, y + 1, row, chunk_box);
-            }
+        // Carve upper landing.
+        self.piece.fill(chunk, chunk_box, 0, 5, 0, 2, 7, 1, air);
+        // Carve lower landing.
+        self.piece.fill(chunk, chunk_box, 0, 0, 7, 2, 2, 8, air);
+        // Descending steps.
+        for i in 0..5 {
+            let y = 5 - i - if i < 4 { 1 } else { 0 };
+            self.piece.fill(chunk, chunk_box, 0, y, 2 + i, 2, 7 - i, 2 + i, air);
         }
     }
+}
+
+impl ChildAttachments for MineshaftStairsPiece {
+    fn child_attachments(&self, _random: &mut RandomGenerator) -> Vec<Attachment> {
+        let bb = self.piece.bounding_box;
+        let facing = self.piece.facing.unwrap_or(BlockDirection::North);
+        let (x, z) = match facing {
+            BlockDirection::North => (bb.min.x, bb.min.z - 1),
+            BlockDirection::South => (bb.min.x, bb.max.z + 1),
+            BlockDirection::West => (bb.min.x - 1, bb.min.z),
+            _ => (bb.max.x + 1, bb.min.z),
+        };
+        vec![Attachment { x, y: bb.min.y, z, facing, depth: self.piece.chain_length + 1 }]
+    }
+}
+
+// ===========================================================================
+// Helpers
+// ===========================================================================
+
+/// Checks whether the piece's floor area contains liquid (vanilla `isInInvalidLocation`).
+fn is_in_liquid(chunk: &ProtoChunk, bb: &BlockBox, chunk_box: &BlockBox) -> bool {
+    let cx = (bb.min.x + bb.max.x) / 2;
+    let cz = (bb.min.z + bb.max.z) / 2;
+    for &(x, z) in &[(bb.min.x, bb.min.z), (bb.max.x, bb.max.z), (cx, cz)] {
+        if chunk_box.contains(x, bb.min.y, z)
+            && chunk
+                .get_block_state(&Vector3::new(x, bb.min.y, z))
+                .to_state()
+                .is_liquid()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn place_spawner(chunk: &mut ProtoChunk, piece: &StructurePiece, x: i32, y: i32, z: i32, chunk_box: &BlockBox, entity_id: &str) {
+    let pos = piece.offset_pos(x, y, z);
+    if !chunk_box.contains(pos.x, pos.y, pos.z) { return; }
+    chunk.set_block_state(pos.x, pos.y, pos.z, Block::SPAWNER.default_state);
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("id", "minecraft:mob_spawner".to_string());
+    nbt.put_int("x", pos.x);
+    nbt.put_int("y", pos.y);
+    nbt.put_int("z", pos.z);
+    let mut spawn_data = NbtCompound::new();
+    let mut entity = NbtCompound::new();
+    entity.put_string("id", entity_id.to_string());
+    spawn_data.put_compound("entity", entity);
+    nbt.put_compound("SpawnData", spawn_data);
+    chunk.add_block_entity(nbt);
+}
+
+#[expect(clippy::too_many_arguments)]
+fn place_loot_chest(chunk: &mut ProtoChunk, piece: &StructurePiece, x: i32, y: i32, z: i32, chunk_box: &BlockBox, seed: i64, loot_table: &str) {
+    let pos = piece.offset_pos(x, y, z);
+    if !chunk_box.contains(pos.x, pos.y, pos.z) { return; }
+    chunk.set_block_state(pos.x, pos.y, pos.z, Block::CHEST.default_state);
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("id", "minecraft:chest".to_string());
+    nbt.put_int("x", pos.x);
+    nbt.put_int("y", pos.y);
+    nbt.put_int("z", pos.z);
+    nbt.put_string("LootTable", loot_table.to_string());
+    nbt.put_long("LootTableSeed", seed ^ (pos.x as i64).rotate_left(13) ^ (pos.z as i64).rotate_left(7));
+    chunk.add_block_entity(nbt);
 }
 
 #[cfg(test)]
@@ -680,27 +714,19 @@ mod tests {
 
     #[test]
     fn mineshaft_assembles_multiple_pieces() {
-        let generator = MineshaftGenerator {
-            mineshaft_type: MineshaftType::Normal,
+        let generator = MineshaftGenerator { mineshaft_type: MineshaftType::Normal };
+        let context = StructureGeneratorContext {
+            seed: 42,
+            chunk_x: 0,
+            chunk_z: 0,
+            random: create_chunk_random(42, 0, 0),
+            sea_level: 63,
+            min_y: -64,
+            height_sampler: None,
+            structure_key: Some(StructureKeys::Mineshaft),
         };
-        // The generator applies a 0.01 probability gate, so try many chunks until one passes.
-        for offset in 0..400 {
-            let context = StructureGeneratorContext {
-                seed: 1234,
-                chunk_x: offset,
-                chunk_z: offset,
-                random: create_chunk_random(1234, offset, offset),
-                sea_level: 63,
-                min_y: -64,
-                height_sampler: None,
-                structure_key: Some(StructureKeys::Mineshaft),
-            };
-            if let Some(position) = generator.get_structure_position(context) {
-                let count = position.collector.lock().unwrap().pieces.len();
-                assert!(count > 1, "mineshaft produced only {count} pieces");
-                return;
-            }
-        }
-        panic!("mineshaft probability gate never passed in 400 attempts");
+        let position = generator.get_structure_position(context).expect("mineshaft should generate");
+        let count = position.collector.lock().unwrap().pieces.len();
+        assert!(count > 2, "mineshaft generated only {count} pieces");
     }
 }
