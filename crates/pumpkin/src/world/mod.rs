@@ -25,6 +25,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod time;
+pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
 use crate::world::chunker::is_within_view_distance;
@@ -263,8 +264,10 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, BlockStateId>>,
-    /// POI storage for fast portal lookups
+    /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
+    /// Villager job sites and their current owners.
+    pub villager_poi: Mutex<villager_poi::VillagerPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
@@ -383,6 +386,7 @@ impl World {
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
+            villager_poi: Mutex::new(villager_poi::VillagerPoiStorage::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
@@ -4732,9 +4736,24 @@ impl World {
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
 
+        self.villager_poi
+            .lock()
+            .await
+            .update_block(*position, new_block);
+
         let block_moved = flags.contains(BlockFlags::MOVED);
 
         let is_new_block = old_block != new_block;
+
+        if is_new_block {
+            let mut poi = self.portal_poi.lock().await;
+            if villager_poi::profession_for_block(old_block).is_some() {
+                poi.remove(position);
+            }
+            if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
+                poi.add_with_free_tickets(*position, poi_type, 1);
+            }
+        }
 
         // WorldChunk.java line 305-314
         if is_new_block

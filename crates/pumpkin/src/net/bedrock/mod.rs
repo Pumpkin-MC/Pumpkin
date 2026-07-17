@@ -708,7 +708,7 @@ impl BedrockClient {
                 self.handle_item_stack_request(player, pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::read(reader)?).await;
             }
             SInteraction::PACKET_ID => {
-                self.handle_interaction(player, SInteraction::read(reader)?)
+                self.handle_interaction(player, SInteraction::read(reader)?, server)
                     .await;
             }
             SContainerClose::PACKET_ID => {
