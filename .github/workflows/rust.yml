@@ -43,6 +43,10 @@ jobs:
     name: Run lints (debug)
     runs-on: ubuntu-latest
     needs: [machete]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
     strategy:
       matrix:
         toolchain:
@@ -54,12 +58,19 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - name: Clippy (debug)
         run: cargo clippy --all-targets --all-features
+      - name: sccache stats
+        run: sccache --show-stats
   clippy_release:
     name: Run lints (release)
     runs-on: ubuntu-latest
     needs: [machete]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
     strategy:
       matrix:
         toolchain:
@@ -71,12 +82,19 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - name: Clippy (release)
         run: cargo clippy --release --all-targets --all-features
+      - name: sccache stats
+        run: sccache --show-stats
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
     needs: [clippy_debug, clippy_release]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
     strategy:
       matrix:
         os:
@@ -96,14 +114,21 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
+      - uses: mozilla-actions/sccache-action@v0.0.10
       - name: Cargo nextest
         run: cargo nextest run --verbose
       - name: Cargo doctest
         run: cargo test --doc --verbose
+      - name: sccache stats
+        run: sccache --show-stats
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
     needs: [build_and_test]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
     strategy:
       matrix:
         os:
@@ -123,12 +148,16 @@ jobs:
 
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      
+      - uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Build Release
         shell: bash
         run: |
           cargo build --verbose --release
-          
+
+      - name: sccache stats
+        run: sccache --show-stats
+
       - name: Prepare artifacts
         shell: bash
         run: |
