@@ -3497,14 +3497,27 @@ impl World {
             position.y.round() as i32,
             position.z.round() as i32,
         ));
+        let bedrock_dimension = match target_world.dimension.minecraft_name {
+            "minecraft:the_nether" => 1,
+            "minecraft:the_end" => 2,
+            _ => 0,
+        };
         player
             .client
-            .send_packet_now(&CPlayerSpawnPosition::new(
-                spawn_block_pos,
-                yaw,
-                pitch,
-                target_world.dimension.minecraft_name.to_string(),
-            ))
+            .send_packet_now_editioned(
+                &CPlayerSpawnPosition::new(
+                    spawn_block_pos,
+                    yaw,
+                    pitch,
+                    target_world.dimension.minecraft_name.to_string(),
+                ),
+                &pumpkin_protocol::bedrock::client::CSetSpawnPosition::new(
+                    1, // World spawn
+                    spawn_block_pos,
+                    bedrock_dimension,
+                    spawn_block_pos,
+                ),
+            )
             .await;
 
         player.living_entity.reset_state().await;

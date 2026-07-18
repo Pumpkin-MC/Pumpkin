@@ -8,6 +8,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::command::translate_format;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_i18n::server_global_locale;
 use pumpkin_util::GameMode;
@@ -42,6 +43,10 @@ pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
 pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID,
     translation::java::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID,
+);
+pub const TYPE_INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_TYPE_INVALID,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_TYPE_INVALID,
 );
 
 /// Options to customize an [`EntitySelectorParser`].
@@ -189,6 +194,7 @@ impl EntitySelectorOption {
     /// Any required fields will be parsed by this method using [`StringReader`]
     /// methods, and any required predicates will be added.
     /// Any found errors will be returned.
+    #[allow(clippy::too_many_lines)]
     pub fn modify_parser(
         self,
         parser: &mut EntitySelectorParser,
@@ -280,16 +286,149 @@ impl EntitySelectorOption {
                         .create(parser.reader, TextComponent::text(string)))
                 }
             }
-            _ => {
-                tracing::warn!(
-                    "{}",
-                    translate_format(
-                        "server.log.entity_selector_unimplemented",
-                        server_global_locale(),
-                        &[format!("{self:?}")],
-                    )
+            Self::Type => {
+                let start = parser.reader.cursor();
+                let invert = parser.consume_inverted_start();
+                if parser.has_flag(Flags::ENTITY_TYPE_INVERTED) && !invert {
+                    parser.reader.set_cursor(start);
+                    return Err(self.inapplicable_error(parser.reader));
+                }
+                let mut string = parser.reader.read_unquoted_string();
+                if let Some(stripped) = string.strip_prefix("minecraft:") {
+                    string = stripped.to_string();
+                }
+                if let Some(entity_type) = EntityType::from_name(&string) {
+                    if entity_type.id == EntityType::PLAYER.id && !invert {
+                        parser.limit_to_players();
+                    }
+                    parser.add_predicate(EntitySelectorPredicate::EntityType(entity_type, invert));
+                    if invert {
+                        parser.set_flag(Flags::ENTITY_TYPE_INVERTED, true);
+                    } else {
+                        parser.entity_type = Some(entity_type);
+                    }
+                    Ok(())
+                } else {
+                    parser.reader.set_cursor(start);
+                    Err(TYPE_INVALID_ERROR_TYPE.create(parser.reader, TextComponent::text(string)))
+                }
+            }
+            Self::Name => {
+                let start = parser.reader.cursor();
+                let invert = parser.consume_inverted_start();
+                if parser.has_flag(if invert {
+                    Flags::NAME_NOT_EQUALS_SET
+                } else {
+                    Flags::NAME_EQUALS_SET
+                }) {
+                    parser.reader.set_cursor(start);
+                    return Err(self.inapplicable_error(parser.reader));
+                }
+                let string = parser.reader.read_unquoted_string();
+                parser.add_predicate(EntitySelectorPredicate::Name(string, invert));
+                parser.set_flag(
+                    if invert {
+                        Flags::NAME_NOT_EQUALS_SET
+                    } else {
+                        Flags::NAME_EQUALS_SET
+                    },
+                    true,
                 );
-                Err(UNKNOWN_OPTION_ERROR_TYPE.create_without_context(self.name_component()))
+                Ok(())
+            }
+            Self::Tag => {
+                let invert = parser.consume_inverted_start();
+                let string = parser.reader.read_unquoted_string();
+                parser.add_predicate(EntitySelectorPredicate::Tag(string, invert));
+                Ok(())
+            }
+            Self::Team => {
+                let start = parser.reader.cursor();
+                let invert = parser.consume_inverted_start();
+                if parser.has_flag(if invert {
+                    Flags::TEAM_NOT_EQUALS_SET
+                } else {
+                    Flags::TEAM_EQUALS_SET
+                }) {
+                    parser.reader.set_cursor(start);
+                    return Err(self.inapplicable_error(parser.reader));
+                }
+                let string = parser.reader.read_unquoted_string();
+                parser.add_predicate(EntitySelectorPredicate::Team(string, invert));
+                parser.set_flag(
+                    if invert {
+                        Flags::TEAM_NOT_EQUALS_SET
+                    } else {
+                        Flags::TEAM_EQUALS_SET
+                    },
+                    true,
+                );
+                Ok(())
+            }
+            Self::Scores => {
+                parser.reader.expect('{')?;
+                parser.reader.skip_whitespace();
+                let mut scores = std::collections::HashMap::new();
+                while parser.reader.can_read_char() && parser.reader.peek() != Some('}') {
+                    parser.reader.skip_whitespace();
+                    let objective = parser.reader.read_unquoted_string();
+                    parser.reader.skip_whitespace();
+                    parser.reader.expect('=')?;
+                    parser.reader.skip_whitespace();
+                    let bounds = IntBounds::from_reader(parser.reader)?;
+                    scores.insert(objective, bounds);
+                    parser.reader.skip_whitespace();
+                    if parser.reader.can_read_char() && parser.reader.peek() == Some(',') {
+                        parser.reader.skip(); // Consume ','
+                    }
+                }
+                parser.reader.expect('}')?;
+                parser.add_predicate(EntitySelectorPredicate::Scores(scores));
+                parser.set_flag(Flags::SCORES_SET, true);
+                Ok(())
+            }
+            Self::Advancements => {
+                parser.reader.expect('{')?;
+                parser.reader.skip_whitespace();
+                let mut advancements = std::collections::HashMap::new();
+                while parser.reader.can_read_char() && parser.reader.peek() != Some('}') {
+                    parser.reader.skip_whitespace();
+                    let advancement_id = parser.reader.read_unquoted_string();
+                    parser.reader.skip_whitespace();
+                    parser.reader.expect('=')?;
+                    parser.reader.skip_whitespace();
+                    let val = parser.reader.read_bool()?;
+                    advancements.insert(advancement_id, val);
+                    parser.reader.skip_whitespace();
+                    if parser.reader.can_read_char() && parser.reader.peek() == Some(',') {
+                        parser.reader.skip(); // Consume ','
+                    }
+                }
+                parser.reader.expect('}')?;
+                parser.add_predicate(EntitySelectorPredicate::Advancements(advancements));
+                parser.set_flag(Flags::ADVANCEMENTS_SET, true);
+                Ok(())
+            }
+            Self::Nbt => {
+                let start = parser.reader.cursor();
+                let invert = parser.consume_inverted_start();
+                let tag = crate::command::snbt::SnbtParser::parse_for_commands(parser.reader)?;
+                if let pumpkin_nbt::tag::NbtTag::Compound(compound) = tag {
+                    parser.add_predicate(EntitySelectorPredicate::Nbt(compound, invert));
+                    Ok(())
+                } else {
+                    parser.reader.set_cursor(start);
+                    Err(
+                        crate::command::errors::error_types::DISPATCHER_UNKNOWN_ARGUMENT
+                            .create(parser.reader),
+                    )
+                }
+            }
+            Self::Predicate => {
+                let invert = parser.consume_inverted_start();
+                let string = parser.reader.read_unquoted_string();
+                parser.add_predicate(EntitySelectorPredicate::Predicate(string, invert));
+                Ok(())
             }
         }
     }

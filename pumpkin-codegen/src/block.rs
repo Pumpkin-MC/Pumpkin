@@ -1520,15 +1520,14 @@ fn parse_geyser_entry(
         _ => panic!("Expected NbtCompound in Geyser bedrock_mappings list"),
     };
 
-    let bedrock_identifier = compound
+    let raw_identifier = compound
         .get_string("bedrock_identifier")
-        .unwrap_or(java_block_name)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(java_block_name);
+
+    let bedrock_identifier = raw_identifier
         .strip_prefix("minecraft:")
-        .unwrap_or_else(|| {
-            compound
-                .get_string("bedrock_identifier")
-                .unwrap_or(java_block_name)
-        })
+        .unwrap_or(raw_identifier)
         .to_string();
 
     let mut properties = BTreeMap::new();

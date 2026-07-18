@@ -8,7 +8,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     BlockDirection, HeightMap,
     math::{block_box::BlockBox, position::BlockPos},
-    random::{RandomDeriverImpl, RandomGenerator, RandomImpl},
+    random::{
+        RandomDeriverImpl, RandomGenerator, RandomImpl, hash_block_pos, legacy_rand::LegacyRand,
+    },
 };
 
 use crate::{
@@ -192,7 +194,12 @@ impl DesertPyramidPiece {
         nbt.put_int("y", world_pos.y);
         nbt.put_int("z", world_pos.z);
         nbt.put_string("id", "minecraft:chest".to_string());
-        // TODO: attach desert_pyramid loot table once structure container loot exists.
+        nbt.put_string("LootTable", "minecraft:chests/desert_pyramid".to_string());
+
+        let mut random =
+            LegacyRand::from_seed(hash_block_pos(world_pos.x, world_pos.y, world_pos.z) as u64);
+        nbt.put_long("LootTableSeed", random.next_i64());
+
         chunk.add_block_entity(nbt);
         self.has_placed_chest[index] = true;
     }

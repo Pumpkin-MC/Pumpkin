@@ -1,6 +1,5 @@
 use pumpkin_data::data_component::DataComponent::MaxStackSize;
 use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 
@@ -42,7 +41,8 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
 
-            let (item_name, item) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+            let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+            let item = parsed_stack.item;
 
             let item_count = match item_count_consumer().find_arg_default_name(args) {
                 Err(_) => 1,
@@ -86,7 +86,8 @@ impl CommandExecutor for Executor {
 
                 while remaining > 0 {
                     let take = remaining.min(max_stack);
-                    let mut stack = ItemStack::new(take as u8, item);
+                    let mut stack = parsed_stack.clone();
+                    stack.item_count = take as u8;
                     target.inventory().insert_stack_anywhere(&mut stack).await;
                     if !stack.is_empty() {
                         target.drop_item(stack).await;
@@ -97,8 +98,8 @@ impl CommandExecutor for Executor {
 
             let msg = if targets.len() == 1 {
                 TextComponent::translate_cross(
-                    "commands.give.success.single",
-                    "commands.give.success.single",
+                    pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_SINGLE,
+                    pumpkin_data::translation::bedrock::COMMANDS_GIVE_SUCCESS,
                     [
                         TextComponent::text(item_count.to_string()),
                         TextComponent::text("[")
@@ -113,8 +114,8 @@ impl CommandExecutor for Executor {
                 )
             } else {
                 TextComponent::translate_cross(
-                    "commands.give.success.multiple",
-                    "commands.give.success.multiple",
+                    pumpkin_data::translation::java::COMMANDS_GIVE_SUCCESS_MULTIPLE,
+                    pumpkin_data::translation::bedrock::COMMANDS_GIVE_SUCCESS,
                     [
                         TextComponent::text(item_count.to_string()),
                         TextComponent::text("[")

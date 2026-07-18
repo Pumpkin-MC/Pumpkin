@@ -112,8 +112,8 @@ impl CommandExecutor for Executor {
             if success {
                 sender
                     .send_message(TextComponent::translate_cross(
-                        "commands.setblock.success",
-                        "commands.setblock.success",
+                        pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
+                        pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
                         [
                             TextComponent::text(pos.0.x.to_string()),
                             TextComponent::text(pos.0.y.to_string()),
@@ -124,8 +124,8 @@ impl CommandExecutor for Executor {
                 Ok(1)
             } else {
                 Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.setblock.failed",
-                    "commands.setblock.failed",
+                    pumpkin_data::translation::java::COMMANDS_SETBLOCK_FAILED,
+                    pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_FAILED,
                     [],
                 )))
             }

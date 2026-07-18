@@ -24,17 +24,17 @@ const ARG_FILTER: &str = "filter";
 
 const OVERLAP_ERROR: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_CLONE_OVERLAP,
-    translation::java::COMMANDS_CLONE_OVERLAP,
+    translation::bedrock::COMMANDS_CLONE_NOOVERLAP,
 );
 
 const TOOBIG_ERROR: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_CLONE_TOOBIG,
-    translation::java::COMMANDS_CLONE_TOOBIG,
+    translation::bedrock::COMMANDS_CLONE_TOOMANYBLOCKS,
 );
 
 const FAILED_ERROR: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_CLONE_FAILED,
-    translation::java::COMMANDS_CLONE_FAILED,
+    translation::bedrock::COMMANDS_CLONE_FAILED,
 );
 
 const NOT_LOADED_ERROR: CommandErrorType<0> = CommandErrorType::new(
@@ -252,7 +252,7 @@ impl CommandExecutor for CloneExecutor {
                 .send_feedback(
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_CLONE_SUCCESS,
-                        translation::java::COMMANDS_CLONE_SUCCESS,
+                        translation::bedrock::COMMANDS_CLONE_SUCCESS,
                         [TextComponent::text(count.to_string())],
                     ),
                     true,

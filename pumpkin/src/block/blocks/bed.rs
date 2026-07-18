@@ -360,6 +360,11 @@ impl BlockBehaviour for BedBlock {
 
             args.player.sleep(bed_head_pos);
             args.player
+                .trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::SleptInBed,
+                )
+                .await;
+            args.player
                 .increment_stat(
                     pumpkin_data::statistic::StatisticCategory::Custom,
                     pumpkin_data::statistic::CustomStatistic::SleepInBed as i32,

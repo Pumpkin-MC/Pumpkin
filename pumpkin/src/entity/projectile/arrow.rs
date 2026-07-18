@@ -362,6 +362,14 @@ impl EntityBase for ArrowEntity {
                     self.shake_time.store(7, Ordering::Relaxed);
                     *self.last_block_pos.write().unwrap() = Some(pos);
 
+                    let block = world.get_block(&pos);
+                    if block == &pumpkin_data::Block::TARGET {
+                        let player_opt = self.owner_id.and_then(|id| world.get_player_by_id(id));
+                        if let Some(player) = player_opt {
+                            player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::Bullseye).await;
+                        }
+                    }
+
                     // Stop the arrow
                     entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
                     entity.set_pos(hit_pos);

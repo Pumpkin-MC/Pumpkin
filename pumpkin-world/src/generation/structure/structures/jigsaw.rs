@@ -68,7 +68,10 @@ struct RawWeightedPoolElement {
 enum RawPoolElement {
     #[serde(rename = "minecraft:empty_pool_element")]
     Empty,
-    #[serde(rename = "minecraft:single_pool_element")]
+    #[serde(
+        rename = "minecraft:single_pool_element",
+        alias = "minecraft:legacy_single_pool_element"
+    )]
     Single {
         location: String,
         processors: RawProcessorList,

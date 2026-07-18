@@ -129,7 +129,7 @@ pub struct ProtoChunk {
     pub z: i32,
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
-    flat_block_map: Box<[BlockStateId]>,
+    pub(crate) flat_block_map: Box<[BlockStateId]>,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
     flat_ocean_floor_height_map: [i16; CHUNK_AREA],

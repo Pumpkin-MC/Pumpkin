@@ -196,7 +196,7 @@ pub fn place_template(
 }
 
 /// Returns the block entity ID for blocks that require one, or None if not needed.
-fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
+pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
     match block_name {
         "minecraft:furnace" => Some("minecraft:furnace"),
         "minecraft:chest" => Some("minecraft:chest"),

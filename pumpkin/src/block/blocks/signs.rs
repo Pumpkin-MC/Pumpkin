@@ -550,6 +550,13 @@ impl BlockBehaviour for SignBlock {
                 );
 
             if result == BlockActionResult::Success {
+                if pumpkin_item
+                    .as_any()
+                    .downcast_ref::<crate::item::items::glowing_ink_sac::GlowingInkSacItem>()
+                    .is_some()
+                {
+                    args.player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::GlowedSign).await;
+                }
                 if !args.player.has_infinite_materials() {
                     item.decrement(1);
                 }

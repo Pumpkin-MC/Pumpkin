@@ -55,8 +55,8 @@ impl CommandExecutor for Executor {
 
             if level > enchantment.max_level {
                 let msg = TextComponent::translate_cross(
-                    "commands.enchant.failed.level",
-                    "commands.enchant.failed.level",
+                    translation::java::COMMANDS_ENCHANT_FAILED_LEVEL,
+                    translation::bedrock::COMMANDS_ENCHANT_INVALIDLEVEL,
                     [
                         TextComponent::text(level.to_string()),
                         TextComponent::text(enchantment.max_level.to_string()),
@@ -87,8 +87,8 @@ impl CommandExecutor for Executor {
                 if item.is_empty() {
                     if only_one {
                         let msg = TextComponent::translate_cross(
-                            "commands.enchant.failed.itemless",
-                            "commands.enchant.failed.itemless",
+                            translation::java::COMMANDS_ENCHANT_FAILED_ITEMLESS,
+                            translation::bedrock::COMMANDS_ENCHANT_NOITEM,
                             [targets[0].get_display_name().await],
                         );
                         return Err(CommandError::CommandFailed(msg));
@@ -98,8 +98,8 @@ impl CommandExecutor for Executor {
                 if !enchantment.can_enchant(item.item) {
                     if only_one {
                         let msg = TextComponent::translate_cross(
-                            "commands.enchant.failed.incompatible",
-                            "commands.enchant.failed.incompatible",
+                            translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
+                            translation::bedrock::COMMANDS_ENCHANT_CANTENCHANT,
                             [item.item.translated_name()],
                         );
                         return Err(CommandError::CommandFailed(msg));
@@ -112,8 +112,8 @@ impl CommandExecutor for Executor {
                         success += 1;
                     } else if only_one {
                         let msg = TextComponent::translate_cross(
-                            "commands.enchant.failed.incompatible",
-                            "commands.enchant.failed.incompatible",
+                            translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
+                            translation::bedrock::COMMANDS_ENCHANT_CANTENCHANT,
                             [item.item.translated_name()],
                         );
                         return Err(CommandError::CommandFailed(msg));
@@ -126,15 +126,15 @@ impl CommandExecutor for Executor {
             if success == 0 {
                 let msg = TextComponent::translate_cross(
                     translation::java::COMMANDS_ENCHANT_FAILED,
-                    translation::java::COMMANDS_ENCHANT_FAILED,
-                    [],
+                    translation::bedrock::COMMANDS_ENCHANT_CANTENCHANT,
+                    [TextComponent::text("")],
                 );
                 return Err(CommandError::CommandFailed(msg));
             }
             if only_one {
                 let msg = TextComponent::translate_cross(
                     translation::java::COMMANDS_ENCHANT_SUCCESS_SINGLE,
-                    translation::java::COMMANDS_ENCHANT_SUCCESS_SINGLE,
+                    translation::bedrock::COMMANDS_ENCHANT_SUCCESS,
                     [
                         enchantment.get_fullname(level),
                         targets[0].get_display_name().await,
@@ -144,7 +144,7 @@ impl CommandExecutor for Executor {
             } else {
                 let msg = TextComponent::translate_cross(
                     translation::java::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
-                    translation::java::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
+                    translation::bedrock::COMMANDS_ENCHANT_SUCCESS,
                     [
                         enchantment.get_fullname(level),
                         TextComponent::text(targets.len().to_string()),

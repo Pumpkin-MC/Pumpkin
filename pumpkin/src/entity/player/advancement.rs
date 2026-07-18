@@ -1,3 +1,4 @@
+pub mod trigger;
 mod visibility_evaluator;
 
 use crate::data::advancement_data::AdvancementManager;

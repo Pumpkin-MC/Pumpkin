@@ -614,7 +614,7 @@ const fn bedrock_param_type(arg: &ArgumentType) -> u32 {
         }
         ArgumentType::String(StringProtoArgBehavior::GreedyPhrase) => arg_types::ARG_TYPE_RAW_TEXT,
         ArgumentType::Message => arg_types::ARG_TYPE_MESSAGE,
-        ArgumentType::IntRange => arg_types::ARG_TYPE_INT_RANGE,
+        ArgumentType::IntRange | ArgumentType::FloatRange => arg_types::ARG_TYPE_INT_RANGE,
         ArgumentType::ItemSlot | ArgumentType::ItemSlots => arg_types::ARG_TYPE_EQUIPMENT_SLOT,
         ArgumentType::Component
         | ArgumentType::Style

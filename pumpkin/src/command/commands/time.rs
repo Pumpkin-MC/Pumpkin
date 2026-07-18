@@ -76,10 +76,15 @@ impl CommandExecutor for QueryExecutor {
                 QueryMode::GameTime => level_time.query_gametime(),
                 QueryMode::Day => level_time.query_day(),
             };
+            let bedrock_key = match mode {
+                QueryMode::DayTime => translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
+                QueryMode::GameTime => translation::bedrock::COMMANDS_TIME_QUERY_GAMETIME,
+                QueryMode::Day => translation::bedrock::COMMANDS_TIME_QUERY_DAY,
+            };
             sender
                 .send_message(TextComponent::translate_cross(
                     translation::java::COMMANDS_TIME_QUERY,
-                    translation::java::COMMANDS_TIME_QUERY,
+                    bedrock_key,
                     [TextComponent::text(curr_time.to_string())],
                 ))
                 .await;

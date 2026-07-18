@@ -66,11 +66,17 @@ impl CommandExecutor for BanListCommandExecutor {
                     )
                     .await;
             } else {
+                let bedrock_list_key = if self.ips && !self.players {
+                    translation::bedrock::COMMANDS_BANLIST_IPS
+                } else {
+                    translation::bedrock::COMMANDS_BANLIST_PLAYERS
+                };
+
                 source
                     .send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_BANLIST_LIST,
-                            translation::java::COMMANDS_BANLIST_LIST,
+                            bedrock_list_key,
                             [TextComponent::text(entries.len().to_string())],
                         ),
                         false,

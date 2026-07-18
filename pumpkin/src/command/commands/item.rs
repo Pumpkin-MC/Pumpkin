@@ -1,5 +1,4 @@
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
@@ -58,7 +57,8 @@ impl CommandExecutor for BlockReplaceExecutor {
 
             let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_POS, &world)?;
             let (slot, slot_name) = SlotArgumentConsumer::find_arg(args, ARG_SLOT)?;
-            let (item_name, item) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+            let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+            let item = parsed_stack.item;
             let count = match count_consumer().find_arg_default_name(args) {
                 Ok(Ok(c)) => c,
                 Err(_) | Ok(Err(_)) => 1,
@@ -96,7 +96,8 @@ impl CommandExecutor for BlockReplaceExecutor {
                 )));
             }
 
-            let item_stack = ItemStack::new(count as u8, item);
+            let mut item_stack = parsed_stack.clone();
+            item_stack.item_count = count as u8;
             inventory.set_stack(slot, item_stack.clone()).await;
 
             let msg = TextComponent::translate_cross(
@@ -135,14 +136,16 @@ impl CommandExecutor for EntityReplaceExecutor {
         Box::pin(async move {
             let targets = EntitiesArgumentConsumer.find_arg_default_name(args)?;
             let (mojang_slot, slot_name) = SlotArgumentConsumer::find_arg(args, ARG_SLOT)?;
-            let (item_name, item) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+            let (item_name, parsed_stack) = ItemArgumentConsumer::find_arg(args, ARG_ITEM)?;
+            let item = parsed_stack.item;
             let count = match count_consumer().find_arg_default_name(args) {
                 Ok(Ok(c)) => c,
                 Err(_) | Ok(Err(_)) => 1,
             };
 
             let mut modified_count = 0;
-            let item_stack = ItemStack::new(count as u8, item);
+            let mut item_stack = parsed_stack.clone();
+            item_stack.item_count = count as u8;
 
             for target in targets {
                 if let Some(player) = target.get_player() {

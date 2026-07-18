@@ -2,7 +2,7 @@ use crate::command::argument_builder::{ArgumentBuilder, command};
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use pumpkin_data::translation::java::{CHAT_COPY_CLICK, COMMANDS_SEED_SUCCESS};
+use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::click::ClickEvent;
@@ -17,13 +17,13 @@ struct SeedCommandExecutor;
 
 fn create_copy_on_click_text(content: String) -> TextComponent {
     TextComponent::translate_cross(
-        COMMANDS_SEED_SUCCESS,
-        COMMANDS_SEED_SUCCESS,
+        translation::java::COMMANDS_SEED_SUCCESS,
+        translation::bedrock::COMMANDS_SEED_SUCCESS,
         [TextComponent::wrap_in_square_brackets(
             TextComponent::text(content.clone())
                 .hover_event(HoverEvent::show_text(TextComponent::translate_cross(
-                    CHAT_COPY_CLICK,
-                    CHAT_COPY_CLICK,
+                    translation::java::CHAT_COPY_CLICK,
+                    translation::java::CHAT_COPY_CLICK,
                     [],
                 )))
                 .click_event(ClickEvent::CopyToClipboard {

@@ -13,10 +13,13 @@ use crate::{
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
             buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator, jigsaw::JigsawGenerator,
-            jungle_temple::JungleTempleGenerator, nether_fortress::NetherFortressGenerator,
-            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
-            swamp_hut::SwampHutGenerator,
+            desert_pyramid::DesertPyramidGenerator, end_city::EndCityGenerator,
+            igloo::IglooGenerator, jigsaw::JigsawGenerator, jungle_temple::JungleTempleGenerator,
+            mansion::MansionGenerator, mineshaft::MineshaftGenerator,
+            nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
+            ocean_monument::OceanMonumentGenerator, ocean_ruin::OceanRuinGenerator,
+            ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
+            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -28,6 +31,7 @@ pub mod structures;
 pub mod template;
 
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn try_generate_structure(
     key: &StructureKeys,
     structure: &Structure,
@@ -105,8 +109,37 @@ pub fn try_generate_structure(
             }
             generator.get_structure_position(context)
         }
-        // TODO: Implement other structure types
-        _ => None,
+        StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
+            let generator = ShipwreckGenerator {
+                is_beached: *key == StructureKeys::ShipwreckBeached,
+            };
+            generator.get_structure_position(context)
+        }
+        StructureKeys::RuinedPortal
+        | StructureKeys::RuinedPortalDesert
+        | StructureKeys::RuinedPortalJungle
+        | StructureKeys::RuinedPortalSwamp
+        | StructureKeys::RuinedPortalMountain
+        | StructureKeys::RuinedPortalOcean
+        | StructureKeys::RuinedPortalNether => {
+            let generator = RuinedPortalGenerator { variant: *key };
+            generator.get_structure_position(context)
+        }
+        StructureKeys::OceanRuinCold | StructureKeys::OceanRuinWarm => {
+            let generator = OceanRuinGenerator {
+                is_warm: *key == StructureKeys::OceanRuinWarm,
+            };
+            generator.get_structure_position(context)
+        }
+        StructureKeys::EndCity => EndCityGenerator.get_structure_position(context),
+        StructureKeys::Mansion => MansionGenerator.get_structure_position(context),
+        StructureKeys::Monument => OceanMonumentGenerator.get_structure_position(context),
+        StructureKeys::Mineshaft | StructureKeys::MineshaftMesa => {
+            let generator = MineshaftGenerator {
+                is_mesa: *key == StructureKeys::MineshaftMesa,
+            };
+            generator.get_structure_position(context)
+        }
     };
 
     if let Some(pos) = structure_pos {
@@ -196,8 +229,37 @@ pub fn lazily_generate_structure(
             }
             generator.get_structure_position(context)
         }
-        // TODO: Implement other structure types
-        _ => None,
+        StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
+            let generator = ShipwreckGenerator {
+                is_beached: *key == StructureKeys::ShipwreckBeached,
+            };
+            generator.get_structure_position(context)
+        }
+        StructureKeys::RuinedPortal
+        | StructureKeys::RuinedPortalDesert
+        | StructureKeys::RuinedPortalJungle
+        | StructureKeys::RuinedPortalSwamp
+        | StructureKeys::RuinedPortalMountain
+        | StructureKeys::RuinedPortalOcean
+        | StructureKeys::RuinedPortalNether => {
+            let generator = RuinedPortalGenerator { variant: *key };
+            generator.get_structure_position(context)
+        }
+        StructureKeys::OceanRuinCold | StructureKeys::OceanRuinWarm => {
+            let generator = OceanRuinGenerator {
+                is_warm: *key == StructureKeys::OceanRuinWarm,
+            };
+            generator.get_structure_position(context)
+        }
+        StructureKeys::EndCity => EndCityGenerator.get_structure_position(context),
+        StructureKeys::Mansion => MansionGenerator.get_structure_position(context),
+        StructureKeys::Monument => OceanMonumentGenerator.get_structure_position(context),
+        StructureKeys::Mineshaft | StructureKeys::MineshaftMesa => {
+            let generator = MineshaftGenerator {
+                is_mesa: *key == StructureKeys::MineshaftMesa,
+            };
+            generator.get_structure_position(context)
+        }
     };
 
     if let Some(pos) = structure_pos {

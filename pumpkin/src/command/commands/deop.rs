@@ -52,8 +52,8 @@ impl CommandExecutor for Executor {
                     }
 
                     let msg = TextComponent::translate_cross(
-                        "commands.deop.success",
-                        "commands.deop.success",
+                        pumpkin_data::translation::java::COMMANDS_DEOP_SUCCESS,
+                        pumpkin_data::translation::bedrock::COMMANDS_DEOP_SUCCESS,
                         [TextComponent::text(profile.name.clone())],
                     );
                     sender.send_message(msg).await;
@@ -66,8 +66,8 @@ impl CommandExecutor for Executor {
 
             if succeeded_deops == 0 {
                 Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.deop.failed",
-                    "commands.deop.failed",
+                    pumpkin_data::translation::java::COMMANDS_DEOP_FAILED,
+                    pumpkin_data::translation::bedrock::COMMANDS_DEOP_FAILED,
                     [],
                 )))
             } else {

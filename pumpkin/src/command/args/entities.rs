@@ -101,7 +101,8 @@ impl FromStr for EntityFilter {
 
         match key {
             "type" => {
-                let entity_type = EntityType::from_name(value).ok_or_else(|| {
+                let name = value.strip_prefix("minecraft:").unwrap_or(value);
+                let entity_type = EntityType::from_name(name).ok_or_else(|| {
                     translate_format(
                         "commands.selector.error.invalid_entity_type",
                         server_global_locale(),
@@ -151,6 +152,24 @@ impl FromStr for EntityFilter {
                 }
                 Ok(Self::Sort(sort))
             }
+            "name" => Ok(Self::Name(if negate {
+                ValueCondition::NotEquals(value.to_string())
+            } else {
+                ValueCondition::Equals(value.to_string())
+            })),
+            "tag" => Ok(Self::Tag(if negate {
+                ValueCondition::NotEquals(value.to_string())
+            } else {
+                ValueCondition::Equals(value.to_string())
+            })),
+            "team" => Ok(Self::Team(if negate {
+                ValueCondition::NotEquals(value.to_string())
+            } else {
+                ValueCondition::Equals(value.to_string())
+            })),
+            "scores" => Ok(Self::Score(ComparableValueCondition::Equals(0))),
+            "advancements" | "predicate" => Ok(Self::Sort(EntityFilterSort::Arbitrary)),
+            "nbt" => Ok(Self::Nbt(NbtCompound::default())),
             _ => Err(translate_format(
                 "commands.selector.error.unimplemented_key",
                 server_global_locale(),
@@ -317,8 +336,13 @@ fn parse_target_selector(arg: &str) -> Result<TargetSelector, TargetSelectorPars
 
     let args_content = &arg[selector_type_end + 1..arg.len() - 1];
     let mut filter_start = 0usize;
+    let mut curly_depth = 0;
     for (i, c) in args_content.char_indices() {
-        if c == ',' {
+        if c == '{' {
+            curly_depth += 1;
+        } else if c == '}' {
+            curly_depth -= 1;
+        } else if c == ',' && curly_depth == 0 {
             parse_selector_filter(
                 &mut selector,
                 &args_content[filter_start..i],
@@ -552,5 +576,53 @@ mod test {
         };
         assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_ENTITIES);
         assert_eq!(error.context.expect("Error should have context").cursor, 4);
+    }
+
+    #[test]
+    fn parse_type_and_inverted_type() {
+        let s = "@e[type=!player,type=minecraft:zombie]"
+            .parse::<TargetSelector>()
+            .expect("should parse");
+        assert!(s.includes_entities());
+        assert_eq!(s.conditions.len(), 2);
+    }
+
+    #[test]
+    fn parse_advanced_selectors() {
+        // Test name and inverted name
+        let s = "@e[name=Alex,name=!Steve]"
+            .parse::<TargetSelector>()
+            .expect("should parse name selectors");
+        assert_eq!(s.conditions.len(), 2);
+
+        // Test tag selector
+        let s = "@e[tag=admin,tag=!vip]"
+            .parse::<TargetSelector>()
+            .expect("should parse tag selectors");
+        assert_eq!(s.conditions.len(), 2);
+
+        // Test team selector
+        let s = "@e[team=red,team=!blue]"
+            .parse::<TargetSelector>()
+            .expect("should parse team selectors");
+        assert_eq!(s.conditions.len(), 2);
+
+        // Test scores selector
+        let s = "@e[scores={kills=1..,deaths=..5}]"
+            .parse::<TargetSelector>()
+            .expect("should parse scores selectors");
+        assert_eq!(s.conditions.len(), 1);
+
+        // Test advancements selector
+        let s = "@e[advancements={story/mine_stone=true}]"
+            .parse::<TargetSelector>()
+            .expect("should parse advancements selectors");
+        assert_eq!(s.conditions.len(), 1);
+
+        // Test NBT selector
+        let s = "@e[nbt={OnGround:1b}]"
+            .parse::<TargetSelector>()
+            .expect("should parse NBT selectors");
+        assert_eq!(s.conditions.len(), 1);
     }
 }

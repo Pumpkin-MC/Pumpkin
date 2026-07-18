@@ -268,6 +268,17 @@ impl ClientPlatform {
         }
     }
 
+    pub async fn send_packet_now_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        match self {
+            Self::Java(java) => java.send_packet_now(je_packet).await,
+            Self::Bedrock(bedrock) => bedrock.send_game_packet(be_packet).await,
+        }
+    }
+
     pub async fn send_packet_now_data(&self, data: Bytes) {
         match self {
             Self::Java(java) => java.send_packet_now_data(data).await,

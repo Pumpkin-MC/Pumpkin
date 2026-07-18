@@ -77,6 +77,14 @@ impl BreedGoal {
                     1,
                 )
                 .await;
+
+            player
+                .trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::BredAnimal {
+                        parent_type: format!("minecraft:{}", entity.entity_type.resource_name),
+                    },
+                )
+                .await;
         }
 
         mob_entity.reset_love_ticks();

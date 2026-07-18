@@ -29,13 +29,13 @@ impl CommandExecutor for TargetsExecutor {
             let msg = if target_count == 1 {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
-                    translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
+                    translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
                     [targets[0].get_display_name().await],
                 )
             } else {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_KILL_SUCCESS_MULTIPLE,
-                    translation::java::COMMANDS_KILL_SUCCESS_MULTIPLE,
+                    translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
                     [TextComponent::text(target_count.to_string())],
                 )
             };
@@ -60,7 +60,7 @@ impl CommandExecutor for SelfExecutor {
                 .send_feedback(
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
-                        translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
+                        translation::bedrock::COMMANDS_KILL_SUCCESSFUL,
                         [target.get_display_name().await],
                     ),
                     true,

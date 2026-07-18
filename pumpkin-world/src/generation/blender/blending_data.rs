@@ -23,14 +23,20 @@ impl BlendingData {
     }
 
     #[must_use]
-    pub fn get_density(&self, cell_x: i32, _cell_y: i32, cell_z: i32) -> f64 {
-        // cell_y is block_y / 8 in Blender.java
-        // We'll need a better storage for this if we want full fidelity
+    pub fn get_density(&self, cell_x: i32, cell_y: i32, cell_z: i32) -> f64 {
         if !(0..16).contains(&cell_x) || !(0..16).contains(&cell_z) {
             return f64::MAX;
         }
-        // Dummy implementation
-        f64::MAX
+        let cell_count_y = (self.max_y - self.min_y) / 8;
+        if !(0..cell_count_y).contains(&cell_y) {
+            return f64::MAX;
+        }
+        let index = (cell_y * 16 * 16 + cell_z * 16 + cell_x) as usize;
+        if index < self.densities.len() {
+            self.densities[index]
+        } else {
+            f64::MAX
+        }
     }
 
     pub fn iterate_heights<F>(&self, quart_x: i32, quart_z: i32, mut consumer: F)
@@ -49,15 +55,30 @@ impl BlendingData {
 
     pub fn iterate_densities<F>(
         &self,
-        _quart_x: i32,
-        _quart_z: i32,
-        _min_cell_y: i32,
-        _max_cell_y: i32,
-        _consumer: F,
+        quart_x: i32,
+        quart_z: i32,
+        min_cell_y: i32,
+        max_cell_y: i32,
+        mut consumer: F,
     ) where
         F: FnMut(i32, i32, i32, f64),
     {
-        // TODO: implement density iteration
+        let cell_count_y = (self.max_y - self.min_y) / 8;
+        for cell_y in min_cell_y..=max_cell_y {
+            if (0..cell_count_y).contains(&cell_y) {
+                for z in 0..16 {
+                    for x in 0..16 {
+                        let index = (cell_y * 16 * 16 + z * 16 + x) as usize;
+                        if index < self.densities.len() {
+                            let d = self.densities[index];
+                            if d != f64::MAX {
+                                consumer(quart_x + x, cell_y, quart_z + z, d);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn iterate_biomes<F>(&self, quart_x: i32, _quart_y: i32, quart_z: i32, mut consumer: F)

@@ -52,7 +52,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_CLEAR,
-                            translation::java::COMMANDS_WEATHER_SET_CLEAR,
+                            translation::bedrock::COMMANDS_WEATHER_CLEAR,
                             [],
                         ))
                         .await;
@@ -65,7 +65,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_RAIN,
-                            translation::java::COMMANDS_WEATHER_SET_RAIN,
+                            translation::bedrock::COMMANDS_WEATHER_RAIN,
                             [],
                         ))
                         .await;
@@ -78,7 +78,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_THUNDER,
-                            translation::java::COMMANDS_WEATHER_SET_THUNDER,
+                            translation::bedrock::COMMANDS_WEATHER_THUNDER,
                             [],
                         ))
                         .await;

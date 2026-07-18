@@ -142,8 +142,8 @@ impl CommandExecutor for Executor {
             // Send appropriate message based on results
             if players_who_heard == 0 {
                 Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.playsound.failed",
-                    "commands.playsound.failed",
+                    translation::java::COMMANDS_PLAYSOUND_FAILED,
+                    translation::java::COMMANDS_PLAYSOUND_FAILED,
                     [],
                 )))
             } else {
@@ -152,7 +152,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
-                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
+                            translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
                             [
                                 TextComponent::text(sound_name),
                                 targets[0].get_display_name().await,
@@ -163,7 +163,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
-                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
+                            translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
                             [
                                 TextComponent::text(sound_name),
                                 TextComponent::text(players_who_heard.to_string()),

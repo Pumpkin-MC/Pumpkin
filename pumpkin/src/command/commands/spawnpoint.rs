@@ -133,16 +133,13 @@ async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: Block
 
     sender
         .send_message(TextComponent::translate_cross(
-            translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
-            translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
+            translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+            translation::bedrock::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
             [
+                TextComponent::text(target.gameprofile.name.clone()),
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),
                 TextComponent::text(pos.0.z.to_string()),
-                TextComponent::text(format!("{yaw:.2}")),
-                TextComponent::text("0.00".to_string()),
-                TextComponent::text(dimension.minecraft_name),
-                TextComponent::text(target.gameprofile.name.clone()),
             ],
         ))
         .await;

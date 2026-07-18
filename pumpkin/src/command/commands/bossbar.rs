@@ -69,8 +69,8 @@ impl CommandExecutor for AddExecutor {
 
             if server.bossbars.lock().await.has_bossbar(&namespace) {
                 return Result::Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.bossbar.create.failed",
-                    "commands.bossbar.create.failed",
+                    translation::java::COMMANDS_BOSSBAR_CREATE_FAILED,
+                    translation::bedrock::COMMANDS_BOSSBAR_ADD_FAILURE_EXISTS,
                     [TextComponent::text(namespace.clone())],
                 )));
             }
@@ -84,8 +84,8 @@ impl CommandExecutor for AddExecutor {
 
             sender
                 .send_message(TextComponent::translate_cross(
-                    "commands.bossbar.create.success",
-                    "commands.bossbar.create.success",
+                    translation::java::COMMANDS_BOSSBAR_CREATE_SUCCESS,
+                    translation::bedrock::COMMANDS_BOSSBAR_ADD_SUCCESS,
                     [bossbar_prefix(bossbar.title.clone(), namespace.clone())],
                 ))
                 .await;
@@ -119,8 +119,8 @@ impl CommandExecutor for GetExecutor {
                 CommandValueGet::Max => {
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.get.max",
-                            "commands.bossbar.get.max",
+                            translation::java::COMMANDS_BOSSBAR_GET_MAX,
+                            translation::bedrock::COMMANDS_BOSSBAR_GET_MAX,
                             [
                                 bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
@@ -136,8 +136,8 @@ impl CommandExecutor for GetExecutor {
                 CommandValueGet::Value => {
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.bossbar.get.value",
-                            "commands.bossbar.get.value",
+                            translation::java::COMMANDS_BOSSBAR_GET_VALUE,
+                            translation::bedrock::COMMANDS_BOSSBAR_GET_VALUE,
                             [
                                 bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
@@ -150,15 +150,21 @@ impl CommandExecutor for GetExecutor {
                     Ok(bossbar.value)
                 }
                 CommandValueGet::Visible => {
-                    let state = if bossbar.visible {
-                        "commands.bossbar.get.visible.visible"
+                    let (java_key, bedrock_key) = if bossbar.visible {
+                        (
+                            translation::java::COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_VISIBLE,
+                            translation::bedrock::COMMANDS_BOSSBAR_GET_VISIBLE_TRUE,
+                        )
                     } else {
-                        "commands.bossbar.get.visible.hidden"
+                        (
+                            translation::java::COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_HIDDEN,
+                            translation::bedrock::COMMANDS_BOSSBAR_GET_VISIBLE_FALSE,
+                        )
                     };
                     sender
                         .send_message(TextComponent::translate_cross(
-                            state,
-                            state,
+                            java_key,
+                            bedrock_key,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
                                 namespace.clone(),
@@ -187,8 +193,8 @@ impl CommandExecutor for ListExecutor {
             if bossbars.is_empty() {
                 sender
                     .send_message(TextComponent::translate_cross(
-                        "commands.bossbar.list.bars.none",
-                        "commands.bossbar.list.bars.none",
+                        translation::java::COMMANDS_BOSSBAR_LIST_BARS_NONE,
+                        translation::bedrock::COMMANDS_BOSSBAR_LIST_NONE,
                         [],
                     ))
                     .await;
@@ -214,8 +220,8 @@ impl CommandExecutor for ListExecutor {
 
             sender
                 .send_message(TextComponent::translate_cross(
-                    "commands.bossbar.list.bars.some",
-                    "commands.bossbar.list.bars.some",
+                    translation::java::COMMANDS_BOSSBAR_LIST_BARS_SOME,
+                    translation::bedrock::COMMANDS_BOSSBAR_LIST,
                     [
                         TextComponent::text(bossbars.len().to_string()),
                         bossbars_text,
@@ -250,8 +256,8 @@ impl CommandExecutor for RemoveExecutor {
 
             sender
                 .send_message(TextComponent::translate_cross(
-                    "commands.bossbar.remove.success",
-                    "commands.bossbar.remove.success",
+                    translation::java::COMMANDS_BOSSBAR_REMOVE_SUCCESS,
+                    translation::bedrock::COMMANDS_BOSSBAR_REMOVE,
                     [bossbar_prefix(
                         bossbar.bossbar_data.title.clone(),
                         namespace.clone(),
@@ -655,7 +661,7 @@ fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {
         BossbarUpdateError::InvalidResourceLocation(location) => {
             CommandError::CommandFailed(TextComponent::translate_cross(
                 translation::java::COMMANDS_BOSSBAR_UNKNOWN,
-                translation::java::COMMANDS_BOSSBAR_UNKNOWN,
+                translation::bedrock::COMMANDS_BOSSBAR_NOTFOUND,
                 [TextComponent::text(location)],
             ))
         }

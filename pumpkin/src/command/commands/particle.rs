@@ -74,9 +74,12 @@ impl CommandExecutor for Executor {
 
             sender
                 .send_message(TextComponent::translate_cross(
-                    "commands.particle.success",
-                    "commands.particle.success",
-                    [TextComponent::text(format!("{particle:?}"))],
+                    pumpkin_data::translation::java::COMMANDS_PARTICLE_SUCCESS,
+                    pumpkin_data::translation::bedrock::COMMANDS_PARTICLE_SUCCESS,
+                    [
+                        TextComponent::text(format!("{particle:?}")),
+                        TextComponent::text(count.to_string()),
+                    ],
                 ))
                 .await;
 

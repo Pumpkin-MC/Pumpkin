@@ -1491,6 +1491,38 @@ impl LivingEntity {
                         1,
                     )
                     .await;
+
+                let resource_name = self.entity.entity_type.resource_name;
+                let criterion_key = format!("minecraft:{resource_name}");
+                killer_player
+                    .trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilledEntity {
+                            entity_type_resource: criterion_key,
+                        }
+                    )
+                    .await;
+
+                if resource_name == "skeleton" {
+                    let distance_sq = killer_player
+                        .position()
+                        .squared_distance_to_vec(&self.entity.pos.load());
+                    if distance_sq >= 2500.0 {
+                        killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::SniperDuel).await;
+                    }
+                }
+
+                if resource_name == "phantom" {
+                    killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::TwoBirdsOneArrow).await;
+                }
+
+                let held_item = killer_player.inventory().held_item();
+                let is_crossbow = {
+                    let lock = held_item.lock().await;
+                    lock.item.registry_key == "crossbow"
+                };
+                if is_crossbow {
+                    killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::Arbalistic).await;
+                }
             }
             killer_player
                 .increment_stat(
@@ -2218,6 +2250,8 @@ impl EntityBase for LivingEntity {
                                 (effective_amount * 10.0) as i32,
                             )
                             .await;
+
+                        player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DeflectedDamage).await;
                     }
 
                     if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
@@ -2635,6 +2669,12 @@ impl EntityBase for LivingEntity {
                     }
 
                     if let Some(player) = caller.get_player() {
+                        player
+                            .trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
+                                item_id: format!("minecraft:{}", item.item.registry_key),
+                            })
+                            .await;
+
                         // Prefer modifying the exact stack that matches the consumed item:
                         // 1) selected hotbar (held_item)
                         // 2) off-hand

@@ -758,7 +758,7 @@ impl Server {
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
-    pub fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
+    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
         if current_info.difficulty_locked && !force_update {
             return;
@@ -778,9 +778,13 @@ impl Server {
 
         for world in self.worlds.load().iter() {
             world.set_difficulty(difficulty);
+            world
+                .broadcast_editioned(
+                    &CChangeDifficulty::new(difficulty as u8, locked),
+                    &pumpkin_protocol::bedrock::client::CSetDifficulty::new(difficulty as u32),
+                )
+                .await;
         }
-
-        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked));
     }
 
     /// Searches for a player by their username across all worlds.

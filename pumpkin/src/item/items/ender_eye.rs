@@ -127,6 +127,7 @@ impl ItemBehaviour for EnderEyeItem {
                 pitch,
             );
 
+            player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::LaunchedEyeOfEnder).await;
             player.inventory.held_item().lock().await.decrement(1);
         })
     }

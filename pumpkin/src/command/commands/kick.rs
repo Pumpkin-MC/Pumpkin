@@ -35,7 +35,8 @@ impl CommandExecutor for Executor {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
-            let reason = match args.get(&ARG_REASON) {
+            let custom_reason = args.get(&ARG_REASON);
+            let reason = match custom_reason {
                 Some(Arg::Msg(r)) => TextComponent::text(r.clone()),
                 _ => TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_KICKED,
@@ -46,14 +47,24 @@ impl CommandExecutor for Executor {
 
             for target in targets {
                 target.kick(DisconnectReason::Kicked, reason.clone()).await;
-                let mut msg = TextComponent::custom(
-                    PUMPKIN_NAMESPACE,
-                    "commands.kick.kicked_message",
-                    sender.get_locale(),
-                    [],
-                );
-                msg = msg.add_child(target.get_display_name().await);
-                sender.send_message(msg.color_named(NamedColor::Blue)).await;
+
+                let feedback = if custom_reason.is_some() {
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_KICK_SUCCESS,
+                        translation::bedrock::COMMANDS_KICK_SUCCESS_REASON,
+                        [target.get_display_name().await, reason.clone()],
+                    )
+                } else {
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_KICK_SUCCESS,
+                        translation::bedrock::COMMANDS_KICK_SUCCESS,
+                        [target.get_display_name().await, reason.clone()],
+                    )
+                };
+
+                sender
+                    .send_message(feedback.color_named(NamedColor::Blue))
+                    .await;
             }
 
             Ok(targets.len() as i32)

@@ -8,8 +8,12 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::entity::player::advancement::AdvancementProgress;
 use crate::world::World;
+use pumpkin_data::Advancement;
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
@@ -17,6 +21,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::translation::localized_log;
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use uuid::Uuid;
@@ -385,6 +390,22 @@ pub enum EntitySelectorPredicate {
     BoundingBox(BoundingBox),
     /// A predicate to check whether an entity is within a specified range from some position.
     Distance(DoubleBounds, Vector3<f64>),
+    /// A predicate to check the entity type. This check can also be inverted.
+    EntityType(&'static EntityType, bool),
+    /// A predicate to check the entity's name (custom or profile name).
+    Name(String, bool),
+    /// A predicate to check the entity's scoreboard tags.
+    Tag(String, bool),
+    /// A predicate to check the entity's team.
+    Team(String, bool),
+    /// A predicate to check the entity's scores.
+    Scores(HashMap<String, IntBounds>),
+    /// A predicate to check the player's advancements.
+    Advancements(HashMap<String, bool>),
+    /// A predicate to check the entity's raw NBT data.
+    Nbt(NbtCompound, bool),
+    /// A predicate to check loot table conditions / predicates.
+    Predicate(String, bool),
 
     /// Used to combine sub-predicates.
     AllOf(Vec<Self>),
@@ -407,12 +428,66 @@ impl RotationType {
     }
 }
 
+fn matches_nbt(expected: &NbtTag, actual: &NbtTag) -> bool {
+    match (expected, actual) {
+        (NbtTag::Compound(expected_comp), NbtTag::Compound(actual_comp)) => {
+            for (key, expected_val) in &expected_comp.child_tags {
+                if let Some(actual_val) = actual_comp.child_tags.get(key) {
+                    if !matches_nbt(expected_val, actual_val) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            true
+        }
+        (NbtTag::List(expected_list), NbtTag::List(actual_list)) => {
+            for expected_val in expected_list {
+                if !actual_list
+                    .iter()
+                    .any(|actual_val| matches_nbt(expected_val, actual_val))
+                {
+                    return false;
+                }
+            }
+            true
+        }
+        (a, b) => a == b,
+    }
+}
+
+fn matches_nbt_compound(expected: &NbtCompound, actual: &NbtCompound) -> bool {
+    for (key, expected_val) in &expected.child_tags {
+        if let Some(actual_val) = actual.child_tags.get(key) {
+            if !matches_nbt(expected_val, actual_val) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+#[allow(clippy::option_if_let_else)]
+fn entity_actual_name(entity: &dyn EntityBase) -> String {
+    if let Some(player) = entity.get_player() {
+        player.gameprofile.name.clone()
+    } else if let Some(custom_name) = &**entity.get_entity().custom_name.load() {
+        custom_name.clone().get_text()
+    } else {
+        entity.get_entity().entity_type.resource_name.to_string()
+    }
+}
+
 impl EntitySelectorPredicate {
     #[must_use]
     pub const fn new_all_of(predicates: Vec<Self>) -> Self {
         Self::AllOf(predicates)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn test(&self, entity: &dyn EntityBase) -> bool {
         match self {
             Self::IsAlive => entity.get_entity().is_alive(),
@@ -439,6 +514,74 @@ impl EntitySelectorPredicate {
                 .intersects(bounding_box),
             Self::Distance(bounds, pos) => {
                 bounds.matches_square(entity.get_entity().pos.load().squared_distance_to_vec(pos))
+            }
+            Self::EntityType(expected_type, invert) => {
+                let actual_type = entity.get_entity().entity_type;
+                (actual_type.id == expected_type.id) ^ invert
+            }
+            Self::Name(expected_name, invert) => {
+                let actual_name = entity_actual_name(entity);
+                (actual_name == *expected_name) ^ invert
+            }
+            Self::Tag(expected_tag, invert) => {
+                let has_tag = entity
+                    .get_entity()
+                    .scoreboard_tags
+                    .blocking_lock()
+                    .contains(expected_tag);
+                has_tag ^ invert
+            }
+            Self::Team(expected_team, invert) => {
+                let actual_name = entity_actual_name(entity);
+                let world = entity.get_entity().world.load();
+                let scoreboard = world.scoreboard.blocking_lock();
+                let has_team = scoreboard.get_teams().iter().any(|(name, team)| {
+                    name == expected_team && team.players.contains(&actual_name)
+                });
+                has_team ^ invert
+            }
+            Self::Scores(scores_map) => {
+                let actual_name = entity_actual_name(entity);
+                let world = entity.get_entity().world.load();
+                let scoreboard = world.scoreboard.blocking_lock();
+                let entity_scores = scoreboard.get_scores().get(&actual_name);
+                for (objective, bounds) in scores_map {
+                    let score_val = entity_scores
+                        .and_then(|obj_map| obj_map.get(objective))
+                        .map_or(0, |score| score.value.0);
+                    if !bounds.matches(score_val) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Self::Advancements(advancements_map) => {
+                let Some(player) = entity.get_player() else {
+                    return false;
+                };
+                let adv_mgr = player.advancements.blocking_lock();
+                for (adv_id, expected_done) in advancements_map {
+                    if let Some(advancement) = Advancement::from_name(adv_id) {
+                        let progress = adv_mgr.progress.map.get(advancement);
+                        let is_done = progress.is_some_and(AdvancementProgress::is_done);
+                        if is_done != *expected_done {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                }
+                true
+            }
+            Self::Nbt(expected_nbt, invert) => {
+                let mut actual_nbt = NbtCompound::default();
+                // write_nbt is asynchronous, so we can poll it synchronously because it does not do IO.
+                futures::executor::block_on(entity.write_nbt(&mut actual_nbt));
+                matches_nbt_compound(expected_nbt, &actual_nbt) ^ invert
+            }
+            Self::Predicate(_predicate_id, invert) => {
+                // Since loot-table predicates are not yet fully implemented, we default to false (or true ^ invert)
+                false ^ invert
             }
             Self::AllOf(predicates) => predicates.iter().all(|predicate| predicate.test(entity)),
         }

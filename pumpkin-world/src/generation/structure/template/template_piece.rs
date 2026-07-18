@@ -157,9 +157,43 @@ impl TemplatePiece {
             // Place the block
             chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, state);
 
-            // TODO: Handle block entity data (block.nbt)
-            // This would involve creating a block entity at this position
-            // and populating it with the NBT data
+            let block_entity_id = super::get_block_entity_id(&palette_entry.name);
+            if block.nbt.is_some() || block_entity_id.is_some() {
+                let block_entity_id = block_entity_id.unwrap_or(&palette_entry.name);
+                let mut placed_nbt = pumpkin_nbt::compound::NbtCompound::new();
+
+                placed_nbt.put_string("id", block_entity_id.to_string());
+                placed_nbt.put_int("x", world_pos.x);
+                placed_nbt.put_int("y", world_pos.y);
+                placed_nbt.put_int("z", world_pos.z);
+
+                if let Some(template_nbt) = &block.nbt {
+                    for (key, value) in &template_nbt.child_tags {
+                        if key.as_ref() != "x"
+                            && key.as_ref() != "y"
+                            && key.as_ref() != "z"
+                            && key.as_ref() != "id"
+                        {
+                            placed_nbt.child_tags.insert(key.clone(), value.clone());
+                        }
+                    }
+                }
+
+                if placed_nbt.get_string("LootTable").is_some()
+                    && placed_nbt.get_long("LootTableSeed").is_none()
+                {
+                    use pumpkin_util::random::{
+                        RandomImpl, hash_block_pos, legacy_rand::LegacyRand,
+                    };
+                    let mut random =
+                        LegacyRand::from_seed(
+                            hash_block_pos(world_pos.x, world_pos.y, world_pos.z) as u64,
+                        );
+                    placed_nbt.put_long("LootTableSeed", random.next_i64());
+                }
+
+                chunk.add_block_entity(placed_nbt);
+            }
         }
     }
 }
@@ -177,10 +211,6 @@ impl StructurePieceBase for TemplatePiece {
         chunk_box: &BlockBox,
     ) {
         self.place_blocks(chunk, chunk_box);
-
-        // TODO: Spawn entities from template
-        // This would involve iterating over self.template.entities
-        // and spawning them at the transformed positions
     }
 
     fn get_structure_piece(&self) -> &StructurePiece {

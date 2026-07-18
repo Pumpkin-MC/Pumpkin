@@ -216,9 +216,17 @@ impl StructureTemplate {
     }
 
     fn parse_palette(compound: &NbtCompound) -> Result<Vec<PaletteEntry>, TemplateError> {
-        let palette_list = compound
-            .get_list("palette")
-            .ok_or(TemplateError::MissingField("palette"))?;
+        let palette_list = if let Some(list) = compound.get_list("palette") {
+            list
+        } else if let Some(palettes) = compound.get_list("palettes") {
+            if let Some(NbtTag::List(list)) = palettes.first() {
+                list
+            } else {
+                return Err(TemplateError::MissingField("palette"));
+            }
+        } else {
+            return Err(TemplateError::MissingField("palette"));
+        };
 
         let mut palette = Vec::with_capacity(palette_list.len());
 

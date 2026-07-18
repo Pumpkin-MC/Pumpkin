@@ -1053,6 +1053,10 @@ impl Player {
             return;
         }
 
+        if damage >= 100.0 {
+            self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage).await;
+        }
+
         if let Some(enchantments) = item_stack
             .lock()
             .await
@@ -1299,13 +1303,26 @@ impl Player {
             return false;
         }
 
+        let bedrock_dimension = match dimension.minecraft_name {
+            "minecraft:the_nether" => 1,
+            "minecraft:the_end" => 2,
+            _ => 0,
+        };
         self.client
-            .send_packet_now(&CPlayerSpawnPosition::new(
-                block_pos,
-                yaw,
-                pitch,
-                dimension.minecraft_name.to_owned(),
-            ))
+            .send_packet_now_editioned(
+                &CPlayerSpawnPosition::new(
+                    block_pos,
+                    yaw,
+                    pitch,
+                    dimension.minecraft_name.to_owned(),
+                ),
+                &pumpkin_protocol::bedrock::client::CSetSpawnPosition::new(
+                    0, // Player spawn
+                    block_pos,
+                    bedrock_dimension,
+                    block_pos,
+                ),
+            )
             .await;
 
         *self.respawn_point.lock().await = Some(RespawnPoint {
@@ -1740,22 +1757,41 @@ impl Player {
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(client) => match mode {
-                TitleMode::Title => client.enqueue_packet(&CTitleText::new(text)).await,
-                TitleMode::SubTitle => client.enqueue_packet(&CSubtitle::new(text)).await,
-                TitleMode::ActionBar => client.enqueue_packet(&CActionBar::new(text)).await,
-            },
-            ClientPlatform::Bedrock(client) => {
-                let action_type = match mode {
-                    TitleMode::Title => 2,
-                    TitleMode::SubTitle => 3,
-                    TitleMode::ActionBar => 4,
-                };
-                client
-                    .send_game_packet(
+        match mode {
+            TitleMode::Title => {
+                self.client
+                    .enqueue_packet_editioned(
+                        &CTitleText::new(text),
                         &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
-                            action_type,
+                            2,
+                            text.clone().get_text(),
+                            0,
+                            0,
+                            0,
+                        ),
+                    )
+                    .await;
+            }
+            TitleMode::SubTitle => {
+                self.client
+                    .enqueue_packet_editioned(
+                        &CSubtitle::new(text),
+                        &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                            3,
+                            text.clone().get_text(),
+                            0,
+                            0,
+                            0,
+                        ),
+                    )
+                    .await;
+            }
+            TitleMode::ActionBar => {
+                self.client
+                    .enqueue_packet_editioned(
+                        &CActionBar::new(text),
+                        &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                            4,
                             text.clone().get_text(),
                             0,
                             0,
@@ -1994,6 +2030,7 @@ impl Player {
         self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
+        self.check_inventory_advancements().await;
         self.advancements.lock().await.flush_dirty(self, true);
 
         // experience handling
@@ -2383,10 +2420,12 @@ impl Player {
         let world = self.world();
         let level_info = world.level_info.load();
         self.client
-            .enqueue_packet(&CChangeDifficulty::new(
-                level_info.difficulty as u8,
-                level_info.difficulty_locked,
-            ))
+            .enqueue_packet_editioned(
+                &CChangeDifficulty::new(level_info.difficulty as u8, level_info.difficulty_locked),
+                &pumpkin_protocol::bedrock::client::CSetDifficulty::new(
+                    level_info.difficulty as u32,
+                ),
+            )
             .await;
     }
 
@@ -2411,24 +2450,12 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        match self.client.as_ref() {
-            ClientPlatform::Java(java_client) => {
-                java_client
-                    .enqueue_packet(&CUpdateTime::new(
-                        l_world.world_age,
-                        l_world.time_of_day,
-                        true,
-                    ))
-                    .await;
-            }
-            ClientPlatform::Bedrock(bedrock_client) => {
-                bedrock_client
-                    .send_game_packet(&CSetTime {
-                        time: VarInt(l_world.query_daytime() as _),
-                    })
-                    .await;
-            }
-        }
+        self.client
+            .enqueue_packet_editioned(
+                &CUpdateTime::new(l_world.world_age, l_world.time_of_day, true),
+                &CSetTime::new(l_world.query_daytime() as _),
+            )
+            .await;
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
@@ -2491,8 +2518,17 @@ impl Player {
                 self.unload_watched_chunks(&current_world).await;
 
                 self.chunk_manager.lock().await.change_world(&current_world.level, new_world.clone());
-                // Update the entity's world reference for correct dimension-based operations
                 self.living_entity.entity.set_world(new_world.clone());
+
+                if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
+                    self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
+                        dimension: "the_nether".to_string(),
+                    }).await;
+                } else if new_world.dimension == pumpkin_data::dimension::Dimension::THE_END {
+                    self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
+                        dimension: "the_end".to_string(),
+                    }).await;
+                }
 
                 let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
@@ -2651,26 +2687,18 @@ impl Player {
             return;
         }
 
-        match self.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                client
-                    .enqueue_packet(&CSetHealth::new(
-                        self.living_entity.health.load(),
-                        self.hunger_manager.level.load().into(),
-                        self.hunger_manager.saturation.load(),
-                    ))
-                    .await;
-            }
-            ClientPlatform::Bedrock(client) => {
-                client
-                    .send_game_packet(
-                        &pumpkin_protocol::bedrock::client::set_health::CSetHealth::new(
-                            self.living_entity.health.load() as i32,
-                        ),
-                    )
-                    .await;
-            }
-        }
+        self.client
+            .enqueue_packet_editioned(
+                &CSetHealth::new(
+                    self.living_entity.health.load(),
+                    self.hunger_manager.level.load().into(),
+                    self.hunger_manager.saturation.load(),
+                ),
+                &pumpkin_protocol::bedrock::client::set_health::CSetHealth::new(
+                    self.living_entity.health.load() as i32,
+                ),
+            )
+            .await;
     }
 
     pub async fn tick_health(&self) {
@@ -2827,6 +2855,10 @@ impl Player {
     }
 
     async fn handle_killed(&self, death_msg: TextComponent) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
+        )
+        .await;
         self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
 
@@ -2925,25 +2957,14 @@ impl Player {
                         }],
                     ));
 
-                match self.client.as_ref() {
-                    crate::net::ClientPlatform::Java(client) => {
-                        client
-                            .enqueue_packet(&CGameEvent::new(
-                                GameEvent::ChangeGameMode,
-                                gamemode as i32 as f32,
-                            ))
-                            .await;
-                    }
-                    crate::net::ClientPlatform::Bedrock(client) => {
-                        client
-                            .send_game_packet(
-                                &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGamemode {
-                                    gamemode,
-                                },
-                            )
-                            .await;
-                    }
-                }
+                self.client
+                    .enqueue_packet_editioned(
+                        &CGameEvent::new(GameEvent::ChangeGameMode, gamemode as i32 as f32),
+                        &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGamemode {
+                            gamemode,
+                        },
+                    )
+                    .await;
 
                 true
             }
@@ -4179,6 +4200,51 @@ impl Player {
             .into_source(server)
             .await
     }
+
+    pub async fn has_advancement(
+        &self,
+        advancement: &'static pumpkin_data::advancement::Advancement,
+    ) -> bool {
+        let advancements = self.advancements.lock().await;
+        advancements
+            .progress
+            .map
+            .get(advancement)
+            .is_some_and(crate::entity::player::advancement::AdvancementProgress::is_done)
+    }
+
+    pub async fn has_item_in_inventory(&self, item: &pumpkin_data::item::Item) -> bool {
+        for slot in &self.inventory.main_inventory {
+            let stack = slot.lock().await;
+            if !stack.is_empty() && stack.item.id == item.id {
+                return true;
+            }
+        }
+        let equipment = self.inventory.entity_equipment.lock().await;
+        for slot_stack in equipment.equipment.values() {
+            let stack = slot_stack.lock().await;
+            if !stack.is_empty() && stack.item.id == item.id {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub async fn trigger_advancement_criterion(
+        &self,
+        advancement: &'static pumpkin_data::advancement::Advancement,
+        criterion: &str,
+    ) {
+        let mut advancements = self.advancements.lock().await;
+        advancements.award(advancement, criterion);
+    }
+
+    pub async fn check_inventory_advancements(&self) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::InventoryChanged,
+        )
+        .await;
+    }
 }
 
 impl PartialEq for Player {
@@ -5147,7 +5213,18 @@ impl InventoryPlayer for Player {
         packet: &'a CSetSelectedSlot,
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
-            self.client.enqueue_packet(packet).await;
+            self.client
+                .enqueue_packet_editioned(
+                    packet,
+                    &pumpkin_protocol::bedrock::client::CPlayerHotbar {
+                        selected_slot: pumpkin_protocol::codec::var_uint::VarUInt(
+                            packet.slot as u32,
+                        ),
+                        container_id: 0,
+                        should_select_block: true,
+                    },
+                )
+                .await;
         })
     }
 

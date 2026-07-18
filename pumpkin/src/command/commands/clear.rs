@@ -145,12 +145,12 @@ async fn clear_command_text_output(
     match (targets, item_count == 0, max_count == 0) {
         ([target], true, _) => Err(TextComponent::translate_cross(
             translation::java::CLEAR_FAILED_SINGLE,
-            translation::java::CLEAR_FAILED_SINGLE,
+            translation::bedrock::COMMANDS_CLEAR_FAILURE,
             [target.get_display_name().await],
         )),
         (targets, true, _) => Err(TextComponent::translate_cross(
             translation::java::CLEAR_FAILED_MULTIPLE,
-            translation::java::CLEAR_FAILED_MULTIPLE,
+            translation::bedrock::COMMANDS_CLEAR_FAILURE,
             [TextComponent::text(targets.len().to_string())],
         )),
         ([target], false, false) => Ok(TextComponent::translate_cross(

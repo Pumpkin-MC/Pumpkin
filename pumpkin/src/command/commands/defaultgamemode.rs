@@ -45,8 +45,8 @@ impl CommandExecutor for DefaultGamemodeExecutor {
 
             sender
                 .send_message(TextComponent::translate_cross(
-                    "commands.defaultgamemode.success",
-                    "commands.defaultgamemode.success",
+                    pumpkin_data::translation::java::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
+                    pumpkin_data::translation::bedrock::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
                     [TextComponent::translate_cross(
                         gamemode_string.clone(),
                         gamemode_string,

@@ -44,8 +44,8 @@ impl CommandExecutor for Executor {
                     lock.banned_players.remove(idx);
                     sender
                         .send_message(TextComponent::translate_cross(
-                            "commands.pardon.success",
-                            "commands.pardon.success",
+                            pumpkin_data::translation::java::COMMANDS_PARDON_SUCCESS,
+                            pumpkin_data::translation::bedrock::COMMANDS_UNBAN_SUCCESS,
                             [TextComponent::text(target.name.clone())],
                         ))
                         .await;
@@ -57,10 +57,13 @@ impl CommandExecutor for Executor {
                 lock.save();
                 Ok(successes)
             } else {
+                let err_target = targets
+                    .first()
+                    .map_or_else(String::new, |first_target| first_target.name.clone());
                 Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.pardon.failed",
-                    "commands.pardon.failed",
-                    [],
+                    pumpkin_data::translation::java::COMMANDS_PARDON_FAILED,
+                    pumpkin_data::translation::bedrock::COMMANDS_UNBAN_FAILED,
+                    [TextComponent::text(err_target)],
                 )))
             }
         })

@@ -631,6 +631,14 @@ impl BlockRegistry {
         )
         .await;
 
+        player
+            .trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlacedBlock {
+                    block_id: format!("minecraft:{}", placed_block.name),
+                },
+            )
+            .await;
+
         Ok(Some((final_block_pos, new_state)))
     }
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {

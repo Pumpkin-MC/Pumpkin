@@ -32,8 +32,8 @@ impl CommandExecutor for Executor {
 
             let Ok(ip) = IpAddr::from_str(target) else {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.pardonip.invalid",
-                    "commands.pardonip.invalid",
+                    pumpkin_data::translation::java::COMMANDS_PARDONIP_INVALID,
+                    pumpkin_data::translation::bedrock::COMMANDS_UNBANIP_INVALID,
                     [],
                 )));
             };
@@ -45,16 +45,16 @@ impl CommandExecutor for Executor {
                 lock.banned_ips.remove(idx);
                 sender
                     .send_message(TextComponent::translate_cross(
-                        "commands.pardonip.success",
-                        "commands.pardonip.success",
+                        pumpkin_data::translation::java::COMMANDS_PARDONIP_SUCCESS,
+                        pumpkin_data::translation::bedrock::COMMANDS_UNBANIP_SUCCESS,
                         [TextComponent::text(ip.to_string())],
                     ))
                     .await;
                 Ok(1)
             } else {
                 Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.pardonip.failed",
-                    "commands.pardonip.failed",
+                    pumpkin_data::translation::java::COMMANDS_PARDONIP_FAILED,
+                    pumpkin_data::translation::java::COMMANDS_PARDONIP_FAILED,
                     [],
                 )))
             };

@@ -131,6 +131,33 @@ impl PortalType {
                         })
                     } else {
                         // Leaving the End through the exit portal: return to overworld spawn
+                        if let Some(player) =
+                            current_level.get_player_by_id(caller.get_entity().entity_id)
+                        {
+                            match player.client.as_ref() {
+                                crate::net::ClientPlatform::Java(client) => {
+                                    client
+                                        .enqueue_packet(&pumpkin_protocol::java::client::play::CGameEvent::new(
+                                            pumpkin_protocol::java::client::play::GameEvent::WinGame,
+                                            1.0,
+                                        ))
+                                        .await;
+                                }
+                                crate::net::ClientPlatform::Bedrock(client) => {
+                                    client
+                                        .send_game_packet(
+                                            &pumpkin_protocol::bedrock::client::CShowCredits::new(
+                                                pumpkin_protocol::codec::var_ulong::VarULong(
+                                                    caller.get_entity().entity_id as u64,
+                                                ),
+                                                pumpkin_protocol::codec::var_int::VarInt(0),
+                                            ),
+                                        )
+                                        .await;
+                                }
+                            }
+                        }
+
                         let info = dest_world.level_info.load();
                         Some(TeleportTransition {
                             new_world: dest_world,

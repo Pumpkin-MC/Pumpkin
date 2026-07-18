@@ -95,13 +95,19 @@ impl ChunkNoiseFunctionComponent<'_> {
                 IndependentProtoNoiseFunctionComponent::ShiftB(_) => "ShiftB".into(),
             },
             Self::Dependent(dependent) => match dependent {
-                DependentProtoNoiseFunctionComponent::Spline(spine) => "Spline(todo)".into(),
+                DependentProtoNoiseFunctionComponent::Spline(spine) => {
+                    let a = stack[spine.spline.input_index].display_test(stack);
+                    format!("Spline({})", a)
+                }
                 DependentProtoNoiseFunctionComponent::Unary(x) => {
                     let a = stack[x.input_index].display_test(stack);
                     format!("Unary({})", a)
                 }
                 DependentProtoNoiseFunctionComponent::ShiftedNoise(x) => {
-                    format!("ShiftedNoise(todo)")
+                    let a = stack[x.input_x_index].display_test(stack);
+                    let b = stack[x.input_y_index].display_test(stack);
+                    let c = stack[x.input_z_index].display_test(stack);
+                    format!("ShiftedNoise({}, {}, {})", a, b, c)
                 }
                 DependentProtoNoiseFunctionComponent::Linear(x) => {
                     let a = stack[x.input_index].display_test(stack);
@@ -113,15 +119,20 @@ impl ChunkNoiseFunctionComponent<'_> {
                     format!("Binary({}, {})", a, b)
                 }
                 DependentProtoNoiseFunctionComponent::IntervalSelect(x) => {
-                    format!("IntervalSelect(todo)")
+                    let a = stack[x.input_index].display_test(stack);
+                    format!("IntervalSelect({})", a)
                 }
                 DependentProtoNoiseFunctionComponent::Clamp(x) => {
-                    format!("Clamp(todo)")
+                    let a = stack[x.input_index].display_test(stack);
+                    format!("Clamp({})", a)
                 }
                 DependentProtoNoiseFunctionComponent::RangeChoice(x) => {
                     let when_in = stack[x.when_in_index].display_test(stack);
                     let when_out = stack[x.when_out_index].display_test(stack);
                     format!("RangeChoice({}, {})", when_in, when_out)
+                }
+                DependentProtoNoiseFunctionComponent::FindTopSurface(_) => {
+                    format!("FindTopSurface")
                 }
             },
             Self::Chunk(chunk) => match &**chunk {

@@ -414,7 +414,42 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            _ => false, // TODO
+            Self::BonusChest(_feature) => {
+                BonusChestFeature::generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::DeltaFeature(_feature) => {
+                DeltaFeatureFeature::generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::DripstoneCluster(feature) => feature.generate(chunk, random, pos),
+            Self::LargeDripstone(feature) => feature.generate(chunk, random, pos),
+            Self::EndGateway(_feature) => {
+                EndGatewayFeature::generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::FillLayer(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::HugeBrownMushroom(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::HugeFungus(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::HugeRedMushroom(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::MultifaceGrowth(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::ReplaceSingleBlock(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::VoidStartPlatform(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::WeepingVines(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            _ => false,
         }
     }
 }
