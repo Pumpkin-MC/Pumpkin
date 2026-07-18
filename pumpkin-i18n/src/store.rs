@@ -119,14 +119,21 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
 #[must_use]
 pub fn format_translation(key: &str, locale: Locale, args: &[String]) -> String {
     let resolved = resolve_translation(key, locale);
-    if args.is_empty() || resolved.tokens().is_none() {
+    // Always use the token-aware write_to path when tokens are present,
+    // even when args is empty.  A template like "Progress: 100%%" contains
+    // an escaped-percent Token::Text — returning the raw template without
+    // unescaping would leave "100%%" visible.
+    let Some(tokens) = resolved.tokens() else {
         return resolved.value_or_raw(key);
-    }
+    };
 
     let mut output = String::with_capacity(resolved.as_str().len());
-    resolved.write_to(args, &mut output);
+    format_tokens(tokens, args, &mut output);
     output
 }
+
+// Re-export to avoid a circular dependency (format_tokens lives in engine).
+use crate::engine::format_tokens;
 
 #[cfg(test)]
 mod tests {
@@ -157,6 +164,35 @@ mod tests {
         assert_eq!(
             get_translation("Test_Runtime_Store:DefinitelyMissing", Locale::EnUs),
             "Test_Runtime_Store:DefinitelyMissing"
+        );
+    }
+
+    #[test]
+    fn cross_locale_cache_invalidation_stale_fallback() {
+        use crate::store::load_translations;
+
+        // ZhCn misses → falls back to EnUs → cached in ZhCn cache.
+        assert!(get_translation("cross:foo", Locale::ZhCn).contains("cross:foo"));
+
+        // Now load value into EnUs.  ZhCn must see the EnUs fallback, not
+        // the old Missing from its own cache.
+        load_translations("cross", r#"{"foo":"Pumpkin rocks"}"#, Locale::EnUs);
+        assert_eq!(get_translation("cross:foo", Locale::ZhCn), "Pumpkin rocks");
+    }
+
+    #[test]
+    fn format_translation_unescapes_percent_with_empty_args() {
+        use crate::store::load_translations;
+
+        load_translations(
+            "percent_test",
+            r#"{"progress":"Loading: 100%% complete"}"#,
+            Locale::EnUs,
+        );
+        // No args provided → only Text tokens → must still unescape %%.
+        assert_eq!(
+            format_translation("percent_test:progress", Locale::EnUs, &[]),
+            "Loading: 100% complete"
         );
     }
 }

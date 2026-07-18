@@ -233,8 +233,8 @@ impl TranslationEngine {
         let num_locales = data.len();
         Self {
             stores: ArcSwap::from_pointee(stores),
-            overrides: build_override_maps(num_locales),
-            cache: build_cache_maps(num_locales),
+            overrides: build_resolved_maps(num_locales),
+            cache: build_resolved_maps(num_locales),
             #[cfg(not(debug_assertions))]
             fallback_log_once: DashMap::with_hasher(BuildHasherDefault::default()),
             #[cfg(not(debug_assertions))]
@@ -331,9 +331,12 @@ impl TranslationEngine {
         );
         if let Some(store) = self.overrides.get(locale_idx) {
             let normalized = normalize_key(key).into_owned();
-            // Evict cached entry before inserting the override, so we can move
-            // `normalized` into the insert call without an extra clone.
-            self.cache[locale_idx].remove(&normalized);
+            // Evict the cached entry from EVERY locale before inserting: other
+            // locales may hold this key's EnUs fallback (or Missing) value in
+            // their own caches, which would otherwise never be invalidated.
+            for cache in &self.cache {
+                cache.remove(&normalized);
+            }
             store.insert(
                 normalized,
                 Arc::new(ResolvedTranslation::from_template(translation)),
@@ -367,7 +370,15 @@ impl TranslationEngine {
                 Arc::new(ResolvedTranslation::from_template(&translation)),
             );
         }
-        self.cache[locale_idx].clear();
+        if locale_idx == crate::locale::Locale::EnUs as usize {
+            // EnUs is the fallback tier for every locale: other locales may
+            // hold cached EnUs fallbacks for these keys, so clear all caches.
+            for cache in &self.cache {
+                cache.clear();
+            }
+        } else {
+            self.cache[locale_idx].clear();
+        }
     }
 
     /// Reload translation data atomically.
@@ -447,14 +458,9 @@ fn build_stores(data: &[HashMap<String, String>]) -> Box<[FstLocaleStore]> {
         .into_boxed_slice()
 }
 
-fn build_override_maps(len: usize) -> Box<[ResolvedMap]> {
-    (0..len)
-        .map(|_| DashMap::with_hasher(BuildHasherDefault::default()))
-        .collect::<Vec<_>>()
-        .into_boxed_slice()
-}
-
-fn build_cache_maps(len: usize) -> Box<[ResolvedMap]> {
+/// Build one empty [`ResolvedMap`] per locale (used for both the override
+/// store and the resolved-translation cache).
+fn build_resolved_maps(len: usize) -> Box<[ResolvedMap]> {
     (0..len)
         .map(|_| DashMap::with_hasher(BuildHasherDefault::default()))
         .collect::<Vec<_>>()

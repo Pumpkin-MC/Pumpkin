@@ -91,13 +91,22 @@ where
     F: FnMut(TextComponentBase) -> String,
 {
     let resolved = resolve_translation(namespaced_key, locale);
-    if with.is_empty() {
-        return resolved.value_or_raw(namespaced_key);
-    }
 
     let Some(tokens) = resolved.tokens() else {
         return resolved.value_or_raw(namespaced_key);
     };
+
+    // Even when `with` is empty, tokens may contain escaped-percent
+    // Token::Text (e.g. "Progress: 100%%") that need unescaping.
+    if with.is_empty() {
+        let mut output = String::with_capacity(resolved.as_str().len());
+        for token in tokens {
+            if let Token::Text(text) = token {
+                output.push_str(text);
+            }
+        }
+        return output;
+    }
 
     let mut result = String::with_capacity(resolved.as_str().len());
     for token in tokens {
