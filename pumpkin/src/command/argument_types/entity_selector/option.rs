@@ -7,10 +7,10 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
-use crate::command::translate_format;
+
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
-use pumpkin_i18n::server_global_locale;
+
 use pumpkin_util::GameMode;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;

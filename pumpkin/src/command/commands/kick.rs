@@ -1,5 +1,4 @@
 use pumpkin_data::translation;
-use pumpkin_i18n::PUMPKIN_NAMESPACE;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 

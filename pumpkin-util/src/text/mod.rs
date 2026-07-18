@@ -149,23 +149,14 @@ impl TextComponentBase {
             format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
         }
 
-        let mut text = match *self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with,
-            } => {
-                let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
-            }
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
-        };
+        let mut text = self.resolve_content_text(
+            locale,
+            |translate, _, with, locale| {
+                translation_to_pretty(format!("{JAVA_NAMESPACE}:{translate}"), locale, with)
+            },
+            |key, with, locale| translation_to_pretty(key, locale, with),
+        );
+
         let style = self.style;
         let color = style.color;
         if let Some(color) = color {
@@ -259,22 +250,15 @@ impl TextComponentBase {
         // Note: Bedrock does not support strikethrough natively without resource packs.
 
         // 2. Resolve Content
-        match &*self.content {
-            TextContent::Text { text: t } => text.push_str(t),
-            TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with,
-            } => {
-                let key = bedrock_translate.as_ref().unwrap_or(translate);
-                text.push_str(&get_translation_text(key.to_string(), locale, with.clone()));
-            }
-            TextContent::EntityNames { selector, .. } => text.push_str(selector),
-            TextContent::Keybind { keybind } => text.push_str(keybind),
-            TextContent::Custom { key, with, .. } => {
-                text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
-            }
-        }
+        text.push_str(&self.resolve_content_text(
+            locale,
+            |translate, bedrock_translate, with, locale| {
+                // Prefer the Bedrock-specific key on this Bedrock-bound path.
+                let key = bedrock_translate.unwrap_or(translate);
+                get_translation_text(format!("{BEDROCK_NAMESPACE}:{key}"), locale, with)
+            },
+            |key, with, locale| get_translation_text(key, locale, with),
+        ));
 
         // 3. Recursively append extra components
         for child in &self.extra {
@@ -296,23 +280,13 @@ impl TextComponentBase {
     /// The plain text content of the component.
     #[must_use]
     pub fn get_text(self, locale: Locale) -> String {
-        let mut text = match *self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate {
-                translate,
-                bedrock_translate,
-                with,
-            } => {
-                let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                get_translation_text(format!("minecraft:{key}"), locale, with)
-            }
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
-        };
+        let mut text = self.resolve_content_text(
+            locale,
+            |translate, _, with, locale| {
+                get_translation_text(format!("{JAVA_NAMESPACE}:{translate}"), locale, with)
+            },
+            |key, with, locale| get_translation_text(key, locale, with),
+        );
 
         for child in self.extra {
             text += &child.get_text(locale);
