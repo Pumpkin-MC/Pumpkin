@@ -89,7 +89,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Permissions
   - [x] Translations
 - Proxy
-  - [x] Bungeecord
+  - [x] BungeeCord
   - [x] Velocity
 
 <!-- Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress. -->
