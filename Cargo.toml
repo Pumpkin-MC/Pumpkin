@@ -110,6 +110,9 @@ futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = { version = "1.12", default-features = false }
 crossbeam = { version = "0.8", default-features = false, features = ["std"] }
 
+# Faster general-purpose allocator for the multithreaded, allocation-heavy server
+mimalloc = "0.1"
+
 uuid = { version = "1.24", default-features = false, features = ["serde", "v3", "v4", "std"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 serde_repr = { version = "0.1", default-features = false }

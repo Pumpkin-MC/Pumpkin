@@ -32,6 +32,7 @@ pumpkin-codecs.workspace = true
 
 dashmap.workspace = true
 crossbeam.workspace = true
+mimalloc.workspace = true
 uuid.workspace = true
 tokio = { workspace = true, features = [
     "macros",
