@@ -116,6 +116,7 @@ pumpkin-nbt.workspace = true
 serde = {workspace = true, features = ["rc"]}
 crc-fast.workspace = true
 rand.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 criterion.workspace = true

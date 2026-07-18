@@ -39,6 +39,26 @@ jobs:
           submodules: recursive
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: bnjbvr/cargo-machete@main
+  hakari:
+    name: Check workspace-hack is up to date
+    runs-on: ubuntu-latest
+    needs: [format]
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hakari
+      - name: Verify workspace-hack contents
+        run: cargo hakari generate --diff
+      - name: Verify all workspace crates depend on workspace-hack
+        run: cargo hakari manage-deps --dry-run
   clippy_debug:
     name: Run lints (debug)
     runs-on: ubuntu-latest

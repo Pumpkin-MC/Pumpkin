@@ -15,6 +15,7 @@ pumpkin-data = { workspace = true, features = ["block", "tag"] }
 heck.workspace = true
 quote.workspace = true
 syn.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

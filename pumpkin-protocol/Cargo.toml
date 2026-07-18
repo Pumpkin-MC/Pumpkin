@@ -36,6 +36,7 @@ async-compression = { workspace = true, features = ["tokio", "zlib", "deflate"] 
 flate2.workspace = true
 
 bitflags.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 # Validate correctness

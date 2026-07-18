@@ -52,6 +52,15 @@ Note: Pumpkin's clippy settings are relatively strict, this can be frustrating b
 - Include any relevant context, such as related issues or discussions.
 - **No Clippy Warnings:** Address all warnings reported by the Clippy linter. You can check for warnings using `cargo clippy --all-targets`.
 - **Passing Unit Tests:** All existing unit tests must pass successfully. You can run the tests with `cargo test`.
+- **Changing Dependencies:** The workspace uses [`cargo-hakari`](https://docs.rs/cargo-hakari) to unify dependency features across crates, which keeps shared dependencies from being rebuilt when you switch between crates. If you add, remove, or change a dependency (or add a new workspace member), regenerate the `workspace-hack` crate and commit the result:
+
+  ```shell
+  cargo install cargo-hakari   # once
+  cargo hakari generate        # update workspace-hack/Cargo.toml
+  cargo hakari manage-deps     # ensure every member depends on workspace-hack
+  ```
+
+  CI verifies this with `cargo hakari generate --diff` and `cargo hakari manage-deps --dry-run`, and will fail if `workspace-hack` is out of date. Benchmark-only dependencies are deliberately kept out of the unified set via `[traversal-excludes]` in `.config/hakari.toml`, so they are not compiled by a plain `cargo build`; add new bench-only crates there.
 
 #### Best Practice
 
