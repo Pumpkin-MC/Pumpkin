@@ -35,6 +35,7 @@ mod item;
 mod kick;
 mod kill;
 mod list;
+mod locate;
 mod loot;
 mod me;
 mod msg;
@@ -183,6 +184,7 @@ pub async fn default_dispatcher(
     op::register(&mut dispatcher, registry);
     random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
+    locate::register(&mut dispatcher, registry);
     loot::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     saveall::register(&mut dispatcher, registry);
