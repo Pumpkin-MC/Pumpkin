@@ -3433,6 +3433,10 @@ impl Player {
     }
 
     /// Add experience points to the player.
+    ///
+    /// Levels are advanced incrementally like vanilla's `giveExperiencePoints`,
+    /// so the player keeps earning levels even after the accumulated total
+    /// passes `i32::MAX`.
     pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
         if let Some(server) = self.world().server.upgrade() {
             let event = PlayerExpChangeEvent::new(self.clone(), added_points);
@@ -3440,14 +3444,15 @@ impl Player {
             added_points = event.amount;
         }
 
+        if added_points == 0 {
+            return;
+        }
+
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
 
-        let total_exp = experience::points_to_level(current_level) as i64 + current_points as i64;
-        let new_total_exp = total_exp + added_points as i64;
-        let safe_new_total = new_total_exp.clamp(0, i32::MAX as i64) as i32;
-
-        let (new_level, new_points) = experience::total_to_level_and_points(safe_new_total);
+        let (new_level, new_points) =
+            experience::add_points_to_level(current_level, current_points, added_points);
         let progress = experience::progress_in_level(new_points, new_level);
 
         self.set_experience(new_level, progress, new_points).await;
