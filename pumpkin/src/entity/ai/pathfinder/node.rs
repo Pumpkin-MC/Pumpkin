@@ -461,7 +461,10 @@ mod tests {
 
         assert_eq!(block.distance(&target), vec.distance(&target));
         assert_eq!(block.distance(&target), node.distance(&target));
-        assert_eq!(block.distance_manhattan(&target), node.distance_manhattan(&target));
+        assert_eq!(
+            block.distance_manhattan(&target),
+            node.distance_manhattan(&target)
+        );
         assert_eq!(block.distance_xz(&target), vec.distance_xz(&target));
 
         assert_eq!(node.as_vector3(), vec);
