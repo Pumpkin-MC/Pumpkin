@@ -15,8 +15,8 @@ use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpa
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
-    BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
-    Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
+    BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
+    BoundingBox as WitBoundingBox, Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
     PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
@@ -192,7 +192,58 @@ impl PluginHostState {
     }
 }
 
-impl pumpkin::plugin::world::Host for PluginHostState {}
+impl pumpkin::plugin::world::Host for PluginHostState {
+    async fn resolve_block_state(
+        &mut self,
+        name: String,
+        properties: Vec<(String, String)>,
+    ) -> wasmtime::Result<Option<u16>> {
+        let Some(block) = pumpkin_data::Block::from_name(&name) else {
+            return Ok(None);
+        };
+
+        if properties.is_empty() {
+            return Ok(Some(block.default_state.id.as_u16()));
+        }
+
+        let props: Vec<(&str, &str)> = properties
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        // from_properties/from_value panics on unknown property values,
+        // so catch panics to avoid crashing on schematics from other MC versions.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let block_props = block.from_properties(&props);
+            block_props.to_state_id(block).as_u16()
+        }));
+        match result {
+            Ok(id) => Ok(Some(id)),
+            Err(_) => Ok(None),
+        }
+    }
+
+    async fn block_state_to_info(
+        &mut self,
+        state_id: u16,
+    ) -> wasmtime::Result<Option<WitBlockStateInfo>> {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let bsid = BlockStateId::new_or_air(state_id);
+            let block = pumpkin_data::Block::from_state_id(bsid);
+            let name = format!("minecraft:{}", block.name);
+            let properties = block
+                .properties(bsid)
+                .map(|p| {
+                    p.to_props()
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            WitBlockStateInfo { name, properties }
+        }));
+        Ok(result.ok())
+    }
+}
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
@@ -687,6 +738,52 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let block_entity = world_provider.get_block_entity(&internal_pos);
 
         block_entity.map_or_else(|| Ok(None), |be| self.get_wit_block_entity(be))
+    }
+
+    async fn get_block_entity_nbt(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<Option<Vec<u8>>> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+
+        let Some(entity) = world_ref.get_block_entity(&internal_pos) else {
+            return Ok(None);
+        };
+
+        let mut nbt = pumpkin_nbt::NbtCompound::new();
+        entity.write_internal(&mut nbt).await;
+
+        let mut bytes = Vec::new();
+        pumpkin_nbt::serializer::to_bytes_unnamed(&nbt, &mut bytes)
+            .map_err(|e| wasmtime::Error::msg(format!("NBT serialize error: {e}")))?;
+        Ok(Some(bytes))
+    }
+
+    async fn set_block_entity_nbt(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        nbt_data: Vec<u8>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+
+        let mut nbt: pumpkin_nbt::NbtCompound =
+            pumpkin_nbt::from_bytes(&mut std::io::Cursor::new(&nbt_data))
+                .map_err(|e| wasmtime::Error::msg(format!("Invalid NBT: {e}")))?;
+
+        // Override NBT position with the caller-provided position so tile
+        // entities land at the correct coordinates during schematic pastes.
+        nbt.put_int("x", pos.x);
+        nbt.put_int("y", pos.y);
+        nbt.put_int("z", pos.z);
+
+        // Use add_block_entity_nbt for lazy loading — avoids broadcasting
+        // a packet per tile entity during bulk operations.
+        world_ref.add_block_entity_nbt(internal_pos, &nbt);
+        Ok(Ok(()))
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {

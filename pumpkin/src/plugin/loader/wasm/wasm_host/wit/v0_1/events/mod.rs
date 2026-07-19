@@ -213,10 +213,12 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
-                    plugin
+                    if let Err(e) = plugin
                         .call_handle_event(&mut *store, self.handler_id, server, &event)
                         .await
-                        .unwrap();
+                    {
+                        tracing::warn!("Plugin event handler error (skipped): {e}");
+                    }
                 }
             }
         })
@@ -233,12 +235,17 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
-                    let returned_event = plugin
+                    match plugin
                         .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
                         .await
-                        .unwrap();
-
-                    *event = E::from_wasm_event(returned_event, store.data_mut());
+                    {
+                        Ok(returned_event) => {
+                            *event = E::from_wasm_event(returned_event, store.data_mut());
+                        }
+                        Err(e) => {
+                            tracing::warn!("Plugin blocking event handler error (skipped): {e}");
+                        }
+                    }
                 }
             }
         })
