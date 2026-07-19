@@ -90,12 +90,7 @@ impl BlockBehaviour for LayeredSnowBlock {
         Box::pin(async move {
             // Snow layers melt when lit by block light above level 11,
             // e.g. from a nearby torch.
-            if args
-                .world
-                .get_block_light_level(args.position)
-                .unwrap_or(0)
-                > 11
-            {
+            if args.world.get_block_light_level(args.position).unwrap_or(0) > 11 {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
