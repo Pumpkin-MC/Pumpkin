@@ -18,11 +18,13 @@ pub mod block;
 pub mod packet;
 pub mod player;
 pub mod server;
+pub mod world;
 
 pub use block::*;
 pub use packet::*;
 pub use player::*;
 pub use server::*;
+pub use world::*;
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
 pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Box<dyn ErasedEventHandler>>> =

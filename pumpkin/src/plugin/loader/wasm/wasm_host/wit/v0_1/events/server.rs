@@ -3,7 +3,7 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1::{
-            events::{ToFromWasmEvent, consume_text_component},
+            events::{ToFromWasmEvent, consume_player, consume_text_component},
             generated_packets,
             pumpkin::plugin::event::{
                 ClientboundPacket, Event, PacketReceivedEventData, PacketSentEventData,
@@ -22,6 +22,7 @@ use crate::plugin::{
         server_tick_start::ServerTickStartEvent,
     },
 };
+use bytes::Bytes;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
@@ -57,15 +58,14 @@ impl ToFromWasmEvent for PacketReceivedEvent {
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
-            Event::PacketReceivedEvent(_) => {
-                // TODO: Implement converting from WIT variant back to raw if needed.
-                // For now, we only support cancellation.
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
+            Event::PacketReceivedEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                packet_id: data.packet_id,
+                payload: Bytes::from(data.raw_payload),
+                cancelled: data.cancelled,
+            },
             _ => panic!("unexpected event type"),
         }
     }
@@ -97,10 +97,18 @@ impl ToFromWasmEvent for PacketSentEvent {
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
-            Event::PacketSentEvent(_) => {
-                panic!("Modifying packets from WASM is not yet supported.");
+            Event::PacketSentEvent(data) => {
+                struct RawPacket;
+
+                Self {
+                    player: consume_player(state, &data.player),
+                    packet_id: data.packet_id,
+                    payload: Bytes::from(data.raw_payload),
+                    packet: std::sync::Arc::new(RawPacket),
+                    cancelled: data.cancelled,
+                }
             }
             _ => panic!("unexpected event type"),
         }

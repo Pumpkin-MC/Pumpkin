@@ -46,12 +46,15 @@ async fn register_player_event(
     event_type: EventType,
 ) {
     use crate::plugin::player::{
-        changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
-        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
-        player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
-        player_command_send::PlayerCommandSendEvent,
+        bedrock_form_response::BedrockFormResponseEvent,
+        changed_main_hand::PlayerChangedMainHandEvent, custom_click_action::CustomClickActionEvent,
+        egg_throw::PlayerEggThrowEvent, exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent,
+        inventory_close::InventoryCloseEvent, inventory_interact::InventoryClickEvent,
+        item_held::PlayerItemHeldEvent, player_change_world::PlayerChangeWorldEvent,
+        player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::PlayerInteractEvent,
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
@@ -136,6 +139,12 @@ async fn register_player_event(
             )
             .await;
         }
+        EventType::PlayerInteractEntityEvent => {
+            register_typed_event::<PlayerInteractEntityEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
         EventType::PlayerInteractEvent => {
             register_typed_event::<PlayerInteractEvent>(resource, handler, priority, blocking)
                 .await;
@@ -150,6 +159,22 @@ async fn register_player_event(
         }
         EventType::PlayerToggleSprintEvent => {
             register_typed_event::<PlayerToggleSprintEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::InventoryCloseEvent => {
+            register_typed_event::<InventoryCloseEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::InventoryClickEvent => {
+            register_typed_event::<InventoryClickEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::BedrockFormResponseEvent => {
+            register_typed_event::<BedrockFormResponseEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::CustomClickActionEvent => {
+            register_typed_event::<CustomClickActionEvent>(resource, handler, priority, blocking)
                 .await;
         }
         _ => {
@@ -180,11 +205,14 @@ async fn register_world_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use crate::plugin::world::spawn_change::SpawnChangeEvent;
+    use crate::plugin::world::{chunk_send::ChunkSend, spawn_change::SpawnChangeEvent};
 
     match event_type {
         EventType::SpawnChangeEvent => {
             register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::ChunkSendEvent => {
+            register_typed_event::<ChunkSend>(resource, handler, priority, blocking).await;
         }
         _ => {
             tracing::error!("non-world event should not be routed to register_world_event");
@@ -344,7 +372,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::ServerTickStartEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
             }
-            event_type @ EventType::SpawnChangeEvent => {
+            event_type @ (EventType::SpawnChangeEvent | EventType::ChunkSendEvent) => {
                 register_world_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type @ (EventType::BlockRedstoneEvent
