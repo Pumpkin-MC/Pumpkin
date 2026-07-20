@@ -66,8 +66,15 @@ impl ClientPacket for CUpdateAdvancements {
                 write.write_slice(&display.get_description().encode())?;
 
                 // Item icon
-                ItemStackTemplateSerializer::from(display.item_icon.clone())
-                    .write_with_version(&mut write, version)?;
+                let icon_result = ItemStackTemplateSerializer::from(display.item_icon.clone())
+                    .write_with_version(&mut write, version);
+                if icon_result.is_err() {
+                    // Fallback
+                    write.write_var_int(&VarInt(0))?; // item_id = 0 (AIR)
+                    write.write_var_int(&VarInt(0))?; // count = 0
+                    write.write_var_int(&VarInt(0))?; // to_add = 0
+                    write.write_var_int(&VarInt(0))?; // to_remove = 0
+                }
 
                 write.write_var_int(&VarInt(display.frame_type as i32))?;
                 let flags = (display.has_background() as i32)
