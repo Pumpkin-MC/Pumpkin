@@ -1279,6 +1279,29 @@ impl StructureSet {
         Self::VILLAGES,
         Self::WOODLAND_MANSIONS,
     ];
+    #[doc = r" The registry names of all structure sets, in the same order as [`Self::ALL`]."]
+    pub const NAMES: &'static [&'static str] = &[
+        "ancient_cities",
+        "buried_treasures",
+        "desert_pyramids",
+        "end_cities",
+        "igloos",
+        "jungle_temples",
+        "mineshafts",
+        "nether_complexes",
+        "nether_fossils",
+        "ocean_monuments",
+        "ocean_ruins",
+        "pillager_outposts",
+        "ruined_portals",
+        "shipwrecks",
+        "strongholds",
+        "swamp_huts",
+        "trail_ruins",
+        "trial_chambers",
+        "villages",
+        "woodland_mansions",
+    ];
     #[must_use]
     pub fn get(name: &str) -> Option<&'static Self> {
         match name {

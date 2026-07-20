@@ -30,30 +30,6 @@ const ARG_STRUCTURE: &str = "structure";
 /// `findNearestMapStructure` call in `LocateCommand`.
 const MAX_SEARCH_RADIUS: i32 = 100;
 
-/// The structure set names known to the generator, offered as suggestions.
-const STRUCTURE_SET_NAMES: &[&str] = &[
-    "ancient_cities",
-    "buried_treasures",
-    "desert_pyramids",
-    "end_cities",
-    "igloos",
-    "jungle_temples",
-    "mineshafts",
-    "nether_complexes",
-    "nether_fossils",
-    "ocean_monuments",
-    "ocean_ruins",
-    "pillager_outposts",
-    "ruined_portals",
-    "shipwrecks",
-    "strongholds",
-    "swamp_huts",
-    "trail_ruins",
-    "trial_chambers",
-    "villages",
-    "woodland_mansions",
-];
-
 const STRUCTURE_INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_LOCATE_STRUCTURE_INVALID,
     translation::java::COMMANDS_LOCATE_STRUCTURE_INVALID,
@@ -73,7 +49,7 @@ impl SuggestionProvider for StructureSuggestionProvider {
         mut builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         Box::pin(async move {
-            for name in STRUCTURE_SET_NAMES {
+            for name in StructureSet::NAMES {
                 builder = builder.suggest(*name);
             }
             builder.build()
