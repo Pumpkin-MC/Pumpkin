@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{Cursor, Read},
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -152,6 +152,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let level = LevelDat { data: level_data };
 
         // ── Write level.dat ───────────────────────────────────────────────────
+        fs::create_dir_all(level_folder)?;
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
         let world_info_file = File::create(path)?;
 
@@ -262,6 +263,25 @@ mod test {
 
         let data = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
 
+        assert_eq!(data.world_gen_settings.seed, seed);
+    }
+
+    #[test]
+    fn write_world_info_creates_missing_level_folder() {
+        let seed: i64 = 1337;
+        let data = LevelData::default(Seed(seed as u64));
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = temp_dir.path().join("nested").join("world");
+
+        assert!(!level_folder.exists());
+
+        AnvilLevelInfo
+            .write_world_info(&data, &level_folder)
+            .unwrap();
+
+        assert!(level_folder.join(LEVEL_DAT_FILE_NAME).is_file());
+
+        let data = AnvilLevelInfo.read_world_info(&level_folder).unwrap();
         assert_eq!(data.world_gen_settings.seed, seed);
     }
 
