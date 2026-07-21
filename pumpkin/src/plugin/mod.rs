@@ -30,9 +30,12 @@ pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// Bump this whenever the public plugin API or any event layout changes in a way
+/// Bump this whenever the native plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 2;
+///
+/// Native plugins exchange Rust types with the server, so changing a type's
+/// layout, such as adding a field to [`PluginMetadata`], is an API break.
+pub const PLUGIN_API_VERSION: u32 = 3;
 
 const PLUGIN_DIR: &str = "./plugins";
 
