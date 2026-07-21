@@ -3,7 +3,7 @@ use pumpkin_data::{
     block_properties::BlockProperties,
     tag::{self},
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
     world::World,
 };
 
-use super::PressurePlate;
+use super::{PressurePlate, detection_box_at};
 
 /// This is for Normal Pressure plates, so not Gold or Iron
 pub struct PressurePlateBlock;
@@ -99,8 +99,7 @@ impl PressurePlate for PressurePlateBlock {
     }
 
     async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
-        // TODO: this is bad use real box
-        let aabb = BoundingBox::from_block(pos);
+        let aabb = detection_box_at(pos);
         if !world.get_entities_at_box(&aabb).is_empty()
             || !world.get_players_at_box(&aabb).is_empty()
         {
