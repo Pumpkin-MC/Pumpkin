@@ -5092,10 +5092,9 @@ impl World {
                 .block_entities
                 .get(&chunk_pos)
                 .is_some_and(|m| m.contains_key(&pos));
-            if !already_loaded
-                && let Some(entity) = self.get_block_entity(&pos) {
-                    self.update_block_entity(&entity);
-                }
+            if !already_loaded && let Some(entity) = self.get_block_entity(&pos) {
+                self.update_block_entity(&entity);
+            }
         }
     }
 

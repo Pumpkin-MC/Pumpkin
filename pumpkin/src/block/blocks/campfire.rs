@@ -13,7 +13,7 @@ use pumpkin_world::tick::TickPriority;
 use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockIsReplacing, BlockActionResult,
+        BlockActionResult, BlockBehaviour, BlockFuture, BlockIsReplacing,
         GetStateForNeighborUpdateArgs, NormalUseArgs, OnEntityCollisionArgs, OnPlaceArgs,
         PlacedArgs, RandomTickArgs, UseWithItemArgs,
     },
@@ -41,14 +41,12 @@ impl BlockBehaviour for CampfireBlock {
             }
 
             if let Some(block_entity) = args.world.get_block_entity(args.position)
-                && let Some(campfire) =
-                    block_entity.as_any().downcast_ref::<CampfireBlockEntity>()
+                && let Some(campfire) = block_entity.as_any().downcast_ref::<CampfireBlockEntity>()
             {
                 for slot in 0..4 {
-                    let is_finished =
-                        campfire.cooking_times[slot].load(Ordering::Relaxed)
-                            >= campfire.cooking_total_times[slot].load(Ordering::Relaxed)
-                            && !campfire.items[slot].lock().await.is_empty();
+                    let is_finished = campfire.cooking_times[slot].load(Ordering::Relaxed)
+                        >= campfire.cooking_total_times[slot].load(Ordering::Relaxed)
+                        && !campfire.items[slot].lock().await.is_empty();
 
                     if is_finished {
                         let result = campfire.remove_stack(slot).await;
@@ -85,8 +83,7 @@ impl BlockBehaviour for CampfireBlock {
             };
 
             if let Some(block_entity) = args.world.get_block_entity(args.position)
-                && let Some(campfire) =
-                    block_entity.as_any().downcast_ref::<CampfireBlockEntity>()
+                && let Some(campfire) = block_entity.as_any().downcast_ref::<CampfireBlockEntity>()
             {
                 let empty_slot = {
                     let mut found = None;
@@ -105,9 +102,7 @@ impl BlockBehaviour for CampfireBlock {
                         guard.split_unless_creative(args.player.gamemode.load(), 1)
                     };
 
-                    campfire
-                        .cooking_total_times[slot]
-                        .store(recipe.cookingtime, Ordering::Relaxed);
+                    campfire.cooking_total_times[slot].store(recipe.cookingtime, Ordering::Relaxed);
                     campfire.set_stack(slot, placed_item).await;
 
                     args.world.update_block_entity(&block_entity);

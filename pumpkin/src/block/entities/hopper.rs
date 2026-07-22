@@ -10,7 +10,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt};
+use pumpkin_world::inventory::{
+    Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt,
+};
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;

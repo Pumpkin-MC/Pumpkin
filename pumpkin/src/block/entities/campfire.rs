@@ -1,10 +1,10 @@
 use super::BlockEntity;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredient};
-use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
@@ -55,15 +55,23 @@ impl BlockEntity for CampfireBlockEntity {
                 }
             }
         }
-        let mut cooking_times =
-            [AtomicI32::new(0), AtomicI32::new(0), AtomicI32::new(0), AtomicI32::new(0)];
+        let mut cooking_times = [
+            AtomicI32::new(0),
+            AtomicI32::new(0),
+            AtomicI32::new(0),
+            AtomicI32::new(0),
+        ];
         if let Some(arr) = nbt.get_int_array("CookingTimes") {
             for (i, &val) in arr.iter().enumerate().take(4) {
                 cooking_times[i] = AtomicI32::new(val);
             }
         }
-        let mut cooking_total_times =
-            [AtomicI32::new(0), AtomicI32::new(0), AtomicI32::new(0), AtomicI32::new(0)];
+        let mut cooking_total_times = [
+            AtomicI32::new(0),
+            AtomicI32::new(0),
+            AtomicI32::new(0),
+            AtomicI32::new(0),
+        ];
         if let Some(arr) = nbt.get_int_array("CookingTotalTimes") {
             for (i, &val) in arr.iter().enumerate().take(4) {
                 cooking_total_times[i] = AtomicI32::new(val);
@@ -183,13 +191,13 @@ impl BlockEntity for CampfireBlockEntity {
                     continue;
                 }
 
-                if let Some(recipe) =
-                    get_cooking_recipe_with_ingredient(item_type, CookingRecipeKind::CampfireCooking)
-                {
+                if let Some(recipe) = get_cooking_recipe_with_ingredient(
+                    item_type,
+                    CookingRecipeKind::CampfireCooking,
+                ) {
                     let total = self.cooking_total_times[slot].load(Ordering::Relaxed);
                     if total == 0 {
-                        self.cooking_total_times[slot]
-                            .store(recipe.cookingtime, Ordering::Relaxed);
+                        self.cooking_total_times[slot].store(recipe.cookingtime, Ordering::Relaxed);
                         self.dirty.store(true, Ordering::Relaxed);
                     }
                     let total = self.cooking_total_times[slot].load(Ordering::Relaxed);
@@ -205,8 +213,7 @@ impl BlockEntity for CampfireBlockEntity {
 
                         if auto_pop {
                             if let Some(result_item) = Item::from_registry_key(recipe.result.id) {
-                                let result_stack =
-                                    ItemStack::new(recipe.result.count, result_item);
+                                let result_stack = ItemStack::new(recipe.result.count, result_item);
 
                                 let pos_down = self.position.down();
                                 let inserted = if let Some(hopper_entity) =
@@ -229,22 +236,17 @@ impl BlockEntity for CampfireBlockEntity {
                                         f64::from(self.position.0.y) + 0.7,
                                         f64::from(self.position.0.z) + 0.5,
                                     );
-                                    let entity = Entity::new(
-                                        world.clone(),
-                                        spawn_pos,
-                                        &EntityType::ITEM,
-                                    );
+                                    let entity =
+                                        Entity::new(world.clone(), spawn_pos, &EntityType::ITEM);
                                     let item_entity =
                                         Arc::new(ItemEntity::new(entity, result_stack));
                                     world.spawn_entity(item_entity).await;
                                 }
                             }
                             *self.items[slot].lock().await = ItemStack::EMPTY.clone();
-                        } else if let Some(result_item) =
-                            Item::from_registry_key(recipe.result.id)
+                        } else if let Some(result_item) = Item::from_registry_key(recipe.result.id)
                         {
-                            let result_stack =
-                                ItemStack::new(recipe.result.count, result_item);
+                            let result_stack = ItemStack::new(recipe.result.count, result_item);
                             *self.items[slot].lock().await = result_stack;
                         }
                         self.cooking_times[slot].store(0, Ordering::Relaxed);
@@ -258,26 +260,28 @@ impl BlockEntity for CampfireBlockEntity {
                 }
             }
 
-            if tick.is_multiple_of(3) && let Some(particle) = if props.signal_fire {
+            if tick.is_multiple_of(3)
+                && let Some(particle) = if props.signal_fire {
                     Some(pumpkin_data::particle::Particle::CampfireSignalSmoke)
                 } else if *block == Block::SOUL_CAMPFIRE {
                     Some(pumpkin_data::particle::Particle::Soul)
                 } else {
                     Some(pumpkin_data::particle::Particle::CampfireCosySmoke)
-                } {
-                    let pos = pumpkin_util::math::vector3::Vector3::new(
-                        f64::from(self.position.0.x) + 0.5,
-                        f64::from(self.position.0.y) + 1.0,
-                        f64::from(self.position.0.z) + 0.5,
-                    );
-                    world.spawn_particle(
-                        pos,
-                        pumpkin_util::math::vector3::Vector3::new(0.05, 0.0, 0.05),
-                        0.01,
-                        1,
-                        particle,
-                    );
                 }
+            {
+                let pos = pumpkin_util::math::vector3::Vector3::new(
+                    f64::from(self.position.0.x) + 0.5,
+                    f64::from(self.position.0.y) + 1.0,
+                    f64::from(self.position.0.z) + 0.5,
+                );
+                world.spawn_particle(
+                    pos,
+                    pumpkin_util::math::vector3::Vector3::new(0.05, 0.0, 0.05),
+                    0.01,
+                    1,
+                    particle,
+                );
+            }
         })
     }
 

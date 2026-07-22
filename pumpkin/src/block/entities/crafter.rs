@@ -2,7 +2,9 @@ use crate::block::entities::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt};
+use pumpkin_world::inventory::{
+    Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt,
+};
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
