@@ -374,7 +374,24 @@ impl Display for NbtTag {
             Self::Long(v) => write!(f, "{v}L"),
             Self::Float(v) => write!(f, "{v}f"),
             Self::Double(v) => write!(f, "{v}d"),
-            Self::String(v) => write!(f, "\"{v}\""), // TODO: Proper escaping needed for robust SNBT
+            Self::String(v) => {
+                write!(f, "\"")?;
+                for c in v.chars() {
+                    match c {
+                        '\\' => f.write_str("\\\\")?,
+                        '"' => f.write_str("\\\"")?,
+                        '\n' => f.write_str("\\n")?,
+                        '\r' => f.write_str("\\r")?,
+                        '\t' => f.write_str("\\t")?,
+                        '\0' => f.write_str("\\0")?,
+                        c if c.is_control() => {
+                            write!(f, "\\u{:04x}", c as u32)?;
+                        }
+                        c => write!(f, "{c}")?,
+                    }
+                }
+                f.write_str("\"")
+            }
             Self::Compound(v) => write!(f, "{v}"),
             Self::ByteArray(v) => {
                 f.write_str("[B;")?;
@@ -423,6 +440,8 @@ impl Display for NbtTag {
 #[cfg(test)]
 mod tests {
     use super::NbtCompound;
+    use crate::tag::NbtTag;
+    use std::fmt::Write;
     use uuid::Uuid;
 
     #[test]
@@ -437,5 +456,25 @@ mod tests {
         let mut short = NbtCompound::new();
         short.put("UUID", crate::tag::NbtTag::IntArray(vec![1, 2, 3]));
         assert_eq!(short.get_uuid("UUID"), None);
+    }
+
+    #[test]
+    fn snbt_string_escaping() {
+        fn fmt(v: &str) -> String {
+            let tag = NbtTag::String(v.to_string().into_boxed_str());
+            let mut out = String::new();
+            write!(&mut out, "{tag}").unwrap();
+            out
+        }
+
+        assert_eq!(fmt("hello"), r#""hello""#);
+        assert_eq!(fmt(""), r#""""#);
+        assert_eq!(fmt("a\"b"), r#""a\"b""#);
+        assert_eq!(fmt("a\\b"), r#""a\\b""#);
+        assert_eq!(fmt("a\nb"), r#""a\nb""#);
+        assert_eq!(fmt("a\rb"), r#""a\rb""#);
+        assert_eq!(fmt("a\tb"), r#""a\tb""#);
+        assert_eq!(fmt("a\0b"), r#""a\0b""#);
+        assert_eq!(fmt("a\u{1b}b"), r#""a\u001bb""#);
     }
 }
