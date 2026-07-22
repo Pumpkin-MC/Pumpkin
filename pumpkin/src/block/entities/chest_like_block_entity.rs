@@ -95,6 +95,20 @@ macro_rules! impl_block_entity_for_chest {
                     .store(false, std::sync::atomic::Ordering::Relaxed);
             }
 
+            fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+                let loot_table_key = self.loot_table.lock().expect("Loot table mutex should not be poisoned").clone();
+                if let Some(key) = loot_table_key {
+                    nbt.put_string("LootTable", key);
+                    if self.loot_table_seed != 0 {
+                        nbt.put_long("LootTableSeed", self.loot_table_seed);
+                    }
+                } else {
+                    pumpkin_world::inventory::sync_write_items_to_nbt(&self.items, &mut nbt);
+                }
+                Some(nbt)
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }

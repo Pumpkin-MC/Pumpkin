@@ -143,6 +143,23 @@ pub trait Clearable {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
+pub fn sync_write_items_to_nbt(items: &[Arc<Mutex<ItemStack>>], nbt: &mut NbtCompound) {
+    let mut slots = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        if let Ok(stack) = item.try_lock()
+            && !stack.is_empty()
+        {
+            let mut item_nbt = NbtCompound::new();
+            item_nbt.put_byte("Slot", i as i8);
+            stack.write_item_stack(&mut item_nbt);
+            slots.push(NbtTag::Compound(item_nbt));
+        }
+    }
+    if !slots.is_empty() {
+        nbt.put_list("Items", slots);
+    }
+}
+
 pub struct ComparableInventory(pub Arc<dyn Inventory>);
 
 impl PartialEq for ComparableInventory {

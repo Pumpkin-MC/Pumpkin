@@ -595,6 +595,33 @@ macro_rules! impl_block_entity_for_cooking {
                 self.dirty.load(Ordering::Relaxed)
             }
 
+            fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+                nbt.put_short("cooking_total_time", self.get_cooking_total_time() as i16);
+                nbt.put_short("cooking_time_spent", self.get_cooking_time_spent() as i16);
+                nbt.put_short("lit_total_time", self.get_lit_total_time() as i16);
+                nbt.put_short("lit_time_remaining", self.get_lit_time_remaining() as i16);
+
+                if let Ok(recipes) = self.recipes_used.lock() {
+                    if !recipes.is_empty() {
+                        let mut recipes_compound = pumpkin_nbt::compound::NbtCompound::new();
+                        for (recipe_id, count) in recipes.iter() {
+                            recipes_compound.put(
+                                recipe_id.as_str(),
+                                pumpkin_nbt::tag::NbtTag::Int(*count as i32),
+                            );
+                        }
+                        nbt.put(
+                            "RecipesUsed",
+                            pumpkin_nbt::tag::NbtTag::Compound(recipes_compound),
+                        );
+                    }
+                }
+
+                pumpkin_world::inventory::sync_write_items_to_nbt(&self.items, &mut nbt);
+                Some(nbt)
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }

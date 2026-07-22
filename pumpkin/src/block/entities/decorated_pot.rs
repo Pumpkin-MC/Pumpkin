@@ -52,6 +52,23 @@ impl BlockEntity for DecoratedPotBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(sherds) = self.sherds.try_lock()
+            && let Some(ref sh) = *sherds
+        {
+            nbt.put_list("sherds", sh.clone());
+        }
+        if let Ok(item) = self.item.try_lock()
+            && let Some(ref it) = *item
+        {
+            let mut it_nbt = NbtCompound::new();
+            it.write_item_stack(&mut it_nbt);
+            nbt.put_compound("item", it_nbt);
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
