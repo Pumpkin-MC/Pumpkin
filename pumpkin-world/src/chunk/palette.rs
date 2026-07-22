@@ -10,6 +10,15 @@ use tracing::warn;
 
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates};
 
+#[inline]
+fn bedrock_bits_per_entry(palette_len: usize) -> u8 {
+    match encompassing_bits(palette_len) {
+        bits @ 0..=6 => bits,
+        7 | 8 => 8,
+        _ => 16,
+    }
+}
+
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
@@ -549,7 +558,7 @@ impl BiomePalette {
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
-                let bits_per_entry = encompassing_bits(data.palette.len());
+                let bits_per_entry = bedrock_bits_per_entry(data.palette.len());
 
                 let key_to_index_map: HashMap<_, usize> = data
                     .palette
@@ -698,7 +707,7 @@ impl BlockPalette {
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
-                let bits_per_entry = encompassing_bits(data.palette.len());
+                let bits_per_entry = bedrock_bits_per_entry(data.palette.len());
 
                 let key_to_index_map: HashMap<_, usize> = data
                     .palette
@@ -917,7 +926,7 @@ pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
 
 #[cfg(test)]
 mod tests {
-    use super::{BlockPalette, NetworkPalette};
+    use super::{BlockPalette, NetworkPalette, bedrock_bits_per_entry};
     use pumpkin_data::{Block, BlockStateId};
 
     fn network_palette_values(palette: NetworkPalette<u16>) -> Option<Box<[u16]>> {
@@ -981,5 +990,15 @@ mod tests {
         assert_bulk_matches_mutations(|x, y, z| {
             BlockStateId::new_or_air(((y * 256 + z * 16 + x) % 300) as u16)
         });
+    }
+
+    #[test]
+    fn bedrock_palette_uses_supported_storage_widths() {
+        assert_eq!(bedrock_bits_per_entry(2), 1);
+        assert_eq!(bedrock_bits_per_entry(64), 6);
+        assert_eq!(bedrock_bits_per_entry(65), 8);
+        assert_eq!(bedrock_bits_per_entry(256), 8);
+        assert_eq!(bedrock_bits_per_entry(257), 16);
+        assert_eq!(bedrock_bits_per_entry(4096), 16);
     }
 }

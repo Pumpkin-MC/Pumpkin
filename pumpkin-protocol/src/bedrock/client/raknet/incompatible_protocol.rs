@@ -9,6 +9,7 @@ use pumpkin_macros::packet;
 pub struct CIncompatibleProtocolVersion {
     protocol_version: u8,
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
 }
 

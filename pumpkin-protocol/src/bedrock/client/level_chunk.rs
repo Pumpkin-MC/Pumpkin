@@ -77,32 +77,26 @@ impl PacketWrite for CLevelChunk<'_> {
             .read()
             .map_err(|_| Error::other("biome_sections read lock poisoned"))?;
 
-        for (i, biome_palette) in biome_sections.iter().enumerate() {
-            let num_storages = 1;
-            let y = (i as i8) + min_y_section;
-            data_write.write_all(&[VERSION, num_storages, y as u8])?;
+        for biome_palette in biome_sections.iter() {
+            let network_repr = biome_palette.convert_be_network();
 
-            for _ in 0..num_storages {
-                let network_repr = biome_palette.convert_be_network();
+            (network_repr.bits_per_entry << 1 | 1).write(data_write)?;
 
-                (network_repr.bits_per_entry << 1 | 1).write(data_write)?;
+            for data in network_repr.packed_data {
+                data.write(data_write)?;
+            }
 
-                for data in network_repr.packed_data {
-                    data.write(data_write)?;
+            match network_repr.palette {
+                NetworkPalette::Single(id) => {
+                    VarInt(i32::from(id)).write(data_write)?;
                 }
-
-                match network_repr.palette {
-                    NetworkPalette::Single(id) => {
+                NetworkPalette::Indirect(palette) => {
+                    VarInt(palette.len() as i32).write(data_write)?;
+                    for id in palette {
                         VarInt(i32::from(id)).write(data_write)?;
                     }
-                    NetworkPalette::Indirect(palette) => {
-                        VarInt(palette.len() as i32).write(data_write)?;
-                        for id in palette {
-                            VarInt(i32::from(id)).write(data_write)?;
-                        }
-                    }
-                    NetworkPalette::Direct => (),
                 }
+                NetworkPalette::Direct => (),
             }
         }
 

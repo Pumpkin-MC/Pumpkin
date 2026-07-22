@@ -11,7 +11,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 use bytes::Bytes;
 use pumpkin_config::networking::compression::CompressionInfo;
@@ -73,8 +73,11 @@ use pumpkin_protocol::{
 use std::net::SocketAddr;
 use tokio::{
     net::UdpSocket,
-    sync::mpsc::{Receiver, Sender},
-    sync::{Mutex, RwLock, oneshot},
+    sync::{
+        Mutex, OwnedSemaphorePermit, RwLock, Semaphore,
+        mpsc::{Receiver, Sender},
+        oneshot,
+    },
     task::JoinHandle,
 };
 
@@ -94,6 +97,8 @@ use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::level::SyncChunk;
+
+const RELIABLE_FRAME_WINDOW: usize = 128;
 
 pub struct OutgoingPacket {
     pub data: Bytes,
@@ -159,7 +164,9 @@ pub struct BedrockClient {
     received_sequences: Mutex<HashSet<u32>>,
     pending_acks: Mutex<Vec<u32>>,
     #[allow(clippy::type_complexity)]
-    unacked_outgoing_frames: Mutex<HashMap<u32, (u8, Vec<u8>, std::time::Instant)>>,
+    unacked_outgoing_frames:
+        Mutex<HashMap<u32, (u8, Vec<u8>, std::time::Instant, OwnedSemaphorePermit)>>,
+    reliable_frame_window: Arc<Semaphore>,
     expected_order_index: Mutex<HashMap<u8, u32>>,
     highest_sequence_index: Mutex<HashMap<u8, u32>>,
     ordered_queues: Mutex<HashMap<u8, BTreeMap<u32, Frame>>>,
@@ -208,6 +215,7 @@ impl BedrockClient {
             received_sequences: Mutex::new(HashSet::new()),
             pending_acks: Mutex::new(Vec::new()),
             unacked_outgoing_frames: Mutex::new(HashMap::new()),
+            reliable_frame_window: Arc::new(Semaphore::new(RELIABLE_FRAME_WINDOW)),
             expected_order_index: Mutex::new(HashMap::new()),
             highest_sequence_index: Mutex::new(HashMap::new()),
             ordered_queues: Mutex::new(HashMap::new()),
@@ -227,7 +235,72 @@ impl BedrockClient {
         }
     }
 
+    fn start_raknet_maintenance_task(self: &Arc<Self>) {
+        let client = self.clone();
+        self.spawn_task(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+            loop {
+                tokio::select! {
+                    () = client.close_token.cancelled() => break,
+                    _ = interval.tick() => {}
+                }
+
+                if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
+                    let unacked = client.unacked_outgoing_frames.lock().await;
+                    debug!(
+                        "Bedrock client {} timed out with {} reliable frames in flight (sequences {:?}..={:?}, next {})",
+                        client.address,
+                        unacked.len(),
+                        unacked.keys().min(),
+                        unacked.keys().max(),
+                        client.output_sequence_number.load(Ordering::Relaxed),
+                    );
+                    drop(unacked);
+                    client.close().await;
+                    break;
+                }
+
+                let mut pending = client.pending_acks.lock().await;
+                if !pending.is_empty() {
+                    let ack = Acknowledge::new(std::mem::take(&mut *pending));
+                    drop(pending);
+                    let _ = client.send_acknowledgement(&ack, RAKNET_ACK).await;
+                }
+
+                let now = std::time::Instant::now();
+                let mut resend = Vec::new();
+                {
+                    let mut unacked = client.unacked_outgoing_frames.lock().await;
+                    for (seq, (id, data, timestamp, _permit)) in unacked.iter_mut() {
+                        if now.duration_since(*timestamp) > std::time::Duration::from_secs(1) {
+                            resend.push((*seq, *id, data.clone()));
+                            *timestamp = now;
+                            if resend.len() >= 50 {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if !resend.is_empty() {
+                    let encoder = client.network_writer.read().await;
+                    for (seq, id, data) in resend {
+                        trace!("Resending reliable sequence {} (ID: {})", seq, id);
+                        if let Err(err) = encoder
+                            .write_packet(&data, client.address, &client.socket)
+                            .await
+                        {
+                            warn!("Failed to resend packet for sequence {}: {}", seq, err);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     pub fn start_outgoing_packet_task(self: &Arc<Self>) {
+        self.start_raknet_maintenance_task();
+
         let client = self.clone();
         self.spawn_task(async move {
             let mut packet_receiver = {
@@ -242,8 +315,6 @@ impl BedrockClient {
                     .take()
                     .expect("Outgoing packet receiver was already taken")
             };
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
-
             while !client.close_token.is_cancelled() {
                 let mut packet = tokio::select! {
                     biased;
@@ -252,51 +323,6 @@ impl BedrockClient {
                         Some(p) => p,
                         None => break,
                     },
-                    _ = interval.tick() => {
-                        // Check for timeout (10 seconds)
-                        if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
-                            debug!("Bedrock client {} timed out", client.address);
-                            client.close().await;
-                            break;
-                        }
-
-                        // Flush ACKs
-                        let mut pending = client.pending_acks.lock().await;
-                        if !pending.is_empty() {
-                            let ack = Acknowledge::new(pending.clone());
-                            pending.clear();
-                            let _ = client.send_acknowledgement(&ack, RAKNET_ACK).await;
-                        }
-
-                        // Check retransmission
-                        let now = std::time::Instant::now();
-                        let mut resend = Vec::new();
-                        {
-                            let mut unacked = client.unacked_outgoing_frames.lock().await;
-                            for (seq, (id, data, timestamp)) in unacked.iter_mut() {
-                                if now.duration_since(*timestamp) > std::time::Duration::from_secs(1) {
-                                    resend.push((*seq, *id, data.clone()));
-                                    // Update timestamp
-                                    *timestamp = now;
-                                    // Limit resends per tick to avoid starvation
-                                    if resend.len() >= 50 {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        if !resend.is_empty() {
-                            let encoder = client.network_writer.read().await;
-                            for (seq, id, data) in resend {
-                                debug!("Resending reliable sequence {} (ID: {})", seq, id);
-                                if let Err(err) = encoder.write_packet(&data, client.address, &client.socket).await {
-                                    warn!("Failed to resend packet for sequence {}: {}", seq, err);
-                                }
-                            }
-                        }
-                        continue;
-                    }
                     res = packet_receiver.recv() => match res {
                         Some(p) => p,
                         None => break,
@@ -468,7 +494,7 @@ impl BedrockClient {
 
         {
             let Ok(network_writer) = self.network_writer.try_read() else {
-                debug!("Failed to lock network writer for try_enqueue_packet");
+                trace!("Failed to lock network writer for try_enqueue_packet");
                 return;
             };
 
@@ -494,11 +520,11 @@ impl BedrockClient {
     ///
     /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Err(err) = self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::normal(packet_data))
-            .await
-        {
+        let result = tokio::select! {
+            () = self.close_token.cancelled() => return,
+            result = self.outgoing_packet_queue_send.send(OutgoingPacket::normal(packet_data)) => result,
+        };
+        if let Err(err) = result {
             // This is expected to fail if we are closed
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
@@ -513,7 +539,7 @@ impl BedrockClient {
         {
             match err {
                 tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
+                    trace!(
                         "Failed to add packet to the outgoing packet queue for client: channel full"
                     );
                 }
@@ -585,16 +611,19 @@ impl BedrockClient {
                     return;
                 }
                 let (tx, rx) = oneshot::channel();
-                if let Err(err) = self
-                    .outgoing_packet_priority_send
-                    .send(OutgoingPacket::priority(payload, tx))
-                    .await
-                {
+                let result = tokio::select! {
+                    () = self.close_token.cancelled() => return,
+                    result = self.outgoing_packet_priority_send.send(OutgoingPacket::priority(payload, tx)) => result,
+                };
+                if let Err(err) = result {
                     if !self.is_closed() {
                         error!("Failed to add priority packet to the outgoing packet queue: {err}");
                     }
                 } else {
-                    let _ = rx.await;
+                    tokio::select! {
+                        () = self.close_token.cancelled() => {}
+                        _ = rx => {}
+                    }
                 }
             }
             Err(err) => error!("Failed to write game packet: {err}"),
@@ -694,6 +723,24 @@ impl BedrockClient {
     }
 
     pub async fn send_frame_set(&self, mut frame_set: FrameSet, id: u8) {
+        let reliable = frame_set
+            .frames
+            .iter()
+            .any(|frame| frame.reliability.is_reliable());
+        let permit = if reliable {
+            tokio::select! {
+                () = self.close_token.cancelled() => return,
+                permit = self.reliable_frame_window.clone().acquire_owned() => {
+                    let Ok(permit) = permit else {
+                        return;
+                    };
+                    Some(permit)
+                }
+            }
+        } else {
+            None
+        };
+
         let sequence = self.output_sequence_number.fetch_add(1, Ordering::Relaxed);
         frame_set.sequence = u24(sequence);
 
@@ -703,10 +750,10 @@ impl BedrockClient {
             return;
         }
 
-        if frame_set.frames.iter().any(|f| f.reliability.is_reliable()) {
+        if let Some(permit) = permit {
             self.unacked_outgoing_frames.lock().await.insert(
                 sequence,
-                (id, frame_set_buf.clone(), std::time::Instant::now()),
+                (id, frame_set_buf.clone(), std::time::Instant::now(), permit),
             );
         }
 
@@ -802,12 +849,12 @@ impl BedrockClient {
     }
 
     async fn handle_nack(&self, nack: &Acknowledge) {
-        debug!("Received NACK for sequences: {:?}", nack.sequences);
+        trace!("Received NACK for sequences: {:?}", nack.sequences);
         let mut resend_data = Vec::new();
         {
             let unacked = self.unacked_outgoing_frames.lock().await;
             for seq in &nack.sequences {
-                if let Some((_id, data, _timestamp)) = unacked.get(seq) {
+                if let Some((_id, data, _timestamp, _permit)) = unacked.get(seq) {
                     resend_data.push(data.clone());
                 }
             }
@@ -1248,6 +1295,7 @@ impl BedrockClient {
                     .await;
             }
             SDisconnect::PACKET_ID | SConnectionLost::PACKET_ID => {
+                debug!("Bedrock client {} disconnected", self.address);
                 self.close().await;
             }
             _ => {

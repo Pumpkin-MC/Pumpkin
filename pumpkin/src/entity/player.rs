@@ -655,6 +655,10 @@ impl Player {
         })
         .await
         .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
+        let chunks_per_tick = match client.as_ref() {
+            ClientPlatform::Java(_) => 16,
+            ClientPlatform::Bedrock(_) => 1,
+        };
 
         Self {
             living_entity,
@@ -727,9 +731,8 @@ impl Player {
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
             item_cooldowns: Mutex::new(HashMap::new()),
-            // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(
-                16,
+                chunks_per_tick,
                 world.level.chunk_listener.add_global_chunk_listener(),
                 world.clone(),
             )),
@@ -2005,15 +2008,10 @@ impl Player {
         let (chunk_of_chunks, total_sent_chunks) = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            let chunks = if let ClientPlatform::Java(_) = self.client.as_ref() {
-                // Java clients can only send a limited amount of chunks per tick.
-                // If we have sent too many chunks without receiving an ack, we stop sending chunks.
-                chunk_manager
-                    .can_send_chunk()
-                    .then(|| chunk_manager.next_chunk())
-            } else {
-                Some(chunk_manager.next_chunk())
-            };
+            // Pace chunk batches so packet transport is not flooded while acknowledgements catch up.
+            let chunks = chunk_manager
+                .can_send_chunk()
+                .then(|| chunk_manager.next_chunk());
             (chunks, chunk_manager.sent_chunks_count())
         };
         if let Some(chunk_of_chunks) = chunk_of_chunks {

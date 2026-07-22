@@ -206,7 +206,7 @@ impl PacketRead for SocketAddr {
             4 => {
                 let ip = u32::read_be(reader)?;
                 let port = u16::read_be(reader)?;
-                Ok(Self::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)))
+                Ok(Self::V4(SocketAddrV4::new(Ipv4Addr::from(!ip), port)))
             }
             6 => {
                 // Addr family

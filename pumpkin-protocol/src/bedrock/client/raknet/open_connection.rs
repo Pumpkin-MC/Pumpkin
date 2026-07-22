@@ -11,10 +11,12 @@ use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
 #[packet(0x06)]
 pub struct COpenConnectionReply1 {
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
     has_server_security: bool,
     // Only write when has_server_security
     // cookie: u32,
+    #[serial(big_endian)]
     mtu: u16,
 }
 
@@ -38,8 +40,10 @@ impl COpenConnectionReply1 {
 #[packet(0x08)]
 pub struct COpenConnectionReply2 {
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
     client_address: SocketAddr,
+    #[serial(big_endian)]
     mtu: u16,
     security: bool,
 }
@@ -59,5 +63,51 @@ impl COpenConnectionReply2 {
             mtu,
             security,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+
+    use super::{COpenConnectionReply1, COpenConnectionReply2};
+    use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
+
+    const SERVER_GUID: u64 = 0x0102_0304_0506_0708;
+    const MTU: u16 = 1492;
+
+    #[test]
+    fn open_connection_reply_1_uses_raknet_byte_order() {
+        let mut bytes = Vec::new();
+        COpenConnectionReply1::new(SERVER_GUID, false, MTU)
+            .write(&mut bytes)
+            .unwrap();
+
+        let mut expected = RAKNET_MAGIC.to_vec();
+        expected.extend_from_slice(&SERVER_GUID.to_be_bytes());
+        expected.push(0);
+        expected.extend_from_slice(&MTU.to_be_bytes());
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn open_connection_reply_2_uses_raknet_address_and_byte_order() {
+        let mut bytes = Vec::new();
+        COpenConnectionReply2::new(
+            SERVER_GUID,
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(192, 168, 0, 17), 19132)),
+            MTU,
+            false,
+        )
+        .write(&mut bytes)
+        .unwrap();
+
+        let mut expected = RAKNET_MAGIC.to_vec();
+        expected.extend_from_slice(&SERVER_GUID.to_be_bytes());
+        expected.extend_from_slice(&[4, !192, !168, !0, !17]);
+        expected.extend_from_slice(&19132u16.to_be_bytes());
+        expected.extend_from_slice(&MTU.to_be_bytes());
+        expected.push(0);
+        assert_eq!(bytes, expected);
     }
 }

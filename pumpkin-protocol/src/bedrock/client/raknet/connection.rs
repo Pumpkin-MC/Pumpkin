@@ -9,7 +9,9 @@ use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
 #[derive(PacketWrite)]
 #[packet(0x03)]
 pub struct CConnectedPong {
+    #[serial(big_endian)]
     ping: u64,
+    #[serial(big_endian)]
     pong: u64,
 }
 
@@ -28,9 +30,12 @@ impl CConnectedPong {
 #[packet(0x10)]
 pub struct CConnectionRequestAccepted {
     client_address: SocketAddr,
+    #[serial(big_endian)]
     system_index: u16,
     system_addresses: [SocketAddr; 10],
+    #[serial(big_endian)]
     requested_timestamp: u64,
+    #[serial(big_endian)]
     timestamp: u64,
 }
 
@@ -60,6 +65,7 @@ impl CConnectionRequestAccepted {
 #[packet(0x12)]
 pub struct CAlreadyConnected {
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
 }
 
@@ -80,6 +86,7 @@ impl CAlreadyConnected {
 #[packet(0x14)]
 pub struct CNoFreeIncomingConnections {
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
 }
 
@@ -100,6 +107,7 @@ impl CNoFreeIncomingConnections {
 #[packet(0x17)]
 pub struct CConnectionBanned {
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
 }
 
@@ -120,6 +128,7 @@ impl CConnectionBanned {
 #[packet(0x1A)]
 pub struct CIpRecentlyConnected {
     magic: [u8; 16],
+    #[serial(big_endian)]
     server_guid: u64,
 }
 
