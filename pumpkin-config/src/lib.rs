@@ -190,7 +190,7 @@ pub struct BasicConfiguration {
     pub allow_campfire_manual_pickup: bool,
     /// Whether cooked food automatically pops off the campfire as an item entity.
     /// When false, cooked items stay in the campfire slot (useful with manual pickup).
-    pub auto_pop_off: bool,
+    pub campfire_auto_pop_off: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -213,7 +213,7 @@ impl Default for BasicConfiguration {
             white_list: false,
             enforce_whitelist: false,
             allow_campfire_manual_pickup: false,
-            auto_pop_off: true,
+            campfire_auto_pop_off: true,
         }
     }
 }

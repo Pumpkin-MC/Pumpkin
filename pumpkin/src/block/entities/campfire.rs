@@ -209,7 +209,7 @@ impl BlockEntity for CampfireBlockEntity {
                         let auto_pop = world
                             .server
                             .upgrade()
-                            .is_none_or(|s| s.basic_config.auto_pop_off);
+                            .is_none_or(|s| s.basic_config.campfire_auto_pop_off);
 
                         if auto_pop {
                             if let Some(result_item) = Item::from_registry_key(recipe.result.id) {
