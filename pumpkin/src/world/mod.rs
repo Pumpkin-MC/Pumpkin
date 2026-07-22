@@ -1300,6 +1300,14 @@ impl World {
                 error!("Chunk task panicked: {:?}", e);
             }
         }
+
+        // Update chunk inhabited time for active chunks
+        let loaded_chunks = self.level.loaded_chunks.clone();
+        for pos in active_chunks.iter() {
+            if let Some(chunk) = loaded_chunks.get(pos) {
+                chunk.inhabited_time.fetch_add(1, Relaxed);
+            }
+        }
     }
 
     pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {

@@ -5,7 +5,7 @@ use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 
 use crate::ProtoChunk;
 use crate::level::SyncChunk;
@@ -222,6 +222,7 @@ impl Chunk {
                 status: ChunkStatus::Empty,
                 blending_data: None,
                 dirty: AtomicBool::new(false),
+                inhabited_time: AtomicU64::new(0),
             })),
         ) {
             Self::Proto(proto) => proto,
@@ -313,6 +314,7 @@ impl Chunk {
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
+            inhabited_time: AtomicU64::new(0),
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());

@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
     sync::{
         RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -371,6 +371,7 @@ impl ChunkData {
             light_populated: AtomicBool::new(light_correct),
             status,
             blending_data: None,
+            inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
         })
     }
 

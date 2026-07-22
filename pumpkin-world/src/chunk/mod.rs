@@ -13,6 +13,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -81,6 +82,7 @@ pub struct ChunkData {
     pub status: ChunkStatus,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub dirty: AtomicBool,
+    pub inhabited_time: AtomicU64,
 }
 
 pub struct ChunkEntityData {
