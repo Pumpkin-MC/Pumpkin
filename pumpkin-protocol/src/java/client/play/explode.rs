@@ -1,6 +1,4 @@
-use pumpkin_data::{
-    packet::clientbound::PLAY_EXPLODE, particle_id_remap::remap_particle_id_for_version,
-};
+use pumpkin_data::packet::clientbound::PLAY_EXPLODE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -8,6 +6,8 @@ use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use crate::{IdOr, SoundEvent, codec::var_int::VarInt};
 use pumpkin_util::version::JavaMinecraftVersion;
+
+use super::particle::particle_id_for_version;
 
 /// Notifies the client that an explosion has occurred.
 ///
@@ -75,10 +75,7 @@ impl ClientPacket for CExplosion {
             w.write_f64_be(k.z)?;
             Ok(())
         })?;
-        let particle = VarInt(i32::from(remap_particle_id_for_version(
-            self.particle.0 as u16,
-            *version,
-        )));
+        let particle = particle_id_for_version(self.particle, *version);
         write.write_var_int(&particle)?;
         match &self.sound {
             IdOr::Id(id) => write.write_var_int(&VarInt((*id + 1) as i32))?,

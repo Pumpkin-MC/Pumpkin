@@ -13,6 +13,8 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
+use super::particle::particle_id_for_version;
+
 pub trait MetadataSerializer {
     fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError>;
 }
@@ -135,6 +137,22 @@ impl<T> Metadata<T> {
                 let inner = cursor.into_inner();
                 writer.write_slice(&inner[remainder_start..])?;
             }
+            return Ok(());
+        }
+
+        if self.r#type == MetaDataType::PARTICLE {
+            let mut serialized_value = Vec::new();
+            self.value.write_metadata(&mut serialized_value)?;
+
+            let mut cursor = Cursor::new(serialized_value);
+            let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode particle metadata: {e}"))
+            })?;
+            writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+
+            let remainder_start = cursor.position() as usize;
+            let inner = cursor.into_inner();
+            writer.write_slice(&inner[remainder_start..])?;
             return Ok(());
         }
 
@@ -262,5 +280,73 @@ impl MetadataSerializer for crate::codec::optional_int::OptionalInt {
     fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
         let val = self.0.map_or(0, |id| id + 1);
         writer.write_var_int(&VarInt(val))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Cursor, Read};
+
+    use pumpkin_data::{
+        meta_data_type::MetaDataType, particle::Particle, tracked_data::TrackedData,
+    };
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use crate::{VarInt, ser::NetworkWriteExt};
+
+    use super::{Metadata, MetadataSerializer};
+
+    struct ParticleMetadata {
+        particle_id: VarInt,
+        data: [u8; 4],
+    }
+
+    impl MetadataSerializer for ParticleMetadata {
+        fn write_metadata(
+            &self,
+            writer: &mut impl std::io::Write,
+        ) -> Result<(), crate::WritingError> {
+            writer.write_var_int(&self.particle_id)?;
+            writer.write_slice(&self.data)
+        }
+    }
+
+    fn encoded_particle(version: JavaMinecraftVersion) -> (VarInt, Vec<u8>) {
+        let particle_data = [0x12, 0x34, 0x56, 0x78];
+        let metadata = Metadata::new(
+            TrackedData::PARTICLE,
+            MetaDataType::PARTICLE,
+            ParticleMetadata {
+                particle_id: VarInt(Particle::ExplosionEmitter as i32),
+                data: particle_data,
+            },
+        );
+        let mut bytes = Vec::new();
+        metadata.write(&mut bytes, &version).unwrap();
+
+        assert_eq!(bytes[0], TrackedData::PARTICLE.get(&version));
+        assert_eq!(bytes[1], MetaDataType::PARTICLE.id(version) as u8);
+
+        let mut cursor = Cursor::new(&bytes[2..]);
+        let particle_id = VarInt::decode(&mut cursor).unwrap();
+        let mut remainder = Vec::new();
+        cursor.read_to_end(&mut remainder).unwrap();
+        (particle_id, remainder)
+    }
+
+    #[test]
+    fn particle_metadata_id_remaps_for_1_21_11() {
+        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_1_21_11);
+
+        assert_eq!(particle_id, VarInt(22));
+        assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn particle_metadata_id_stays_latest_for_26_2() {
+        let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_2);
+
+        assert_eq!(particle_id, VarInt(29));
+        assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
     }
 }
