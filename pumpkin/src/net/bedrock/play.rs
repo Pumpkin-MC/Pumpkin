@@ -1809,7 +1809,8 @@ impl BedrockClient {
             return;
         }
         let previous_slot = player.inventory.get_selected_slot();
-        if let Some(server) = player.world().server.upgrade() {
+        let server = player.world().server.upgrade();
+        if let Some(server) = server {
             let mut event = PlayerItemHeldEvent::new(player.clone(), previous_slot, slot);
             server.plugin_manager.fire(&server, &mut event).await;
             let is_cancelled = {

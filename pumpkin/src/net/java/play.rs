@@ -849,7 +849,8 @@ impl JavaClient {
             return;
         }
         let pos = command.pos;
-        if let Some(block_entity) = player.world().get_block_entity(&pos) {
+        let block_entity = player.world().get_block_entity(&pos);
+        if let Some(block_entity) = block_entity {
             if block_entity.resource_location() != CommandBlockEntity::ID {
                 warn!("Client tried to change Command block but not Command block entity found");
                 return;
@@ -937,7 +938,8 @@ impl JavaClient {
             return;
         }
         let pos = jigsaw.pos;
-        if let Some(block_entity) = player.world().get_block_entity(&pos) {
+        let block_entity = player.world().get_block_entity(&pos);
+        if let Some(block_entity) = block_entity {
             if block_entity.resource_location() != JigsawBlockEntity::ID {
                 warn!("Client tried to change Jigsaw block but not Jigsaw block entity found");
                 return;

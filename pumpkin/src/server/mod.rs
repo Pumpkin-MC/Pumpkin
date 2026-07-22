@@ -413,11 +413,12 @@ impl Server {
     pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
-            if let Some(world) = worlds
+            let world = worlds
                 .iter()
                 .find(|w| w.get_world_name() == name && w.dimension == dimension)
-            {
-                return world.clone();
+                .cloned();
+            if let Some(world) = world {
+                return world;
             }
         }
 
