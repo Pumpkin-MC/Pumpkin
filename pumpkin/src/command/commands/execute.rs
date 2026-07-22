@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::command::CommandSender;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
@@ -34,10 +35,10 @@ impl CommandExecutor for ExecuteRunExecutor {
         Box::pin(async move {
             let command_str = StringArgumentType::get(context, "command")?;
             let dispatcher = context.server().command_dispatcher.read().await;
-            let result = dispatcher
-                .execute_input(command_str, &context.source)
-                .await?;
-            Ok(result)
+            dispatcher
+                .handle_command(&context.source, command_str)
+                .await;
+            Ok(1)
         })
     }
 }
@@ -53,6 +54,7 @@ fn execute_as_modifier<'a>(
             let display_name = target.get_display_name().await;
             let name = target.get_name().get_text();
             source.entity = Some(target.clone());
+            source.output = CommandSender::Entity(name.clone());
             source.name = name;
             source.display_name = display_name;
             sources.push(Arc::new(source));

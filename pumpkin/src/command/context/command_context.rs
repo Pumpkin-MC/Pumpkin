@@ -218,6 +218,10 @@ impl<'a> ContextChain<'a> {
         let mut modifiers = Vec::new();
         let mut current = root;
 
+        if !matches!(root.modifier, RedirectModifier::KeepSource) {
+            modifiers.push(Arc::new(root.clone()));
+        }
+
         loop {
             if let Some(child) = current.get_child() {
                 modifiers.push(child.clone());
@@ -556,9 +560,13 @@ mod test {
     use crate::command::context::command_source::CommandSource;
     use crate::command::context::string_range::StringRange;
     use crate::command::errors::command_syntax_error::CommandSyntaxError;
+    use crate::command::node::RedirectModifierResult;
     use crate::command::node::dispatcher::{CommandDispatcher, EmptyResultConsumer};
     use crate::command::node::tree::ROOT_NODE_ID;
-    use crate::command::node::{CommandExecutor, CommandExecutorResult, Redirection};
+    use crate::command::node::{
+        CommandExecutor, CommandExecutorResult, RedirectModifier, Redirection,
+    };
+    use rustc_hash::FxHashMap;
 
     struct TenExecutor;
     impl CommandExecutor for TenExecutor {
@@ -709,5 +717,61 @@ mod test {
         let top_context = result.context.build("foo");
 
         assert!(ContextChain::try_flatten(&top_context).is_none());
+    }
+
+    /// When a command is parsed via a fork redirect (like `/execute as @e`),
+    /// the modifier info lives on the root context. `try_flatten` must include
+    /// the root as the first modifier in the chain so `execute_all` processes it.
+    #[tokio::test]
+    async fn root_with_modifier_is_included_in_chain() {
+        fn dummy_modifier_sync<'a>(_context: &'a CommandContext) -> RedirectModifierResult<'a> {
+            Box::pin(std::future::ready(Ok(vec![])))
+        }
+
+        let dispatcher = CommandDispatcher::new();
+        let tree = &dispatcher.tree;
+        let source = Arc::new(CommandSource::dummy());
+
+        let executor = CommandContext {
+            source: source.clone(),
+            input: String::new(),
+            arguments: FxHashMap::default(),
+            tree,
+            root: ROOT_NODE_ID,
+            nodes: Vec::new(),
+            range: StringRange::at(0),
+            child: None,
+            modifier: RedirectModifier::KeepSource,
+            forks: false,
+            command: Some(Arc::new(TenExecutor)),
+        };
+
+        let root = CommandContext {
+            source,
+            input: String::new(),
+            arguments: FxHashMap::default(),
+            tree,
+            root: ROOT_NODE_ID,
+            nodes: Vec::new(),
+            range: StringRange::at(0),
+            child: Some(Arc::new(executor)),
+            modifier: RedirectModifier::Custom(Arc::new(dummy_modifier_sync)),
+            forks: true,
+            command: None,
+        };
+
+        let chain =
+            ContextChain::try_flatten(&root).expect("The context should have properly flattened");
+
+        assert_eq!(chain.get_stage(), Stage::MODIFY);
+
+        let second = chain.next_stage().expect("There should be the next stage");
+        assert_eq!(second.get_stage(), Stage::MODIFY);
+
+        let third = second
+            .next_stage()
+            .expect("There should be the executor stage");
+        assert_eq!(third.get_stage(), Stage::EXECUTE);
+        assert!(third.next_stage().is_none());
     }
 }
