@@ -4146,10 +4146,10 @@ impl World {
         self.players.rcu(|current_list| {
             let mut new_list = (**current_list).clone();
             // Find the player before we filter them out
-            if let Some(pos) = new_list
+            let pos = new_list
                 .iter()
-                .position(|p| p.gameprofile.id == player.gameprofile.id)
-            {
+                .position(|p| p.gameprofile.id == player.gameprofile.id);
+            if let Some(pos) = pos {
                 removed_player = Some(new_list.remove(pos));
             }
             new_list
