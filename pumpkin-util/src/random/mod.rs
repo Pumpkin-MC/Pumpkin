@@ -69,7 +69,6 @@ pub enum RandomDeriver {
     Legacy(LegacySplitter),
 }
 
-// TODO: Write unit test for this
 #[macro_export]
 macro_rules! population_seed_fn {
     () => {
@@ -110,7 +109,6 @@ macro_rules! population_seed_fn {
 ///
 /// # Returns
 /// A decorator seed for the given parameters.
-// TODO: Write unit test for this
 #[inline]
 #[must_use]
 pub const fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
@@ -272,7 +270,10 @@ pub const fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use super::get_decorator_seed;
     use crate::random::get_region_seed;
+    use crate::random::legacy_rand::LegacyRand;
+    use crate::random::xoroshiro128::Xoroshiro;
 
     use super::hash_block_pos;
 
@@ -298,5 +299,45 @@ mod tests {
         for ((x, y, z), value) in values {
             assert_eq!(hash_block_pos(x, y, z), value);
         }
+    }
+
+    #[test]
+    fn decorator_seed() {
+        assert_eq!(get_decorator_seed(0, 0, 0), 0);
+        assert_eq!(get_decorator_seed(100, 0, 0), 100);
+        assert_eq!(get_decorator_seed(100, 50, 0), 150);
+        assert_eq!(get_decorator_seed(100, 0, 2), 20100);
+        assert_eq!(get_decorator_seed(100, 50, 2), 20150);
+        assert_eq!(get_decorator_seed(u64::MAX, 0, 0), u64::MAX);
+        assert_eq!(get_decorator_seed(u64::MAX, 1, 0), 0);
+    }
+
+    #[test]
+    fn population_seed_deterministic() {
+        let a = LegacyRand::get_population_seed(12345, 10, 20);
+        let b = LegacyRand::get_population_seed(12345, 10, 20);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn population_seed_different_inputs() {
+        let a = LegacyRand::get_population_seed(12345, 10, 20);
+        let b = LegacyRand::get_population_seed(54321, 10, 20);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn population_seed_known_values() {
+        let result = LegacyRand::get_population_seed(0, 1, 1);
+        assert_eq!(result, 17921089389078954488);
+    }
+
+    #[test]
+    fn population_seed_xoroshiro() {
+        let a = Xoroshiro::get_population_seed(42, 5, 10);
+        let b = Xoroshiro::get_population_seed(42, 5, 10);
+        assert_eq!(a, b);
+        let c = Xoroshiro::get_population_seed(99, 5, 10);
+        assert_ne!(a, c);
     }
 }
