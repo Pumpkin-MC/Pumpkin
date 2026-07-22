@@ -1,9 +1,11 @@
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -12,14 +14,20 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
+use super::piglin::convert_to_zombified_piglin;
+
 pub struct PiglinBruteEntity {
     pub mob_entity: MobEntity,
+    pub time_in_overworld: AtomicI32,
 }
 
 impl PiglinBruteEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let piglin = Self { mob_entity };
+        let piglin = Self {
+            mob_entity,
+            time_in_overworld: AtomicI32::new(0),
+        };
         let mob_arc = Arc::new(piglin);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -66,5 +74,28 @@ impl NBTStorage for PiglinBruteEntity {}
 impl Mob for PiglinBruteEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = caller.get_entity();
+            let overworld_time = self.time_in_overworld.load(Ordering::Relaxed);
+            let world = entity.world.load_full();
+
+            if world.dimension == Dimension::THE_NETHER {
+                if overworld_time > 0 {
+                    self.time_in_overworld
+                        .store(overworld_time - 1, Ordering::Relaxed);
+                }
+                return;
+            }
+
+            let new_time = overworld_time + 1;
+            self.time_in_overworld.store(new_time, Ordering::Relaxed);
+
+            if new_time >= 300 {
+                convert_to_zombified_piglin(caller).await;
+            }
+        })
     }
 }
