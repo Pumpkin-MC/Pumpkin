@@ -279,7 +279,7 @@ impl JavaClient {
                     let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
                     if seq != -1 {
                         self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .enqueue_packet(&CAcknowledgeBlockChange::new(seq.into()))
                             .await;
                     }
                 }
@@ -422,24 +422,32 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Err(err) = self
+        match self
             .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::normal(packet_data))
+            .try_send(OutgoingPacket::normal(packet_data.clone()))
         {
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
-                        self.id
-                    );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    if !self.close_token.is_cancelled() {
+            Ok(()) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                let sender = self.outgoing_packet_queue_send.clone();
+                let client_id = self.id;
+                let token = self.close_token.clone();
+                tokio::task::block_in_place(move || {
+                    if let Err(err) = sender.blocking_send(OutgoingPacket::normal(packet_data))
+                        && !token.is_cancelled()
+                    {
                         error!(
-                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
-                            self.id
+                            "Failed to add packet to the outgoing packet queue for client {}: {}",
+                            client_id, err
                         );
                     }
+                });
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                if !self.close_token.is_cancelled() {
+                    error!(
+                        "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                        self.id
+                    );
                 }
             }
         }

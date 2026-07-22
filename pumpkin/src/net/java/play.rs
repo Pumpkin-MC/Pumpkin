@@ -56,10 +56,10 @@ use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot,
-    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    CAcknowledgeBlockChange, CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot,
+    COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera,
+    CSetSelectedSlot, CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
+    InitChat, PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
@@ -1913,6 +1913,7 @@ impl JavaClient {
                             player.gameprofile.name, player_action.position
                         );
                         self.update_sequence(player, player_action.sequence.0);
+                        self.send_ack(player_action.sequence.0).await;
                         return;
                     }
                     let position = player_action.position;
@@ -1948,6 +1949,7 @@ impl JavaClient {
                         ))
                         .await;
                         self.update_sequence(player, player_action.sequence.0);
+                        self.send_ack(player_action.sequence.0).await;
                         return;
                     }
 
@@ -1970,6 +1972,7 @@ impl JavaClient {
                         }
                         self.sync_block_state_to_client(&world, position).await;
                         self.update_sequence(player, player_action.sequence.0);
+                        self.send_ack(player_action.sequence.0).await;
                         return;
                     }
                     player.start_mining_time.store(
@@ -2018,6 +2021,7 @@ impl JavaClient {
                         }
                     }
                     self.update_sequence(player, player_action.sequence.0);
+                    self.send_ack(player_action.sequence.0).await;
                 }
                 Status::CancelledDigging => {
                     if !player.can_interact_with_block_at(&player_action.position, 1.0) {
@@ -2026,6 +2030,7 @@ impl JavaClient {
                             player.gameprofile.name, player_action.position
                         );
                         self.update_sequence(player, player_action.sequence.0);
+                        self.send_ack(player_action.sequence.0).await;
                         return;
                     }
                     player.mining.store(false, Ordering::Relaxed);
@@ -2036,6 +2041,7 @@ impl JavaClient {
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
+                    self.send_ack(player_action.sequence.0).await;
                 }
                 Status::FinishedDigging => {
                     // TODO: do validation
@@ -2046,6 +2052,7 @@ impl JavaClient {
                             player.gameprofile.name, player_action.position
                         );
                         self.update_sequence(player, player_action.sequence.0);
+                        self.send_ack(player_action.sequence.0).await;
                         return;
                     }
 
@@ -2090,6 +2097,7 @@ impl JavaClient {
                     self.sync_block_state_to_client(&world, location).await;
 
                     self.update_sequence(player, player_action.sequence.0);
+                    self.send_ack(player_action.sequence.0).await;
                 }
                 Status::DropItem => {
                     player.drop_held_item(false).await;
@@ -2190,6 +2198,19 @@ impl JavaClient {
             .await;
     }
 
+    /// Sends a block change acknowledgement for the given sequence immediately.
+    /// Clears `packet_sequence` if it matches, to prevent the keep-alive from sending a duplicate.
+    async fn send_ack(&self, sequence: i32) {
+        self.enqueue_packet(&CAcknowledgeBlockChange::new(VarInt(sequence)))
+            .await;
+        let _ = self.packet_sequence.compare_exchange(
+            sequence,
+            -1,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
@@ -2201,7 +2222,8 @@ impl JavaClient {
             return Ok(());
         }
         player.update_last_action_time();
-        self.update_sequence(player, use_item_on.sequence.0);
+        let sequence = use_item_on.sequence.0;
+        self.update_sequence(player, sequence);
 
         let position = use_item_on.position;
         let cursor_pos = use_item_on.cursor_pos;
@@ -2210,19 +2232,23 @@ impl JavaClient {
 
         if !player.can_interact_with_block_at(&position, 1.0) {
             // TODO: maybe log?
+            self.send_ack(sequence).await;
             return Err(BlockPlacingError::BlockOutOfReach);
         }
 
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
+            self.send_ack(sequence).await;
             return Err(BlockPlacingError::InvalidBlockFace);
         };
 
         let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
+            self.send_ack(sequence).await;
             return Err(BlockPlacingError::InvalidHand);
         };
 
         if player.gamemode.load() == GameMode::Spectator {
             // TODO: openMenu
+            self.send_ack(sequence).await;
             return Ok(());
         }
 
@@ -2263,6 +2289,7 @@ impl JavaClient {
                     VarInt(block.id.as_u16() as i32),
                 ))
                 .await;
+                self.send_ack(sequence).await;
                 return Ok(());
             }
         }}
@@ -2289,6 +2316,7 @@ impl JavaClient {
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true).await;
                 }
+                self.send_ack(sequence).await;
                 return Ok(());
             }
         }
@@ -2304,6 +2332,7 @@ impl JavaClient {
         if stack.is_empty() {
             // TODO item cool down
             // If the hand is empty we stop here
+            self.send_ack(sequence).await;
             return Ok(());
         }
 
@@ -2352,6 +2381,7 @@ impl JavaClient {
             player.sync_hand_slot(slot_index, after).await;
         }
 
+        self.send_ack(sequence).await;
         Ok(())
     }
 
@@ -2504,6 +2534,7 @@ impl JavaClient {
             .should_continue_use_after_fish_event(server, player, hand, item_for_use)
             .await
         {
+            self.send_ack(use_item.sequence.0).await;
             return;
         }
 
@@ -2514,6 +2545,7 @@ impl JavaClient {
                 server.item_registry.on_use(&stack_for_use, player).await;
             }
         }}
+        self.send_ack(use_item.sequence.0).await;
     }
 
     async fn prepare_hand_item_for_use(
