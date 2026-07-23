@@ -373,17 +373,12 @@ impl MobEntity {
             .await;
 
         if damaged {
+            // Vanilla IronGolem.doHurtTarget after a successful hurt:
+            //   e = max(0, 1 - knockbackResistance)
+            //   deltaMovement = deltaMovement.add(0, 0.4 * e, 0)
+            // Horizontal knockback already applied in LivingEntity.damage with
+            // resistance. Warden/golem have resistance 1.0 → no fling; players 0 → launch.
             if is_golem {
-                // Attack sound only on a successful hit (vanilla playSound in doHurtTarget).
-                world.play_sound(
-                    pumpkin_data::sound::Sound::EntityIronGolemAttack,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &self.living_entity.entity.pos.load(),
-                );
-                // Vanilla IronGolem.doHurtTarget:
-                //   e = max(0, 1 - knockbackResistance)
-                //   deltaMovement = deltaMovement.add(0, 0.4 * e, 0)
-                // (no Y cap — that is what flings players into the air)
                 if let Some(target_living) = target.get_living_entity() {
                     let kb_res = target_living
                         .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
@@ -403,6 +398,15 @@ impl MobEntity {
             self.living_entity
                 .last_attack_time
                 .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
+        }
+
+        // Vanilla always plays the golem attack sound (even if the hit failed).
+        if is_golem {
+            world.play_sound(
+                pumpkin_data::sound::Sound::EntityIronGolemAttack,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &self.living_entity.entity.pos.load(),
+            );
         }
     }
 

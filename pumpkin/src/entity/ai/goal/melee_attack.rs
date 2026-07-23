@@ -61,17 +61,15 @@ impl MeleeAttackGoal {
 
     /// Prefer dry ground near the target. Iron golems (and any mob with water
     /// malus < 0) must not path into water when a zombie is knocked into a pond.
-    fn path_destination_for(mob: &dyn Mob, target: &dyn EntityBase) -> Vector3<f64> {
+    ///
+    /// `avoid_water` must be computed by the caller **without** holding
+    /// `navigator`'s mutex — `start()` already locks the navigator.
+    fn path_destination_for(
+        mob: &dyn Mob,
+        target: &dyn EntityBase,
+        avoid_water: bool,
+    ) -> Vector3<f64> {
         let default = Self::path_destination(target);
-        let is_golem =
-            mob.get_entity().entity_type.id == pumpkin_data::entity::EntityType::IRON_GOLEM.id;
-        let avoid_water = is_golem
-            || mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap()
-                .avoids_water();
         if !avoid_water {
             return default;
         }
@@ -127,6 +125,19 @@ impl MeleeAttackGoal {
         // No bank found — keep current position so we don't march into the water.
         let me = mob.get_entity().pos.load();
         Vector3::new(me.x, me.y, me.z)
+    }
+
+    fn mob_avoids_water(mob: &dyn Mob) -> bool {
+        let is_golem =
+            mob.get_entity().entity_type.id == pumpkin_data::entity::EntityType::IRON_GOLEM.id;
+        if is_golem {
+            return true;
+        }
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap()
+            .avoids_water()
     }
 }
 
@@ -196,8 +207,10 @@ impl Goal for MeleeAttackGoal {
                 if !Self::target_is_valid(target.as_ref()) {
                     return;
                 }
+                // Read avoid_water / dest *before* locking navigator (non-reentrant Mutex).
+                let avoid_water = Self::mob_avoids_water(mob);
+                let dest = Self::path_destination_for(mob, target.as_ref(), avoid_water);
                 let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
-                let dest = Self::path_destination_for(mob, target.as_ref());
                 navigator.set_progress(NavigatorGoal {
                     current_progress: mob.get_entity().pos.load(),
                     destination: dest,
@@ -260,7 +273,8 @@ impl Goal for MeleeAttackGoal {
 
             self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
 
-            let dest = Self::path_destination_for(mob, target.as_ref());
+            let avoid_water = Self::mob_avoids_water(mob);
+            let dest = Self::path_destination_for(mob, target.as_ref(), avoid_water);
             let should_update_nav = self.update_countdown_ticks <= 0
                 && (self
                     .last_target_position

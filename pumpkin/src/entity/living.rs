@@ -2484,12 +2484,22 @@ impl EntityBase for LivingEntity {
                 );
 
                 if let Some(source) = source {
-                    let source_pos = source.get_entity().pos.load();
-                    let target_pos = self.entity.pos.load();
-                    let dx = source_pos.x - target_pos.x;
-                    let dz = source_pos.z - target_pos.z;
-                    self.entity.apply_knockback(0.4, dx, dz);
-                    self.entity.send_velocity();
+                    // Vanilla LivingEntity.takeKnockback:
+                    //   strength *= 1.0 - knockbackResistance
+                    // Warden / iron golem (resistance 1.0) take no knockback;
+                    // players (0.0) get the full fling.
+                    let kb_res = self
+                        .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+                        .clamp(0.0, 1.0);
+                    let strength = 0.4 * (1.0 - kb_res);
+                    if strength > 0.0 {
+                        let source_pos = source.get_entity().pos.load();
+                        let target_pos = self.entity.pos.load();
+                        let dx = source_pos.x - target_pos.x;
+                        let dz = source_pos.z - target_pos.z;
+                        self.entity.apply_knockback(strength, dx, dz);
+                        self.entity.send_velocity();
+                    }
                 }
             }
 
