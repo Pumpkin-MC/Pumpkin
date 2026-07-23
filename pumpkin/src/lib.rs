@@ -48,6 +48,7 @@ pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod terminal;
 pub mod world;
 
 pub struct LoggingConfig {
@@ -98,6 +99,10 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             Box<dyn std::io::Write + Send + 'static>,
             Option<Editor<PumpkinCommandCompleter, FileHistory>>,
         ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
+            // Save the terminal state before rustyline can switch it to raw
+            // mode, so it can be restored if the server exits while a
+            // `readline` call is still active (e.g. after a panic).
+            terminal::save_original_state();
             let rl_config = Config::builder()
                 .auto_add_history(true)
                 .completion_type(rustyline::CompletionType::List)
