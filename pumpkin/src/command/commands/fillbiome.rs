@@ -13,6 +13,7 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::chunk::io::Dirtiable;
 use std::collections::HashMap;
 
 const DESCRIPTION: &str = "Changes biomes of an area.";
@@ -142,6 +143,8 @@ impl CommandExecutor for FillBiomeExecutor {
                         .level
                         .get_or_fetch_chunk(chunk_pos, std::clone::Clone::clone)
                         .await;
+                    chunk.mark_network_changed();
+                    chunk.mark_dirty(true);
                     world.broadcast_to_chunk_except(chunk_pos, &[], &CChunkData(&chunk));
                 }
             }

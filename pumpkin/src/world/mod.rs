@@ -1016,8 +1016,9 @@ impl World {
 
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
+            let cache = server.chunk_packet_cache.stats();
             debug!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
+                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?} | Chunk cache: {} entries / {} MiB, {} active preparations, {} hits, {} misses, {} unstable snapshots",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
                 player_count,
@@ -1026,6 +1027,12 @@ impl World {
                 entity_elapsed,
                 block_entity_count,
                 block_entity_elapsed,
+                cache.entries,
+                cache.bytes / (1024 * 1024),
+                cache.active_preparations,
+                cache.hits,
+                cache.misses,
+                cache.unstable_snapshots,
             );
         }
     }
