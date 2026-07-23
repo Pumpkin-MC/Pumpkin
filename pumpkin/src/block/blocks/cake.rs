@@ -143,7 +143,7 @@ impl BlockBehaviour for CakeBlock {
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
-                    let seed: f64 = rng().random();
+                    let seed: i64 = rng().random();
                     args.player
                         .play_sound(
                             Sound::BlockCakeAddCandle as u16,

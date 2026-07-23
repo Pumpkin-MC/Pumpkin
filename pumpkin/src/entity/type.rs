@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
@@ -341,7 +341,20 @@ pub fn check_spawn_rules(
         || id == EntityType::VEX.id
         || id == EntityType::VINDICATOR.id
         || id == EntityType::WARDEN.id
+        || id == EntityType::DROWNED.id
+        || id == EntityType::HUSK.id
+        || id == EntityType::STRAY.id
     {
+        // Drowned are MONSTER but must spawn in water (vanilla InWater restriction).
+        // Without this, ocean biomes flood the sea with unlimited drowned.
+        if id == EntityType::DROWNED.id {
+            let feet = world.get_block_state(pos);
+            let head = world.get_block_state(&pos.up());
+            let in_water = feet.is_liquid() || head.is_liquid() || feet.is_waterlogged();
+            if !in_water {
+                return false;
+            }
+        }
         return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
     if id == EntityType::BAT.id {
@@ -351,6 +364,32 @@ pub fn check_spawn_rules(
         return SlimeEntity::check_slime_spawn_rules(world, pos);
     }
 
-    // TODO
+    // Vanilla Animal.checkMobSpawnRules: most land animals need grass (or equivalent)
+    // underfoot for natural spawns.
+    if entity_type.category == &MobCategory::CREATURE
+        && matches!(
+            entity_type.spawn_restriction.location,
+            pumpkin_data::entity::SpawnLocation::OnGround
+        )
+    {
+        let below = world.get_block(&pos.down());
+        let ok_ground = below == &Block::GRASS_BLOCK
+            || below == &Block::DIRT
+            || below == &Block::PODZOL
+            || below == &Block::COARSE_DIRT
+            || below == &Block::ROOTED_DIRT
+            || below == &Block::MOSS_BLOCK
+            || below == &Block::MUD
+            || below == &Block::SNOW_BLOCK;
+        if !ok_ground {
+            return false;
+        }
+        // Vanilla Animal.checkMobSpawnRules: raw brightness > 8 (no sky darken).
+        let light = world.get_raw_brightness_no_darken(pos);
+        if light <= 8 {
+            return false;
+        }
+    }
+
     true
 }

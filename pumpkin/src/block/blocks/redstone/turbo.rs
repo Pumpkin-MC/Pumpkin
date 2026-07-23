@@ -407,11 +407,13 @@ impl RedstoneWireTurbo {
         }
         if i != j {
             wire.power = j;
+            // NOTIFY_LISTENERS: clients see power level; turbo itself walks
+            // neighbors so we must not NOTIFY_NEIGHBORS (would recurse/stack).
             world
                 .set_block_state(
                     &pos,
                     wire.to_state_id(&Block::REDSTONE_WIRE),
-                    BlockFlags::empty(),
+                    BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
         }

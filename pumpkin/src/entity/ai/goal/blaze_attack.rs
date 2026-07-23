@@ -99,7 +99,18 @@ impl Goal for BlazeShootFireballGoal {
             };
 
             // TODO: hasLineOfSight check
-            let has_line_of_sight = true;
+            let has_line_of_sight = {
+                let from = blaze.entity.living_entity.entity.get_eye_pos();
+                let to = target.get_entity().get_eye_pos();
+                let world = blaze.entity.living_entity.entity.world.load();
+                world
+                    .raycast(from, to, async |block_pos, w| {
+                        let state = w.get_block_state(block_pos);
+                        state.is_solid()
+                    })
+                    .await
+                    .is_none()
+            };
 
             if has_line_of_sight {
                 self.last_seen = 0;

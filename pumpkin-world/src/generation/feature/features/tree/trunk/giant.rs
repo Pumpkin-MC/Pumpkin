@@ -24,47 +24,46 @@ impl GiantTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        let pos = start_pos.down();
-        TrunkPlacer::set_dirt(block_registry, chunk, random, &pos, below_trunk_provider);
+        // Vanilla GiantTrunkPlacer: dirt under start_pos; logs from start_pos up.
+        // (Previously used start_pos.down() as log base → canopy floated above trunk.)
+        let dirt = start_pos.down();
+        TrunkPlacer::set_dirt(block_registry, chunk, random, &dirt, below_trunk_provider);
         TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.east(),
+            &dirt.east(),
             below_trunk_provider,
         );
         TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.south(),
+            &dirt.south(),
             below_trunk_provider,
         );
         TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.south().east(),
+            &dirt.south().east(),
             below_trunk_provider,
         );
 
         let mut trunk_poses = Vec::new();
         for y in 0..height {
-            if TrunkPlacer::try_place(chunk, &pos.up_height(y as i32), trunk_block) {
-                trunk_poses.push(pos.up_height(y as i32));
+            let log = start_pos.up_height(y as i32);
+            if TrunkPlacer::try_place(chunk, &log, trunk_block) {
+                trunk_poses.push(log);
             }
-            if y >= height - 1 {
-                continue;
+            if TrunkPlacer::try_place(chunk, &log.east(), trunk_block) {
+                trunk_poses.push(log.east());
             }
-
-            if TrunkPlacer::try_place(chunk, &pos.east().up_height(y as i32), trunk_block) {
-                trunk_poses.push(pos.east().up_height(y as i32));
+            if TrunkPlacer::try_place(chunk, &log.south(), trunk_block) {
+                trunk_poses.push(log.south());
             }
-            if TrunkPlacer::try_place(chunk, &pos.east().south().up_height(y as i32), trunk_block) {
-                trunk_poses.push(pos.east().south().up_height(y as i32));
-            }
-            if TrunkPlacer::try_place(chunk, &pos.south().up_height(y as i32), trunk_block) {
-                trunk_poses.push(pos.south().up_height(y as i32));
+            if TrunkPlacer::try_place(chunk, &log.east().south(), trunk_block) {
+                trunk_poses.push(log.east().south());
             }
         }
         (

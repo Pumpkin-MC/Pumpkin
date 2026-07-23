@@ -1029,6 +1029,8 @@ impl Mob for VillagerEntity {
             let mut offers = self.offers.lock().await;
             if offers.is_empty() {
                 let data = self.villager_data.lock().await;
+                // Vanilla: only employed villagers (not None / Nitwit) have trades.
+                // Unemployed must claim a workstation first.
                 if data.profession_enum() != VillagerProfession::None
                     && data.profession_enum() != VillagerProfession::Nitwit
                 {

@@ -10,12 +10,14 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::MobCategory;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
 use pumpkin_util::Difficulty;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -76,6 +78,8 @@ pub struct MobEntity {
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
+    /// Vanilla `Mob.despawnCounter` — ticks spent far enough from players to roll despawn.
+    despawn_counter: AtomicI32,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -112,11 +116,76 @@ impl MobEntity {
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
+            despawn_counter: AtomicI32::new(0),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
         }
+    }
+
+    /// Vanilla `Mob.checkDespawn` — free mob caps so natural spawning can refresh.
+    ///
+    /// - Immediate remove beyond category `despawn_distance` (usually 128)
+    /// - After 600 ticks far from players (>32), 1/800 chance per tick to despawn
+    /// - Named / category-persistent creatures skip random far despawn (still
+    ///   immediate-despawn at extreme range is skipped for persistent categories)
+    pub async fn check_despawn(&self) -> bool {
+        let entity = &self.living_entity.entity;
+        let entity_type = entity.entity_type;
+        let category = entity_type.category;
+
+        if category == &MobCategory::MISC || !entity_type.mob {
+            return false;
+        }
+
+        // Named mobs are persistent (vanilla custom name).
+        if entity.custom_name.load().is_some() {
+            self.despawn_counter.store(0, Relaxed);
+            return false;
+        }
+
+        let world = entity.world.load();
+        let players = world.players.load();
+        if players.is_empty() {
+            return false;
+        }
+
+        let pos = entity.pos.load();
+        let mut nearest_sq = f64::MAX;
+        for player in players.iter() {
+            if player.gamemode.load() == GameMode::Spectator {
+                continue;
+            }
+            let d = player.position().squared_distance_to_vec(&pos);
+            if d < nearest_sq {
+                nearest_sq = d;
+            }
+        }
+
+        let despawn_range = category.despawn_distance;
+        let immediate_sq = f64::from(despawn_range * despawn_range);
+        let soft_range = MobCategory::NO_DESPAWN_DISTANCE;
+        let soft_sq = f64::from(soft_range * soft_range);
+
+        // Immediate despawn for non-persistent categories past hard range.
+        if !category.is_persistent && nearest_sq > immediate_sq {
+            entity.remove().await;
+            return true;
+        }
+
+        if nearest_sq > soft_sq {
+            let counter = self.despawn_counter.fetch_add(1, Relaxed) + 1;
+            // Vanilla: after 600 ticks far away, 1/800 chance each tick.
+            if counter > 600 && rand::rng().random_range(0..800) == 0 && !category.is_persistent {
+                entity.remove().await;
+                return true;
+            }
+        } else {
+            self.despawn_counter.store(0, Relaxed);
+        }
+
+        false
     }
 
     pub fn is_in_position_target_range(&self) -> bool {
@@ -219,6 +288,7 @@ impl MobEntity {
     }
 
     pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
+        // Vanilla: raw SKY light vs random(0..32) — no ambient darken on this check.
         let sky_light = world.get_sky_light_level(pos);
         if sky_light > rand::random_range(0..32) {
             return false;
@@ -232,13 +302,15 @@ impl MobEntity {
             return false;
         }
 
-        let current_brightness = if is_thundering {
-            (sky_light - 10).max(block_light)
+        // Vanilla: thundering uses fixed ambient 10; otherwise world ambientDarkness.
+        // Without sky darken, open sky stays at 15 all night and surface mobs never spawn.
+        let ambient = if is_thundering {
+            10
         } else {
-            sky_light.max(block_light)
+            world.sky_darken.load(std::sync::atomic::Ordering::Relaxed)
         };
+        let current_brightness = world.get_light_level_with_darken(pos, ambient);
 
-        // TODO
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
@@ -261,9 +333,33 @@ impl MobEntity {
             return;
         }
 
-        let attack_damage: f32 =
-            self.living_entity
-                .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+        let entity_type = self.living_entity.entity.entity_type;
+        let is_golem = entity_type.id == pumpkin_data::entity::EntityType::IRON_GOLEM.id;
+        let world = self.living_entity.entity.world.load();
+
+        // Vanilla IronGolem.doHurtTarget always fires the arm-raise entity event
+        // (status 4) *before* applying damage, even if the hit later fails.
+        if is_golem {
+            world.send_entity_status(
+                &self.living_entity.entity,
+                pumpkin_data::entity::EntityStatus::StartAttacking,
+            );
+        }
+
+        let base = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+        // Vanilla: damage = f/2 + random(0..floor(f)) → ~7.5–21.5 with f=15.
+        let attack_damage = if is_golem {
+            let whole = base as i32;
+            if whole > 0 {
+                base / 2.0 + rand::rng().random_range(0..whole) as f32
+            } else {
+                base
+            }
+        } else {
+            base
+        };
 
         let damaged = target
             .damage_with_context(
@@ -277,6 +373,27 @@ impl MobEntity {
             .await;
 
         if damaged {
+            if is_golem {
+                // Attack sound only on a successful hit (vanilla playSound in doHurtTarget).
+                world.play_sound(
+                    pumpkin_data::sound::Sound::EntityIronGolemAttack,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &self.living_entity.entity.pos.load(),
+                );
+                // Slight upward knockback scaled by target KB resistance.
+                if let Some(target_living) = target.get_living_entity() {
+                    let kb_res = target_living
+                        .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+                        .clamp(0.0, 1.0);
+                    let lift = 0.4 * (1.0 - kb_res);
+                    if lift > 0.0 {
+                        let mut vel = target.get_entity().velocity.load();
+                        vel.y = (vel.y + lift).min(0.4);
+                        target.get_entity().velocity.store(vel);
+                        target.get_entity().send_velocity();
+                    }
+                }
+            }
             self.living_entity
                 .last_attacking_id
                 .store(target.get_entity().entity_id, Relaxed);
@@ -529,6 +646,11 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
             mob_entity.tick_sun_burn().await;
+
+            // Despawn far mobs so natural spawn caps free up (vanilla checkDespawn).
+            if mob_entity.check_despawn().await {
+                return;
+            }
 
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);

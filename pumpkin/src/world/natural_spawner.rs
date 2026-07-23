@@ -111,6 +111,11 @@ impl fmt::Debug for LocalMobCapCalculator {
 }
 
 impl LocalMobCapCalculator {
+    /// Squared range for "player near chunk" (vanilla ~128). Active chunks use ±8
+    /// chunk radius (~181 block diagonal); 128 left corner chunks unable to spawn.
+    /// Use 192 so the whole simulation disk can natural-spawn.
+    const PLAYER_NEAR_RANGE_SQ: f64 = 192.0 * 192.0;
+
     const fn calc_distance(chunk_pos: Vector2<i32>, player_pos: &Vector3<f64>) -> f64 {
         let dx = ((chunk_pos.x << 4) + 8) as f64 - player_pos.x;
         let dy = ((chunk_pos.y << 4) + 8) as f64 - player_pos.z;
@@ -127,7 +132,7 @@ impl LocalMobCapCalculator {
             if player.gamemode.load() == GameMode::Spectator {
                 continue;
             }
-            if Self::calc_distance(chunk_pos, &player.position()) < 16384. {
+            if Self::calc_distance(chunk_pos, &player.position()) < Self::PLAYER_NEAR_RANGE_SQ {
                 players.push(player.entity_id());
             }
         }
@@ -472,41 +477,70 @@ pub fn spawn_for_chunk(
     spawn_list: &Vec<&'static MobCategory>,
     is_thundering: bool,
 ) -> Vec<Arc<dyn EntityBase>> {
-    // debug!("spawn for chunk {:?}", chunk_pos);
     let mut entities = Vec::new();
     for category in spawn_list {
-        if spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
-            let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk);
-            if random_pos.0.y > world.min_y {
-                entities.extend(spawn_category_for_position(
-                    category,
-                    world,
-                    random_pos,
-                    &chunk_pos,
-                    spawn_state,
-                    is_thundering,
-                ));
+        if !spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
+            continue;
+        }
+        // Vanilla picks one packed position per category; we try a few so natural
+        // refresh is noticeable without breaking caps (still gated by can_spawn).
+        // Creatures only roll every ~400 ticks; give them a few pack attempts.
+        let attempts = 3;
+        for _ in 0..attempts {
+            if !spawn_state.can_spawn_for_category_global(category) {
+                break;
+            }
+            let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk, category);
+            if random_pos.0.y <= world.min_y {
+                continue;
+            }
+            let batch = spawn_category_for_position(
+                category,
+                world,
+                random_pos,
+                &chunk_pos,
+                spawn_state,
+                is_thundering,
+            );
+            if !batch.is_empty() {
+                entities.extend(batch);
+                break; // one successful pack per category per chunk tick
             }
         }
     }
     entities
 }
+
+/// Pick a random column in the chunk. For ground mobs prefer near-surface Y
+/// (vanilla pack spawning heavily uses the surface heightmap).
 pub fn get_random_pos_within(
     min_y: i32,
     chunk_pos: &Vector2<i32>,
     chunk: &Arc<ChunkData>,
+    category: &'static MobCategory,
 ) -> BlockPos {
     let mut rng = Xoroshiro::from_seed(get_seed());
 
     let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
     let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
-    let temp_y = chunk.heightmap.lock().unwrap().get(
+    // Heightmap = highest opaque block Y; +1 = first air above surface (vanilla feet).
+    let surface_air_y = chunk.heightmap.lock().unwrap().get(
         ChunkHeightmapType::WorldSurface,
         x,
         z,
         chunk.section.min_y,
     ) + 1;
-    let y = rng.next_inbetween_i32(min_y, temp_y);
+
+    // Creatures almost always surface; monsters mix surface + caves.
+    let y = if category == &MobCategory::CREATURE
+        || category == &MobCategory::AMBIENT
+        || rng.next_bounded_i32(2) == 0
+    {
+        // Feet in the air column above grass — NOT inside the solid surface block.
+        surface_air_y.max(min_y + 1)
+    } else {
+        rng.next_inbetween_i32(min_y, surface_air_y.max(min_y + 1))
+    };
     BlockPos::new(x, y, z)
 }
 
@@ -640,7 +674,25 @@ pub fn spawn_category_for_position(
 ) -> Vec<Arc<dyn EntityBase>> {
     let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
-    let player_positions: Vec<_> = world.players.load().iter().map(|p| p.position()).collect();
+    let player_positions: Vec<_> = world
+        .players
+        .load()
+        .iter()
+        .filter(|p| p.gamemode.load() != GameMode::Spectator)
+        .map(|p| p.position())
+        .collect();
+    if player_positions.is_empty() {
+        return batch_buffer;
+    }
+
+    let world_spawn = {
+        let info = world.level_info.load();
+        Vector3::new(
+            f64::from(info.spawn_x) + 0.5,
+            f64::from(info.spawn_y),
+            f64::from(info.spawn_z) + 0.5,
+        )
+    };
 
     'group_loop: for _ in 0..3 {
         let mut new_x = pos.0.x;
@@ -664,10 +716,16 @@ pub fn spawn_category_for_position(
             }
 
             let spawner = current_spawner.unwrap();
-            let entity_type =
-                &EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap()).unwrap();
+            let Some(entity_type) =
+                EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap_or(spawner.r#type))
+            else {
+                inc += 1;
+                continue;
+            };
 
             new_pos = adjust_spawn_position(world, new_pos, entity_type);
+            // Snap OnGround packs onto solid ground if adjust left us floating.
+            new_pos = find_ground_spawn_y(world, new_pos, entity_type);
 
             let spawn_pos_f64 = Vector3::new(
                 f64::from(new_pos.0.x) + 0.5,
@@ -676,7 +734,12 @@ pub fn spawn_category_for_position(
             );
 
             let player_distance = get_nearest_player(&spawn_pos_f64, &player_positions);
-            if !is_right_distance_to_player_and_spawn_point(&new_pos, player_distance, chunk_pos) {
+            if !is_right_distance_to_player_and_spawn_point(
+                &new_pos,
+                player_distance,
+                chunk_pos,
+                world_spawn,
+            ) {
                 inc += 1;
                 continue;
             }
@@ -715,6 +778,55 @@ pub fn spawn_category_for_position(
     batch_buffer
 }
 
+/// Find a valid standing spot near `pos` (prefer up if inside solid, else down).
+fn find_ground_spawn_y(
+    world: &World,
+    mut pos: BlockPos,
+    entity_type: &'static EntityType,
+) -> BlockPos {
+    if !matches!(
+        entity_type.spawn_restriction.location,
+        SpawnLocation::OnGround
+    ) {
+        return pos;
+    }
+    let min_y = world.min_y;
+
+    let is_valid = |p: BlockPos| {
+        let feet = world.get_block_state(&p);
+        let below = world.get_block_state(&p.down());
+        let head = world.get_block_state(&p.up());
+        below.is_side_solid(BlockDirection::Up)
+            && is_valid_empty_spawn_block(feet)
+            && is_valid_empty_spawn_block(head)
+    };
+
+    if is_valid(pos) {
+        return pos;
+    }
+
+    // If feet are inside solid (old surface bug), climb out first.
+    let mut up = pos;
+    for _ in 0..8 {
+        up = up.up();
+        if is_valid(up) {
+            return up;
+        }
+    }
+
+    // Otherwise search downward for a cave/ledge.
+    for _ in 0..16 {
+        if pos.0.y <= min_y + 1 {
+            break;
+        }
+        pos = pos.down();
+        if is_valid(pos) {
+            return pos;
+        }
+    }
+    pos
+}
+
 #[must_use]
 pub fn get_nearest_player(pos: &Vector3<f64>, player_positions: &[Vector3<f64>]) -> f64 {
     let mut min_dst_sq = f64::MAX;
@@ -733,18 +845,22 @@ pub fn is_right_distance_to_player_and_spawn_point(
     pos: &BlockPos,
     distance: f64,
     chunk_pos: &Vector2<i32>,
+    world_spawn: Vector3<f64>,
 ) -> bool {
+    // Vanilla: must be > 24 blocks from any player.
     if distance <= 24. * 24. {
         return false;
     }
-    // TODO getSharedSpawnPos/WorldSpawnPoint
-    if pos.to_centered_f64().squared_distance_to(0., 0., 0.) <= 24. * 24. {
+    // Vanilla: must be > 24 blocks from world spawn (not world origin).
+    if pos
+        .to_centered_f64()
+        .squared_distance_to(world_spawn.x, world_spawn.y, world_spawn.z)
+        <= 24. * 24.
+    {
         return false;
     }
-    #[expect(clippy::nonminimal_bool)]
-    {
-        chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || false // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)
-    }
+    // Keep pack inside the chunk being processed.
+    chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z))
 }
 
 #[must_use]

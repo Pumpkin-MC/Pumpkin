@@ -9,14 +9,25 @@ use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
+/// Clientbound sound effect — matches vanilla `PlaySoundS2CPacket` /
+/// MCProtocolLib `ClientboundSoundPacket`.
+///
+/// Wire format (after sound holder + category):
+/// - x/y/z as `i32` fixed-point world coords (`world * 8`, client divides by 8)
+/// - volume `f32`, pitch `f32`, seed `i64`
+///
+/// Distance attenuation is done **on the client** from these world coordinates.
+/// If coords are wrong (e.g. double `* 8`), the source is misplaced and falloff
+/// feels broken (silent nearby, or always loud if the source collapses onto the player).
 #[java_packet(PLAY_SOUND)]
 pub struct CSoundEffect {
     pub sound_event: IdOr<SoundEvent>,
     pub sound_category: VarInt,
-    pub position: Vector3<i32>,
+    /// World-space position (blocks). Scaled by 8 only when writing the packet.
+    pub position: Vector3<f64>,
     pub volume: f32,
     pub pitch: f32,
-    pub seed: f64,
+    pub seed: i64,
 }
 
 impl CSoundEffect {
@@ -27,20 +38,26 @@ impl CSoundEffect {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) -> Self {
         Self {
             sound_event,
             sound_category: VarInt(sound_category as i32),
-            position: Vector3::new(
-                (position.x * 8.0) as i32,
-                (position.y * 8.0) as i32,
-                (position.z * 8.0) as i32,
-            ),
+            position: *position,
             volume,
             pitch,
             seed,
         }
+    }
+
+    /// Vanilla fixed-point encoding: `(int)(world * 8)`.
+    #[must_use]
+    pub fn fixed_position(&self) -> Vector3<i32> {
+        Vector3::new(
+            (self.position.x * 8.0) as i32,
+            (self.position.y * 8.0) as i32,
+            (self.position.z * 8.0) as i32,
+        )
     }
 }
 
@@ -60,12 +77,15 @@ impl ClientPacket for CSoundEffect {
             w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
         })?;
         write.write_var_int(&self.sound_category)?;
-        write.write_i32_be(self.position.x * 8)?;
-        write.write_i32_be(self.position.y * 8)?;
-        write.write_i32_be(self.position.z * 8)?;
+
+        // Vanilla PlaySoundS2CPacket / MCProtocolLib: write (int)(x * 8) once.
+        let fixed = self.fixed_position();
+        write.write_i32_be(fixed.x)?;
+        write.write_i32_be(fixed.y)?;
+        write.write_i32_be(fixed.z)?;
         write.write_f32_be(self.volume)?;
         write.write_f32_be(self.pitch)?;
-        write.write_i64_be(self.seed as i64)
+        write.write_i64_be(self.seed)
     }
 }
 
@@ -92,6 +112,58 @@ mod tests {
     }
 
     #[test]
+    fn fixed_point_position_matches_vanilla() {
+        // Vanilla: fixedX = (int)(x * 8); client recovers x/8.
+        let packet = CSoundEffect::new(
+            IdOr::Id(0),
+            SoundCategory::Players,
+            &Vector3::new(100.5, 64.0, -20.25),
+            1.0,
+            1.0,
+            42,
+        );
+        let fixed = packet.fixed_position();
+        assert_eq!(fixed.x, 804); // 100.5 * 8
+        assert_eq!(fixed.y, 512); // 64 * 8
+        assert_eq!(fixed.z, -162); // -20.25 * 8
+    }
+
+    #[test]
+    fn write_encodes_fixed_point_once() {
+        let packet = CSoundEffect::new(
+            IdOr::Id(0),
+            SoundCategory::Blocks,
+            &Vector3::new(1.0, 2.0, 3.0),
+            0.5,
+            1.25,
+            99,
+        );
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+
+        // sound id varint (1) + category varint (4 = blocks) + 3*i32 + 2*f32 + i64
+        // After first varint (sound = 0+1 = 1):
+        let mut cur = Cursor::new(&bytes);
+        let sound = VarInt::decode(&mut cur).unwrap();
+        assert_eq!(sound.0, 1);
+        let cat = VarInt::decode(&mut cur).unwrap();
+        assert_eq!(cat.0, SoundCategory::Blocks as i32);
+        // Read three BE i32s
+        let mut x_buf = [0u8; 4];
+        let mut y_buf = [0u8; 4];
+        let mut z_buf = [0u8; 4];
+        use std::io::Read;
+        cur.read_exact(&mut x_buf).unwrap();
+        cur.read_exact(&mut y_buf).unwrap();
+        cur.read_exact(&mut z_buf).unwrap();
+        assert_eq!(i32::from_be_bytes(x_buf), 8); // 1.0 * 8
+        assert_eq!(i32::from_be_bytes(y_buf), 16); // 2.0 * 8
+        assert_eq!(i32::from_be_bytes(z_buf), 24); // 3.0 * 8
+    }
+
+    #[test]
     fn numeric_sound_id_remaps_for_1_21_11() {
         let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
         let packet = CSoundEffect::new(
@@ -100,7 +172,7 @@ mod tests {
             &Vector3::new(1.0, 2.0, 3.0),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 
@@ -123,7 +195,7 @@ mod tests {
             &Vector3::new(1.0, 2.0, 3.0),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 
@@ -145,7 +217,7 @@ mod tests {
             &Vector3::new(1.0, 2.0, 3.0),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 

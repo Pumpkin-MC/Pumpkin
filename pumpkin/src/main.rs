@@ -281,30 +281,28 @@ fn try_set_crash_report(crash_report: CrashReport) -> Option<&'static CrashRepor
     }
 }
 
-// Non-UNIX Ctrl-C handling
+// Non-UNIX Ctrl-C handling — loop so a second Ctrl+C force-exits.
 #[cfg(not(unix))]
 async fn setup_sighandler() -> io::Result<()> {
-    if ctrl_c().await.is_ok() {
-        handle_interrupt();
+    loop {
+        if ctrl_c().await.is_ok() {
+            handle_interrupt();
+        }
     }
-
-    Ok(())
 }
 
-// Unix signal handling
+// Unix signal handling — keep listening so a second SIGINT force-exits stuck shutdowns.
 #[cfg(unix)]
 async fn setup_sighandler() -> io::Result<()> {
-    if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+    let mut sigint = signal(SignalKind::interrupt())?;
+    let mut sighup = signal(SignalKind::hangup())?;
+    let mut sigterm = signal(SignalKind::terminate())?;
 
-    if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
+    loop {
+        tokio::select! {
+            Some(()) = sigint.recv() => handle_interrupt(),
+            Some(()) = sighup.recv() => handle_interrupt(),
+            Some(()) = sigterm.recv() => handle_interrupt(),
+        }
     }
-
-    if signal(SignalKind::terminate())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    Ok(())
 }

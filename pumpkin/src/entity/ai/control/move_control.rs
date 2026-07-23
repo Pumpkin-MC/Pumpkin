@@ -4,6 +4,8 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering;
 
+// Attributes::STEP_HEIGHT still used for jump check.
+
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
     #[default]
@@ -46,12 +48,14 @@ impl MoveControlTrait for MoveControl {
         let entity = &living_entity.entity;
         if self.operation == Operation::Strafe {
             // TODO: is_walkable check
+            let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+            living_entity.set_speed(self.speed_modifier * attr);
+            // Strafe overrides axes after set_speed
             living_entity.movement_input.store(Vector3::new(
                 self.strafe_right as f64,
                 0.0,
                 self.strafe_forwards as f64,
             ));
-            // Vanilla sets speed here too
             self.operation = Operation::Wait;
         } else if self.operation == Operation::MoveTo {
             self.operation = Operation::Wait;
@@ -62,9 +66,7 @@ impl MoveControlTrait for MoveControl {
             let dd = xd * xd + yd * yd + zd * zd;
 
             if dd < 2.5000003E-7 {
-                living_entity
-                    .movement_input
-                    .store(Vector3::new(0.0, 0.0, 0.0));
+                living_entity.clear_speed();
                 return;
             }
 
@@ -73,13 +75,10 @@ impl MoveControlTrait for MoveControl {
                 .yaw
                 .store(self.change_angle(entity.yaw.load(), y_rot_d, 90.0));
 
-            let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-            let speed = self.speed_modifier * movement_speed;
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, speed));
+            // Vanilla: setSpeed(speedModifier * MOVEMENT_SPEED)
+            let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+            living_entity.set_speed(self.speed_modifier * attr);
 
-            // TODO: Jump if needed (based on collision and height difference)
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
             if yd > step_height
                 && xd * xd + zd * zd < 1.0f64.max(entity.entity_dimension.load().width as f64)
@@ -88,20 +87,15 @@ impl MoveControlTrait for MoveControl {
                 self.operation = Operation::Jumping;
             }
         } else if self.operation == Operation::Jumping {
-            let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-            let speed = self.speed_modifier * movement_speed;
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, speed));
+            let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+            living_entity.set_speed(self.speed_modifier * attr);
 
             if entity.on_ground.load(Ordering::Relaxed) {
                 self.operation = Operation::Wait;
             }
-        } else {
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, 0.0));
         }
+        // Wait: do not clear navigator-written speed.
+        // Navigator ticks before move control and owns path-following motion.
     }
 }
 

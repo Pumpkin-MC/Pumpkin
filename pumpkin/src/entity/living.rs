@@ -91,6 +91,9 @@ pub struct LivingEntity {
     pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    /// Vanilla `LivingEntity.speed` — set by MoveControl/Navigator via `set_speed`.
+    /// Travel uses this for mobs (players keep using the movement_speed attribute).
+    pub living_speed: AtomicCell<f64>,
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -133,7 +136,25 @@ impl LivingEntity {
     ];
 
     fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
-        entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+        if let Some(sound) = entity_type.hurt_sound {
+            return sound;
+        }
+        // Most living entities omit hurt_sound in entities.json (only a few undead
+        // set it). Resolve `entity.<name>.hurt` from the sound registry so villagers
+        // get the "hmm", wolves yelp, golems clang, etc.
+        let key = format!("entity.{}.hurt", entity_type.resource_name);
+        Sound::from_name(&key).unwrap_or(Sound::EntityGenericHurt)
+    }
+
+    fn sound_category_for_entity(entity_type: &'static EntityType) -> SoundCategory {
+        use pumpkin_data::entity::MobCategory;
+        if entity_type == &EntityType::PLAYER {
+            SoundCategory::Players
+        } else if entity_type.category == &MobCategory::MONSTER {
+            SoundCategory::Hostile
+        } else {
+            SoundCategory::Neutral
+        }
     }
 
     pub fn new(entity: Entity) -> Self {
@@ -182,8 +203,24 @@ impl LivingEntity {
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
+            living_speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
         }
+    }
+
+    /// Vanilla `LivingEntity.setSpeed` — stores speed and sets forward input (`zza`).
+    pub fn set_speed(&self, speed: f64) {
+        self.living_speed.store(speed);
+        // Match vanilla: setSpeed also sets forward speed to the same value.
+        let mut input = self.movement_input.load();
+        input.z = speed;
+        self.movement_input.store(input);
+    }
+
+    /// Clear AI-driven speed (idle).
+    pub fn clear_speed(&self) {
+        self.living_speed.store(0.0);
+        self.movement_input.store(Vector3::default());
     }
 
     pub fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
@@ -200,6 +237,32 @@ impl LivingEntity {
             &[self.entity.entity_uuid],
             &CSetEquipment::new(self.entity_id().into(), equipment),
         );
+    }
+
+    /// Snapshot of non-empty equipment for spawn packets (sync `try_lock`).
+    #[must_use]
+    pub fn equipment_packet_if_any(&self) -> Option<CSetEquipment> {
+        let Ok(eq) = self.entity_equipment.try_lock() else {
+            return None;
+        };
+        let mut list = Vec::new();
+        for (slot, stack_arc) in &eq.equipment {
+            let Ok(stack) = stack_arc.try_lock() else {
+                continue;
+            };
+            if stack.is_empty() {
+                continue;
+            }
+            list.push((
+                slot.discriminant(),
+                ItemStackSerializer::from(stack.clone()),
+            ));
+        }
+        if list.is_empty() {
+            None
+        } else {
+            Some(CSetEquipment::new(self.entity_id().into(), list))
+        }
     }
 
     /// Picks up and Item entity or XP Orb
@@ -249,12 +312,15 @@ impl LivingEntity {
             meta
         });
 
+        // `LIVING_FLAGS` = index 8 on 1.21.x; `LIVING_ENTITY_FLAGS` = index 8 on 26.x.
+        // Metadata write skips TrackedId entries that resolve to 255 for the client
+        // version, so send both and the correct one is applied.
+        // Without this, skeleton bow-draw (using-item bit) never reaches 1.21 clients.
         self.entity.send_meta_data(
-            &[Metadata::new(
-                TrackedData::LIVING_ENTITY_FLAGS,
-                MetaDataType::BYTE,
-                b,
-            )],
+            &[
+                Metadata::new(TrackedData::LIVING_ENTITY_FLAGS, MetaDataType::BYTE, b),
+                Metadata::new(TrackedData::LIVING_FLAGS, MetaDataType::BYTE, b),
+            ],
             bedrock_meta.as_ref(),
         );
     }
@@ -862,12 +928,18 @@ impl LivingEntity {
     }
 
     async fn travel_in_air<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
-        // applyMovementInput
-
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        // Vanilla: players use attribute MOVEMENT_SPEED; mobs use LivingEntity.speed
+        // written by MoveControl.setSpeed(modifier * attribute).
+        let is_player = caller.get_player().is_some();
+        let living_speed = self.living_speed.load();
+        let effective_speed = if is_player || living_speed <= 0.0 {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        } else {
+            living_speed
+        };
 
         let (speed, friction) = if self.entity.on_ground.load(SeqCst) {
-            // getVelocityAffectingPos
+            // getVelocityAffectingPos / getFrictionInfluencedSpeed
 
             let slipperiness = f64::from(
                 self.entity
@@ -884,16 +956,28 @@ impl LivingEntity {
             let speed = if let Some(player) = caller.get_player() {
                 player.get_off_ground_speed().await
             } else {
-                // TODO: If the passenger is a player, ogs = movement_speed * 0.1
-
-                0.02
+                // Vanilla mob off-ground: getSpeed() * 0.1 roughly via flying speed
+                effective_speed * 0.1
             };
 
             (speed, 0.91)
         };
 
+        // For mobs after set_speed: movement_input.z already equals living_speed (zza),
+        // and speed_param is also living_speed * friction factor — matching vanilla
+        // MoveControl double-application. For players: input is -1..1, param is attribute.
+        let mut movement_input = self.movement_input.load();
+        if !is_player && living_speed > 0.0 {
+            // Forward-only AI movement: use unit forward so product is speed_param * 1
+            // times the zza already baked into living_speed via speed_param.
+            // Vanilla multiplies (xxa,yya,zza=speed) * getSpeed()=speed → speed²*factor.
+            // Keep zza = living_speed so product matches.
+            movement_input.x = 0.0;
+            movement_input.z = living_speed;
+        }
+
         self.entity
-            .update_velocity_from_input(self.movement_input.load(), speed);
+            .update_velocity_from_input(movement_input, speed);
 
         self.apply_climbing_speed();
 
@@ -1830,8 +1914,21 @@ impl LivingEntity {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
     }
 
+    /// Vanilla `LivingEntity.isAlive` — health > 0 and not in death state.
+    ///
+    /// Note: `Entity::is_alive` only checks removal. Corpses stay in the world for
+    /// ~20 ticks of death animation; targeting must use this method or they keep
+    /// attacking dead villagers/zombies.
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        self.health.load() > 0.0
+            && !self.dead.load(Ordering::Relaxed)
+            && !self.entity.is_removed()
+    }
+
     pub fn is_part_of_game(&self) -> bool {
-        !self.is_spectator() && self.entity.is_alive()
+        // Vanilla: !isSpectator() && isAlive()
+        !self.is_spectator() && self.is_alive()
     }
 
     pub async fn reset_state(&self) {
@@ -2373,10 +2470,19 @@ impl EntityBase for LivingEntity {
             self.try_spawn_infested_silverfish().await;
 
             if play_sound {
-                world.play_sound(
+                // Vanilla LivingEntity.playHurtSound: category from entity sound source,
+                // volume 1.0, pitch ~1.0 ± 0.2.
+                let pitch = {
+                    use rand::RngExt;
+                    let mut rng = rand::rng();
+                    1.0 + (rng.random::<f32>() - rng.random::<f32>()) * 0.2
+                };
+                world.play_sound_fine(
                     self.hurt_sound(),
-                    SoundCategory::Players,
+                    Self::sound_category_for_entity(self.entity.entity_type),
                     &self.entity.pos.load(),
+                    1.0,
+                    pitch,
                 );
 
                 if let Some(source) = source {
@@ -2387,6 +2493,16 @@ impl EntityBase for LivingEntity {
                     self.entity.apply_knockback(0.4, dx, dz);
                     self.entity.send_velocity();
                 }
+            }
+
+            // Always record the attacker as soon as we accept a hit (even if
+            // absorption eats all HP damage). RevengeGoal needs this so a near
+            // mob hitting us steals focus from a far opportunistic target.
+            if let Some(attacker) = cause.or(source) {
+                self.last_attacker_id
+                    .store(attacker.get_entity().entity_id, Relaxed);
+                self.last_attacked_time
+                    .store(self.entity.age.load(Relaxed), Relaxed);
             }
 
             // Consume absorption first, then apply remaining damage to health
@@ -2422,14 +2538,6 @@ impl EntityBase for LivingEntity {
                     remaining -= current_abs;
                     self.set_absorption(0.0).await;
                 }
-
-                // Track attacker for RevengeGoal (only after confirming damage)
-                if let Some(attacker) = cause.or(source) {
-                    self.last_attacker_id
-                        .store(attacker.get_entity().entity_id, Relaxed);
-                    self.last_attacked_time
-                        .store(self.entity.age.load(Relaxed), Relaxed);
-                }
             }
 
             // Apply remaining damage to health (clamped)
@@ -2458,14 +2566,6 @@ impl EntityBase for LivingEntity {
                             (remaining * 10.0) as i32,
                         )
                         .await;
-                }
-
-                // Track attacker for RevengeGoal (only after confirming damage)
-                if let Some(attacker) = cause.or(source) {
-                    self.last_attacker_id
-                        .store(attacker.get_entity().entity_id, Relaxed);
-                    self.last_attacked_time
-                        .store(self.entity.age.load(Relaxed), Relaxed);
                 }
             }
 
@@ -2948,10 +3048,15 @@ mod tests {
     }
 
     #[test]
-    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+    fn hurt_sound_for_entity_resolves_registry_name() {
+        // entities.json omits most hurt_sound fields; we resolve entity.<name>.hurt.
         assert_eq!(
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
-            Sound::EntityGenericHurt
+            Sound::EntityCreeperHurt
+        );
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::VILLAGER),
+            Sound::EntityVillagerHurt
         );
     }
 }

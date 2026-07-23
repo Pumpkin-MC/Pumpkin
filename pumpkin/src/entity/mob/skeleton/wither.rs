@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBaseFuture, NBTStorage,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 
@@ -11,7 +11,8 @@ pub struct WitherSkeletonEntity {
 
 impl WitherSkeletonEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity);
+        // Wither skeletons use melee swords, not bows (vanilla).
+        let entity = SkeletonEntityBase::with_combat(entity, false);
         let skeleton = Self { entity };
         Arc::new(skeleton)
     }
@@ -22,5 +23,9 @@ impl NBTStorage for WitherSkeletonEntity {}
 impl Mob for WitherSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        self.entity.mob_init_data_tracker()
     }
 }

@@ -46,15 +46,26 @@ impl PistonBlock {
         can_break: bool,
         piston_dir: BlockDirection,
     ) -> bool {
-        // TODO: more checks
         if state.is_air() {
             return true;
         }
-        // Vanilla hardcoded them aswell
+        // Vanilla hardcodes several immovable blocks beyond hardness=-1.
         if block == &Block::OBSIDIAN
             || block == &Block::CRYING_OBSIDIAN
             || block == &Block::RESPAWN_ANCHOR
             || block == &Block::REINFORCED_DEEPSLATE
+            || block == &Block::END_PORTAL_FRAME
+            || block == &Block::END_PORTAL
+            || block == &Block::END_GATEWAY
+            || block == &Block::BARRIER
+            || block == &Block::BEDROCK
+            || block == &Block::COMMAND_BLOCK
+            || block == &Block::CHAIN_COMMAND_BLOCK
+            || block == &Block::REPEATING_COMMAND_BLOCK
+            || block == &Block::STRUCTURE_BLOCK
+            || block == &Block::JIGSAW
+            || block == &Block::MOVING_PISTON
+            || block == &Block::PISTON_HEAD
         {
             return false;
         }
@@ -71,8 +82,10 @@ impl PistonBlock {
             pumpkin_data::block_state::PistonBehavior::Destroy => return can_break,
             pumpkin_data::block_state::PistonBehavior::Block => return false,
             pumpkin_data::block_state::PistonBehavior::PushOnly => return dir == piston_dir,
+            pumpkin_data::block_state::PistonBehavior::Ignore => return true,
             _ => {}
         }
+        // Block entities (chests, furnaces, …) cannot be pushed.
         !has_block_block_entity(block)
     }
 }

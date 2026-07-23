@@ -92,10 +92,15 @@ impl Default for Navigator {
 // other things)
 // TODO: Calculate from mob attributes like in vanilla
 const MAX_ITERS: usize = 560;
-const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
-const NODE_REACH_XZ: f64 = 0.5;
-const NODE_REACH_Y: f64 = 1.0;
+// Vanilla PathFinder uses ~1.0 heuristic scale (some versions 1.5).
+const TARGET_DISTANCE_MULTIPLIER: f32 = 1.0;
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
+// Vanilla GroundPathNavigation: abs(dy) < 1.0 for "on node". Exactly 1-block drops
+// sit at dy≈1.0 and fail that check — we allow a hair more so mobs step down
+// instead of orbiting the ledge and repathing the long way around.
+const NODE_REACH_Y: f64 = 1.0;
+const STEP_DOWN_REACH_Y: f64 = 1.05;
+const MAX_FALL_FOLLOW_Y: f64 = 3.25;
 
 impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
@@ -117,10 +122,19 @@ impl Navigator {
         self.ticks_on_current_node = 0;
         self.total_ticks = 0;
         self.path_start_pos = None;
+        // Note: living clear_speed is applied on next idle tick via current_goal=None.
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.path_type_overrides.insert(path_type, malus);
+    }
+
+    /// True when water is marked impassable (malus < 0), e.g. iron golems.
+    #[must_use]
+    pub fn avoids_water(&self) -> bool {
+        self.path_type_overrides
+            .get(&PathType::Water)
+            .is_some_and(|&m| m < 0.0)
     }
 
     pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
@@ -215,7 +229,21 @@ impl Navigator {
                 .await;
 
             for mut neighbor in self.neighbors_buf.drain(..) {
-                let step_cost = current.distance(&neighbor);
+                // Prefer nearly-horizontal step-downs: charge mostly XZ distance so a
+                // 1-block drop (vanilla getClosedNode edge) beats walking around a hill.
+                // Full 3D distance alone makes drops look like √2 while a 2-long flat
+                // detour is 2 — still OK, but with malus noise detours won too often.
+                let step_cost = {
+                    let full = current.distance(&neighbor);
+                    let xz = current.distance_xz(&neighbor);
+                    let dy = (neighbor.pos.0.y - current.pos.0.y).abs() as f32;
+                    if dy > 0.0 && dy <= 1.0 && xz <= 1.5 {
+                        // 1-block step up/down: treat as flat adjacency cost.
+                        xz.max(1.0)
+                    } else {
+                        full
+                    }
+                };
                 neighbor.walked_dist = current.walked_dist + step_cost;
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
@@ -274,11 +302,107 @@ impl Navigator {
             }
             path_nodes.reverse();
 
+            // Reject incomplete paths that get *farther* from the goal while also
+            // being much longer than the straight line. Keep incomplete paths that
+            // still move closer — better than freezing (vindicator/golem "stand and
+            // stare" when A* can't fully reach).
+            if !reached && path_nodes.len() >= 2 {
+                let start = path_nodes[0].pos.0;
+                let end = path_nodes[path_nodes.len() - 1].pos.0;
+                let goal = target.node.pos.0;
+                let path_len = {
+                    let mut len = 0.0f32;
+                    for w in path_nodes.windows(2) {
+                        len += w[0].distance(&w[1]);
+                    }
+                    len
+                };
+                let start_to_goal = {
+                    let dx = (goal.x - start.x) as f32;
+                    let dy = (goal.y - start.y) as f32;
+                    let dz = (goal.z - start.z) as f32;
+                    (dx * dx + dy * dy + dz * dz).sqrt()
+                };
+                let end_to_goal = {
+                    let dx = (goal.x - end.x) as f32;
+                    let dy = (goal.y - end.y) as f32;
+                    let dz = (goal.z - end.z) as f32;
+                    (dx * dx + dy * dy + dz * dz).sqrt()
+                };
+                // Only drop if we did not get closer and the path is a long detour.
+                if end_to_goal >= start_to_goal - 0.5
+                    && path_len > start_to_goal.mul_add(3.0, 12.0)
+                {
+                    return None;
+                }
+            }
+
             let path_target = target.node.pos.0;
             return Some(Path::new(path_nodes, path_target, reached));
         }
 
         None
+    }
+
+    /// Best-effort straight walk when A* fails — keeps melee chases moving instead
+    /// of freezing until the next repath luckily succeeds.
+    fn direct_walk_toward(&self, entity: &LivingEntity, goal: &NavigatorGoal) {
+        let current_pos = entity.entity.pos.load();
+
+        // Iron golem etc.: never direct-walk into water when water is impassable.
+        if self.avoids_water() {
+            let world = entity.entity.world.load();
+            let dest_block = goal.destination.to_block_pos();
+            let is_water = |p: pumpkin_util::math::position::BlockPos| {
+                use pumpkin_data::tag::Taggable;
+                let id = world.get_block_state_id(&p);
+                pumpkin_data::fluid::Fluid::from_state_id(id)
+                    .is_some_and(|f| f.has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER))
+            };
+            if is_water(dest_block) || is_water(dest_block.down()) {
+                entity.clear_speed();
+                return;
+            }
+            // Also refuse a step that would walk off land into water immediately ahead.
+            let ahead = current_pos.add_raw(
+                (goal.destination.x - current_pos.x).signum().clamp(-1.0, 1.0),
+                0.0,
+                (goal.destination.z - current_pos.z).signum().clamp(-1.0, 1.0),
+            );
+            let ahead_block = ahead.to_block_pos();
+            if is_water(ahead_block) || is_water(ahead_block.down()) {
+                entity.clear_speed();
+                return;
+            }
+        }
+
+        let dx = goal.destination.x - current_pos.x;
+        let dz = goal.destination.z - current_pos.z;
+        let horizontal = (dx * dx + dz * dz).sqrt();
+        if horizontal < 0.05 {
+            entity.clear_speed();
+            return;
+        }
+        let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
+        let current_yaw = entity.entity.yaw.load();
+        let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
+        let target_yaw =
+            current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
+        entity.entity.yaw.store(target_yaw);
+        entity.entity.head_yaw.store(target_yaw);
+        entity.entity.body_yaw.store(target_yaw);
+
+        let attr = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        entity.set_speed(goal.speed * attr);
+
+        // Jump if destination is above us and we're close horizontally.
+        let dy = goal.destination.y - current_pos.y;
+        let step = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
+        if dy > step && horizontal < 1.5 {
+            entity
+                .jumping
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 
     fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
@@ -307,14 +431,14 @@ impl Navigator {
         let Some(goal) = self.current_goal.take() else {
             // Idle: stop the mob
             self.is_idle.store(true, Ordering::Relaxed);
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            entity.clear_speed();
             return;
         };
 
         if goal.current_progress == goal.destination {
             self.is_idle.store(true, Ordering::Relaxed);
             self.current_path = None;
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            entity.clear_speed();
             return;
         }
 
@@ -328,19 +452,31 @@ impl Navigator {
             self.ticks_on_current_node = 0;
             self.last_node_index = 0;
             self.path_start_pos = Some(entity.entity.pos.load());
-            self.repath_cooldown = 15; // ~0.75 seconds cooldown before recomputing
+            self.repath_cooldown = 10; // repath a bit faster during chase
+
+            // A* failed: keep the goal and walk straight toward the destination
+            // so melee mobs (vindicator/golem/zombie) don't freeze in place.
+            if self.current_path.is_none() {
+                self.is_idle.store(false, Ordering::Relaxed);
+                self.direct_walk_toward(entity, &goal);
+                self.current_goal = Some(goal);
+                return;
+            }
         }
 
         if self.current_path.is_none() {
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            self.is_idle.store(false, Ordering::Relaxed);
+            self.direct_walk_toward(entity, &goal);
             self.current_goal = Some(goal);
             return;
         }
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                // Arrived or path invalid — idle so goals can re-select.
+                self.is_idle.store(true, Ordering::Relaxed);
+                self.current_path = None;
+                entity.clear_speed();
                 return;
             }
 
@@ -353,10 +489,11 @@ impl Navigator {
             }
 
             if self.ticks_on_current_node > 100 {
+                // Stuck on a node — give up so wander can pick a new destination.
+                self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
                 self.ticks_on_current_node = 0;
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
+                entity.clear_speed();
                 return;
             }
 
@@ -367,11 +504,11 @@ impl Navigator {
                     let dy = current_pos.y - start_pos.y;
                     let dz = current_pos.z - start_pos.z;
                     let dist_sq = dx * dx + dy * dy + dz * dz;
-                    if dist_sq < 2.0 * 2.0 {
+                    if dist_sq < 0.25 {
+                        self.is_idle.store(true, Ordering::Relaxed);
                         self.current_path = None;
                         self.ticks_on_current_node = 0;
-                        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                        self.current_goal = Some(goal);
+                        entity.clear_speed();
                         return;
                     }
                 }
@@ -381,6 +518,7 @@ impl Navigator {
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
             if let Some(next_block) = path.get_next_node_pos() {
+                // Vanilla: Vec3.atBottomCenterOf(nextNodePos)
                 let target_pos = Vector3::new(
                     f64::from(next_block.x) + 0.5,
                     f64::from(next_block.y),
@@ -392,23 +530,68 @@ impl Navigator {
                 let dy = target_pos.y - current_pos.y;
                 let dz = target_pos.z - current_pos.z;
 
+                let bbox = entity.entity.bounding_box.load();
+                let width = (bbox.max.x - bbox.min.x).max(0.1);
+                // Vanilla GroundPathNavigation.maxDistanceToWaypoint
+                let max_waypoint = if width > 0.75 {
+                    width * 0.5
+                } else {
+                    0.75 - width * 0.5
+                };
+
+                // Vanilla uses axis-aligned |dx|/|dz|, not euclidean — tighter and
+                // matches "on the block" rather than a circle that overshoots edges.
+                let near_xz = dx.abs() < max_waypoint && dz.abs() < max_waypoint;
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
-                // Skip node if we're above it on the same XZ column and airborne (falling toward it)
-                if !on_ground && horizontal_dist < NODE_REACH_XZ && dy < -0.5 {
+                // --- Vanilla followThePath reach checks (+ 1-block step-down fix) ---
+                // 1) Airborne above next node → consume it while falling.
+                if !on_ground && near_xz && dy < 0.0 {
+                    path.advance();
+                    self.current_goal = Some(goal);
+                    return;
+                }
+                // 2) Vanilla: |dx|<wp && |dz|<wp && |dy|<1.0
+                if near_xz && dy.abs() < NODE_REACH_Y {
+                    path.advance();
+                    self.current_goal = Some(goal);
+                    return;
+                }
+                // 3) Exactly 1-block down: |dy|≈1.0 fails (2). Without this, mobs
+                //    orbit the ledge, stuck-detect fires, and A* repaths around.
+                if near_xz && dy < 0.0 && dy > -STEP_DOWN_REACH_Y {
+                    path.advance();
+                    self.current_goal = Some(goal);
+                    return;
+                }
+                // 4) Still above a drop but already over the column — keep node if
+                //    we're clearly committed (close XZ, within max fall).
+                if dx.abs() < max_waypoint.max(0.6)
+                    && dz.abs() < max_waypoint.max(0.6)
+                    && dy < 0.0
+                    && dy > -MAX_FALL_FOLLOW_Y
+                    && (!on_ground || dy > -STEP_DOWN_REACH_Y)
+                {
                     path.advance();
                     self.current_goal = Some(goal);
                     return;
                 }
 
-                if horizontal_dist < NODE_REACH_XZ && dy.abs() < NODE_REACH_Y {
-                    path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
+                // When the next node is below, aim at the *edge* toward it so we
+                // walk off instead of spinning on the lip (vanilla effectively does
+                // this via waypoint size + step).
+                let aim_x = if dy < -0.25 && dx.abs() > 0.05 {
+                    // Nudge past the current block center toward the lower node.
+                    target_pos.x
+                } else {
+                    target_pos.x
+                };
+                let aim_z = target_pos.z;
+                let adx = aim_x - current_pos.x;
+                let adz = aim_z - current_pos.z;
 
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
+                let desired_yaw = wrap_degrees((adz.atan2(adx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();
                 let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
                 let target_yaw =
@@ -417,16 +600,10 @@ impl Navigator {
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
-                // Get movement speed from goal and mob attributes
-                let mob_speed =
-                    goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                // Vanilla MoveControl/Navigator: setSpeed(modifier * MOVEMENT_SPEED)
+                let attr = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                entity.set_speed(goal.speed * attr);
 
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, 0.0, mob_speed));
-
-                let bbox = entity.entity.bounding_box.load();
-                let width = bbox.max.x - bbox.min.x;
                 let jump_distance = 1.0f64.max(width);
 
                 // Jump when the next node is above step height and we're close enough horizontally
@@ -441,10 +618,16 @@ impl Navigator {
                         .jumping
                         .store(false, std::sync::atomic::Ordering::SeqCst);
                 }
+
+                // Don't stuck-cancel while we're clearly approaching a step-down
+                // (small horizontal progress is expected on the lip).
+                if dy < 0.0 && dy > -MAX_FALL_FOLLOW_Y && horizontal_dist < 2.0 {
+                    self.ticks_on_current_node = self.ticks_on_current_node.min(40);
+                }
             } else {
                 self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
-                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                entity.clear_speed();
             }
         }
 

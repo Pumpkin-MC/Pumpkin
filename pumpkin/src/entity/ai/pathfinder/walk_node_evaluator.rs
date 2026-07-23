@@ -196,27 +196,37 @@ impl WalkNodeEvaluator {
         None
     }
 
-    /// Searches downward for the first non-`OPEN` block, respecting safe fall distance.
+    /// Vanilla `WalkNodeEvaluator` open-column fall: walk down through consecutive
+    /// `OPEN` cells until a standable type within `maxFallDistance`.
+    ///
+    /// This is what connects a 1-block ledge to the floor below so A* does not
+    /// have to route halfway around the map for a single step down.
     async fn get_open_node(&mut self, pos: Vector3<i32>) -> Node {
         let safe_fall_distance = self
             .base
             .mob_data
             .as_ref()
-            .map_or(3, |d| d.max_fall_distance as i32);
+            .map_or(3, |d| d.max_fall_distance as i32)
+            .max(1);
 
-        let mut check_y = pos.y - 1;
-        let bottom_y = pos.y - safe_fall_distance - 2;
+        // Vanilla: start at y, loop --y while type stays OPEN.
+        let mut check_y = pos.y;
+        let mut fell = 0i32;
+        let mut path_type = PathType::Open;
 
-        while check_y >= bottom_y {
-            let fall_dist = pos.y - check_y;
-            if fall_dist > safe_fall_distance {
+        while path_type == PathType::Open {
+            check_y -= 1;
+            fell += 1;
+
+            if fell > safe_fall_distance {
                 let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
                 n.path_type = PathType::Blocked;
                 n.cost_malus = -1.0;
+                n.closed = true;
                 return n;
             }
 
-            let path_type = self
+            path_type = self
                 .get_cached_path_type(Vector3::new(pos.x, check_y, pos.z))
                 .await;
             let penalty = self.get_mob_penalty(path_type);
@@ -225,21 +235,23 @@ impl WalkNodeEvaluator {
                 if penalty >= 0.0 {
                     let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
                     n.path_type = path_type;
-                    n.cost_malus = penalty.max(n.cost_malus);
+                    // Small falls are free in practice; do not stack extra malus so
+                    // 1-block drops stay cheaper than long detours.
+                    n.cost_malus = penalty.max(0.0);
                     return n;
                 }
                 let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
                 n.path_type = PathType::Blocked;
                 n.cost_malus = -1.0;
+                n.closed = true;
                 return n;
             }
-
-            check_y -= 1;
         }
 
         let mut n = self.base.get_node(pos.as_blockpos());
         n.path_type = PathType::Blocked;
         n.cost_malus = -1.0;
+        n.closed = true;
         n
     }
 
@@ -337,12 +349,16 @@ impl NodeEvaluator for WalkNodeEvaluator {
 
         self.base.context = Some(context);
         self.base.mob_data = Some(mob_data);
+        // Vanilla allocates a fresh node map per path compute — stale closed /
+        // cost flags from a prior search must not leak into the next one.
+        self.base.nodes.clear();
         self.path_types_cache.clear();
     }
 
     fn done(&mut self) {
         self.base.context = None;
         self.base.mob_data = None;
+        self.base.nodes.clear();
         self.path_types_cache.clear();
     }
 

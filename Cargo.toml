@@ -83,9 +83,12 @@ rust-version = "1.95"
 license = "GPL-3.0"
 
 [profile.release]
-lto = true
+lto = false
 strip = "debuginfo"
-codegen-units = 1
+codegen-units = 16
+opt-level = 2
+debug = false
+incremental = true
 
 [profile.bench]
 debug = true

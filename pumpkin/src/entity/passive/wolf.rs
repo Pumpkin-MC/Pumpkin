@@ -1,29 +1,46 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_util::math::vector3::Vector3;
+use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        follow_owner::FollowOwnerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, owner_hurt_by_target::OwnerHurtByTargetGoal,
+        owner_hurt_target::OwnerHurtTargetGoal, revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    player::Player,
 };
+
+/// Vanilla tameable flags (sitting = 0x1, tamed = 0x4). Not sent on 26.x (index 255).
+const SITTING_FLAG: u8 = 0x1;
+const TAMED_FLAG: u8 = 0x4;
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
+    owner: AtomicCell<Option<Uuid>>,
+    sitting: AtomicBool,
+    tamed: AtomicBool,
 }
 
 impl WolfEntity {
@@ -31,7 +48,11 @@ impl WolfEntity {
         let mob_entity = MobEntity::new(entity);
         let wolf = Self {
             mob_entity,
-            variant: AtomicU8::new(3), // Default to pale
+            // Vanilla pale = registry index 0
+            variant: AtomicU8::new(0),
+            owner: AtomicCell::new(None),
+            sitting: AtomicBool::new(false),
+            tamed: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -41,12 +62,15 @@ impl WolfEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // goal_selector.add_goal(2, SitGoal::new(mob_arc.clone()));
+            goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
-            goal_selector.add_goal(5, BreedGoal::new(1.0));
-            // goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0, false));
+            // Melee only useful once tamed (owner-hurt goals set target).
+            goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
+            goal_selector.add_goal(7, BreedGoal::new(1.0));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
             goal_selector.add_goal(
@@ -55,9 +79,57 @@ impl WolfEntity {
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
+
+            target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
+            target_selector.add_goal(2, OwnerHurtTargetGoal::new());
+            target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
         };
 
         mob_arc
+    }
+
+    fn is_tamed(&self) -> bool {
+        self.tamed.load(Ordering::Relaxed)
+    }
+
+    fn set_sitting(&self, sitting: bool) {
+        self.sitting.store(sitting, Ordering::Relaxed);
+        self.sync_tameable_flags();
+        if sitting {
+            let mut navigator = self.mob_entity.navigator.lock().unwrap();
+            navigator.stop();
+        }
+    }
+
+    fn set_tamed_owner(&self, owner: Uuid) {
+        self.tamed.store(true, Ordering::Relaxed);
+        self.owner.store(Some(owner));
+        self.sitting.store(false, Ordering::Relaxed);
+        self.sync_tameable_flags();
+        // Owner UUID metadata encoding varies by protocol; keep server-side only for now.
+    }
+
+    fn tameable_flags(&self) -> u8 {
+        let mut flags = 0u8;
+        if self.sitting.load(Ordering::Relaxed) {
+            flags |= SITTING_FLAG;
+        }
+        if self.tamed.load(Ordering::Relaxed) {
+            flags |= TAMED_FLAG;
+        }
+        flags
+    }
+
+    fn sync_tameable_flags(&self) {
+        // 1.21.x only; 26.x maps to 255 and is a no-op in Metadata::write.
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TAMEABLE_FLAGS,
+                MetaDataType::BYTE,
+                self.tameable_flags(),
+            )],
+            None,
+        );
     }
 }
 
@@ -66,17 +138,21 @@ impl NBTStorage for WolfEntity {
         Box::pin(async {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             let variant_str = match self.variant.load(Ordering::Relaxed) {
-                0 => "minecraft:ashen",
-                1 => "minecraft:black",
-                2 => "minecraft:chestnut",
-                4 => "minecraft:rusty",
-                5 => "minecraft:snowy",
-                6 => "minecraft:spotted",
-                7 => "minecraft:striped",
-                8 => "minecraft:woods",
+                1 => "minecraft:spotted",
+                2 => "minecraft:snowy",
+                3 => "minecraft:black",
+                4 => "minecraft:ashen",
+                5 => "minecraft:rusty",
+                6 => "minecraft:woods",
+                7 => "minecraft:chestnut",
+                8 => "minecraft:striped",
                 _ => "minecraft:pale",
             };
             nbt.put_string("variant", variant_str.to_string());
+            nbt.put_bool("Sitting", self.sitting.load(Ordering::Relaxed));
+            if let Some(owner) = self.owner.load() {
+                nbt.put_uuid("Owner", owner);
+            }
         })
     }
 
@@ -88,17 +164,23 @@ impl NBTStorage for WolfEntity {
                     .strip_prefix("minecraft:")
                     .unwrap_or(variant_str)
                 {
-                    "ashen" => 0,
-                    "black" => 1,
-                    "chestnut" => 2,
-                    "rusty" => 4,
-                    "snowy" => 5,
-                    "spotted" => 6,
-                    "striped" => 7,
-                    "woods" => 8,
-                    _ => 3,
+                    "spotted" => 1,
+                    "snowy" => 2,
+                    "black" => 3,
+                    "ashen" => 4,
+                    "rusty" => 5,
+                    "woods" => 6,
+                    "chestnut" => 7,
+                    "striped" => 8,
+                    _ => 0,
                 };
                 self.variant.store(variant, Ordering::Relaxed);
+            }
+            self.sitting
+                .store(nbt.get_bool("Sitting").unwrap_or(false), Ordering::Relaxed);
+            if let Some(owner) = nbt.get_uuid("Owner") {
+                self.tamed.store(true, Ordering::Relaxed);
+                self.owner.store(Some(owner));
             }
         })
     }
@@ -109,17 +191,25 @@ impl Mob for WolfEntity {
         &self.mob_entity
     }
 
+    fn get_owner_uuid(&self) -> Option<Uuid> {
+        self.owner.load()
+    }
+
+    fn is_sitting(&self) -> bool {
+        self.sitting.load(Ordering::Relaxed)
+    }
+
     fn mob_set_variant_name(&self, name: &str) {
         let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
-            "ashen" => 0,
-            "black" => 1,
-            "chestnut" => 2,
-            "rusty" => 4,
-            "snowy" => 5,
-            "spotted" => 6,
-            "striped" => 7,
-            "woods" => 8,
-            _ => 3,
+            "spotted" => 1,
+            "snowy" => 2,
+            "black" => 3,
+            "ashen" => 4,
+            "rusty" => 5,
+            "woods" => 6,
+            "chestnut" => 7,
+            "striped" => 8,
+            _ => 0,
         };
         self.variant.store(variant, Ordering::Relaxed);
     }
@@ -138,14 +228,80 @@ impl Mob for WolfEntity {
                     None,
                 );
             }
-            entity.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::VARIANT,
-                    MetaDataType::WOLF_VARIANT,
-                    VarInt(self.variant.load(Ordering::Relaxed) as i32),
-                )],
-                None,
+            // Do not send WOLF_VARIANT / OPTIONAL_UUID here: mismatched metadata
+            // type or index on 26.x clients causes "Network Protocol Error" kicks.
+            // Variant + owner remain server-side (NBT + AI).
+            self.sync_tameable_flags();
+            let _ = (self.variant.load(Ordering::Relaxed), VarInt(0));
+        })
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Arc<Player>,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let entity = &self.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            let pos = entity.pos.load();
+
+            // Untamed: bone taming (~1/3 chance, vanilla).
+            if !self.is_tamed() {
+                if item_stack.item.id != Item::BONE.id {
+                    return false;
+                }
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+                let success = {
+                    use rand::RngExt;
+                    rand::rng().random_range(0..3) == 0
+                };
+
+                if success {
+                    self.set_tamed_owner(player.gameprofile.id);
+                    world.send_entity_status(entity, EntityStatus::TamingSucceeded);
+                    world.spawn_particle(
+                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                        Vector3::new(0.5, 0.5, 0.5),
+                        1.0,
+                        7,
+                        Particle::Heart,
+                    );
+                    world.play_sound(
+                        Sound::EntityWolfAmbient,
+                        SoundCategory::Neutral,
+                        &pos,
+                    );
+                } else {
+                    world.send_entity_status(entity, EntityStatus::TamingFailed);
+                    world.play_sound(Sound::EntityWolfHurt, SoundCategory::Neutral, &pos);
+                }
+                return true;
+            }
+
+            let Some(owner) = self.get_owner_uuid() else {
+                return false;
+            };
+            if owner != player.gameprofile.id {
+                return false;
+            }
+            if !item_stack.is_empty() {
+                return false;
+            }
+
+            let new_sitting = !self.is_sitting();
+            self.set_sitting(new_sitting);
+            world.play_sound(
+                if new_sitting {
+                    Sound::EntityWolfWhine
+                } else {
+                    Sound::EntityWolfAmbient
+                },
+                SoundCategory::Neutral,
+                &pos,
             );
+            true
         })
     }
 }

@@ -26,7 +26,8 @@ impl PineFoliagePlacer {
     ) -> Vec<BlockPos> {
         let mut foliage_positions = Vec::new();
         let mut radius = 0;
-        for y in (offset - foliage_height)..offset {
+        // Vanilla: inclusive top layer at `offset` (was exclusive → bare tip log).
+        for y in (offset - foliage_height)..=offset {
             FoliagePlacer::generate_square(
                 &mut foliage_positions,
                 self,

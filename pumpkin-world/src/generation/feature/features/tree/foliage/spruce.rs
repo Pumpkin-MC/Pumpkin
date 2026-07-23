@@ -28,7 +28,9 @@ impl SpruceFoliagePlacer {
         let mut radius = random.next_bounded_i32(2);
         let mut max = 1;
         let mut next = 0;
-        for y in ((-foliage_height)..=offset).rev() {
+        // Vanilla: from `offset` down to `offset - foliageHeight` (inclusive).
+        // Using `-foliage_height..=offset` ignored `offset` and left bare tall trunks.
+        for y in ((offset - foliage_height)..=offset).rev() {
             FoliagePlacer::generate_square(
                 &mut foliage_positions,
                 self,
@@ -51,7 +53,8 @@ impl SpruceFoliagePlacer {
         foliage_positions
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
-        (trunk_height - self.trunk_height.get(random)).max(4)
+        // Keep a fuller crown on tall spruce (was bare tip with only max(4) layers).
+        (trunk_height - self.trunk_height.get(random)).max(6).min(trunk_height.max(6))
     }
 }
 

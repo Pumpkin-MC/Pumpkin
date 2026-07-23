@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use super::{Controls, Goal};
+use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
 use crate::entity::mob::Mob;
 use crate::entity::mob::creeper::CreeperEntity;
@@ -74,10 +75,19 @@ impl Goal for CreeperIgniteGoal {
 
             if dist_sq > 49.0 {
                 self.creeper.set_fuse_speed(-1);
-            }
-            // TODO: line of sight check (needs world raycast)
-            else {
-                self.creeper.set_fuse_speed(1);
+            } else {
+                // Only charge fuse when target is visible (vanilla).
+                let from = self.creeper.get_entity().get_eye_pos();
+                let to = target.get_entity().get_eye_pos();
+                let world = self.creeper.get_entity().world.load();
+                let can_see = world
+                    .raycast(from, to, async |block_pos, w| {
+                        let state = w.get_block_state(block_pos);
+                        state.is_solid()
+                    })
+                    .await
+                    .is_none();
+                self.creeper.set_fuse_speed(if can_see { 1 } else { -1 });
             }
         })
     }

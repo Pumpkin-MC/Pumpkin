@@ -176,11 +176,14 @@ impl BlockBehaviour for RedstoneWireBlock {
                 let new_power = calculate_power(args.world, args.position).await;
                 if wire.power != new_power {
                     wire.power = new_power;
+                    // Vanilla: setBlock + updateNeighborsAt shape. NOTIFY_LISTENERS
+                    // pushes the new power level to clients; turbo then BFS-updates
+                    // the wire graph (MCHPRS / MC-81098 order).
                     args.world
                         .set_block_state(
                             args.position,
                             wire.to_state_id(&Block::REDSTONE_WIRE),
-                            BlockFlags::empty(),
+                            BlockFlags::NOTIFY_LISTENERS,
                         )
                         .await;
                     RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.position)
@@ -259,7 +262,7 @@ async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &Bl
                 .set_block_state(
                     block_pos,
                     new_wire.to_state_id(&Block::REDSTONE_WIRE),
-                    BlockFlags::empty(),
+                    BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
             update_wire_neighbors(world, block_pos).await;

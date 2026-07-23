@@ -1044,10 +1044,12 @@ impl Player {
             )
             .await
         {
-            world.play_sound(
+            world.play_sound_fine(
                 Sound::EntityPlayerAttackNodamage,
                 SoundCategory::Players,
                 &self.living_entity.entity.pos.load(),
+                0.5,
+                1.0,
             );
             return;
         }
@@ -1852,7 +1854,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         self.client
             .enqueue_packet(&CSoundEffect::new(
@@ -1873,7 +1875,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         self.client
             .enqueue_packet(&CSoundEffect::new(
@@ -5234,12 +5236,42 @@ impl InventoryPlayer for Player {
                 ),
             );
 
-            if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
-                self.world().play_sound_event(
-                    &equippable.equip_sound,
-                    SoundCategory::Players,
-                    &self.position(),
-                );
+            // Play equip sound at the player. Prefer item equip_sound component;
+            // fall back to a material guess so iron/diamond still sound right.
+            if !stack.is_empty() {
+                let pos = self.position();
+                if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
+                    self.world().play_sound_event(
+                        &equippable.equip_sound,
+                        SoundCategory::Players,
+                        &pos,
+                    );
+                } else {
+                    let name = stack.item.registry_key;
+                    let sound = if name.contains("netherite") {
+                        Sound::ItemArmorEquipNetherite
+                    } else if name.contains("diamond") {
+                        Sound::ItemArmorEquipDiamond
+                    } else if name.contains("iron") {
+                        Sound::ItemArmorEquipIron
+                    } else if name.contains("gold") {
+                        Sound::ItemArmorEquipGold
+                    } else if name.contains("chain") {
+                        Sound::ItemArmorEquipChain
+                    } else if name.contains("leather") {
+                        Sound::ItemArmorEquipLeather
+                    } else if name.contains("copper") {
+                        Sound::ItemArmorEquipCopper
+                    } else if name.contains("turtle") {
+                        Sound::ItemArmorEquipTurtle
+                    } else if name.contains("elytra") {
+                        Sound::ItemArmorEquipElytra
+                    } else {
+                        Sound::ItemArmorEquipGeneric
+                    };
+                    self.world()
+                        .play_sound(sound, SoundCategory::Players, &pos);
+                }
             }
         })
     }

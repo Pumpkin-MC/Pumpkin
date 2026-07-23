@@ -53,7 +53,9 @@ impl AttackType {
             return Self::Critical;
         }
 
-        if sword && is_strong {
+        // Vanilla: sweep only for grounded non-sprint full-charge sword hits.
+        // Previously every full sword hit used Sweeping SFX (very loud whoosh).
+        if sword && is_strong && on_ground && !sprinting {
             return Self::Sweeping;
         }
 
@@ -91,28 +93,20 @@ pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vecto
 }
 
 pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type: AttackType) {
-    match attack_type {
-        AttackType::Knockback => {
-            world.play_sound(
-                Sound::EntityPlayerAttackKnockback,
-                SoundCategory::Players,
-                pos,
-            );
-        }
-        AttackType::Critical => {
-            world.play_sound(Sound::EntityPlayerAttackCrit, SoundCategory::Players, pos);
-        }
-        AttackType::Sweeping => {
-            world.play_sound(Sound::EntityPlayerAttackSweep, SoundCategory::Players, pos);
-        }
-        AttackType::Strong => {
-            world.play_sound(Sound::EntityPlayerAttackStrong, SoundCategory::Players, pos);
-        }
-        AttackType::Weak => {
-            world.play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos);
-        }
-        AttackType::MaceSmash => {
-            world.play_sound(Sound::ItemMaceSmashAir, SoundCategory::Players, pos);
-        }
-    }
+    use rand::RngExt;
+
+    // Vanilla plays these at volume 1.0 / pitch 1.0. Slight pitch jitter matches
+    // other entity combat SFX and avoids every hit sounding identical/harsh.
+    // Weak/no-full-charge attacks use a lower volume so spam hits are quieter.
+    let mut rng = rand::rng();
+    let pitch = rng.random_range(0.9f32..1.1);
+    let (sound, volume) = match attack_type {
+        AttackType::Knockback => (Sound::EntityPlayerAttackKnockback, 1.0),
+        AttackType::Critical => (Sound::EntityPlayerAttackCrit, 1.0),
+        AttackType::Sweeping => (Sound::EntityPlayerAttackSweep, 1.0),
+        AttackType::Strong => (Sound::EntityPlayerAttackStrong, 1.0),
+        AttackType::Weak => (Sound::EntityPlayerAttackWeak, 0.5),
+        AttackType::MaceSmash => (Sound::ItemMaceSmashAir, 1.0),
+    };
+    world.play_sound_fine(sound, SoundCategory::Players, pos, volume, pitch);
 }

@@ -115,7 +115,8 @@ impl Goal for TrackTargetGoal {
                 return false;
             };
 
-            if !target.entity.is_alive() {
+            // LivingEntity.isAlive — not Entity.is_alive (which ignores death animation).
+            if !target.is_alive() {
                 return false;
             }
 

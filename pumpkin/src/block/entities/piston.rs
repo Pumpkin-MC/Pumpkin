@@ -220,6 +220,37 @@ const FACING: &str = "facing";
 const LAST_PROGRESS: &str = "progress";
 const EXTENDING: &str = "extending";
 const SOURCE: &str = "source";
+/// Pumpkin-native key: global block state palette id of the pushed block.
+const BLOCK_STATE_ID: &str = "blockStateId";
+
+fn write_piston_fields(entity: &PistonBlockEntity, nbt: &mut NbtCompound) {
+    nbt.put_byte(FACING, entity.facing.to_index() as i8);
+    nbt.put_float(LAST_PROGRESS, entity.last_progress.load());
+    nbt.put_bool(EXTENDING, entity.extending);
+    nbt.put_bool(SOURCE, entity.source);
+    nbt.put_int(
+        BLOCK_STATE_ID,
+        i32::from(entity.pushed_block_state.id.as_u16()),
+    );
+}
+
+fn read_pushed_block_state(nbt: &NbtCompound) -> &'static BlockState {
+    if let Some(id) = nbt.get_int(BLOCK_STATE_ID)
+        && let Some(state_id) = pumpkin_data::BlockStateId::new(id as u16)
+    {
+        return BlockState::from_id(state_id);
+    }
+    // Vanilla-style: blockState compound with Name (properties ignored for now).
+    if let Some(compound) = nbt.get_compound("blockState")
+        && let Some(name) = compound.get_string("Name")
+    {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        if let Some(block) = Block::from_name(name) {
+            return block.default_state;
+        }
+    }
+    Block::AIR.default_state
+}
 
 impl BlockEntity for PistonBlockEntity {
     fn resource_location(&self) -> &'static str {
@@ -278,8 +309,7 @@ impl BlockEntity for PistonBlockEntity {
     where
         Self: Sized,
     {
-        // TODO
-        let pushed_block_state = Block::AIR.default_state;
+        let pushed_block_state = read_pushed_block_state(nbt);
         let facing = nbt.get_byte(FACING).unwrap_or(0);
         let last_progress = nbt.get_float(LAST_PROGRESS).unwrap_or(0.0);
         let extending = nbt.get_bool(EXTENDING).unwrap_or(false);
@@ -300,22 +330,13 @@ impl BlockEntity for PistonBlockEntity {
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            // TODO: pushed_block_state
-            nbt.put_byte(FACING, self.facing.to_index() as i8);
-            nbt.put_float(LAST_PROGRESS, self.last_progress.load());
-            nbt.put_bool(EXTENDING, self.extending);
-            nbt.put_bool(SOURCE, self.source);
+            write_piston_fields(self, nbt);
         })
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        // TODO: pushed_block_state
-        nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(LAST_PROGRESS, self.last_progress.load());
-        nbt.put_bool(EXTENDING, self.extending);
-        nbt.put_bool(SOURCE, self.source);
-        // TODO: duplicated code because of async :c
+        write_piston_fields(self, &mut nbt);
         Some(nbt)
     }
 

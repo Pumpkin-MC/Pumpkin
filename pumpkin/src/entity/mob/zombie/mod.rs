@@ -1,5 +1,6 @@
 use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
+use crate::entity::ai::goal::flee_sun::FleeSunGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
@@ -39,6 +40,8 @@ impl ZombieEntityBase {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, ZombieAttackGoal::new(1.0, false));
+            // Vanilla RestrictSun / FleeSun — walk under trees when no target.
+            goal_selector.add_goal(3, Box::new(FleeSunGoal::new(1.0)));
             goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3));
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(

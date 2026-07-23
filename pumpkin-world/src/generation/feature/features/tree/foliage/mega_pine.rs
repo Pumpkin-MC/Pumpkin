@@ -27,15 +27,24 @@ impl MegaPineFoliagePlacer {
         let mut foliage_positions = Vec::new();
         let pos = node.center;
         let mut current = 0;
-        for y in pos.0.y - foliage_height + offset..pos.0.y + offset {
+        // Vanilla: y from (centerY - foliageHeight + offset) to (centerY + offset) inclusive.
+        let y_start = pos.0.y - foliage_height + offset;
+        let y_end = pos.0.y + offset;
+        for y in y_start..=y_end {
             let delta = pos.0.y - y;
+            // Tapered crown radius (vanilla MegaPineFoliagePlacer).
             let rad = radius
                 + node.foliage_radius
-                + (delta as f32 / foliage_height as f32 * 3.5).floor() as i32;
-            let radius = if delta > 0 && rad == current && (y & 1) == 0 {
-                radius + 1
+                + if foliage_height > 0 {
+                    (delta as f32 / foliage_height as f32 * 3.5).floor() as i32
+                } else {
+                    0
+                };
+            // Place with tapered radius — not the base `radius` (that left bare trunks).
+            let place_r = if delta > 0 && rad == current && (y & 1) == 0 {
+                rad + 1
             } else {
-                radius
+                rad
             };
             FoliagePlacer::generate_square(
                 &mut foliage_positions,
@@ -43,7 +52,7 @@ impl MegaPineFoliagePlacer {
                 chunk,
                 random,
                 BlockPos::new(pos.0.x, y, pos.0.z),
-                radius,
+                place_r,
                 0,
                 node.giant_trunk,
                 foliage_provider,

@@ -395,13 +395,40 @@ impl Level {
             }
         }
 
-        self.tasks.wait().await;
-        self.chunk_system_tasks.wait().await;
+        // Bound waits — stuck chunk tasks must not freeze Ctrl+C shutdown forever.
+        if timeout(Duration::from_secs(20), self.tasks.wait())
+            .await
+            .is_err()
+        {
+            warn!("Timed out waiting for level tasks for {}.", world_id);
+        }
+        if timeout(Duration::from_secs(20), self.chunk_system_tasks.wait())
+            .await
+            .is_err()
+        {
+            warn!("Timed out waiting for chunk system tasks for {}.", world_id);
+        }
 
         info!("Flushing chunk data to disk for {}...", world_id);
-        self.chunk_saver.block_and_await_ongoing_tasks().await;
+        if timeout(
+            Duration::from_secs(60),
+            self.chunk_saver.block_and_await_ongoing_tasks(),
+        )
+        .await
+        .is_err()
+        {
+            warn!("Timed out flushing chunk data for {}.", world_id);
+        }
         info!("Flushing entity data to disk for {}...", world_id);
-        self.entity_saver.block_and_await_ongoing_tasks().await;
+        if timeout(
+            Duration::from_secs(30),
+            self.entity_saver.block_and_await_ongoing_tasks(),
+        )
+        .await
+        .is_err()
+        {
+            warn!("Timed out flushing entity data for {}.", world_id);
+        }
 
         // save all chunks currently in memory
         let chunks_to_write = self

@@ -380,8 +380,7 @@ impl EntityBase for ArrowEntity {
                         SoundCategory::Neutral,
                         &hit_pos,
                         1.0,
-                        1.0,
-                        0.0,
+                        1.0, 0,
                     );
                     let chunk_pos = entity.chunk_pos.load();
                     world.broadcast_to_chunk(chunk_pos, &sound_packet);
@@ -408,15 +407,31 @@ impl EntityBase for ArrowEntity {
                         target.get_entity().set_on_fire_for_ticks(100);
                     }
 
+                    // Vanilla: damage source is the arrow, cause/attacker is the shooter.
+                    // Without cause, RevengeGoal never sees the skeleton (golem won't fight back).
+                    let owner = self
+                        .owner_id
+                        .and_then(|id| world.get_entity_by_id(id).or_else(|| {
+                            world
+                                .get_player_by_id(id)
+                                .map(|p| p as Arc<dyn EntityBase>)
+                        }));
+                    let owner_ref = owner.as_deref();
                     target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
+                        .damage_with_context(
+                            &*target,
+                            damage as f32,
+                            DamageType::ARROW,
+                            Some(hit_pos),
+                            Some(&*self as &dyn EntityBase),
+                            owner_ref,
+                        )
                         .await;
 
                     if target.get_living_entity().is_some() {
                         let punch = self.punch_level.load(Ordering::Relaxed);
                         if punch > 0
-                            && let Some(owner_id) = self.owner_id
-                            && let Some(owner_entity) = world.get_entity_by_id(owner_id)
+                            && let Some(owner_entity) = owner.as_ref()
                         {
                             crate::entity::combat::handle_knockback(
                                 owner_entity.get_entity(),
@@ -431,8 +446,7 @@ impl EntityBase for ArrowEntity {
                             SoundCategory::Neutral,
                             &hit_pos,
                             1.0,
-                            1.0,
-                            0.0,
+                            1.0, 0,
                         );
                         world.broadcast_packet_all(&sound_packet);
                     }

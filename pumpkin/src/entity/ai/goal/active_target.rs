@@ -4,21 +4,33 @@ use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
-use crate::entity::{EntityBase, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase, mob::MobEntity};
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use rand::RngExt;
 use std::future::Future;
 use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
 
+/// What entity types this goal may acquire.
+enum TargetKind {
+    /// Single entity type (player / zombie / …).
+    Exact(&'static EntityType),
+    /// Any entity in a spawn category, minus an exclusion list.
+    /// Vanilla iron golem: Monster category, exclude Creeper.
+    Category {
+        category: &'static MobCategory,
+        exclude: &'static [&'static EntityType],
+    },
+}
+
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    target_type: &'static EntityType,
+    kind: TargetKind,
     target_predicate: TargetPredicate,
 }
 
@@ -49,7 +61,7 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type,
+            kind: TargetKind::Exact(target_type),
             target_predicate,
         }
     }
@@ -70,13 +82,49 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
-            target_type,
+            kind: TargetKind::Exact(target_type),
+            target_predicate,
+        })
+    }
+
+    /// Vanilla iron-golem style: target every Monster-category mob except those in
+    /// `exclude` (typically just creeper). Single goal so the closest living
+    /// hostile wins — no corpse of type A blocking a living type B.
+    #[must_use]
+    pub fn for_category(
+        mob: &MobEntity,
+        category: &'static MobCategory,
+        exclude: &'static [&'static EntityType],
+        reciprocal_chance: i32,
+        check_visibility: bool,
+    ) -> Box<Self> {
+        let track_target_goal = TrackTargetGoal::with_default(check_visibility);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
+        Box::new(Self {
+            track_target_goal,
+            target: None,
+            reciprocal_chance: to_goal_ticks(reciprocal_chance),
+            kind: TargetKind::Category { category, exclude },
             target_predicate,
         })
     }
 
     pub fn set_target(&mut self, target: Option<Arc<dyn EntityBase>>) {
         self.target = target;
+    }
+
+    fn matches_kind(&self, entity_type: &'static EntityType) -> bool {
+        match self.kind {
+            TargetKind::Exact(want) => entity_type.id == want.id,
+            TargetKind::Category { category, exclude } => {
+                entity_type.category == category
+                    && !exclude.iter().any(|e| e.id == entity_type.id)
+            }
+        }
     }
 
     fn find_closest_target(&mut self, mob: &MobEntity) {
@@ -89,39 +137,65 @@ impl ActiveTargetGoal {
 
         let world = mob.living_entity.entity.world.load();
 
-        // Vanilla searches using getEyeY(), so we offset the position by the eye height
-        let mut search_pos = mob.living_entity.entity.pos.load();
+        // Search volume is centered on the eye (vanilla), but ranking uses feet
+        // position so we don't prefer a far mob that happens to match eye height.
+        let mob_pos = mob.living_entity.entity.pos.load();
+        let mut search_pos = mob_pos;
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+        // Minestom ClosestEntityTarget / vanilla ActiveTargetGoal: scan nearby
+        // candidates and pick the closest that passes the predicate. Do NOT take
+        // the raw closest entity then filter — a corpse would block retargeting.
+        let mut best: Option<(f64, Arc<dyn EntityBase>)> = None;
 
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
+        let looking_for_player = matches!(
+            self.kind,
+            TargetKind::Exact(t) if t.id == EntityType::PLAYER.id
+        );
+
+        if looking_for_player {
+            for player in world.get_nearby_players(search_pos, follow_range) {
+                let entity = player.clone() as Arc<dyn EntityBase>;
+                let Some(living) = entity.get_living_entity() else {
+                    continue;
+                };
+                if !self
                     .target_predicate
                     .test(&world, Some(&mob.living_entity), living)
-            {
-                self.target = Some(potential_entity);
-                return;
+                {
+                    continue;
+                }
+                let dist_sq = mob_pos.squared_distance_to_vec(&entity.get_entity().pos.load());
+                if best.as_ref().is_none_or(|(d, _)| dist_sq < *d) {
+                    best = Some((dist_sq, entity));
+                }
             }
         } else {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
-
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
+            for entity in world
+                .get_nearby_entities(search_pos, follow_range)
+                .into_values()
+            {
+                let et = entity.get_entity().entity_type;
+                if !self.matches_kind(et) {
+                    continue;
+                }
+                let Some(living) = entity.get_living_entity() else {
+                    continue;
+                };
+                if !self
                     .target_predicate
                     .test(&world, Some(&mob.living_entity), living)
-            {
-                self.target = Some(potential_entity);
-                return;
+                {
+                    continue;
+                }
+                let dist_sq = mob_pos.squared_distance_to_vec(&entity.get_entity().pos.load());
+                if best.as_ref().is_none_or(|(d, _)| dist_sq < *d) {
+                    best = Some((dist_sq, entity));
+                }
             }
         }
-        self.target = None;
+
+        self.target = best.map(|(_, e)| e);
     }
 }
 
@@ -153,6 +227,45 @@ impl Goal for ActiveTargetGoal {
         Box::pin(async {
             self.track_target_goal.stop(mob).await;
         })
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            // Periodically re-scan for a *closer* living target. Vanilla keeps the
+            // first lock until invalid; that causes "chase far zombie while near
+            // one is hitting me" when Revenge hasn't fired yet. If a candidate is
+            // meaningfully closer (2+ blocks), switch.
+            if mob.get_random().random_range(0..10) != 0 {
+                return;
+            }
+            let current = mob.get_mob_entity().target.lock().await.clone();
+            let Some(current) = current else {
+                return;
+            };
+            if let Some(living) = current.get_living_entity()
+                && !living.is_alive()
+            {
+                return;
+            }
+
+            let mob_pos = mob.get_entity().pos.load();
+            let current_dist = mob_pos.squared_distance_to_vec(&current.get_entity().pos.load());
+
+            self.find_closest_target(mob.get_mob_entity());
+            if let Some(best) = self.target.clone() {
+                let best_dist = mob_pos.squared_distance_to_vec(&best.get_entity().pos.load());
+                // Switch if closer by at least ~2 blocks, or different entity much nearer.
+                if best.get_entity().entity_id != current.get_entity().entity_id
+                    && best_dist + 4.0 < current_dist
+                {
+                    mob.set_mob_target(Some(best)).await;
+                }
+            }
+        })
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
     }
 
     fn controls(&self) -> Controls {

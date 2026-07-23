@@ -446,6 +446,8 @@ impl MoveControlTrait for SlimeMoveControl {
             }
             living_entity.jumping.store(false, Ordering::SeqCst);
         }
+        // Attribute path: hop writes zza as a modifier; travel multiplies MOVEMENT_SPEED once.
+        living_entity.living_speed.store(0.0);
         living_entity.movement_input.store(movement_input);
     }
 }

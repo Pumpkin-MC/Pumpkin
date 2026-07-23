@@ -117,7 +117,7 @@ impl CommandExecutor for Executor {
             };
 
             // Use same random seed for all targets to ensure sound synchronization
-            let seed = rng().random::<f64>();
+            let seed = rng().random::<i64>();
 
             // Track how many players actually received the sound
             let mut players_who_heard = 0;
@@ -129,9 +129,14 @@ impl CommandExecutor for Executor {
                 // Check if player can hear the sound based on volume and distance
                 let player_pos = target.living_entity.entity.pos.load();
                 let distance = player_pos.squared_distance_to_vec(&pos);
-                let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
+                // Vanilla: volume > 1 ? 16*volume : 16; compare squared distance.
+                let max_distance = if volume > 1.0 {
+                    16.0 * f64::from(volume)
+                } else {
+                    16.0
+                };
 
-                if distance <= max_distance || min_volume > 0.0 {
+                if distance <= max_distance * max_distance || min_volume > 0.0 {
                     target
                         .play_sound(sound as u16, source, &pos, volume, pitch, seed)
                         .await;

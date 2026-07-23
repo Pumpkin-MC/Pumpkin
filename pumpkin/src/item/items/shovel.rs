@@ -73,7 +73,7 @@ impl ItemBehaviour for ShovelItem {
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
-                    let seed = rng().random::<f64>();
+                    let seed = rng().random::<i64>();
                     player
                         .play_sound(
                             Sound::BlockFireExtinguish as u16,

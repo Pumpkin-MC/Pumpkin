@@ -179,12 +179,15 @@ pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
+    // Mark stopping early so a second Ctrl+C can force-exit during long saves.
+    SERVER_IS_STOPPING.store(true, Ordering::Release);
     STOP_INTERRUPT.cancel();
 }
 
 pub fn stop_or_exit_server() {
-    if SERVER_IS_STOPPING.load(Ordering::Acquire) {
-        // Server is already stopping, so we forcefully exit.
+    if SERVER_IS_STOPPING.load(Ordering::Acquire) || SHOULD_STOP.load(Ordering::Acquire) {
+        // Already stopping (or stuck in shutdown) — force exit immediately.
+        warn!("Force exit: shutdown already in progress");
         exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
     } else {
         stop_server();
@@ -389,43 +392,74 @@ impl PumpkinServer {
 
         info!("Stopped accepting incoming connections");
 
-        if let Err(e) = self
-            .server
-            .player_data_storage
-            .save_all_players(&self.server)
-            .await
+        // Bounded shutdown steps so Ctrl+C never hangs forever on I/O or stuck tasks.
+        // Second Ctrl+C still force-exits via stop_or_exit_server.
+        const SHUTDOWN_STEP_TIMEOUT: Duration = Duration::from_secs(15);
+
+        match tokio::time::timeout(
+            SHUTDOWN_STEP_TIMEOUT,
+            self.server
+                .player_data_storage
+                .save_all_players(&self.server),
+        )
+        .await
         {
-            error!("Error saving all players during shutdown: {e}");
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => error!("Error saving all players during shutdown: {e}"),
+            Err(_) => warn!("Timed out saving players during shutdown"),
         }
 
-        if let Err(e) = self
-            .server
-            .advancement_manager
-            .save_all_players(&self.server.get_all_players())
-            .await
+        match tokio::time::timeout(
+            SHUTDOWN_STEP_TIMEOUT,
+            self.server
+                .advancement_manager
+                .save_all_players(&self.server.get_all_players()),
+        )
+        .await
         {
-            error!("Error saving all players advancements during shutdown: {e}");
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => error!("Error saving all players advancements during shutdown: {e}"),
+            Err(_) => warn!("Timed out saving advancements during shutdown"),
         }
 
         let kick_message = TextComponent::text("Server stopped");
-        for player in self.server.get_all_players() {
-            player
-                .kick(DisconnectReason::Shutdown, kick_message.clone())
+        let players = self.server.get_all_players();
+        // Kick in parallel with a short timeout — do not block forever on a dead TCP write.
+        let kick_futs = players.into_iter().map(|player| {
+            let msg = kick_message.clone();
+            async move {
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(3),
+                    player.kick(DisconnectReason::Shutdown, msg),
+                )
                 .await;
-        }
+            }
+        });
+        let _ = tokio::time::timeout(Duration::from_secs(5), futures::future::join_all(kick_futs))
+            .await;
 
         info!("Ending player tasks");
 
         tasks.close();
-        tasks.wait().await;
+        match tokio::time::timeout(Duration::from_secs(10), tasks.wait()).await {
+            Ok(()) => {}
+            Err(_) => warn!("Timed out waiting for network tasks; continuing shutdown"),
+        }
 
-        self.unload_plugins().await;
+        match tokio::time::timeout(Duration::from_secs(5), self.unload_plugins()).await {
+            Ok(()) => {}
+            Err(_) => warn!("Timed out unloading plugins"),
+        }
 
         info!("Starting save.");
 
-        self.server.shutdown().await;
-
-        info!("Completed save!");
+        // World save can take a while with many chunks; 3 minutes before force-continue.
+        match tokio::time::timeout(Duration::from_secs(180), self.server.shutdown()).await {
+            Ok(()) => info!("Completed save!"),
+            Err(_) => {
+                error!("Timed out during world save — some data may be incomplete");
+            }
+        }
 
         if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
@@ -686,7 +720,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     let _ = rx_reply.blocking_recv();
                 }
                 Err(ReadlineError::Interrupted) => {
-                    info!("CTRL-C");
+                    info!("CTRL-C — stopping server (press again to force exit)");
                     stop_or_exit_server();
                     break;
                 }

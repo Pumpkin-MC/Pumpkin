@@ -101,7 +101,8 @@ impl TargetPredicate {
             return false;
         }
 
-        if !target.is_part_of_game() {
+        // Dead / dying / removed entities are not valid targets (vanilla TargetPredicate).
+        if !target.is_alive() || !target.is_part_of_game() {
             return false;
         }
 

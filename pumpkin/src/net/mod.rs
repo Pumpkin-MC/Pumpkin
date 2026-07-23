@@ -244,7 +244,16 @@ impl ClientPlatform {
 
     pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet(&entity.get_entity().create_spawn_packet()),
+            Self::Java(java) => {
+                java.try_enqueue_packet(&entity.get_entity().create_spawn_packet());
+                // Vanilla also sends equipment with the entity so weapons/armor show
+                // immediately (vindicator axe, skeleton bow, etc.).
+                if let Some(living) = entity.get_living_entity()
+                    && let Some(equip) = living.equipment_packet_if_any()
+                {
+                    java.try_enqueue_packet(&equip);
+                }
+            }
             Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
         }
     }

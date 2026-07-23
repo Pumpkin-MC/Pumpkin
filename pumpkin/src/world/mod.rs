@@ -15,7 +15,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::atomic::Ordering,
+    sync::atomic::{AtomicU8, Ordering},
 };
 use tracing::{debug, error, info, trace, warn};
 
@@ -225,6 +225,9 @@ pub struct World {
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    /// Cached ambient sky darken (0–11). Updated each environment tick so
+    /// monster spawn light checks can run without locking time/weather.
+    pub sky_darken: AtomicU8,
 }
 
 impl PartialEq for World {
@@ -313,7 +316,41 @@ impl World {
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            sky_darken: AtomicU8::new(0),
         }
+    }
+
+    /// Vanilla `Level.calculateAmbientDarkness` / sky darken (0–11).
+    ///
+    /// Used by monster spawn light tests so open sky is dark at night.
+    #[must_use]
+    pub fn calculate_sky_darken(time_of_day: i64, rain_level: f32, thunder_level: f32) -> u8 {
+        let d = 1.0 - f64::from(rain_level) * 5.0 / 16.0;
+        let e = 1.0 - f64::from(thunder_level) * 5.0 / 16.0;
+        // Sky angle from vanilla DimensionType.getSkyAngle
+        let day_frac = {
+            let t = (time_of_day as f64) / 24000.0 - 0.25;
+            t - t.floor()
+        };
+        let angle = {
+            let cos_part = 0.5 - (day_frac * std::f64::consts::PI).cos() / 2.0;
+            (day_frac * 2.0 + cos_part) / 3.0
+        };
+        let f = {
+            let cos = (angle * std::f64::consts::TAU).cos();
+            0.5 + 2.0 * cos.clamp(-0.25, 0.25)
+        };
+        ((1.0 - f * d * e) * 11.0).round().clamp(0.0, 11.0) as u8
+    }
+
+    /// Effective light at a position after subtracting ambient sky darken
+    /// (vanilla `Level.getLightLevel(pos, ambientDarkness)`).
+    #[must_use]
+    pub fn get_light_level_with_darken(&self, pos: &BlockPos, ambient_darkness: u8) -> u8 {
+        let sky = self.get_sky_light_level(pos);
+        let block = self.get_block_light_level(pos).unwrap_or(0);
+        let sky_after = sky.saturating_sub(ambient_darkness);
+        sky_after.max(block)
     }
 
     pub fn update_active_chunks(self: &Arc<Self>) {
@@ -394,12 +431,47 @@ impl World {
     }
 
     /// Sends an entity status update to all players tracking the specified entity.
+    ///
+    /// Java: `ClientboundEntityEventPacket` (entity event / status byte).
+    /// Bedrock: `ActorEvent` with the same numeric codes where they align
+    /// (e.g. iron golem arm raise = 4 = `StartAttacking`).
     pub fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
+        use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
+
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityStatus::new(entity.entity_id, status as i8),
-        );
+        let status_byte = status as i8;
+        let je = CEntityStatus::new(entity.entity_id, status_byte);
+
+        // Map shared status codes used by both editions. Unknowns fall back to
+        // Hurt so Bedrock still receives *something* rather than a silent drop.
+        let be_type = match status_byte {
+            1 => ActorEventType::Jump,
+            3 => ActorEventType::Death,
+            4 => ActorEventType::StartAttacking,
+            5 => ActorEventType::StopAttacking,
+            6 => ActorEventType::TamingFailed,
+            7 => ActorEventType::TamingSucceeded,
+            8 => ActorEventType::ShakeWetness,
+            9 => ActorEventType::UseItem,
+            10 => ActorEventType::EatGrass,
+            11 => ActorEventType::StartOfferFlower,
+            12 | 18 => ActorEventType::LoveHearts,
+            13 => ActorEventType::VillagerAngry,
+            14 => ActorEventType::VillagerHappy,
+            15 => ActorEventType::WitchHatMagic,
+            16 => ActorEventType::ZombieConverting,
+            17 => ActorEventType::FireworksExplode,
+            21 => ActorEventType::GuardianAttackSound,
+            34 => ActorEventType::StopOfferFlower,
+            _ => ActorEventType::Hurt,
+        };
+        let be = SActorEvent {
+            entity_runtime_id: VarLong(i64::from(entity.entity_id)),
+            event_type: be_type,
+            event_data: VarInt(0),
+            fire_at_position: None,
+        };
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je, &be);
     }
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
@@ -753,7 +825,8 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        // Same path as play_sound_raw so distance filtering matches vanilla.
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -762,7 +835,7 @@ impl World {
             1.0,
             seed,
         );
-        self.broadcast_packet_all(&packet);
+        self.broadcast_sound_packet(position, 1.0, &packet, None);
     }
 
     pub fn play_sound_fine(
@@ -786,6 +859,40 @@ impl World {
         self.play_sound_raw_expect(player, sound as u16, category, position, 1.0, 1.0);
     }
 
+    /// Vanilla `PlayerManager.sendToAround` range for a sound with the given volume:
+    /// `volume > 1.0 ? 16.0 * volume : 16.0` (euclidean blocks).
+    #[must_use]
+    pub fn sound_hear_distance(volume: f32) -> f64 {
+        if volume > 1.0 {
+            16.0 * f64::from(volume)
+        } else {
+            16.0
+        }
+    }
+
+    fn broadcast_sound_packet(
+        &self,
+        position: &Vector3<f64>,
+        volume: f32,
+        packet: &CSoundEffect,
+        except: Option<uuid::Uuid>,
+    ) {
+        let max_dist_sq = {
+            let d = Self::sound_hear_distance(volume);
+            d * d
+        };
+        let players = self.players.load();
+        let recipients = players.iter().filter(|p| {
+            if except.is_some_and(|id| p.gameprofile.id == id) {
+                return false;
+            }
+            let player_pos = p.position();
+            player_pos.squared_distance_to_vec(position) <= max_dist_sq
+        });
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(packet, recipients_by_version);
+    }
+
     pub fn play_sound_raw(
         &self,
         sound_id: u16,
@@ -794,22 +901,10 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        // Vanilla uses ThreadLocalRandom.nextLong() for the sound seed.
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
-
-        // Calculate the number of chunks the sound can be heard from based on its volume.
-        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
-        let chunk_pos = BlockPos::floored_v(*position).chunk_position();
-
-        let players = self.players.load();
-        let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            // If the sound reaches their chunk, send it!
-            is_within_view_distance(chunk_pos, center, audible_chunks)
-        });
-
-        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
-        Self::broadcast_java_grouped(&packet, recipients_by_version);
+        self.broadcast_sound_packet(position, volume, &packet, None);
     }
 
     pub fn play_sound_raw_expect(
@@ -821,12 +916,13 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
-        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
-        let chunk_pos = BlockPos::floored_v(*position).chunk_position();
-
+        let max_dist_sq = {
+            let d = Self::sound_hear_distance(volume);
+            d * d
+        };
         let players = self.players.load();
         let recipients = players.iter().filter(|p| {
             // Skip the expected player
@@ -834,8 +930,8 @@ impl World {
                 return false;
             }
 
-            let center = p.get_entity().chunk_pos.load();
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            let player_pos = p.position();
+            player_pos.squared_distance_to_vec(position) <= max_dist_sq
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1153,6 +1249,11 @@ impl World {
 
         let mut weather = self.weather.lock().await;
         weather.tick_weather(self);
+
+        // Cache sky darken for spawn / brightness (vanilla ambientDarkness).
+        let sky_darken =
+            Self::calculate_sky_darken(time_of_day, weather.rain_level, weather.thunder_level);
+        self.sky_darken.store(sky_darken, Relaxed);
 
         if self.should_skip_night() && is_night {
             let mut level_time = self.level_time.lock().await;
@@ -3664,10 +3765,8 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player
-                            .client
-                            .enqueue_packet(&base_entity.create_spawn_packet())
-                            .await;
+                        // Spawn + equipment (axe/armor) so weapons render on the client.
+                        player.client.try_enqueue_spawn_packet(&entity);
                         entities_to_add.push(entity);
                     }
 
@@ -3685,10 +3784,7 @@ impl World {
                     for entity in world.entities.load().iter() {
                         let base_entity = entity.get_entity();
                         if base_entity.chunk_pos.load() == position {
-                            player
-                                .client
-                                .enqueue_packet(&base_entity.create_spawn_packet())
-                                .await;
+                            player.client.try_enqueue_spawn_packet(entity);
                         }
                     }
                 }
@@ -4125,8 +4221,10 @@ impl World {
     }
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
-        self.broadcast_entity_spawn(&entity);
+        // Equip weapons/armor *before* spawn packets so clients see the bow/axe
+        // on the first entity spawn (skeleton bow, vindicator axe, …).
         entity.init_data_tracker().await;
+        self.broadcast_entity_spawn(&entity);
         self.add_entity_silent(entity).await;
     }
 
@@ -4391,10 +4489,15 @@ impl World {
         replaced_block_state_id
     }
 
+    /// Light for monster/general checks — includes sky darken (night/rain).
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level(pos);
-        let block_light = self.get_block_light_level(pos).unwrap_or(0);
-        sky_light.max(block_light) // TODO: getSkyDarken
+        let ambient = self.sky_darken.load(Relaxed);
+        self.get_light_level_with_darken(pos, ambient)
+    }
+
+    /// Vanilla animal spawn light: raw block/sky max with ambient 0 (no sky darken).
+    pub fn get_raw_brightness_no_darken(&self, pos: &BlockPos) -> u8 {
+        self.get_light_level_with_darken(pos, 0)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
