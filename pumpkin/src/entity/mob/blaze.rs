@@ -52,6 +52,10 @@ impl BlazeEntity {
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
             );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::SNOW_GOLEM, true),
+            );
         };
 
         mob_arc

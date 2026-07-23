@@ -5,9 +5,11 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed::BreedGoal, look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
 
@@ -20,6 +22,11 @@ pub struct TurtleEntity {
 impl TurtleEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        {
+            let mut nav = mob_entity.navigator.lock().unwrap();
+            nav.set_pathfinding_malus(PathType::Water, 0.0);
+            nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
+        }
         let turtle = Self { mob_entity };
         let mob_arc = Arc::new(turtle);
         let mob_weak: Weak<dyn Mob> = {
@@ -30,10 +37,12 @@ impl TurtleEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            // Home/lay-egg goals TODO.
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
