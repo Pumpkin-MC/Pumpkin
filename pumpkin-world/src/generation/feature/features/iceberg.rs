@@ -8,7 +8,7 @@ use pumpkin_util::{
 
 use crate::{block::BlockStateCodec, generation::proto_chunk::GenerationCache};
 
-const SEA_LEVEL: i32 = 63; // TODO: use getSeaLevel() instead of hardcoding
+use crate::generation::OVERWORLD_SEA_LEVEL as SEA_LEVEL;
 
 pub struct IcebergFeature {
     pub main_block: BlockStateCodec,

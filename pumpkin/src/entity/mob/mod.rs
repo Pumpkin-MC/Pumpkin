@@ -328,6 +328,26 @@ impl MobEntity {
         true
     }
 
+    /// Vanilla `Monster.checkAnyLightMonsterSpawnRules` — peaceful only, no light gate.
+    /// Used by husk (partial), silverfish, endermite, blaze in nether, etc.
+    pub fn check_any_light_monster_spawn_rules(world: &World, _pos: &BlockPos) -> bool {
+        world.level_info.load().difficulty != Difficulty::Peaceful
+    }
+
+    /// Vanilla `Monster.checkSurfaceMonstersSpawnRules` — dark + open sky.
+    /// Used by stray / parched natural spawns.
+    pub fn check_surface_monster_spawn_rules(
+        world: &World,
+        pos: &BlockPos,
+        is_thundering: bool,
+    ) -> bool {
+        if !Self::check_monster_spawn_rules(world, pos, is_thundering) {
+            return false;
+        }
+        // Approximate canSeeSky: full sky light at feet.
+        world.get_sky_light_level(pos) >= 15
+    }
+
     /// Melee attack entry — mirrors vanilla `Mob.doHurtTarget` /
     /// `IronGolem.doHurtTarget` (Paper/Leaves leave this NMS path unpatched aside
     /// from Bukkit target-reason hooks).

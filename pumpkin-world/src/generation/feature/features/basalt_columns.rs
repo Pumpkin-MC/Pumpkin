@@ -6,7 +6,7 @@ use pumpkin_util::{
 
 use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 
-const LAVA_SEA_LEVEL: i32 = 32; // TODO: use getSeaLevel() instead of hardcoding this
+use crate::generation::NETHER_LAVA_SEA_LEVEL as LAVA_SEA_LEVEL;
 const CLUSTERED_REACH: i32 = 5;
 const UNCLUSTERED_REACH: i32 = 8;
 const CLUSTERED_SIZE: i32 = 50;

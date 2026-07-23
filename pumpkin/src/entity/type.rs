@@ -321,6 +321,24 @@ pub fn check_spawn_rules(
 ) -> bool {
     let id = entity_type.id;
 
+    // --- Surface undead (dark + canSeeSky): Stray / Parched ---
+    if id == EntityType::STRAY.id || id == EntityType::PARCHED.id {
+        return mob::MobEntity::check_surface_monster_spawn_rules(world, pos, is_thundering);
+    }
+
+    // --- Any-light monsters (peaceful only): Husk, Silverfish, Endermite ---
+    // Vanilla Husk also requires canSeeSky for natural spawns.
+    if id == EntityType::HUSK.id {
+        if !mob::MobEntity::check_any_light_monster_spawn_rules(world, pos) {
+            return false;
+        }
+        return world.get_sky_light_level(pos) >= 15;
+    }
+    if id == EntityType::SILVERFISH.id || id == EntityType::ENDERMITE.id {
+        return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos);
+    }
+
+    // --- Standard monster light rules (26.2 Monster.checkMonsterSpawnRules) ---
     if id == EntityType::BOGGED.id
         || id == EntityType::CAVE_SPIDER.id
         || id == EntityType::CREEPER.id
@@ -340,10 +358,22 @@ pub fn check_spawn_rules(
         || id == EntityType::ILLUSIONER.id
         || id == EntityType::VEX.id
         || id == EntityType::VINDICATOR.id
+        || id == EntityType::PILLAGER.id
         || id == EntityType::WARDEN.id
         || id == EntityType::DROWNED.id
-        || id == EntityType::HUSK.id
-        || id == EntityType::STRAY.id
+        || id == EntityType::PHANTOM.id
+        || id == EntityType::BLAZE.id
+        || id == EntityType::GHAST.id
+        || id == EntityType::MAGMA_CUBE.id
+        || id == EntityType::ZOGLIN.id
+        || id == EntityType::HOGLIN.id
+        || id == EntityType::PIGLIN.id
+        || id == EntityType::PIGLIN_BRUTE.id
+        || id == EntityType::GUARDIAN.id
+        || id == EntityType::ELDER_GUARDIAN.id
+        || id == EntityType::SHULKER.id
+        || id == EntityType::BREEZE.id
+        || id == EntityType::ZOMBIFIED_PIGLIN.id
     {
         // Drowned are MONSTER but must spawn in water (vanilla InWater restriction).
         // Without this, ocean biomes flood the sea with unlimited drowned.
@@ -352,6 +382,13 @@ pub fn check_spawn_rules(
             let head = world.get_block_state(&pos.up());
             let in_water = feet.is_liquid() || head.is_liquid() || feet.is_waterlogged();
             if !in_water {
+                return false;
+            }
+        }
+        // Guardians also need water.
+        if id == EntityType::GUARDIAN.id || id == EntityType::ELDER_GUARDIAN.id {
+            let feet = world.get_block_state(pos);
+            if !(feet.is_liquid() || feet.is_waterlogged()) {
                 return false;
             }
         }

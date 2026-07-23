@@ -172,7 +172,7 @@ impl DungeonFeature {
             }
         }
 
-        // TODO: set spawner entity type
+        // Vanilla dungeon: random spawner mob written into SpawnData NBT.
         let mob = DUNGEON_MOBS[random.next_bounded_i32(DUNGEON_MOBS.len() as i32) as usize];
         chunk.set_block_state(&pos.0, Block::SPAWNER.default_state);
 

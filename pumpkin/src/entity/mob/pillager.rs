@@ -5,8 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -29,24 +30,31 @@ impl PillagerEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
+            // Vanilla 26.2 Pillager.registerGoals
+            // (RangedCrossbowAttackGoal / HoldGroundAttack TODO — melee stand-in)
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // Pillagers use crossbows, but for now we give them melee
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
+                1,
+                Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 1.0, 1.2)),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(0.6)));
+            goal_selector.add_goal(
+                9,
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 15.0),
+            );
+            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
+            // AbstractVillager checkVisibility=false
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, false),
             );
             target_selector.add_goal(
                 3,

@@ -1,6 +1,5 @@
 use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
-use crate::entity::ai::goal::flee_sun::FleeSunGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
@@ -38,11 +37,14 @@ impl ZombieEntityBase {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Zombie.registerGoals + addBehaviourGoals
+            // (SpearUseGoal / MoveThroughVillage / break-door TODO)
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, ZombieAttackGoal::new(1.0, false));
-            // Vanilla RestrictSun / FleeSun — walk under trees when no target.
-            goal_selector.add_goal(3, Box::new(FleeSunGoal::new(1.0)));
+            // ZombieAttackGoal priority 3 (vanilla addBehaviourGoals)
+            goal_selector.add_goal(3, ZombieAttackGoal::new(1.0, false));
+            // ZombieAttackTurtleEggGoal priority 4
             goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3));
+            // WaterAvoidingRandomStrollGoal priority 7
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
@@ -50,19 +52,22 @@ impl ZombieEntityBase {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
+            // HurtByTargetGoal.setAlertOthers(ZombifiedPiglin) — alert TODO
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // AbstractVillager: checkVisibility=false in vanilla
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, false),
             );
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
             );
+            // Turtle baby-on-land selector TODO — still target turtles
             target_selector.add_goal(
                 5,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),

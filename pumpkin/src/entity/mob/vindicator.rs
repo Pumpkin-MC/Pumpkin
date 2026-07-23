@@ -8,9 +8,10 @@ use pumpkin_data::item_stack::ItemStack;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -32,20 +33,23 @@ impl VindicatorEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
+            // Vanilla 26.2 Vindicator.registerGoals
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // Vanilla VindicatorMeleeAttackGoal sets aggressive (arms raised / axe out).
-            // speed 1.15 ≈ vanilla raid vindicator chase; pause_when_mob_idle=false so
-            // they keep pursuing even when the navigator briefly goes idle mid-path.
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.15, false)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
+                1,
+                Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 1.0, 1.2)),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            // MeleeAttackGoal(1.0, false) — speed 1.15 used for snappier raids
+            goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.15, false)));
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(0.6)));
+            goal_selector.add_goal(
+                9,
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 3.0),
+            );
+            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // Hurt-by first so revenge outranks opportunistic player scan.
+            // HurtByTargetGoal (Raider class filter TODO)
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
@@ -56,7 +60,7 @@ impl VindicatorEntity {
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
             );
             target_selector.add_goal(
-                4,
+                3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
             );
         };

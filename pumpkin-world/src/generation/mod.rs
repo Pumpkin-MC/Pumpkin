@@ -17,6 +17,12 @@ pub mod rule;
 pub mod structure;
 mod surface;
 
+/// Default overworld sea level (vanilla `NoiseGeneratorSettings.OVERWORLD`).
+/// Features that cannot read generator settings fall back to this — matches 26.2.
+pub const OVERWORLD_SEA_LEVEL: i32 = 63;
+/// Nether lava sea level used by basalt columns / similar nether surface features.
+pub const NETHER_LAVA_SEA_LEVEL: i32 = 32;
+
 use generator::{GeneratorInit, VanillaGenerator};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{

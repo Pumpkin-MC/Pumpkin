@@ -17,10 +17,10 @@ use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
+        creeper_ignite::CreeperIgniteGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -63,11 +63,20 @@ impl CreeperEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Creeper.registerGoals
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
+            // AvoidEntityGoal(Ocelot/Cat, 6.0f, 1.0, 1.2)
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::OCELOT, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::CAT, 6.0, 1.0, 1.2)),
+            );
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
-
             goal_selector.add_goal(
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),

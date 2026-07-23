@@ -65,19 +65,22 @@ impl PlaceOnGroundTreeDecorator {
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) {
-        let state = GenerationCache::get_block_state(chunk, &pos.0);
-        let up_pos = pos.up();
-        let up_state = GenerationCache::get_block_state(chunk, &up_pos.0);
-        // TODO
+        // Snap Y to motion-blocking-no-leaves surface (vanilla PlaceOnGroundDecorator).
+        let surface_y = chunk.top_motion_blocking_block_no_leaves_height_exclusive(pos.0.x, pos.0.z);
+        // height exclusive → solid top is surface_y - 1; place litter at surface_y.
+        let ground = BlockPos::new(pos.0.x, surface_y - 1, pos.0.z);
+        let place_at = BlockPos::new(pos.0.x, surface_y, pos.0.z);
+
+        let state = GenerationCache::get_block_state(chunk, &ground.0);
+        let up_state = GenerationCache::get_block_state(chunk, &place_at.0);
         if (up_state.to_state().is_air() || up_state.to_block_id() == Block::VINE)
             && state.to_state().is_full_cube()
             && !state.to_block_id().has_tag(MINECRAFT_LEAVES)
-        // TODO: using heightmap seems not to work
         {
             chunk.set_block_state(
-                &up_pos.0,
+                &place_at.0,
                 self.block_state_provider
-                    .get(random, up_pos, chunk, block_registry),
+                    .get(random, place_at, chunk, block_registry),
             );
         }
     }

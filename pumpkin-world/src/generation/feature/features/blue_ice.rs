@@ -6,7 +6,7 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-const SEA_LEVEL: i32 = 63; // TODO: use getSeaLevel() instead of hardcoding
+use crate::generation::OVERWORLD_SEA_LEVEL as SEA_LEVEL;
 
 pub struct BlueIceFeature;
 

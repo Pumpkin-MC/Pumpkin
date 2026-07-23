@@ -907,7 +907,8 @@ pub fn is_valid_spawn_position_for_type(
     distance: f64,
     is_thundering: bool,
 ) -> bool {
-    // TODO !SpawnPlacements.checkSpawnRules(entityType, level, EntitySpawnReason.NATURAL, pos, level.random)
+    // SpawnPlacements.checkSpawnRules → is_spawn_position_ok + check_spawn_rules below
+    // (vanilla EntitySpawnReason.NATURAL light / biome rules).
     if category == &MobCategory::MISC {
         return false;
     }

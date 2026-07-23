@@ -12,10 +12,10 @@ use pumpkin_protocol::java::client::play::Metadata;
 use crate::entity::{
     Entity, EntityBase, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, bow_attack::BowAttackGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, bow_attack::BowAttackGoal,
+        flee_sun::FleeSunGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -53,19 +53,26 @@ impl SkeletonEntityBase {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 AbstractSkeleton.registerGoals
+            // (RestrictSun not ported — FleeSun covers daylight shelter.)
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(3, Box::new(FleeSunGoal::new(1.0)));
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
+            );
             if ranged {
-                // Vanilla RangedBowAttackGoal priority ~4, speed 1.0, interval 20.
+                // Vanilla RangedBowAttackGoal priority 4, speed 1.0, interval 20.
                 goal_selector.add_goal(4, BowAttackGoal::new(1.0, 20));
             } else {
                 goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, false)));
             }
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                8,
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
@@ -75,6 +82,12 @@ impl SkeletonEntityBase {
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
+            );
+            // NearestAttackableTargetGoal(Turtle, 10, true, false, BABY_ON_LAND)
+            // — baby filter TODO; still target turtles like undead.
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
             );
         };
 

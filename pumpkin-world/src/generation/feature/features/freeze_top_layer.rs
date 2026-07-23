@@ -4,7 +4,7 @@ use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
-const SEA_LEVEL: i32 = 63; // TODO: getSeaLevel() from the worldgen context instead of hardcoding
+use crate::generation::OVERWORLD_SEA_LEVEL as SEA_LEVEL;
 
 pub struct FreezeTopLayerFeature;
 
