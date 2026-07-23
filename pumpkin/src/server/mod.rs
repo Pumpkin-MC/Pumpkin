@@ -25,6 +25,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_world::chunk_system::GenerationRuntime;
 use pumpkin_world::dimension::into_level;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
@@ -101,6 +102,8 @@ pub struct Server {
     pub item_registry: Arc<ItemRegistry>,
     /// Manages multiple worlds within the server.
     pub worlds: ArcSwap<Vec<Arc<World>>>,
+    /// Shared chunk-generation workers and global admission budget.
+    pub generation_runtime: Arc<GenerationRuntime>,
     /// All the dimensions that exist on the server.
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
@@ -255,6 +258,19 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        let available_cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let generation_threads = advanced_config
+            .world
+            .generation
+            .resolve_threads(available_cpus);
+        let generation_runtime = GenerationRuntime::new(generation_threads)
+            .expect("Failed to build generation thread pool");
+        info!(
+            workers = generation_runtime.worker_count(),
+            admission_limit = generation_runtime.admission_limit(),
+            "Configured background chunk generation"
+        );
+
         let server = Self {
             basic_config,
             advanced_config,
@@ -268,6 +284,7 @@ impl Server {
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
+            generation_runtime,
             dimensions,
             command_dispatcher,
             block_registry: block_registry.clone(),
@@ -298,13 +315,6 @@ impl Server {
         };
         let server = Arc::new(server);
 
-        let gen_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .thread_name(|i| format!("Gen-Pool-{i}"))
-                .build()
-                .expect("Failed to build generation thread pool"),
-        );
-
         let server_clone = server.clone();
         tokio::spawn(async move {
             server_clone
@@ -319,7 +329,7 @@ impl Server {
             let l_info = server.level_info.clone(); // Access from struct
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
-            let pool = gen_pool.clone();
+            let generation_runtime = server.generation_runtime.clone();
 
             tokio::task::spawn_blocking(move || {
                 info!(
@@ -328,7 +338,7 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
+                let level = into_level(dim.clone(), &config, path, seed, Some(generation_runtime));
                 let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
                 let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
                 level.world_portal.store(Arc::new(Some(portal)));
@@ -432,13 +442,12 @@ impl Server {
             let config = Arc::new(server.advanced_config.world.clone());
             let seed = server.level_info.load().world_gen_settings.seed;
 
-            // TODO: gen_pool should be reused
             let level = pumpkin_world::dimension::into_level(
                 dimension.clone(),
                 &config,
                 world_path,
                 seed,
-                None,
+                Some(server.generation_runtime.clone()),
             );
             let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
             let world = Arc::new(world);

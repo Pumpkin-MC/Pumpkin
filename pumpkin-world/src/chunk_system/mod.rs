@@ -15,6 +15,7 @@ pub type IOLock = std::sync::Arc<(
     tokio::sync::Notify,
 )>;
 
+pub mod admission;
 pub mod channel;
 pub mod chunk_holder;
 pub mod chunk_listener;
@@ -29,6 +30,7 @@ pub mod worker_logic;
 #[cfg(test)]
 mod tests;
 
+pub use admission::GenerationRuntime;
 pub use channel::LevelChannel;
 pub use chunk_holder::ChunkHolder;
 pub use chunk_listener::ChunkListener;

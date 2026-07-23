@@ -1,6 +1,8 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
-use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
+use crate::chunk_system::{
+    ChunkListener, ChunkLoading, GenerationRuntime, GenerationSchedule, LevelChannel,
+};
 use crate::generation::generator::WorldGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
@@ -102,7 +104,7 @@ pub struct Level {
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
-    pub gen_pool: Option<Arc<rayon::ThreadPool>>,
+    pub generation_runtime: Option<Arc<GenerationRuntime>>,
 }
 
 pub struct TickData {
@@ -134,7 +136,7 @@ impl Level {
         root_folder: PathBuf,
         seed: i64,
         dimension: Dimension,
-        gen_pool: Option<Arc<rayon::ThreadPool>>,
+        generation_runtime: Option<Arc<GenerationRuntime>>,
     ) -> Arc<Self> {
         let dim_folder = if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
             || dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name
@@ -271,24 +273,23 @@ impl Level {
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
-            gen_pool: gen_pool.clone(),
+            generation_runtime: generation_runtime.clone(),
         });
 
-        // TODO
-        let total_cores = thread::available_parallelism()
-            .map_or(1, std::num::NonZero::get)
-            .saturating_sub(2)
-            .max(1);
-        let threads_per_dimension = (total_cores / 2).max(1);
+        let available_cpus = thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let generation_threads = generation_runtime.as_ref().map_or_else(
+            || level_config.generation.resolve_threads(available_cpus),
+            |runtime| runtime.worker_count(),
+        );
 
         GenerationSchedule::create(
             4,
-            threads_per_dimension,
+            generation_threads,
             level_ref.clone(),
             level_channel,
             listener,
             level_ref.thread_tracker.lock().unwrap().as_mut(),
-            gen_pool,
+            generation_runtime,
         );
 
         level_ref
@@ -296,8 +297,8 @@ impl Level {
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         let level = self.clone();
-        if let Some(pool) = &self.gen_pool {
-            pool.spawn(move || {
+        if let Some(runtime) = &self.generation_runtime {
+            runtime.pool().spawn(move || {
                 let arc_chunk = Arc::new(ChunkEntityData {
                     x: pos.x,
                     z: pos.y,

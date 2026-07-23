@@ -1,3 +1,4 @@
+use super::admission::GenerationPermit;
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
@@ -13,16 +14,29 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
+use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 
 pub enum RecvChunk {
     IO(Chunk),
-    Generation(Cache),
+    Generation {
+        data: Cache,
+        stage: StagedChunkEnum,
+        elapsed: Duration,
+        _permit: GenerationPermit,
+    },
     GenerationFailure {
         pos: ChunkPos,
         stage: StagedChunkEnum,
         error: String,
+        elapsed: Duration,
+        _permit: GenerationPermit,
     },
+}
+
+pub enum GenerationOutcome {
+    Success(Cache),
+    Failure(String),
 }
 
 /// Checks if a chunk needs relighting based on the current lighting configuration
@@ -227,7 +241,7 @@ pub fn run_generation(
     stage: StagedChunkEnum,
     level: &Level,
     _settings: &GenerationSettings,
-) -> RecvChunk {
+) -> GenerationOutcome {
     let portal = level.world_portal.load_full();
     let portal_ref = portal.as_deref().expect("Portal should be initialized");
     // Run generation with panic catching
@@ -237,7 +251,7 @@ pub fn run_generation(
     }));
 
     match result {
-        Ok(cache) => RecvChunk::Generation(cache),
+        Ok(cache) => GenerationOutcome::Success(cache),
         Err(payload) => {
             let msg = payload
                 .downcast_ref::<&str>()
@@ -251,29 +265,53 @@ pub fn run_generation(
 
             error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
 
-            RecvChunk::GenerationFailure {
-                pos,
-                stage,
-                error: msg.to_string(),
-            }
+            GenerationOutcome::Failure(msg.to_string())
         }
     }
 }
 
+pub fn finish_generation(
+    pos: ChunkPos,
+    cache: Cache,
+    stage: StagedChunkEnum,
+    level: &Level,
+    settings: &GenerationSettings,
+    permit: GenerationPermit,
+) -> RecvChunk {
+    let start = Instant::now();
+    let outcome = run_generation(pos, cache, stage, level, settings);
+    let elapsed = start.elapsed();
+    match outcome {
+        GenerationOutcome::Success(data) => RecvChunk::Generation {
+            data,
+            stage,
+            elapsed,
+            _permit: permit,
+        },
+        GenerationOutcome::Failure(error) => RecvChunk::GenerationFailure {
+            pos,
+            stage,
+            error,
+            elapsed,
+            _permit: permit,
+        },
+    }
+}
+
 pub fn generation_work(
-    recv: &crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
+    recv: &crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum, GenerationPermit)>,
     send: &crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
     level: &Arc<Level>,
 ) {
     let settings = GenerationSettings::from_dimension(level.world_gen.dimension());
 
     loop {
-        let Ok((pos, cache, stage)) = recv.recv() else {
+        let Ok((pos, cache, stage, permit)) = recv.recv() else {
             debug!("generation channel closed, exiting");
             break;
         };
 
-        let result = run_generation(pos, cache, stage, level, settings);
+        let result = finish_generation(pos, cache, stage, level, settings, permit);
         if send.send((pos, result)).is_err() {
             break;
         }

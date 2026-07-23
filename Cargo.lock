@@ -2602,7 +2602,6 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "rand",
- "rayon",
  "rsa",
  "rustc-hash",
  "rustc_version_runtime",
