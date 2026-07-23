@@ -10,6 +10,7 @@ use std::{fs, num::NonZeroU8, path::Path};
 use tracing::{debug, warn};
 pub mod fun;
 pub mod logging;
+pub use logging::{development_mode, set_development_mode};
 pub mod networking;
 pub mod plugins;
 pub mod recipe;

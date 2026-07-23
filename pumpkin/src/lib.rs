@@ -65,6 +65,9 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
     use tracing_subscriber::fmt;
 
+    // Gate verbose diagnostics (terrain gen, slow ticks, …) behind config.
+    pumpkin_config::set_development_mode(advanced_config.logging.development);
+
     let logger = advanced_config.logging.enabled.then(|| {
         let level = std::env::var("RUST_LOG")
             .ok()
@@ -169,6 +172,10 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         LOGGER_IMPL.set(logger).is_ok(),
         "Failed to set logger. already initialized"
     );
+
+    if advanced_config.logging.development {
+        info!("logging.development=true — verbose diagnostic logs enabled");
+    }
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);

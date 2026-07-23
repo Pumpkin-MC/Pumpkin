@@ -165,13 +165,23 @@ impl JavaClient {
         if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
             // Client shows multiplayer.disconnect.duplicate_login ("异地登录").
             // We kick the *new* connection; the old session stays online.
-            warn!(
-                "Duplicate login (UUID): new='{}' ip={} uuid={} still_online='{}' — kicking new connection",
-                &profile.name,
-                &self.address.lock().await,
-                &profile.id,
-                &online_player.gameprofile.name
-            );
+            if pumpkin_config::development_mode() {
+                warn!(
+                    "Duplicate login (UUID): new='{}' ip={} uuid={} still_online='{}' — kicking new connection",
+                    &profile.name,
+                    &self.address.lock().await,
+                    &profile.id,
+                    &online_player.gameprofile.name
+                );
+            } else {
+                debug!(
+                    "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (username '{}')",
+                    &self.address.lock().await,
+                    &profile.name,
+                    &profile.id,
+                    &online_player.gameprofile.name
+                );
+            }
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
@@ -183,13 +193,23 @@ impl JavaClient {
 
         // Don't allow a duplicate username
         if let Some(online_player) = &server.get_player_by_name(&profile.name) {
-            warn!(
-                "Duplicate login (name): attempted='{}' ip={} online_uuid={} online='{}' — kicking new connection",
-                &profile.name,
-                &self.address.lock().await,
-                &online_player.gameprofile.id,
-                &online_player.gameprofile.name
-            );
+            if pumpkin_config::development_mode() {
+                warn!(
+                    "Duplicate login (name): attempted='{}' ip={} online_uuid={} online='{}' — kicking new connection",
+                    &profile.name,
+                    &self.address.lock().await,
+                    &online_player.gameprofile.id,
+                    &online_player.gameprofile.name
+                );
+            } else {
+                debug!(
+                    "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', username '{}')",
+                    &self.address.lock().await,
+                    &profile.name,
+                    &online_player.gameprofile.id,
+                    &online_player.gameprofile.name
+                );
+            }
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,

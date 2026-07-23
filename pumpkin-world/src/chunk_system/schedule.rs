@@ -808,14 +808,21 @@ impl GenerationSchedule {
                             );
                         }
                         holder.public = true;
-                        let n = CHUNKS_LOADED_DISK.fetch_add(1, AtomicOrdering::Relaxed) + 1;
-                        if n == 1 || n.is_multiple_of(32) {
-                            info!(
-                                "Chunk load (disk): {:?} ({} full chunks loaded this run)",
-                                pos, n
-                            );
+                        if pumpkin_config::development_mode() {
+                            let n = CHUNKS_LOADED_DISK.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+                            if n == 1 || n.is_multiple_of(32) {
+                                info!(
+                                    "Chunk load (disk): {:?} ({} full chunks loaded this run)",
+                                    pos, n
+                                );
+                            } else {
+                                debug!(
+                                    "Notifying players: chunk {:?} loaded from disk (Full status)",
+                                    pos
+                                );
+                            }
                         } else {
-                            debug!(
+                            trace!(
                                 "Notifying players: chunk {:?} loaded from disk (Full status)",
                                 pos
                             );
@@ -886,16 +893,23 @@ impl GenerationSchedule {
                                         );
                                     }
                                     if let Some(pc) = self.public_chunk_map.get(&new_pos) {
-                                        let n = CHUNKS_GEN_FULL
-                                            .fetch_add(1, AtomicOrdering::Relaxed)
-                                            + 1;
-                                        if n == 1 || n.is_multiple_of(16) {
-                                            info!(
-                                                "Terrain ready: new full chunk {:?} ({} generated this run)",
-                                                new_pos, n
-                                            );
+                                        if pumpkin_config::development_mode() {
+                                            let n = CHUNKS_GEN_FULL
+                                                .fetch_add(1, AtomicOrdering::Relaxed)
+                                                + 1;
+                                            if n == 1 || n.is_multiple_of(16) {
+                                                info!(
+                                                    "Terrain ready: new full chunk {:?} ({} generated this run)",
+                                                    new_pos, n
+                                                );
+                                            } else {
+                                                debug!(
+                                                    "Notifying players: new chunk at {:?} (generation complete)",
+                                                    new_pos
+                                                );
+                                            }
                                         } else {
-                                            debug!(
+                                            trace!(
                                                 "Notifying players: new chunk at {:?} (generation complete)",
                                                 new_pos
                                             );

@@ -246,19 +246,23 @@ pub fn run_generation(
     match result {
         Ok(cache) => {
             let n = GEN_STAGE_DONE.fetch_add(1, AtomicOrdering::Relaxed) + 1;
-            // Always surface slow stages (common when exploring new terrain).
-            if elapsed_ms > 80 {
-                info!(
-                    "Terrain gen slow: chunk {:?} stage {:?} took {}ms (#{})",
-                    pos, stage, elapsed_ms, n
-                );
-            } else if n == 1 || n.is_multiple_of(64) {
-                // Rate-limited progress so console shows generation is happening
-                // without flooding every stage of every chunk.
-                info!(
-                    "Terrain gen: {} stages done (latest {:?} {:?} {}ms)",
-                    n, pos, stage, elapsed_ms
-                );
+            if pumpkin_config::development_mode() {
+                if elapsed_ms > 80 {
+                    info!(
+                        "Terrain gen slow: chunk {:?} stage {:?} took {}ms (#{})",
+                        pos, stage, elapsed_ms, n
+                    );
+                } else if n == 1 || n.is_multiple_of(64) {
+                    info!(
+                        "Terrain gen: {} stages done (latest {:?} {:?} {}ms)",
+                        n, pos, stage, elapsed_ms
+                    );
+                } else {
+                    debug!(
+                        "Terrain gen: chunk {:?} stage {:?} {}ms (#{})",
+                        pos, stage, elapsed_ms, n
+                    );
+                }
             } else {
                 debug!(
                     "Terrain gen: chunk {:?} stage {:?} {}ms (#{})",
