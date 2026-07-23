@@ -1,5 +1,15 @@
 pub mod play;
 use crossbeam::atomic::AtomicCell;
+
+/// Maximum fragments in a single `RakNet` split compound.
+/// Legitimate packets fit well under this; uncapped `split_size` is a remote alloc bomb.
+const MAX_RAKNET_SPLIT_COUNT: u32 = 1024;
+/// Cap outstanding incomplete split compounds per client.
+const MAX_PENDING_SPLIT_COMPOUNDS: usize = 64;
+/// Cap frames waiting in an ordered channel queue.
+const MAX_ORDERED_QUEUE_LEN: usize = 512;
+/// Cap unacked outgoing frames retained for resend.
+const MAX_UNACKED_OUTGOING: usize = 2048;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     io::{Cursor, Error, Write},
@@ -704,7 +714,15 @@ impl BedrockClient {
         }
 
         if frame_set.frames.iter().any(|f| f.reliability.is_reliable()) {
-            self.unacked_outgoing_frames.lock().await.insert(
+            let mut unacked = self.unacked_outgoing_frames.lock().await;
+            // Bound memory if peer never ACKs (never-ACK client retention DoS).
+            if unacked.len() >= MAX_UNACKED_OUTGOING {
+                // Drop oldest by insertion-order proxy: lowest sequence number.
+                if let Some(oldest) = unacked.keys().copied().min() {
+                    unacked.remove(&oldest);
+                }
+            }
+            unacked.insert(
                 sequence,
                 (id, frame_set_buf.clone(), std::time::Instant::now()),
             );
@@ -861,15 +879,34 @@ impl BedrockClient {
         mut frame: Frame,
     ) -> Result<(), Error> {
         if frame.split_size > 0 {
+            if frame.split_size > MAX_RAKNET_SPLIT_COUNT {
+                return Err(Error::other(format!(
+                    "RakNet split_size {} exceeds limit {MAX_RAKNET_SPLIT_COUNT}",
+                    frame.split_size
+                )));
+            }
             let fragment_index = frame.split_index as usize;
             let compound_id = frame.split_id;
             let mut compounds = self.compounds.lock().await;
+
+            if !compounds.contains_key(&compound_id)
+                && compounds.len() >= MAX_PENDING_SPLIT_COMPOUNDS
+            {
+                return Err(Error::other(
+                    "Too many pending RakNet split compounds from client",
+                ));
+            }
 
             let entry = compounds.entry(compound_id).or_insert_with(|| {
                 let mut vec = Vec::with_capacity(frame.split_size as usize);
                 vec.resize_with(frame.split_size as usize, || None);
                 vec
             });
+
+            // Reject compounds whose declared size disagrees with the first fragment.
+            if entry.len() != frame.split_size as usize {
+                return Err(Error::other("RakNet split compound size mismatch"));
+            }
 
             if fragment_index >= entry.len() {
                 return Err(Error::other(format!(
@@ -938,6 +975,11 @@ impl BedrockClient {
                 let queue = ordered_queues
                     .entry(frame.order_channel)
                     .or_insert_with(BTreeMap::new);
+                if queue.len() >= MAX_ORDERED_QUEUE_LEN {
+                    return Err(Error::other(
+                        "RakNet ordered queue exceeded limit for channel",
+                    ));
+                }
                 queue.insert(frame.order_index, frame);
             }
             // If frame.order_index < *expected, it's an old frame, discard it.
