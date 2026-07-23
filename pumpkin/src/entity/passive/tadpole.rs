@@ -1,16 +1,21 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
+const TEMPT_ITEMS: &[&Item] = &[&Item::SLIME_BALL];
+
+/// Tadpole — panic + tempt; grow-into-frog TODO.
 pub struct TadpoleEntity {
     pub mob_entity: MobEntity,
 }
@@ -27,14 +32,15 @@ impl TadpoleEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            goal_selector.add_goal(2, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
+            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                2,
+                4,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

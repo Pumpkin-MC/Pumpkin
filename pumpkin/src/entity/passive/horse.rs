@@ -1,19 +1,28 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Represents a Horse, a passive mob that can be tamed and ridden.
-///
-/// Wiki: <https://minecraft.wiki/w/Horse>
+const TEMPT_ITEMS: &[&Item] = &[
+    &Item::WHEAT,
+    &Item::SUGAR,
+    &Item::APPLE,
+    &Item::GOLDEN_CARROT,
+    &Item::GOLDEN_APPLE,
+    &Item::HAY_BLOCK,
+];
+
+/// Horse — basic animal AI (tame/ride TODO).
 pub struct HorseEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,14 +39,17 @@ impl HorseEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(0.7)));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
+            goal_selector.add_goal(2, BreedGoal::new(1.0));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS)));
+            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));
+            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(
-                2,
+                7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

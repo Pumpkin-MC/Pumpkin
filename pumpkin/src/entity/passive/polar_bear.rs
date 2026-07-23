@@ -6,14 +6,13 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Represents a Polar Bear, a neutral mob found in cold biomes.
-///
-/// Wiki: <https://minecraft.wiki/w/Polar_Bear>
+/// Polar bear — neutral; revenge + hunt foxes (vanilla core).
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,19 +29,20 @@ impl PolarBearEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.25, false)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                2,
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // Polar bears are neutral but aggressive towards foxes
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
-                1,
+                2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
             );
         };

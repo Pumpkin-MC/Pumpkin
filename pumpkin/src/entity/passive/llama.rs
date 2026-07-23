@@ -5,15 +5,15 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Represents a Llama, a neutral mob that can be used for carrying items and spits at enemies.
-///
-/// Wiki: <https://minecraft.wiki/w/Llama>
+/// Llama — neutral; revenge + spit stand-in melee + hunt wolves.
 pub struct LlamaEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,14 +30,24 @@ impl LlamaEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(0.7)));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
+            // Spit not ported — melee stand-in at spit range speed.
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.25, true)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(
-                2,
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                2,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WOLF, true),
+            );
         };
 
         mob_arc

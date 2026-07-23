@@ -1,9 +1,14 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::entity::EntityType;
+
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{Controls, Goal, GoalFuture},
+    ai::goal::{
+        Controls, Goal, GoalFuture, active_target::ActiveTargetGoal,
+        fireball_attack::FireballAttackGoal,
+    },
     mob::{Mob, MobEntity},
 };
 
@@ -30,15 +35,22 @@ impl GhastEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak.clone())));
+            // Vanilla: look + shoot fireball; RandomFloatAround not ported.
+            goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak)));
+            goal_selector.add_goal(7, FireballAttackGoal::new());
+
+            target_selector.add_goal(
+                1,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
         };
 
         mob_arc
     }
 
     pub fn set_charging(&self, charging: bool) {
-        // You would also sync this to the client via EntityMetadata here
         self.is_charging.store(charging, Ordering::Relaxed);
     }
 
@@ -55,11 +67,10 @@ impl Mob for GhastEntity {
     }
 
     fn get_mob_gravity(&self) -> f64 {
-        0.0 // Ghasts fly, no gravity applied in standard travel
+        0.0
     }
 }
 
-#[expect(dead_code)]
 pub struct GhastLookGoal {
     goal_control: Controls,
     mob_weak: Weak<dyn Mob>,
@@ -98,7 +109,6 @@ impl Goal for GhastLookGoal {
                     look_control.look_at(mob, target_pos.x, target_pos.y, target_pos.z);
                 }
             } else {
-                // If no target, face the movement direction
                 let velocity = mob_entity.living_entity.entity.velocity.load();
                 if velocity.x != 0.0 || velocity.z != 0.0 {
                     let yaw = (-f64::atan2(velocity.x, velocity.z) * (180.0 / std::f64::consts::PI))
@@ -106,6 +116,7 @@ impl Goal for GhastLookGoal {
                     mob_entity.living_entity.entity.yaw.store(yaw);
                 }
             }
+            let _ = &self.mob_weak;
         })
     }
 

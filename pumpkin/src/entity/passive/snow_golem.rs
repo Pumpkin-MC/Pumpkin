@@ -7,7 +7,8 @@ use crate::entity::{
     ai::{
         goal::{
             active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, wander_around::WanderAroundGoal,
+            look_at_entity::LookAtEntityGoal, snowball_attack::SnowballAttackGoal,
+            wander_around::WanderAroundGoal,
         },
         vanilla_enemy::{SNOW_GOLEM_ENEMY_EXCLUDES, SNOW_GOLEM_TARGET_CHANCE},
     },
@@ -20,9 +21,8 @@ use crate::entity::{
 /// ```text
 /// NearestAttackableTargetGoal(Mob.class, 10, true, false,
 ///   e -> e instanceof Enemy)   // includes creepers; no golem-style exclude
+/// RangedAttackGoal / snowball throw (priority ~1)
 /// ```
-///
-/// Wiki: <https://minecraft.wiki/w/Snow_Golem>
 pub struct SnowGolemEntity {
     pub mob_entity: MobEntity,
 }
@@ -41,7 +41,8 @@ impl SnowGolemEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // TODO: SnowballAttackGoal (ranged) — vanilla primary combat goal
+            // 1 Ranged snowball attack
+            goal_selector.add_goal(1, SnowballAttackGoal::new(1.25));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
@@ -49,14 +50,14 @@ impl SnowGolemEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            // Vanilla: all Enemy (MONSTER), including creeper — not iron-golem rules.
+            // Vanilla: all Enemy (MONSTER), including creeper.
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::for_enemies(
                     &mob_arc.mob_entity,
                     SNOW_GOLEM_ENEMY_EXCLUDES,
                     SNOW_GOLEM_TARGET_CHANCE,
-                    true, // checkVisibility = true
+                    true,
                 ),
             );
         };

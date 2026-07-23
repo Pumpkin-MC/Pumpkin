@@ -38,7 +38,7 @@ use crate::entity::{
 pub mod data;
 pub use data::{
     BREEDING_FOOD_THRESHOLD, GossipType, VillagerData, VillagerProfession, VillagerType,
-    get_food_points,
+    get_food_points, villager_type_from_biome_id,
 };
 
 pub struct VillagerEntity {
@@ -60,7 +60,14 @@ pub struct VillagerEntity {
 impl VillagerEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let villager_data = VillagerData::new(VillagerType::Plains, VillagerProfession::None, 1);
+        // Match clothing to spawn biome (snowy → snow, desert → desert, …).
+        let vtype = {
+            let pos = mob_entity.living_entity.entity.block_pos.load();
+            let world = mob_entity.living_entity.entity.world.load();
+            let biome = world.get_biome(&pos);
+            villager_type_from_biome_id(biome.registry_id)
+        };
+        let villager_data = VillagerData::new(vtype, VillagerProfession::None, 1);
         let inventory = Arc::new(Mutex::new(
             (0..8)
                 .map(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
