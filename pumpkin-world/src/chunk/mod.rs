@@ -12,13 +12,15 @@ use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 pub mod format;
 pub mod io;
 pub mod palette;
+
+pub(crate) static NEXT_CHUNK_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 // TODO
 pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
@@ -81,6 +83,8 @@ pub struct ChunkData {
     pub status: ChunkStatus,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub dirty: AtomicBool,
+    pub(crate) instance_id: u64,
+    pub(crate) network_revision: AtomicU64,
 }
 
 pub struct ChunkEntityData {
@@ -574,6 +578,20 @@ impl ChunkSections {
 }
 
 impl ChunkData {
+    #[must_use]
+    pub const fn instance_id(&self) -> u64 {
+        self.instance_id
+    }
+
+    #[must_use]
+    pub fn network_revision(&self) -> u64 {
+        self.network_revision.load(Ordering::Acquire)
+    }
+
+    pub fn mark_network_changed(&self) {
+        self.network_revision.fetch_add(1, Ordering::AcqRel);
+    }
+
     /// Returns the replaced block state ID
     pub fn set_block_absolute_y(
         &self,

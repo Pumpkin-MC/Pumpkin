@@ -52,7 +52,9 @@ use tokio::sync::{Mutex, OnceCell, RwLock};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
+mod chunk_packet_cache;
 mod connection_cache;
+pub use chunk_packet_cache::ChunkPacketCache;
 mod key_store;
 pub mod recipe;
 pub mod scheduler;
@@ -137,6 +139,7 @@ pub struct Server {
     pub player_idle_timeout: AtomicI32,
     /// Manages scheduled tasks (e.g. from plugins)
     pub task_scheduler: Arc<TaskScheduler>,
+    pub chunk_packet_cache: ChunkPacketCache,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -254,6 +257,8 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        let chunk_packet_cache =
+            ChunkPacketCache::new(advanced_config.networking.java.chunk_packet_cache_mib);
         let server = Self {
             basic_config,
             advanced_config,
@@ -288,6 +293,7 @@ impl Server {
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
             task_scheduler: Arc::new(TaskScheduler::new()),
+            chunk_packet_cache,
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),

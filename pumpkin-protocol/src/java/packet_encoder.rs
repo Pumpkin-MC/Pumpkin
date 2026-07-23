@@ -11,6 +11,84 @@ use crate::{
 
 // raw -> compress -> encrypt
 
+#[derive(Clone, Debug)]
+pub struct PreparedPacket {
+    bytes: Bytes,
+    compression: Option<(CompressionThreshold, CompressionLevel)>,
+}
+
+impl PreparedPacket {
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+}
+
+pub fn prepare_packet(
+    packet_data: &[u8],
+    compression: Option<(CompressionThreshold, CompressionLevel)>,
+) -> Result<PreparedPacket, PacketEncodeError> {
+    let mut output = Vec::new();
+    let data_len = packet_data.len();
+    if data_len > MAX_PACKET_DATA_SIZE {
+        return Err(PacketEncodeError::TooLong(data_len));
+    }
+    let data_len_var_int = VarInt::try_from(data_len)
+        .map_err(|_| PacketEncodeError::Message("Packet data length exceeds VarInt".into()))?;
+
+    if let Some((threshold, level)) = compression {
+        if data_len >= threshold {
+            let mut compressor = Compress::new(Compression::new(level), true);
+            let mut compressed = Vec::with_capacity(data_len.saturating_add(64));
+            let status = compressor
+                .compress_vec(packet_data, &mut compressed, FlushCompress::Finish)
+                .map_err(|err| PacketEncodeError::CompressionFailed(err.to_string()))?;
+            if status != Status::StreamEnd {
+                return Err(PacketEncodeError::CompressionFailed(format!(
+                    "Unexpected compressor status: {status:?}"
+                )));
+            }
+            let packet_len = VarInt::try_from(data_len_var_int.written_size() + compressed.len())
+                .map_err(|_| PacketEncodeError::TooLong(data_len))?;
+            packet_len
+                .encode(&mut output)
+                .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+            data_len_var_int
+                .encode(&mut output)
+                .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+            output.extend_from_slice(&compressed);
+        } else {
+            let packet_len =
+                VarInt::try_from(1 + data_len).map_err(|_| PacketEncodeError::TooLong(data_len))?;
+            packet_len
+                .encode(&mut output)
+                .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+            VarInt(0)
+                .encode(&mut output)
+                .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+            output.extend_from_slice(packet_data);
+        }
+    } else {
+        data_len_var_int
+            .encode(&mut output)
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+        output.extend_from_slice(packet_data);
+    }
+
+    if output.len() > MAX_PACKET_SIZE as usize {
+        return Err(PacketEncodeError::TooLong(output.len()));
+    }
+    Ok(PreparedPacket {
+        bytes: output.into(),
+        compression,
+    })
+}
+
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
     None(W),
@@ -306,6 +384,23 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
 
         Ok(())
+    }
+
+    pub async fn write_prepared_packet(
+        &mut self,
+        packet: &PreparedPacket,
+    ) -> Result<(), PacketEncodeError> {
+        if packet.compression != self.compression {
+            return Err(PacketEncodeError::Message(
+                "Prepared packet compression does not match connection".into(),
+            ));
+        }
+        self.writer
+            .as_mut()
+            .unwrap()
+            .write_all(&packet.bytes)
+            .await
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))
     }
 
     pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
@@ -745,5 +840,35 @@ mod tests {
 
         assert_eq!(buffer, expected_payload);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn prepared_packet_matches_regular_encoder() -> Result<(), Box<dyn std::error::Error>> {
+        for compression in [None, Some((usize::MAX, 4)), Some((0, 4))] {
+            let packet_data = Bytes::from(vec![0x5a; 64 * 1024]);
+            let prepared = prepare_packet(&packet_data, compression)?;
+
+            let mut expected = Vec::new();
+            let mut encoder = TCPNetworkEncoder::new(&mut expected);
+            if let Some(compression) = compression {
+                encoder.set_compression(compression);
+            }
+            encoder.write_packet(packet_data).await?;
+            encoder.flush().await?;
+
+            assert_eq!(prepared.bytes.as_ref(), expected);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prepared_packet_rejects_different_compression() {
+        let prepared = prepare_packet(b"packet", Some((0, 4))).unwrap();
+        let mut output = Vec::new();
+        let mut encoder = TCPNetworkEncoder::new(&mut output);
+        encoder.set_compression((256, 4));
+
+        assert!(encoder.write_prepared_packet(&prepared).await.is_err());
+        assert!(output.is_empty());
     }
 }
