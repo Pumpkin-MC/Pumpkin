@@ -4,10 +4,15 @@ use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{
+        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        wander_around::WanderAroundGoal,
+    },
     mob::{Mob, MobEntity},
 };
 
+/// Phantom — flying attacker (full circle/sweep goals TODO).
 pub struct PhantomEntity {
     pub mob_entity: MobEntity,
 }
@@ -24,13 +29,23 @@ impl PhantomEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // TODO: PhantomCircleAroundAnchorGoal, PhantomSweepAttackGoal
+            // Sweep/circle not ported — chase + bite stand-in.
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Vanilla PhantomAttackPlayerTargetGoal — players only (insomnia later).
+            target_selector.add_goal(
+                1,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
         };
 
         mob_arc

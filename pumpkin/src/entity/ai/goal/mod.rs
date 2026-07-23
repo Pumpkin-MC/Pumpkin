@@ -13,6 +13,7 @@ pub mod creeper_ignite;
 pub mod destroy_egg;
 pub mod eat_grass;
 pub mod escape_danger;
+pub mod evoker_cast;
 pub mod fireball_attack;
 pub mod flee_sun;
 pub mod follow_owner;
