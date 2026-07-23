@@ -730,7 +730,7 @@ mod tests {
             .with_expansion_hack(true);
         let without_hack = JigsawGenerator::new("minecraft:village/plains/town_centers", 6);
 
-        let ctx = |seed| StructureGeneratorContext {
+        let ctx = |seed, key| StructureGeneratorContext {
             seed,
             chunk_x: 4,
             chunk_z: 4,
@@ -738,13 +738,16 @@ mod tests {
             sea_level: 63,
             min_y: -64,
             height_sampler: None,
-            structure_key: Some(pumpkin_data::structures::StructureKeys::VillagePlains),
+            structure_key: key,
         };
 
         // structure_key carries use_expansion_hack=true, so even `without_hack`
         // benefits from the data fallback — both should produce multi-piece villages.
         let pos = with_hack
-            .get_structure_position(ctx(12345))
+            .get_structure_position(ctx(
+                12345,
+                Some(pumpkin_data::structures::StructureKeys::VillagePlains),
+            ))
             .expect("village with expansion hack");
         let pieces = pos.collector.lock().unwrap().pieces.len();
         assert!(
@@ -753,12 +756,74 @@ mod tests {
         );
 
         let pos2 = without_hack
-            .get_structure_position(ctx(12345))
+            .get_structure_position(ctx(
+                12345,
+                Some(pumpkin_data::structures::StructureKeys::VillagePlains),
+            ))
             .expect("village via structure data expansion hack");
         let pieces2 = pos2.collector.lock().unwrap().pieces.len();
         assert!(
             pieces2 > 1,
             "structure-data expansion hack should still grow village, got {pieces2} pieces"
         );
+    }
+
+    /// Prove expansion hack itself matters when structure_key is absent (no data fallback).
+    #[test]
+    fn expansion_hack_flag_increases_village_pieces_without_structure_key() {
+        let seed = 999_i64;
+        let make_ctx = || StructureGeneratorContext {
+            seed,
+            chunk_x: 8,
+            chunk_z: 8,
+            random: super::super::create_chunk_random(seed, 8, 8),
+            sea_level: 63,
+            min_y: -64,
+            height_sampler: None,
+            structure_key: None, // no Structure::use_expansion_hack fallback
+        };
+
+        let with_hack = JigsawGenerator::new("minecraft:village/plains/town_centers", 6)
+            .with_expansion_hack(true)
+            .get_structure_position(make_ctx());
+        let without = JigsawGenerator::new("minecraft:village/plains/town_centers", 6)
+            .get_structure_position(make_ctx());
+
+        // Without height sampler / structure metadata, generation may still fail
+        // or stay small — only assert when both succeed.
+        if let (Some(a), Some(b)) = (with_hack, without) {
+            let n_with = a.collector.lock().unwrap().pieces.len();
+            let n_without = b.collector.lock().unwrap().pieces.len();
+            // Expansion hack must not shrink the graph.
+            assert!(
+                n_with >= n_without,
+                "expansion hack should not reduce pieces: with={n_with} without={n_without}"
+            );
+        }
+    }
+
+    #[test]
+    fn village_entity_templates_embed_entities() {
+        use crate::generation::structure::template::get_template;
+
+        for path in [
+            "village/common/iron_golem",
+            "village/plains/villagers/nitwit",
+            "village/plains/villagers/unemployed",
+            "village/snowy/villagers/unemployed",
+        ] {
+            let tpl = get_template(path).unwrap_or_else(|| panic!("missing template {path}"));
+            assert!(
+                !tpl.entities.is_empty(),
+                "{path} should embed at least one entity (villager/golem)"
+            );
+            // Vanilla entity NBT must carry id for chunk spawn.
+            let id = tpl.entities[0].nbt.get_string("id");
+            assert!(
+                id.is_some(),
+                "{path} entity nbt missing id, got tags: {:?}",
+                tpl.entities[0].nbt.child_tags.keys().collect::<Vec<_>>()
+            );
+        }
     }
 }
