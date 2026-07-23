@@ -181,6 +181,17 @@ impl NbtTag {
     }
 
     pub fn skip_data<'a, R: NbtReadHelper<'a>>(reader: &mut R, tag_id: u8) -> Result<(), Error> {
+        Self::skip_data_depth(reader, tag_id, 0)
+    }
+
+    pub(crate) fn skip_data_depth<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        tag_id: u8,
+        depth: u32,
+    ) -> Result<(), Error> {
+        if depth >= crate::MAX_NBT_DEPTH {
+            return Err(Error::DepthLimitExceeded);
+        }
         match tag_id {
             END_ID => Ok(()),
             BYTE_ID => reader.skip_i8(),
@@ -203,14 +214,21 @@ impl NbtTag {
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
+                // Empty END-typed lists are valid; non-empty END lists are not.
+                if tag_type_id == END_ID && len != 0 {
+                    return Err(Error::UnknownTagId(tag_type_id));
+                }
+                if len as usize > MAX_ARRAY_LENGTH {
+                    return Err(Error::LargeLength(len as usize));
+                }
 
                 for _ in 0..len {
-                    Self::skip_data(reader, tag_type_id)?;
+                    Self::skip_data_depth(reader, tag_type_id, depth + 1)?;
                 }
 
                 Ok(())
             }
-            COMPOUND_ID => NbtCompound::skip_content(reader),
+            COMPOUND_ID => NbtCompound::skip_content_depth(reader, depth),
             INT_ARRAY_ID => {
                 let len = reader.get_i32()?;
                 if len < 0 {
@@ -243,6 +261,18 @@ impl NbtTag {
         reader: &mut R,
         tag_id: u8,
     ) -> Result<Self, Error> {
+        Self::deserialize_data_depth(reader, tag_id, 0)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn deserialize_data_depth<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        tag_id: u8,
+        depth: u32,
+    ) -> Result<Self, Error> {
+        if depth >= crate::MAX_NBT_DEPTH {
+            return Err(Error::DepthLimitExceeded);
+        }
         match tag_id {
             END_ID => Ok(Self::End),
             BYTE_ID => {
@@ -298,17 +328,29 @@ impl NbtTag {
                 if len > MAX_ARRAY_LENGTH {
                     return Err(Error::LargeLength(len));
                 }
+                // Empty END-typed lists are valid (vanilla); non-empty are not and
+                // would otherwise allocate up to MAX_ARRAY_LENGTH unit tags.
+                if tag_type_id == END_ID {
+                    if len != 0 {
+                        return Err(Error::UnknownTagId(tag_type_id));
+                    }
+                    return Ok(Self::List(Vec::new()));
+                }
 
                 let mut list = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let tag = Self::deserialize_data(reader, tag_type_id)?;
-                    assert_eq!(tag.get_type_id(), tag_type_id);
+                    let tag = Self::deserialize_data_depth(reader, tag_type_id, depth + 1)?;
+                    if tag.get_type_id() != tag_type_id {
+                        return Err(Error::UnknownTagId(tag.get_type_id()));
+                    }
                     // Try unwrapping the tag.
                     list.push(Self::flatten(tag));
                 }
                 Ok(Self::List(list))
             }
-            COMPOUND_ID => Ok(Self::Compound(NbtCompound::deserialize_content(reader)?)),
+            COMPOUND_ID => Ok(Self::Compound(NbtCompound::deserialize_content_depth(
+                reader, depth,
+            )?)),
             INT_ARRAY_ID => {
                 let len = reader.get_i32()?;
                 if len < 0 {
