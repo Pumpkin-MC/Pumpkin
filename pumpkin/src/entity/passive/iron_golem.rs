@@ -1,5 +1,13 @@
+//! Iron golem AI synced to **Minecraft 26.2** vanilla NMS
+//! (`net.minecraft.world.entity.animal.golem.IronGolem`).
+//!
+//! Decompiled from official `server-26.2.jar` (protocol 776 / Pumpkin CURRENT).
+//! Paper/Leaves leave `registerGoals` + `doHurtTarget` knockback unpatched
+//! (only Bukkit target-reason / spawn-in-air options).
+
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
@@ -7,7 +15,8 @@ use crate::entity::{
     ai::{
         goal::{
             active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+            move_towards_target::MoveTowardsTargetGoal, revenge::RevengeGoal,
             wander_around::WanderAroundGoal,
         },
         pathfinder::node::PathType,
@@ -15,25 +24,42 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
-use pumpkin_data::entity::EntityType;
 
-/// Iron golem — protects villagers; attacks hostile monsters (vanilla `Enemy`).
+/// Iron golem — Vanilla 26.2 `IronGolem`.
 ///
-/// # Vanilla targeting (`IronGolem` constructor)
+/// # `registerGoals()` (26.2)
 /// ```text
+/// goalSelector:
+///   1 MeleeAttackGoal(this, 1.0, true)
+///   2 MoveTowardsTargetGoal(this, 0.9, 32.0f)
+///   2 MoveBackToVillageGoal(this, 0.6, false)     // TODO village POI
+///   4 GolemRandomStrollInVillageGoal(this, 0.6)   // ≈ WanderAround 0.6
+///   5 OfferFlowerGoal(this)                       // TODO
+///   7 LookAtPlayerGoal(this, Player, 6.0f)
+///   8 RandomLookAroundGoal(this)
 /// targetSelector:
-///   1 HurtByTarget (alert others)
-///   2 NearestAttackableTarget(Mob, 5, false, false,
-///       e -> e instanceof Enemy && !(e instanceof Creeper))
+///   1 DefendVillageTargetGoal(this)               // TODO villager reputation
+///   2 HurtByTargetGoal(this)
+///   3 NearestAttackableTargetGoal(Player, 10, true, false, isAngryAt) // NeutralMob
+///   3 NearestAttackableTargetGoal(Mob, 5, false, false,
+///         e -> e instanceof Enemy && !(e instanceof Creeper))
+///   4 ResetUniversalAngerTargetGoal(this, false)  // TODO NeutralMob timer
 /// ```
-/// Pumpkin uses [`MobCategory::MONSTER`] as `Enemy` and excludes only creeper.
-/// **Warden is a valid target** (monster / Enemy).
 ///
-/// # Attack (`IronGolem.doHurtTarget`)
-/// Handled in `MobEntity::try_attack`: arm-raise status 4, random damage,
-/// vertical knockback `0.4 * (1 - knockbackResistance)` (warden res=1 → no fling).
+/// # `doHurtTarget` (26.2) — see `MobEntity::try_attack`
+/// ```text
+/// attackAnimationTick = 10;
+/// broadcastEntityEvent(byte 4);
+/// damage = f/2 + random(0..floor(f));
+/// if (hurt) {
+///   scale = max(0, 1 - knockbackResistance);
+///   deltaMovement += (0, 0.4 * scale, 0);  // vertical only
+/// }
+/// playSound(IRON_GOLEM_ATTACK);
+/// ```
 ///
-/// Pathfinding: water is impassable so golems stay on the bank when prey is in water.
+/// # `canAttack` (26.2)
+/// Never creeper; player-created golems never attack players.
 ///
 /// Wiki: <https://minecraft.wiki/w/Iron_Golem>
 pub struct IronGolemEntity {
@@ -44,7 +70,7 @@ impl IronGolemEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
 
-        // Never path through water (malus < 0 = blocked in WalkNodeEvaluator).
+        // Prefer dry land (water malus < 0 → impassable for pathfinder).
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
             nav.set_pathfinding_malus(PathType::Water, -1.0);
@@ -62,26 +88,33 @@ impl IronGolemEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // pause_when_mob_idle=true: if path fails (e.g. target mid-lake), stop
-            // thrashing instead of direct-walking into the water.
+            // --- goalSelector (priority order from 26.2) ---
+            // 1 MeleeAttackGoal(this, 1.0, true)  — followingTargetEvenIfNotSeen
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));
+            // 2 MoveTowardsTargetGoal(this, 0.9, 32.0f)
+            goal_selector.add_goal(2, Box::new(MoveTowardsTargetGoal::new(0.9, 32.0)));
+            // 4 GolemRandomStrollInVillageGoal(this, 0.6) ≈ general wander at 0.6
+            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.6)));
+            // 7 LookAtPlayerGoal(this, Player.class, 6.0f)
             goal_selector.add_goal(
                 7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
+            // 8 RandomLookAroundGoal(this)
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            // Vanilla HurtByTargetGoal(this)
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // Vanilla Enemy && !Creeper (includes warden, zombies, …)
+            // --- targetSelector ---
+            // 2 HurtByTargetGoal(this)
+            target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
+            // 3 NearestAttackableTargetGoal(Mob, 5, false, false, Enemy && !Creeper)
+            //    → includes Warden (Enemy/MONSTER); excludes only Creeper
             target_selector.add_goal(
-                2,
+                3,
                 ActiveTargetGoal::for_enemies(
                     &mob_arc.mob_entity,
                     IRON_GOLEM_ENEMY_EXCLUDES,
                     IRON_GOLEM_TARGET_CHANCE,
-                    false, // checkVisibility = false in vanilla golem target goal
+                    false,
                 ),
             );
         };

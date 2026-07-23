@@ -1,19 +1,17 @@
-//! Vanilla `Enemy` targeting helpers.
+//! Vanilla `Enemy` targeting helpers — synced to **Minecraft 26.2**
+//! (`server-26.2.jar` / protocol 776).
 //!
-//! In Java, iron golems / snow golems use:
+//! Iron golem 26.2 (`IronGolem.registerGoals`):
 //! ```text
-//! NearestAttackableTargetGoal(Mob.class, …,
-//!   living -> living instanceof Enemy && !(living instanceof Creeper)  // iron golem
-//!   living -> living instanceof Enemy                                    // snow golem
-//! )
+//! NearestAttackableTargetGoal(Mob.class, 5, false, false,
+//!   (target, level) -> target instanceof Enemy && !(target instanceof Creeper))
 //! ```
 //!
-//! Pumpkin approximates `Enemy` with [`MobCategory::MONSTER`] (all hostile spawn
-//! categories). That includes zombies, skeletons, spiders, endermen, **wardens**,
-//! illagers, etc. Iron golems are `MISC` and are not selected by this filter.
+//! Pumpkin approximates `Enemy` with [`MobCategory::MONSTER`]. That includes
+//! zombies, skeletons, spiders, endermen, **wardens**, illagers, etc.
+//! Iron golems are `MISC` and are not selected by this filter.
 //!
-//! Reference: Yarn / Mojmap `IronGolem` / `SnowGolem` constructors,
-//! <https://minecraft.wiki/w/Iron_Golem#Behavior>
+//! Paper/Leaves do not change this predicate (only Bukkit target-reason hooks).
 
 use pumpkin_data::entity::{EntityType, MobCategory};
 
