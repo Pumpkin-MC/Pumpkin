@@ -1,13 +1,15 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicI32, Ordering};
 use tokio::sync::Mutex;
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
     InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture,
+    offer_or_drop_stack,
 };
 use crate::slot::{BoxFuture, NormalSlot, Slot};
+use crate::window_property::{Stonecutter, WindowProperty};
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -18,11 +20,15 @@ use pumpkin_protocol::java::server::play::SlotActionType;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::inventory::SimpleInventory;
 
+/// Vanilla `StonecutterMenu` uses -1 for "no recipe selected".
+const NO_RECIPE: i32 = -1;
+
 pub struct StonecutterScreenHandler {
     behaviour: ScreenHandlerBehaviour,
     pub input_inventory: Arc<SimpleInventory>,
     pub output_inventory: Arc<SimpleInventory>,
-    pub selected_recipe: AtomicU8,
+    /// Selected recipe index, or [`NO_RECIPE`].
+    pub selected_recipe: AtomicI32,
 }
 
 impl StonecutterScreenHandler {
@@ -35,7 +41,7 @@ impl StonecutterScreenHandler {
             behaviour,
             input_inventory: input_inventory.clone(),
             output_inventory: output_inventory.clone(),
-            selected_recipe: AtomicU8::new(u8::MAX),
+            selected_recipe: AtomicI32::new(NO_RECIPE),
         };
 
         handler.add_slot(Arc::new(NormalSlot::new(
@@ -55,6 +61,18 @@ impl StonecutterScreenHandler {
         handler
     }
 
+    async fn send_selected_recipe_property(&self) {
+        let Some(sync_handler) = self.behaviour.sync_handler.as_ref() else {
+            return;
+        };
+        let selected = self.selected_recipe.load(Ordering::Relaxed);
+        let (id, val) =
+            WindowProperty::new(Stonecutter::SelectedRecipe, selected as i16).into_tuple();
+        sync_handler
+            .update_property(&self.behaviour, i32::from(id), i32::from(val))
+            .await;
+    }
+
     async fn update_output(&self) {
         let input_stack = self.input_inventory.get_stack(0).await;
         let input_lock = input_stack.lock().await;
@@ -63,24 +81,40 @@ impl StonecutterScreenHandler {
             self.output_inventory
                 .set_stack(0, ItemStack::EMPTY.clone())
                 .await;
-            self.selected_recipe.store(u8::MAX, Ordering::Relaxed);
+            self.selected_recipe.store(NO_RECIPE, Ordering::Relaxed);
+            drop(input_lock);
+            self.send_selected_recipe_property().await;
             return;
         }
 
         let available_recipes = Self::get_available_recipes(&input_lock);
         let recipe_index = self.selected_recipe.load(Ordering::Relaxed);
 
-        if recipe_index != u8::MAX && (recipe_index as usize) < available_recipes.len() {
+        if recipe_index >= 0 && (recipe_index as usize) < available_recipes.len() {
             let recipe = available_recipes[recipe_index as usize];
-            let item =
-                Item::from_registry_key(recipe.result.id).expect("Invalid recipe result item");
-            let result = ItemStack::new(recipe.result.count, item);
-            self.output_inventory.set_stack(0, result).await;
+            if let Some(item) = Item::from_registry_key(recipe.result.id) {
+                let result = ItemStack::new(recipe.result.count, item);
+                self.output_inventory.set_stack(0, result).await;
+            } else {
+                // Bad recipe data must not panic the network thread.
+                self.output_inventory
+                    .set_stack(0, ItemStack::EMPTY.clone())
+                    .await;
+                self.selected_recipe.store(NO_RECIPE, Ordering::Relaxed);
+            }
         } else {
+            // Clear invalid selection when input changes.
+            if recipe_index != NO_RECIPE
+                && (recipe_index < 0 || (recipe_index as usize) >= available_recipes.len())
+            {
+                self.selected_recipe.store(NO_RECIPE, Ordering::Relaxed);
+            }
             self.output_inventory
                 .set_stack(0, ItemStack::EMPTY.clone())
                 .await;
         }
+        drop(input_lock);
+        self.send_selected_recipe_property().await;
     }
 
     fn get_available_recipes(input: &ItemStack) -> Vec<&'static StonecutterRecipe> {
@@ -119,9 +153,51 @@ impl ScreenHandler for StonecutterScreenHandler {
         Box::pin(async move {
             self.internal_on_slot_click(slot_index, button, action_type, player)
                 .await;
-            if slot_index == 0 {
+            // Input changed or output taken — refresh result + selected-recipe property.
+            if slot_index == 0 || slot_index == 1 {
                 self.update_output().await;
             }
+        })
+    }
+
+    fn on_button_click<'a>(
+        &'a mut self,
+        _player: &'a dyn InventoryPlayer,
+        button_id: i32,
+    ) -> ScreenHandlerFuture<'a, bool> {
+        // Vanilla: button id is the recipe index in the available list for current input.
+        Box::pin(async move {
+            if button_id < 0 {
+                return false;
+            }
+            let input_stack = self.input_inventory.get_stack(0).await;
+            let input_lock = input_stack.lock().await;
+            if input_lock.is_empty() {
+                return false;
+            }
+            let available = Self::get_available_recipes(&input_lock);
+            drop(input_lock);
+            if (button_id as usize) >= available.len() {
+                return false;
+            }
+            self.selected_recipe.store(button_id, Ordering::Relaxed);
+            self.update_output().await;
+            true
+        })
+    }
+
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            // Return leftover input to the player (output is craft-only, never stored).
+            let stack = self.input_inventory.remove_stack(0).await;
+            if !stack.is_empty() {
+                offer_or_drop_stack(player, stack).await;
+            }
+            self.output_inventory
+                .set_stack(0, ItemStack::EMPTY.clone())
+                .await;
+            self.selected_recipe.store(NO_RECIPE, Ordering::Relaxed);
         })
     }
 
@@ -146,8 +222,7 @@ impl ScreenHandler for StonecutterScreenHandler {
                         slot.on_quick_move_crafted(slot_stack.clone(), stack.clone())
                             .await;
                     } else {
-                        // From Player to Stonecutter
-                        // Try input slot (0)
+                        // From Player to Stonecutter input slot (0)
                         if !self.insert_item(&mut slot_stack, 0, 1, false).await {
                             return ItemStack::EMPTY.clone();
                         }
@@ -157,6 +232,10 @@ impl ScreenHandler for StonecutterScreenHandler {
                         slot.set_stack(ItemStack::EMPTY.clone()).await;
                     } else {
                         slot.set_stack(slot_stack).await;
+                    }
+
+                    if slot_index == 0 || slot_index == 1 {
+                        self.update_output().await;
                     }
                 }
             }
@@ -171,6 +250,8 @@ pub struct StonecutterOutputSlot {
     pub index: usize,
     pub id: AtomicU8,
 }
+
+use std::sync::atomic::AtomicU8;
 
 impl StonecutterOutputSlot {
     pub fn new(

@@ -126,8 +126,17 @@ pub enum BrewingStand {
 
 /// Stonecutter window properties.
 pub enum Stonecutter {
-    /// ID of the selected recipe.
+    /// Index of the selected recipe (-1 / none when no selection).
     SelectedRecipe,
+}
+
+impl WindowPropertyTrait for Stonecutter {
+    fn to_id(self) -> i16 {
+        match self {
+            // Vanilla StonecutterMenu.SELECTED_RECIPE property id is 0.
+            Self::SelectedRecipe => 0,
+        }
+    }
 }
 
 /// Loom window properties.

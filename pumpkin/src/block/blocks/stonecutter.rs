@@ -1,22 +1,40 @@
-use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
+use std::sync::Arc;
 
-use pumpkin_data::translation;
+use crate::block::{
+    BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, registry::BlockActionResult,
+};
+use pumpkin_data::{
+    BlockStateId,
+    block_properties::{BlockProperties, WallTorchLikeProperties},
+    translation,
+};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_inventory::stonecutter_screen_handler::StonecutterScreenHandler;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
 use tokio::sync::Mutex;
-
-use pumpkin_inventory::stonecutter_screen_handler::StonecutterScreenHandler;
 
 #[pumpkin_block("minecraft:stonecutter")]
 pub struct StonecutterBlock;
 
 impl BlockBehaviour for StonecutterBlock {
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        // Horizontal facing (packed as WallTorchLikeProperties for this block id).
+        Box::pin(async move {
+            let mut props = WallTorchLikeProperties::default(args.block);
+            props.facing = args
+                .player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite();
+            props.to_state_id(args.block)
+        })
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
