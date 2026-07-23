@@ -152,3 +152,15 @@ pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
 pub fn all_template_names() -> &'static [&'static str] {
     _generated_all_template_names()
 }
+
+/// Returns a list of all available structure names for `/place structure` tab-completion.
+#[must_use]
+pub fn all_structure_names() -> &'static [&'static str] {
+    pumpkin_data::structures::StructureKeys::all_names()
+}
+
+/// Returns a list of all available pool names for `/place jigsaw` tab-completion.
+#[must_use]
+pub fn all_pool_names() -> &'static [&'static str] {
+    _generated_all_pool_names()
+}

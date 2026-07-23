@@ -133,7 +133,7 @@ pub struct ProtoChunk {
     pub(crate) flat_block_map: Box<[BlockStateId]>,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
-    flat_ocean_floor_height_map: [i16; CHUNK_AREA],
+    pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
     pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
     pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,

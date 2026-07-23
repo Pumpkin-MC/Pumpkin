@@ -5,9 +5,11 @@ use crate::generation::structure::structures::{
     StructureGenerator, StructureGeneratorContext, StructurePieceBase, StructurePosition,
 };
 use crate::generation::structure::template::{
-    BlockMirror, BlockRotation, PaletteEntry, StructureTemplate,
+    BlockMirror, BlockPlacer, BlockRotation, PaletteEntry, StructureTemplate,
 };
+use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::RandomImpl;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -472,29 +474,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
         _seed: i64,
         chunk_box: &pumpkin_util::math::block_box::BlockBox,
     ) {
-        let origin =
-            pumpkin_util::math::vector3::Vector3::new(self.pos.0.x, self.pos.0.y, self.pos.0.z);
-
-        self.element
-            .for_each_template(|_name, processor_list, template| {
-                let processors = match processor_list {
-                    ProcessorListRef::Named(name) => {
-                        crate::generation::structure::template::processor::load_processor_list(name)
-                    }
-                    ProcessorListRef::Empty => Arc::from([]),
-                };
-                crate::generation::structure::template::place_template(
-                    chunk,
-                    &template,
-                    origin,
-                    (0, 0),
-                    self.rotation,
-                    false,
-                    self.liquid_settings == LiquidSettings::ApplyWaterlog,
-                    processors.as_ref(),
-                    Some(chunk_box),
-                );
-            });
+        place_pool_element_templates(self, chunk, Some(chunk_box));
 
         if let Some(feature) = self.element.feature()
             && let Some(placed_feature) =
@@ -503,6 +483,36 @@ impl StructurePieceBase for PoolElementStructurePiece {
             placed_feature.generate_in_proto_chunk(chunk, feature, random, self.pos);
         }
     }
+}
+
+pub fn place_pool_element_templates(
+    piece: &PoolElementStructurePiece,
+    placer: &mut impl BlockPlacer,
+    chunk_box: Option<&BlockBox>,
+) {
+    let origin = Vector3::new(piece.pos.0.x, piece.pos.0.y, piece.pos.0.z);
+
+    piece
+        .element
+        .for_each_template(|_name, processor_list, template| {
+            let processors = match processor_list {
+                ProcessorListRef::Named(name) => {
+                    crate::generation::structure::template::processor::load_processor_list(name)
+                }
+                ProcessorListRef::Empty => Arc::from([]),
+            };
+            crate::generation::structure::template::place_template(
+                placer,
+                &template,
+                origin,
+                (0, 0),
+                piece.rotation,
+                false,
+                piece.liquid_settings == LiquidSettings::ApplyWaterlog,
+                processors.as_ref(),
+                chunk_box,
+            );
+        });
 }
 
 impl PoolElementStructurePiece {

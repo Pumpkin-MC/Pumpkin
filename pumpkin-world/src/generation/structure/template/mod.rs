@@ -39,8 +39,8 @@ use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
 pub use block_state_resolver::BlockStateResolver;
 pub use cache::{
-    TemplateCache, all_template_names, get_pool_elements, get_processor_list_json, get_template,
-    get_template_pool_json, global_cache,
+    TemplateCache, all_pool_names, all_structure_names, all_template_names, get_pool_elements,
+    get_processor_list_json, get_template, get_template_pool_json, global_cache,
 };
 pub use processor::StructureProcessor;
 pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};

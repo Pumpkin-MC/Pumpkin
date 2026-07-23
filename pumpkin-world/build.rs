@@ -39,6 +39,7 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let assets_dir = Path::new(&manifest_dir).join("assets/structures");
     let mut all_template_names: Vec<String> = Vec::new();
+    let mut all_pool_names: Vec<String> = Vec::new();
     if assets_dir.exists() {
         let mut pools = std::collections::BTreeMap::new();
         process_dir(
@@ -50,6 +51,7 @@ fn main() {
         );
 
         for (pool_id, elements) in pools {
+            all_pool_names.push(pool_id.clone());
             let _ = writeln!(
                 pool_code,
                 "        \"minecraft:{pool_id}\" | \"{pool_id}\" => Some(&["
@@ -73,6 +75,15 @@ fn main() {
     }
     code.push_str("    ]\n}\n");
 
+    // Generate a function returning all available pool names (for tab-completion)
+    code.push_str(
+        "\n#[must_use]\npub fn _generated_all_pool_names() -> &'static [&'static str] {\n    &[\n",
+    );
+    for name in &all_pool_names {
+        let _ = writeln!(code, "        \"{name}\",");
+    }
+    code.push_str("    ]\n}\n");
+
     pool_code.push_str("        _ => None,\n");
     pool_code.push_str("    }\n}\n");
 
@@ -81,11 +92,13 @@ fn main() {
         &worldgen_dir.join("template_pool"),
         "",
         &mut template_pool_json_code,
+        &mut all_pool_names,
     );
     process_json_dir(
         &worldgen_dir.join("processor_list"),
         "",
         &mut processor_list_json_code,
+        &mut Vec::new(),
     );
     template_pool_json_code.push_str("        _ => None,\n");
     template_pool_json_code.push_str("    }\n}\n");
@@ -150,7 +163,7 @@ fn process_dir(
     }
 }
 
-fn process_json_dir(dir: &Path, prefix: &str, code: &mut String) {
+fn process_json_dir(dir: &Path, prefix: &str, code: &mut String, names: &mut Vec<String>) {
     if !dir.exists() {
         return;
     }
@@ -170,13 +183,14 @@ fn process_json_dir(dir: &Path, prefix: &str, code: &mut String) {
             } else {
                 format!("{prefix}/{name}")
             };
-            process_json_dir(&path, &new_prefix, code);
+            process_json_dir(&path, &new_prefix, code, names);
         } else if let Some(stem) = name.strip_suffix(".json") {
             let id = if prefix.is_empty() {
                 stem.to_string()
             } else {
                 format!("{prefix}/{stem}")
             };
+            names.push(id.clone());
             let abs_path = path.canonicalize().unwrap();
             let _ = writeln!(
                 code,
