@@ -48,6 +48,9 @@ pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> = CommandErrorType::new(
     translation::java::SNBT_PARSER_EXPECTED_INTEGER_TYPE,
 );
 
+/// Maximum nesting depth for SNBT compounds/lists (matches NBT binary depth budget).
+pub const MAX_SNBT_DEPTH: u32 = 128;
+
 /// A structure that parses SNBT.
 ///
 /// This stores a reader and gives the furthest error, or suggestions
@@ -55,6 +58,7 @@ pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> = CommandErrorType::new(
 pub struct SnbtParser<'r, 's> {
     reader: &'r mut StringReader<'s>,
     errors: ParserErrors,
+    depth: u32,
 }
 
 //
@@ -67,6 +71,7 @@ impl SnbtParser<'_, '_> {
             let mut parser = SnbtParser {
                 reader,
                 errors: ParserErrors::default(),
+                depth: 0,
             };
 
             let literal = parser.parse();
@@ -113,6 +118,7 @@ impl SnbtParser<'_, '_> {
             let mut parser = SnbtParser {
                 reader: &mut reader,
                 errors: ParserErrors::default(),
+                depth: 0,
             };
 
             let _ = parser.parse();
