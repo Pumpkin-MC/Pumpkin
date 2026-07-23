@@ -14,10 +14,10 @@ use crate::entity::{
     Entity, NBTStorage, NbtFuture,
     ai::{
         goal::{
-            active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-            move_towards_target::MoveTowardsTargetGoal, revenge::RevengeGoal,
-            wander_around::WanderAroundGoal,
+            active_target::ActiveTargetGoal, defend_villagers::DefendVillagersGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            melee_attack::MeleeAttackGoal, move_towards_target::MoveTowardsTargetGoal,
+            revenge::RevengeGoal, wander_around::WanderAroundGoal,
         },
         pathfinder::node::PathType,
         vanilla_enemy::{IRON_GOLEM_ENEMY_EXCLUDES, IRON_GOLEM_TARGET_CHANCE},
@@ -104,6 +104,8 @@ impl IronGolemEntity {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             // --- targetSelector ---
+            // 1 DefendVillageTargetGoal
+            target_selector.add_goal(1, DefendVillagersGoal::new());
             // 2 HurtByTargetGoal(this)
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             // 3 NearestAttackableTargetGoal(Mob, 5, false, false, Enemy && !Creeper)

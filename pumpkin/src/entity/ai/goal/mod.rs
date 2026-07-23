@@ -10,6 +10,7 @@ pub mod bow_attack;
 pub mod breed;
 pub mod chase_player;
 pub mod creeper_ignite;
+pub mod defend_villagers;
 pub mod destroy_egg;
 pub mod eat_grass;
 pub mod escape_danger;

@@ -9,6 +9,7 @@ use crate::{
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
@@ -416,7 +417,7 @@ impl EntityBase for ArrowEntity {
                         })
                     });
                     let owner_ref = owner.as_deref();
-                    target
+                    let damaged = target
                         .damage_with_context(
                             &*target,
                             damage as f32,
@@ -426,6 +427,41 @@ impl EntityBase for ArrowEntity {
                             owner_ref,
                         )
                         .await;
+
+                    // Skeleton variants: tipped-arrow stand-in via owner type.
+                    if damaged
+                        && let Some(owner_ent) = owner.as_ref()
+                        && let Some(living) = target.get_living_entity()
+                    {
+                        use pumpkin_data::effect::StatusEffect;
+                        use pumpkin_data::potion::Effect;
+                        let oid = owner_ent.get_entity().entity_type.id;
+                        if oid == EntityType::BOGGED.id {
+                            living
+                                .add_effect(Effect {
+                                    effect_type: &StatusEffect::POISON,
+                                    duration: 5 * 20,
+                                    amplifier: 0,
+                                    ambient: false,
+                                    show_particles: true,
+                                    show_icon: true,
+                                    blend: false,
+                                })
+                                .await;
+                        } else if oid == EntityType::STRAY.id {
+                            living
+                                .add_effect(Effect {
+                                    effect_type: &StatusEffect::SLOWNESS,
+                                    duration: 30 * 20,
+                                    amplifier: 0,
+                                    ambient: false,
+                                    show_particles: true,
+                                    show_icon: true,
+                                    blend: false,
+                                })
+                                .await;
+                        }
+                    }
 
                     if target.get_living_entity().is_some() {
                         let punch = self.punch_level.load(Ordering::Relaxed);

@@ -5,9 +5,10 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -33,10 +34,23 @@ impl RabbitEntity {
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.2));
-            goal_selector.add_goal(2, BreedGoal::new(0.8));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(0.8)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.6)));
+            // Flee wolves / foxes / cats (vanilla AvoidEntity goals).
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 10.0, 2.2, 2.2)),
+            );
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::FOX, 8.0, 2.2, 2.2)),
+            );
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::CAT, 8.0, 2.2, 2.2)),
+            );
+            goal_selector.add_goal(3, BreedGoal::new(0.8));
+            goal_selector.add_goal(4, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
+            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(0.8)));
+            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 11,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
