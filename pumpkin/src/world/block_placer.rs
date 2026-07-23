@@ -15,7 +15,7 @@ pub struct WorldBlockPlacer<'a> {
 
 impl<'a> WorldBlockPlacer<'a> {
     #[must_use]
-    pub fn new(world: &'a World) -> Self {
+    pub const fn new(world: &'a World) -> Self {
         Self {
             world,
             block_entity_nbts: Vec::new(),
@@ -23,6 +23,7 @@ impl<'a> WorldBlockPlacer<'a> {
         }
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn finalize(&self) {
         for nbt in &self.block_entity_nbts {
             if let Some(block_entity) = crate::block::entities::block_entity_from_nbt(nbt) {

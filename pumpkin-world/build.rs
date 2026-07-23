@@ -68,7 +68,7 @@ fn main() {
 
     // Generate a function returning all available template names (for tab-completion)
     code.push_str(
-        "\n#[must_use]\npub fn _generated_all_template_names() -> &'static [&'static str] {\n    &[\n",
+        "#[must_use]\n#[allow(clippy::too_many_lines, clippy::large_stack_arrays)]\npub const fn _generated_all_template_names() -> &'static [&'static str] {\n    &[\n",
     );
     for name in &all_template_names {
         let _ = writeln!(code, "        \"{name}\",");
@@ -77,7 +77,7 @@ fn main() {
 
     // Generate a function returning all available pool names (for tab-completion)
     code.push_str(
-        "\n#[must_use]\npub fn _generated_all_pool_names() -> &'static [&'static str] {\n    &[\n",
+        "#[must_use]\n#[allow(clippy::too_many_lines, clippy::large_stack_arrays)]\npub const fn _generated_all_pool_names() -> &'static [&'static str] {\n    &[\n",
     );
     for name in &all_pool_names {
         let _ = writeln!(code, "        \"{name}\",");

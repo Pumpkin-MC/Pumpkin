@@ -29,8 +29,8 @@ pub mod shiftable_piece;
 pub mod structures;
 pub mod template;
 
-/// Creates a structure position by dispatching to the appropriate generator based on the
-/// structure key. Does NOT perform biome validation - callers that require it should add
+/// Creates a structure position by dispatching to the appropriate generator.
+/// Does NOT perform biome validation — callers that require it should add
 /// their own check after calling this function.
 #[must_use]
 #[allow(clippy::too_many_lines)]

@@ -1,5 +1,6 @@
-use pumpkin_data::{Block, BlockStateId, Mirror, Rotation};
+use pumpkin_data::placed_feature::PlacedFeature as PlacedFeatureKey;
 use pumpkin_data::structures::{Structure, StructureKeys, StructureType};
+use pumpkin_data::{Block, BlockStateId, Mirror, Rotation};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
@@ -13,6 +14,7 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command, liter
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::argument_types::placed_feature::PlacedFeatureNameArgumentType;
 use crate::command::argument_types::pool::PoolNameArgumentType;
 use crate::command::argument_types::structure::StructureNameArgumentType;
 use crate::command::argument_types::template::TemplateNameArgumentType;
@@ -21,6 +23,8 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::world::block_placer::WorldBlockPlacer;
+use pumpkin_world::generation::feature::configured_features::CONFIGURED_FEATURES;
+use pumpkin_world::generation::feature::placed_features::{Feature, PLACED_FEATURES};
 use pumpkin_world::generation::structure::structures::StructureGeneratorContext;
 use pumpkin_world::generation::structure::structures::jigsaw::{
     PoolElementStructurePiece, place_pool_element_templates,
@@ -50,6 +54,25 @@ static STRUCTURE_INVALID: CommandErrorType<1> = CommandErrorType::new(
     "commands.place.structure.invalid",
     "commands.place.structure.invalid",
 );
+static FEATURE_INVALID: CommandErrorType<1> = CommandErrorType::new(
+    "commands.place.feature.invalid",
+    "commands.place.feature.invalid",
+);
+
+const CHUNK_DIM: i32 = 16;
+
+/// Clamps a world Y into valid chunk bounds, placing the surface one block below the target.
+fn ground_y(block_y: i32, chunk_min_y: i32, chunk_height: i32) -> i32 {
+    (block_y - 1).clamp(chunk_min_y, chunk_min_y + chunk_height - 1)
+}
+
+/// Vanilla-style chunk-seed derivation used by structure pieces and feature generators.
+const fn chunk_population_seed(cx: i32, cz: i32, world_seed: u64) -> u64 {
+    (cx as i64)
+        .wrapping_mul(341873128712)
+        .wrapping_add((cz as i64).wrapping_mul(132897987541))
+        .wrapping_add(world_seed as i64) as u64
+}
 
 /// Minimal `WorldPortalExt` implementation for synthetic chunk placement.
 struct CommandBlockRegistry;
@@ -114,7 +137,7 @@ impl CommandExecutor for PlaceTemplateExecutor {
                 pumpkin_world::generation::structure::template::get_template(&template_name)
             else {
                 return Err(TEMPLATE_NOT_FOUND
-                    .create_without_context(TextComponent::text(template_name.to_string())));
+                    .create_without_context(TextComponent::text(template_name.clone())));
             };
 
             let mut placer = WorldBlockPlacer::new(context.world());
@@ -143,7 +166,7 @@ impl CommandExecutor for PlaceTemplateExecutor {
                     TextComponent::translate(
                         "commands.place.template.success",
                         [
-                            TextComponent::text(template_name.to_string()),
+                            TextComponent::text(template_name.clone()),
                             TextComponent::text(block_pos.0.x.to_string()),
                             TextComponent::text(block_pos.0.y.to_string()),
                             TextComponent::text(block_pos.0.z.to_string()),
@@ -249,29 +272,29 @@ impl CommandExecutor for PlaceJigsawExecutor {
 
 struct PlaceStructureExecutor;
 
+#[allow(clippy::too_many_lines)]
 impl CommandExecutor for PlaceStructureExecutor {
     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
             let structure_id = context.get_argument::<Identifier>("structure")?;
             let structure_name = structure_id.to_string();
 
-            let key = StructureKeys::from_name(&structure_name)
-                .ok_or_else(|| {
-                    STRUCTURE_INVALID
-                        .create_without_context(TextComponent::text(structure_name.clone()))
-                })?;
+            let key = StructureKeys::from_name(&structure_name).ok_or_else(|| {
+                STRUCTURE_INVALID
+                    .create_without_context(TextComponent::text(structure_name.clone()))
+            })?;
 
             let structure = Structure::get(&key);
 
-            let block_pos = BlockPosArgumentType::get_block_pos(context, "pos")
-                .unwrap_or_else(|_| {
+            let block_pos =
+                BlockPosArgumentType::get_block_pos(context, "pos").unwrap_or_else(|_| {
                     let p = context.source.position;
                     BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
                 });
 
             let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
 
-            let (piece_count, placer) = {
+            let (_piece_count, placer) = {
                 let world_gen = context.world().level.world_gen.clone();
 
                 if structure.structure_type == StructureType::Jigsaw {
@@ -298,7 +321,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                             structure_key: Some(key),
                         },
                         pool,
-                        structure.start_jigsaw_name.as_deref(),
+                        structure.start_jigsaw_name,
                         size,
                         block_pos,
                         structure.use_expansion_hack.unwrap_or(false),
@@ -310,7 +333,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                     )
                     .ok_or_else(|| {
                         JIGSAW_FAILED
-                            .create_without_context(TextComponent::text(structure_name))
+                            .create_without_context(TextComponent::text(structure_name.clone()))
                     })?;
 
                     let collector = position.collector.lock().unwrap();
@@ -329,24 +352,25 @@ impl CommandExecutor for PlaceStructureExecutor {
                 } else {
                     let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
 
-                    let position = pumpkin_world::generation::structure::generate_structure_position(
-                        &key,
-                        &structure,
-                        StructureGeneratorContext {
-                            seed: seed as i64,
-                            chunk_x: block_pos.0.x >> 4,
-                            chunk_z: block_pos.0.z >> 4,
-                            random,
-                            sea_level: 63,
-                            min_y: world_gen.dimension().min_y,
-                            height_sampler: None,
-                            structure_key: Some(key),
-                        },
-                    )
-                    .ok_or_else(|| {
-                        STRUCTURE_INVALID
-                            .create_without_context(TextComponent::text(structure_name))
-                    })?;
+                    let position =
+                        pumpkin_world::generation::structure::generate_structure_position(
+                            &key,
+                            structure,
+                            StructureGeneratorContext {
+                                seed: seed as i64,
+                                chunk_x: block_pos.0.x >> 4,
+                                chunk_z: block_pos.0.z >> 4,
+                                random,
+                                sea_level: 63,
+                                min_y: world_gen.dimension().min_y,
+                                height_sampler: None,
+                                structure_key: Some(key),
+                            },
+                        )
+                        .ok_or_else(|| {
+                            STRUCTURE_INVALID
+                                .create_without_context(TextComponent::text(structure_name.clone()))
+                        })?;
 
                     let mut collector = position.collector.lock().unwrap();
                     let piece_count = collector.pieces.len();
@@ -361,30 +385,31 @@ impl CommandExecutor for PlaceStructureExecutor {
                         }
                     }
 
-                    let has_non_jigsaw = collector
-                        .pieces
-                        .iter()
-                        .any(|p| p.as_any().downcast_ref::<PoolElementStructurePiece>().is_none());
+                    let has_non_jigsaw = collector.pieces.iter().any(|p| {
+                        p.as_any()
+                            .downcast_ref::<PoolElementStructurePiece>()
+                            .is_none()
+                    });
 
                     if has_non_jigsaw {
                         let reg = CommandBlockRegistry;
 
                         let mut min_x = i32::MAX;
-                        let mut min_y = i32::MAX;
                         let mut min_z = i32::MAX;
                         let mut max_x = i32::MIN;
-                        let mut max_y = i32::MIN;
                         let mut max_z = i32::MIN;
 
                         for piece in &collector.pieces {
-                            if piece.as_any().downcast_ref::<PoolElementStructurePiece>().is_none() {
+                            if piece
+                                .as_any()
+                                .downcast_ref::<PoolElementStructurePiece>()
+                                .is_none()
+                            {
                                 let bb = piece.bounding_box();
-                                if bb.min.x < min_x { min_x = bb.min.x; }
-                                if bb.min.y < min_y { min_y = bb.min.y; }
-                                if bb.min.z < min_z { min_z = bb.min.z; }
-                                if bb.max.x > max_x { max_x = bb.max.x; }
-                                if bb.max.y > max_y { max_y = bb.max.y; }
-                                if bb.max.z > max_z { max_z = bb.max.z; }
+                                min_x = min_x.min(bb.min.x);
+                                min_z = min_z.min(bb.min.z);
+                                max_x = max_x.max(bb.max.x);
+                                max_z = max_z.max(bb.max.z);
                             }
                         }
 
@@ -398,21 +423,31 @@ impl CommandExecutor for PlaceStructureExecutor {
                                 let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
                                 let chunk_min_y = chunk.bottom_y() as i32;
                                 let chunk_height = chunk.height() as i32;
-                                let ground_y = (block_pos.0.y - 1)
-                                    .clamp(chunk_min_y, chunk_min_y + chunk_height - 1);
+                                let surface_y = ground_y(block_pos.0.y, chunk_min_y, chunk_height);
 
-                                // Pre-seed heightmaps so get_top_y returns a reasonable value
-                                let ground = ground_y as i16;
+                                // Seed heightmaps and fill below-surface with stone so
+                                // pieces that carve through solid terrain have material
+                                let ground = surface_y as i16;
                                 chunk.flat_surface_height_map = [ground; 256];
                                 chunk.flat_ocean_floor_height_map = [ground; 256];
                                 chunk.flat_motion_blocking_height_map = [ground; 256];
                                 chunk.flat_motion_blocking_no_leaves_height_map = [ground; 256];
 
-                                // Place a thin stone floor so pieces that scan blocks find solid ground
-                                for x in 0..16i32 {
-                                    for z in 0..16i32 {
+                                for x in 0..CHUNK_DIM {
+                                    for z in 0..CHUNK_DIM {
+                                        for y in chunk_min_y..surface_y {
+                                            chunk.set_block_state(
+                                                x,
+                                                y,
+                                                z,
+                                                Block::STONE.default_state,
+                                            );
+                                        }
                                         chunk.set_block_state(
-                                            x, ground_y, z, Block::STONE.default_state,
+                                            x,
+                                            surface_y,
+                                            z,
+                                            Block::GRASS_BLOCK.default_state,
                                         );
                                     }
                                 }
@@ -421,33 +456,16 @@ impl CommandExecutor for PlaceStructureExecutor {
                                     cx << 4,
                                     chunk_min_y,
                                     cz << 4,
-                                    (cx << 4) + 15,
+                                    (cx << 4) + CHUNK_DIM - 1,
                                     chunk_min_y + chunk_height - 1,
-                                    (cz << 4) + 15,
+                                    (cz << 4) + CHUNK_DIM - 1,
                                 );
 
-                                // Snapshot the pre-populated state so we only send
-                                // the structure's own blocks to the world
-                                let mut snapshot =
-                                    Vec::with_capacity((16 * chunk_height * 16) as usize);
-                                for x in 0..16 {
-                                    for y in chunk_min_y..chunk_min_y + chunk_height {
-                                        for z in 0..16 {
-                                            snapshot.push(chunk.get_block_state(&Vector3::new(
-                                                (cx << 4) + x,
-                                                y,
-                                                (cz << 4) + z,
-                                            )));
-                                        }
-                                    }
-                                }
+                                let snapshot =
+                                    snapshot_blocks(&chunk, cx, cz, chunk_min_y, chunk_height);
 
-                                let chunk_seed = (cx as i64)
-                                    .wrapping_mul(341873128712)
-                                    .wrapping_add((cz as i64).wrapping_mul(132897987541))
-                                    .wrapping_add(seed as i64);
                                 let mut rng = RandomGenerator::Legacy(LegacyRand::from_seed(
-                                    chunk_seed as u64,
+                                    chunk_population_seed(cx, cz, seed),
                                 ));
 
                                 for piece in &mut collector.pieces {
@@ -462,27 +480,15 @@ impl CommandExecutor for PlaceStructureExecutor {
                                     }
                                 }
 
-                                // Delta: only send blocks changed by the structure
-                                let mut snapshot_idx = 0usize;
-                                for x in 0..16 {
-                                    for y in chunk_min_y..chunk_min_y + chunk_height {
-                                        for z in 0..16 {
-                                            let pos = Vector3::new(
-                                                (cx << 4) + x,
-                                                y,
-                                                (cz << 4) + z,
-                                            );
-                                            let new_id = chunk.get_block_state(&pos);
-                                            if new_id != snapshot[snapshot_idx] {
-                                                placer.set_block_state(
-                                                    &pos,
-                                                    new_id.to_state(),
-                                                );
-                                            }
-                                            snapshot_idx += 1;
-                                        }
-                                    }
-                                }
+                                apply_delta(
+                                    &chunk,
+                                    &snapshot,
+                                    cx,
+                                    cz,
+                                    chunk_min_y,
+                                    chunk_height,
+                                    &mut placer,
+                                );
 
                                 for nbt in chunk.pending_block_entities.drain(..) {
                                     placer.block_entity_nbts.push(nbt);
@@ -508,7 +514,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                     TextComponent::translate(
                         "commands.place.structure.success",
                         [
-                            TextComponent::text(piece_count.to_string()),
+                            TextComponent::text(structure_name),
                             TextComponent::text(block_pos.0.x.to_string()),
                             TextComponent::text(block_pos.0.y.to_string()),
                             TextComponent::text(block_pos.0.z.to_string()),
@@ -520,6 +526,162 @@ impl CommandExecutor for PlaceStructureExecutor {
 
             Ok(1)
         })
+    }
+}
+
+struct PlaceFeatureExecutor;
+
+impl CommandExecutor for PlaceFeatureExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+        Box::pin(async move {
+            let feature_id = context.get_argument::<Identifier>("feature")?;
+            let feature_name = feature_id.to_string();
+
+            let key = PlacedFeatureKey::from_name(&feature_name).ok_or_else(|| {
+                FEATURE_INVALID.create_without_context(TextComponent::text(feature_name.clone()))
+            })?;
+
+            let placed = PLACED_FEATURES.get(&key).ok_or_else(|| {
+                FEATURE_INVALID.create_without_context(TextComponent::text(feature_name.clone()))
+            })?;
+
+            let configured = match &placed.feature {
+                Feature::Named(name) => CONFIGURED_FEATURES.get(name).ok_or_else(|| {
+                    FEATURE_INVALID
+                        .create_without_context(TextComponent::text(feature_name.clone()))
+                })?,
+                Feature::Inlined(f) => f.as_ref(),
+            };
+
+            let block_pos =
+                BlockPosArgumentType::get_block_pos(context, "pos").unwrap_or_else(|_| {
+                    let p = context.source.position;
+                    BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
+                });
+
+            let world_gen = context.world().level.world_gen.clone();
+            let cx = block_pos.0.x >> 4;
+            let cz = block_pos.0.z >> 4;
+            let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
+            let bottom_y = chunk.bottom_y();
+            let height = chunk.height();
+            let chunk_min_y = bottom_y as i32;
+            let chunk_height = height as i32;
+            let surface_y = ground_y(block_pos.0.y, chunk_min_y, chunk_height);
+
+            let ground = surface_y as i16;
+            chunk.flat_surface_height_map = [ground; 256];
+            chunk.flat_ocean_floor_height_map = [ground; 256];
+            chunk.flat_motion_blocking_height_map = [ground; 256];
+            chunk.flat_motion_blocking_no_leaves_height_map = [ground; 256];
+
+            for x in 0..CHUNK_DIM {
+                for z in 0..CHUNK_DIM {
+                    for y in chunk_min_y..surface_y {
+                        chunk.set_block_state(x, y, z, Block::STONE.default_state);
+                    }
+                    chunk.set_block_state(x, surface_y, z, Block::GRASS_BLOCK.default_state);
+                }
+            }
+
+            let snapshot = snapshot_blocks(&chunk, cx, cz, chunk_min_y, chunk_height);
+
+            let reg = CommandBlockRegistry;
+            let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
+            let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
+
+            configured.generate(
+                &mut chunk,
+                &reg,
+                bottom_y,
+                height,
+                key,
+                &mut random,
+                block_pos,
+            );
+
+            let mut placer = WorldBlockPlacer::new(context.world());
+            apply_delta(
+                &chunk,
+                &snapshot,
+                cx,
+                cz,
+                chunk_min_y,
+                chunk_height,
+                &mut placer,
+            );
+
+            for nbt in chunk.pending_block_entities.drain(..) {
+                placer.block_entity_nbts.push(nbt);
+            }
+
+            placer.finalize().await;
+            context
+                .world()
+                .queue_block_updates(&placer.changed_positions)
+                .await;
+            context.world().flush_block_updates().await;
+
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate(
+                        "commands.place.feature.success",
+                        [
+                            TextComponent::text(feature_name),
+                            TextComponent::text(block_pos.0.x.to_string()),
+                            TextComponent::text(block_pos.0.y.to_string()),
+                            TextComponent::text(block_pos.0.z.to_string()),
+                        ],
+                    ),
+                    true,
+                )
+                .await;
+
+            Ok(1)
+        })
+    }
+}
+
+fn snapshot_blocks(
+    chunk: &ProtoChunk,
+    cx: i32,
+    cz: i32,
+    min_y: i32,
+    height: i32,
+) -> Vec<BlockStateId> {
+    let mut snap = Vec::with_capacity((CHUNK_DIM * height * CHUNK_DIM) as usize);
+    for x in 0..CHUNK_DIM {
+        for y in min_y..min_y + height {
+            for z in 0..CHUNK_DIM {
+                snap.push(chunk.get_block_state(&Vector3::new((cx << 4) + x, y, (cz << 4) + z)));
+            }
+        }
+    }
+    snap
+}
+
+fn apply_delta(
+    chunk: &ProtoChunk,
+    snapshot: &[BlockStateId],
+    cx: i32,
+    cz: i32,
+    min_y: i32,
+    height: i32,
+    placer: &mut WorldBlockPlacer<'_>,
+) {
+    let mut idx = 0usize;
+    for x in 0..CHUNK_DIM {
+        for y in min_y..min_y + height {
+            for z in 0..CHUNK_DIM {
+                let pos = Vector3::new((cx << 4) + x, y, (cz << 4) + z);
+                let new_id = chunk.get_block_state(&pos);
+                if new_id != snapshot[idx] {
+                    placer.set_block_state(&pos, new_id.to_state());
+                }
+                idx += 1;
+            }
+        }
     }
 }
 
@@ -561,9 +723,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
                     argument("structure", StructureNameArgumentType)
                         .executes(PlaceStructureExecutor)
                         .then(
-                            argument("pos", BlockPosArgumentType)
-                                .executes(PlaceStructureExecutor),
+                            argument("pos", BlockPosArgumentType).executes(PlaceStructureExecutor),
                         ),
+                ),
+            )
+            .then(
+                literal("feature").then(
+                    argument("feature", PlacedFeatureNameArgumentType)
+                        .executes(PlaceFeatureExecutor)
+                        .then(argument("pos", BlockPosArgumentType).executes(PlaceFeatureExecutor)),
                 ),
             ),
     );
