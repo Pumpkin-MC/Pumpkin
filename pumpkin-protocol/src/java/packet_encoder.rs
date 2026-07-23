@@ -11,6 +11,10 @@ use crate::{
 
 // raw -> compress -> encrypt
 
+const LARGE_PACKET_COMPRESSION_THRESHOLD: usize = 16 * 1024;
+static LARGE_PACKET_COMPRESSION_PERMIT: tokio::sync::Semaphore =
+    tokio::sync::Semaphore::const_new(1);
+
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
     None(W),
@@ -170,6 +174,28 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         Ok(())
     }
 
+    async fn compress_packet_data_scheduled(
+        &mut self,
+        packet_data: &[u8],
+        compression_level: CompressionLevel,
+    ) -> Result<(), PacketEncodeError> {
+        let can_yield_runtime_worker = tokio::runtime::Handle::try_current().is_ok_and(|handle| {
+            matches!(
+                handle.runtime_flavor(),
+                tokio::runtime::RuntimeFlavor::MultiThread
+            )
+        });
+        if packet_data.len() < LARGE_PACKET_COMPRESSION_THRESHOLD || !can_yield_runtime_worker {
+            return self.compress_packet_data(packet_data, compression_level);
+        }
+
+        let _permit = LARGE_PACKET_COMPRESSION_PERMIT
+            .acquire()
+            .await
+            .map_err(|error| PacketEncodeError::Message(error.to_string()))?;
+        tokio::task::block_in_place(|| self.compress_packet_data(packet_data, compression_level))
+    }
+
     /// Appends a Clientbound `ClientPacket` to the internal buffer and applies compression when needed.
     ///
     /// If compression is enabled and the packet size exceeds the threshold, the packet is compressed.
@@ -222,7 +248,8 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             self.compression
         {
             if data_len >= compression_threshold {
-                self.compress_packet_data(packet_data.as_ref(), compression_level)?;
+                self.compress_packet_data_scheduled(packet_data.as_ref(), compression_level)
+                    .await?;
                 debug_assert!(!self.compression_scratch.is_empty());
 
                 let full_packet_len_var_int: VarInt = (data_len_var_int.written_size()
@@ -504,6 +531,16 @@ mod tests {
 
         // Remaining buffer is the payload
         assert_eq!(decompressed_buffer, expected_payload);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn encode_large_packet_with_scheduled_compression()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let packet = MaxSizePacket::new(64 * 1024);
+        let packet_bytes = build_packet_with_encoder(&packet, Some((0, 4)), None).await?;
+
+        assert!(!packet_bytes.is_empty());
         Ok(())
     }
 
