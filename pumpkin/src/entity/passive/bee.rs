@@ -5,9 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -40,8 +40,9 @@ impl BeeEntity {
             );
             goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
 
-            // Neutral until hurt.
+            // Neutral until hurt; hive anger stand-in via pack join.
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::BEE));
         };
 
         mob_arc

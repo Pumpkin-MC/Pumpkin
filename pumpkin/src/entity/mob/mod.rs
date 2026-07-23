@@ -430,6 +430,65 @@ impl MobEntity {
                     }
                 }
             }
+
+            // Vanilla on-hit status effects (cave spider poison, husk hunger, bee sting).
+            if let Some(target_living) = target.get_living_entity() {
+                use pumpkin_data::effect::StatusEffect;
+                use pumpkin_data::potion::Effect;
+                let id = entity_type.id;
+                if id == pumpkin_data::entity::EntityType::CAVE_SPIDER.id {
+                    // Easy: 7s poison; hard: 15s (difficulty-scaled TODO).
+                    target_living
+                        .add_effect(Effect {
+                            effect_type: &StatusEffect::POISON,
+                            duration: 7 * 20,
+                            amplifier: 0,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
+                } else if id == pumpkin_data::entity::EntityType::HUSK.id {
+                    target_living
+                        .add_effect(Effect {
+                            effect_type: &StatusEffect::HUNGER,
+                            duration: 7 * 20,
+                            amplifier: 0,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
+                } else if id == pumpkin_data::entity::EntityType::BEE.id {
+                    // Bee sting poison (short).
+                    target_living
+                        .add_effect(Effect {
+                            effect_type: &StatusEffect::POISON,
+                            duration: 18 * 20 / 2, // ~9s stand-in
+                            amplifier: 0,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
+                } else if id == pumpkin_data::entity::EntityType::WITHER_SKELETON.id {
+                    target_living
+                        .add_effect(Effect {
+                            effect_type: &StatusEffect::WITHER,
+                            duration: 10 * 20,
+                            amplifier: 0,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
+                }
+            }
+
             self.living_entity
                 .last_attacking_id
                 .store(target.get_entity().entity_id, Relaxed);

@@ -5,6 +5,7 @@ use crate::entity::{
     mob::{Mob, MobEntity, spider::SpiderEntity},
 };
 
+/// Cave spider — same AI as spider; poison applied in `MobEntity::try_attack`.
 pub struct CaveSpiderEntity {
     pub spider: Arc<SpiderEntity>,
 }
@@ -22,5 +23,4 @@ impl Mob for CaveSpiderEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         self.spider.get_mob_entity()
     }
-    // TODO: Poison effect on attack
 }

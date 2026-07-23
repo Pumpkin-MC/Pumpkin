@@ -1,9 +1,12 @@
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::potion::Effect;
+use pumpkin_data::{effect::StatusEffect, sound::Sound, sound::SoundCategory};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
@@ -13,7 +16,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Dolphin — swim with players / treasure TODO; revenge if attacked.
+/// Dolphin — revenge + periodic Dolphin's Grace for nearby swimming players.
 pub struct DolphinEntity {
     pub mob_entity: MobEntity,
 }
@@ -51,6 +54,40 @@ impl DolphinEntity {
 
         mob_arc
     }
+
+    async fn grant_grace(&self) {
+        let living = &self.mob_entity.living_entity;
+        if !living.is_alive() {
+            return;
+        }
+        let world = living.entity.world.load();
+        let pos = living.entity.pos.load();
+        for player in world.get_nearby_players(pos, 10.0) {
+            if player.is_spectator() || player.is_creative() {
+                continue;
+            }
+            // Only while player is in water.
+            if !player
+                .get_entity()
+                .touching_water
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                continue;
+            }
+            player
+                .add_effect(Effect {
+                    effect_type: &StatusEffect::DOLPHINS_GRACE,
+                    duration: 100, // 5s refresh
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                })
+                .await;
+        }
+        let _ = (Sound::EntityDolphinAmbient, SoundCategory::Neutral);
+    }
 }
 
 impl NBTStorage for DolphinEntity {}
@@ -58,5 +95,14 @@ impl NBTStorage for DolphinEntity {}
 impl Mob for DolphinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let age = self.mob_entity.living_entity.entity.age.load(Relaxed);
+            if age % 20 == 0 {
+                self.grant_grace().await;
+            }
+        })
     }
 }
