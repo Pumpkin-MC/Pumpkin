@@ -3,11 +3,11 @@
 //! Skeleton draws the bow (using-item pose) for ~20 ticks, then releases an arrow.
 
 use super::{Controls, Goal, GoalFuture};
+use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
-use crate::entity::Entity;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -302,7 +302,11 @@ impl Goal for BowAttackGoal {
             } else {
                 let dest = {
                     let b = target_pos.to_block_pos();
-                    Vector3::new(f64::from(b.0.x) + 0.5, f64::from(b.0.y), f64::from(b.0.z) + 0.5)
+                    Vector3::new(
+                        f64::from(b.0.x) + 0.5,
+                        f64::from(b.0.y),
+                        f64::from(b.0.z) + 0.5,
+                    )
                 };
                 let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                 navigator.set_progress(NavigatorGoal::new(mob_pos, dest, self.speed));

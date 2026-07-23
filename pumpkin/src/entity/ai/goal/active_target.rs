@@ -121,8 +121,7 @@ impl ActiveTargetGoal {
         match self.kind {
             TargetKind::Exact(want) => entity_type.id == want.id,
             TargetKind::Category { category, exclude } => {
-                entity_type.category == category
-                    && !exclude.iter().any(|e| e.id == entity_type.id)
+                entity_type.category == category && !exclude.iter().any(|e| e.id == entity_type.id)
             }
         }
     }

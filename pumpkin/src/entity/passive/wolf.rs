@@ -268,11 +268,7 @@ impl Mob for WolfEntity {
                         7,
                         Particle::Heart,
                     );
-                    world.play_sound(
-                        Sound::EntityWolfAmbient,
-                        SoundCategory::Neutral,
-                        &pos,
-                    );
+                    world.play_sound(Sound::EntityWolfAmbient, SoundCategory::Neutral, &pos);
                 } else {
                     world.send_entity_status(entity, EntityStatus::TamingFailed);
                     world.play_sound(Sound::EntityWolfHurt, SoundCategory::Neutral, &pos);

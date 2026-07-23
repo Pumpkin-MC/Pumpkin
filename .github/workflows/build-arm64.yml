@@ -1,0 +1,40 @@
+# Lightweight ARM64 release build for local server install (skips full lint matrix).
+name: Build ARM64 Release
+
+on:
+  push:
+    branches:
+      - "fix/**"
+      - "master"
+  workflow_dispatch:
+
+jobs:
+  build_arm64:
+    name: Build pumpkin (linux-arm64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - run: rustup update stable && rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release -p pumpkin
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/release/pumpkin dist/pumpkin-ARM64-Linux.bin
+          chmod +x dist/pumpkin-ARM64-Linux.bin
+          ls -la dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pumpkin-ARM64-Linux
+          path: dist/pumpkin-ARM64-Linux.bin
+          compression-level: 9
+          retention-days: 14

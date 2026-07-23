@@ -330,8 +330,7 @@ impl Navigator {
                     (dx * dx + dy * dy + dz * dz).sqrt()
                 };
                 // Only drop if we did not get closer and the path is a long detour.
-                if end_to_goal >= start_to_goal - 0.5
-                    && path_len > start_to_goal.mul_add(3.0, 12.0)
+                if end_to_goal >= start_to_goal - 0.5 && path_len > start_to_goal.mul_add(3.0, 12.0)
                 {
                     return None;
                 }
@@ -365,9 +364,13 @@ impl Navigator {
             }
             // Also refuse a step that would walk off land into water immediately ahead.
             let ahead = current_pos.add_raw(
-                (goal.destination.x - current_pos.x).signum().clamp(-1.0, 1.0),
+                (goal.destination.x - current_pos.x)
+                    .signum()
+                    .clamp(-1.0, 1.0),
                 0.0,
-                (goal.destination.z - current_pos.z).signum().clamp(-1.0, 1.0),
+                (goal.destination.z - current_pos.z)
+                    .signum()
+                    .clamp(-1.0, 1.0),
             );
             let ahead_block = ahead.to_block_pos();
             if is_water(ahead_block) || is_water(ahead_block.down()) {

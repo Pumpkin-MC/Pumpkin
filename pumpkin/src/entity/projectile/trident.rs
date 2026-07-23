@@ -329,7 +329,8 @@ impl EntityBase for TridentEntity {
                         SoundCategory::Neutral,
                         &hit_pos,
                         1.0,
-                        1.0, 0,
+                        1.0,
+                        0,
                     );
                     let chunk_pos = entity.chunk_pos.load();
                     world.broadcast_to_chunk(chunk_pos, &sound_packet);
@@ -369,7 +370,8 @@ impl EntityBase for TridentEntity {
                         SoundCategory::Neutral,
                         &hit_pos,
                         1.0,
-                        1.0, 0,
+                        1.0,
+                        0,
                     );
                     world.broadcast_packet_all(&sound_packet);
 

@@ -1,11 +1,11 @@
 //! Simplified vanilla witch ranged potion throw.
 
 use super::{Controls, Goal, GoalFuture, to_goal_ticks};
+use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
-use crate::entity::Entity;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::PotionContentsImpl;
 use pumpkin_data::entity::EntityType;

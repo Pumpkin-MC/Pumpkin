@@ -262,9 +262,10 @@ impl Goal for MeleeAttackGoal {
 
             let dest = Self::path_destination_for(mob, target.as_ref());
             let should_update_nav = self.update_countdown_ticks <= 0
-                && (self.last_target_position.is_none_or(|last_pos| {
-                    dest.squared_distance_to_vec(&last_pos) >= 1.0
-                }) || mob.get_random().random_range(0..20) == 0);
+                && (self
+                    .last_target_position
+                    .is_none_or(|last_pos| dest.squared_distance_to_vec(&last_pos) >= 1.0)
+                    || mob.get_random().random_range(0..20) == 0);
 
             if should_update_nav {
                 let mob_pos = mob.get_entity().pos.load();

@@ -1,5 +1,5 @@
-use std::sync::{Arc, Weak};
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
 

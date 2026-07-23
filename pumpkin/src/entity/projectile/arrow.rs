@@ -380,7 +380,8 @@ impl EntityBase for ArrowEntity {
                         SoundCategory::Neutral,
                         &hit_pos,
                         1.0,
-                        1.0, 0,
+                        1.0,
+                        0,
                     );
                     let chunk_pos = entity.chunk_pos.load();
                     world.broadcast_to_chunk(chunk_pos, &sound_packet);
@@ -409,13 +410,11 @@ impl EntityBase for ArrowEntity {
 
                     // Vanilla: damage source is the arrow, cause/attacker is the shooter.
                     // Without cause, RevengeGoal never sees the skeleton (golem won't fight back).
-                    let owner = self
-                        .owner_id
-                        .and_then(|id| world.get_entity_by_id(id).or_else(|| {
-                            world
-                                .get_player_by_id(id)
-                                .map(|p| p as Arc<dyn EntityBase>)
-                        }));
+                    let owner = self.owner_id.and_then(|id| {
+                        world.get_entity_by_id(id).or_else(|| {
+                            world.get_player_by_id(id).map(|p| p as Arc<dyn EntityBase>)
+                        })
+                    });
                     let owner_ref = owner.as_deref();
                     target
                         .damage_with_context(
@@ -446,7 +445,8 @@ impl EntityBase for ArrowEntity {
                             SoundCategory::Neutral,
                             &hit_pos,
                             1.0,
-                            1.0, 0,
+                            1.0,
+                            0,
                         );
                         world.broadcast_packet_all(&sound_packet);
                     }

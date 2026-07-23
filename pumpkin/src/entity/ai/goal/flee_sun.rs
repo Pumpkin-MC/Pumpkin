@@ -24,7 +24,10 @@ impl FleeSunGoal {
     fn is_bright_enough_to_burn(mob: &dyn Mob) -> bool {
         let entity = mob.get_entity();
         let world = entity.world.load();
-        if entity.touching_water.load(std::sync::atomic::Ordering::Relaxed) {
+        if entity
+            .touching_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             return false;
         }
         let feet = entity.block_pos.load();
@@ -34,8 +37,7 @@ impl FleeSunGoal {
         }
         // Under a roof? top solid above feet means shade.
         let top = world.get_top_block(pumpkin_util::math::vector2::Vector2::new(
-            feet.0.x,
-            feet.0.z,
+            feet.0.x, feet.0.z,
         ));
         // Exposed to sky if top is at or below feet+1 (standing on surface).
         top <= feet.0.y + 1
@@ -51,7 +53,11 @@ impl FleeSunGoal {
             let dx = rng.random_range(-10i32..=10);
             let dy = rng.random_range(-3i32..=3);
             let dz = rng.random_range(-10i32..=10);
-            let sample = BlockPos::floored(pos.x + f64::from(dx), pos.y + f64::from(dy), pos.z + f64::from(dz));
+            let sample = BlockPos::floored(
+                pos.x + f64::from(dx),
+                pos.y + f64::from(dy),
+                pos.z + f64::from(dz),
+            );
             let below = sample.down();
             let below_state = world.get_block_state(&below);
             let feet_state = world.get_block_state(&sample);
@@ -97,7 +103,11 @@ impl Goal for FleeSunGoal {
                 return false;
             }
             // On fire or about to burn — seek shade.
-            let on_fire = mob.get_entity().fire_ticks.load(std::sync::atomic::Ordering::Relaxed) > 0;
+            let on_fire = mob
+                .get_entity()
+                .fire_ticks
+                .load(std::sync::atomic::Ordering::Relaxed)
+                > 0;
             if !on_fire {
                 // Still seek shade proactively in full sun.
                 let sky = mob

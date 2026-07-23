@@ -35,10 +35,7 @@ impl RevengeGoal {
         }
     }
 
-    fn resolve_attacker(
-        &self,
-        mob: &dyn Mob,
-    ) -> Option<Arc<dyn EntityBase>> {
+    fn resolve_attacker(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
         let mob_entity = mob.get_mob_entity();
         let living = &mob_entity.living_entity;
         let attacker_id = living.last_attacker_id.load(Relaxed);

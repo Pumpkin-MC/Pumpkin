@@ -204,7 +204,8 @@ impl BowItem {
             SoundCategory::Neutral,
             &position,
             1.0,
-            sound_pitch, 0,
+            sound_pitch,
+            0,
         );
         let chunk_pos = player.get_entity().chunk_pos.load();
         world.broadcast_to_chunk(chunk_pos, &sound_packet);

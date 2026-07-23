@@ -54,7 +54,9 @@ impl SpruceFoliagePlacer {
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
         // Keep a fuller crown on tall spruce (was bare tip with only max(4) layers).
-        (trunk_height - self.trunk_height.get(random)).max(6).min(trunk_height.max(6))
+        (trunk_height - self.trunk_height.get(random))
+            .max(6)
+            .min(trunk_height.max(6))
     }
 }
 

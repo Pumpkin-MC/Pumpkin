@@ -1921,9 +1921,7 @@ impl LivingEntity {
     /// attacking dead villagers/zombies.
     #[must_use]
     pub fn is_alive(&self) -> bool {
-        self.health.load() > 0.0
-            && !self.dead.load(Ordering::Relaxed)
-            && !self.entity.is_removed()
+        self.health.load() > 0.0 && !self.dead.load(Ordering::Relaxed) && !self.entity.is_removed()
     }
 
     pub fn is_part_of_game(&self) -> bool {

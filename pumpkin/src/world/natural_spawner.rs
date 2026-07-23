@@ -716,9 +716,12 @@ pub fn spawn_category_for_position(
             }
 
             let spawner = current_spawner.unwrap();
-            let Some(entity_type) =
-                EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap_or(spawner.r#type))
-            else {
+            let Some(entity_type) = EntityType::from_name(
+                spawner
+                    .r#type
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(spawner.r#type),
+            ) else {
                 inc += 1;
                 continue;
             };

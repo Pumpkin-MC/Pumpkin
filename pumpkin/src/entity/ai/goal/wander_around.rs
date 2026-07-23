@@ -39,7 +39,8 @@ impl WanderAroundGoal {
             // Scan a small vertical window around the mob for solid ground.
             for dy in (-2..=2).rev() {
                 let feet_y = pos.y + f64::from(dy);
-                let feet = pumpkin_util::math::position::BlockPos::floored(sample_x, feet_y, sample_z);
+                let feet =
+                    pumpkin_util::math::position::BlockPos::floored(sample_x, feet_y, sample_z);
                 let below = feet.down();
                 let below_state = world.get_block_state(&below);
                 let feet_state = world.get_block_state(&feet);

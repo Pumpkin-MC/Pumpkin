@@ -5269,8 +5269,7 @@ impl InventoryPlayer for Player {
                     } else {
                         Sound::ItemArmorEquipGeneric
                     };
-                    self.world()
-                        .play_sound(sound, SoundCategory::Players, &pos);
+                    self.world().play_sound(sound, SoundCategory::Players, &pos);
                 }
             }
         })
