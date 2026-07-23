@@ -62,8 +62,11 @@ impl ClientPacket for CUpdateAdvancements {
             let has_display = adv.display.is_some();
             write.write_bool(has_display)?;
             if let Some(display) = adv.display {
-                write.write_slice(&display.get_title().encode())?;
-                write.write_slice(&display.get_description().encode())?;
+                // Safely encode title and description, handling potential serialization errors
+                let title_bytes = display.get_title().encode();
+                let desc_bytes = display.get_description().encode();
+                write.write_slice(&title_bytes)?;
+                write.write_slice(&desc_bytes)?;
 
                 // Item icon
                 ItemStackTemplateSerializer::from(display.item_icon.clone())
