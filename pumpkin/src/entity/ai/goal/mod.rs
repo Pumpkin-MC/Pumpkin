@@ -19,6 +19,8 @@ pub mod flee_sun;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod goal_selector;
+pub mod guardian_laser;
+pub mod join_anger;
 pub mod leap_at_target;
 pub mod look_around;
 pub mod look_at_entity;

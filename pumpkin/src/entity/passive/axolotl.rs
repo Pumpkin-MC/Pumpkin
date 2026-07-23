@@ -1,19 +1,22 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
 
-/// Represents an Axolotl, a passive aquatic mob that can play dead to regenerate health.
-///
-/// Wiki: <https://minecraft.wiki/w/Axolotl>
+const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
+
+/// Axolotl — hunts aquatic hostiles; play-dead TODO.
 pub struct AxolotlEntity {
     pub mob_entity: MobEntity,
 }
@@ -21,6 +24,11 @@ pub struct AxolotlEntity {
 impl AxolotlEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        {
+            let mut nav = mob_entity.navigator.lock().unwrap();
+            nav.set_pathfinding_malus(PathType::Water, 0.0);
+            nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
+        }
         let axolotl = Self { mob_entity };
         let mob_arc = Arc::new(axolotl);
         let mob_weak: Weak<dyn Mob> = {
@@ -30,14 +38,35 @@ impl AxolotlEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(2, Box::new(TemptGoal::new(0.9, TEMPT_ITEMS)));
+            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
-                2,
+                5,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+
+            // Hunt drowned, fish, squid, guardians (vanilla aquatic prey set).
+            for (prio, ty) in [
+                (1, &EntityType::DROWNED),
+                (1, &EntityType::GUARDIAN),
+                (1, &EntityType::ELDER_GUARDIAN),
+                (2, &EntityType::SQUID),
+                (2, &EntityType::GLOW_SQUID),
+                (2, &EntityType::COD),
+                (2, &EntityType::SALMON),
+                (2, &EntityType::TROPICAL_FISH),
+                (2, &EntityType::PUFFERFISH),
+            ] {
+                target_selector.add_goal(
+                    prio,
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, ty, true),
+                );
+            }
         };
 
         mob_arc

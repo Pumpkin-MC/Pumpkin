@@ -5,13 +5,14 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
+/// Zombified piglin — neutral until hurt; pack joins anger via `JoinAngerGoal`.
 pub struct ZombifiedPiglinEntity {
     pub mob_entity: MobEntity,
 }
@@ -28,20 +29,20 @@ impl ZombifiedPiglinEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            // Neutral like vanilla: no ActiveTarget on players; only Revenge when hurt.
-            // (Group anger call-for-help is still TODO in RevengeGoal.)
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            // Personal revenge first, then pack anger from nearby allies.
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::ZOMBIFIED_PIGLIN));
         };
 
         mob_arc
