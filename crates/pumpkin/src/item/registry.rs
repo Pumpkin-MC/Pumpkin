@@ -55,6 +55,12 @@ impl ItemRegistry {
         }
     }
 
+    pub async fn on_spear_jab(&self, stack: &ItemStack, player: &Player) {
+        if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
+            behaviour.on_spear_jab(stack, player).await;
+        }
+    }
+
     /// Returns the item's use duration in ticks, as defined by its registered behaviour.
     /// Returns `None` if the item has no registered behaviour or its duration is 0.
     #[must_use]
