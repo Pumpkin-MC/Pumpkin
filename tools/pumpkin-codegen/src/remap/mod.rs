@@ -3,6 +3,7 @@ use pumpkin_nbt::compound::NbtCompound;
 
 use crate::version::JavaMinecraftVersion;
 
+mod attribute_id;
 mod block_state;
 mod entity_id;
 mod item_id;
@@ -13,6 +14,7 @@ mod sound_id;
 #[allow(clippy::type_complexity)]
 pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
     vec![
+        (attribute_id::build, "attribute_id_remap.rs"),
         (block_state::build, "block_state_remap.rs"),
         (entity_id::build, "entity_id_remap.rs"),
         (item_id::build, "item_id_remap.rs"),
