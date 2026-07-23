@@ -40,5 +40,9 @@ bitflags.workspace = true
 [dev-dependencies]
 # Validate correctness
 
+[[bench]]
+name = "packet_compression"
+harness = false
+
 [lints]
 workspace = true
