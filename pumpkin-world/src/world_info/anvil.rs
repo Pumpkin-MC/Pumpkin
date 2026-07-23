@@ -151,14 +151,28 @@ impl WorldInfoWriter for AnvilLevelInfo {
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };
 
-        // ── Write level.dat ───────────────────────────────────────────────────
-        let path = level_folder.join(LEVEL_DAT_FILE_NAME);
-        let world_info_file = File::create(path)?;
-
-        let compression_writer = GzEncoder::new(world_info_file, Compression::best());
-        // TODO: Proper error handling
-        pumpkin_nbt::to_bytes(&level, compression_writer)
-            .expect("Failed to write level.dat to disk");
+        // ── Write level.dat atomically ──────────────────────────────────────
+        // Write to a temp file first, then rename atomically to prevent corruption
+        let temp_path = level_folder.join(format!("{}.tmp", LEVEL_DAT_FILE_NAME));
+        let temp_file = File::create(&temp_path)?;
+        
+        let compression_writer = GzEncoder::new(temp_file, Compression::best());
+        
+        // Serialize to bytes first
+        let mut buffer = Vec::new();
+        {
+            let mut encoder = GzEncoder::new(&mut buffer, Compression::best());
+            pumpkin_nbt::to_bytes(&level, &mut encoder)
+                .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
+        }
+        
+        // Write compressed bytes to temp file
+        std::fs::write(&temp_path, &buffer)
+            .map_err(|e| WorldInfoError::DeserializationError(format!("Failed to write temp file: {e}")))?;
+        
+        // Atomic rename
+        std::fs::rename(&temp_path, level_folder.join(LEVEL_DAT_FILE_NAME))
+            .map_err(|e| WorldInfoError::DeserializationError(format!("Failed to rename temp file: {e}")))?;
 
         let data_version = info.data_version;
 
