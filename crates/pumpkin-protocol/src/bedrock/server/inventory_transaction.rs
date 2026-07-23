@@ -270,3 +270,50 @@ impl PacketRead for SInventoryTransaction {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use crate::serial::PacketWrite;
+
+    use super::*;
+
+    #[test]
+    fn decodes_entity_attack_transaction() {
+        let mut input = Vec::new();
+
+        VarInt(0).write(&mut input).unwrap();
+        false.write(&mut input).unwrap();
+        true.write(&mut input).unwrap();
+        VarUInt(3).write(&mut input).unwrap();
+        true.write(&mut input).unwrap();
+        VarUInt(1).write(&mut input).unwrap();
+
+        VarUInt(0).write(&mut input).unwrap();
+        true.write(&mut input).unwrap();
+        true.write(&mut input).unwrap();
+        0i8.write(&mut input).unwrap();
+        true.write(&mut input).unwrap();
+        false.write(&mut input).unwrap();
+        VarUInt(0).write(&mut input).unwrap();
+        NetworkItemDescriptor::default().write(&mut input).unwrap();
+        NetworkItemDescriptor::default().write(&mut input).unwrap();
+
+        VarULong(42).write(&mut input).unwrap();
+        VarInt(1).write(&mut input).unwrap();
+        VarInt(0).write(&mut input).unwrap();
+        NetworkItemDescriptor::default().write(&mut input).unwrap();
+        Vector3::new(1.0, 2.0, 3.0).write(&mut input).unwrap();
+        Vector3::new(0.0, 1.0, 0.0).write(&mut input).unwrap();
+
+        let packet = SInventoryTransaction::read(&mut Cursor::new(input)).unwrap();
+
+        assert_eq!(packet.actions.len(), 1);
+        let TransactionData::UseItemOnEntity(data) = packet.transaction_data else {
+            panic!("expected entity transaction");
+        };
+        assert_eq!(data.target_entity_runtime_id.0, 42);
+        assert_eq!(data.action_type.0, 1);
+    }
+}

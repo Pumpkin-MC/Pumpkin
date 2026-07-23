@@ -494,7 +494,6 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SInventoryTransaction,
     ) {
-        tracing::info!("handle_inventory_action: packet={:?}", packet);
         let mut inventory_updated = false;
         let mut updates = Vec::new();
         let result = 0u8;
