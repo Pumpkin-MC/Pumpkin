@@ -1270,7 +1270,8 @@ impl BedrockClient {
                 self.handle_set_local_player_as_initialized(
                     player,
                     &SSetLocalPlayerAsInitialized::read(reader)?,
-                );
+                )
+                .await;
             }
             SSetPlayerInventoryOptions::PACKET_ID => {
                 let _ = SSetPlayerInventoryOptions::read(reader)?;

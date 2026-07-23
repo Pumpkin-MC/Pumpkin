@@ -190,7 +190,7 @@ impl BedrockClient {
         chunker::update_position(player).await;
     }
 
-    pub fn handle_set_local_player_as_initialized(
+    pub async fn handle_set_local_player_as_initialized(
         &self,
         player: &Arc<Player>,
         packet: &SSetLocalPlayerAsInitialized,
@@ -200,7 +200,11 @@ impl BedrockClient {
             player.gameprofile.name, packet.runtime_entity_id.0
         );
         // This is sent when the client has finished loading and rendering the world.
+        if player.client_loaded.load(Ordering::Relaxed) {
+            return;
+        }
         player.set_client_loaded(true);
+        player.world().spawn_players_for_bedrock(player).await;
     }
 
     #[expect(clippy::too_many_lines)]
