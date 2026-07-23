@@ -52,7 +52,7 @@ impl ZombieEntityBase {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            // HurtByTargetGoal.setAlertOthers(ZombifiedPiglin) — alert TODO
+            // HurtByTargetGoal.setAlertOthers(ZombifiedPiglin) — handled on ZombifiedPiglin via JoinAnger(ZOMBIE*)
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,

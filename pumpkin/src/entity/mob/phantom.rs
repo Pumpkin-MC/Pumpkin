@@ -1,19 +1,18 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, leap_at_target::LeapAtTargetGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, random_float::RandomFloatGoal, revenge::RevengeGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, melee_attack::MeleeAttackGoal,
+        random_float::RandomFloatGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Phantom — flying attacker (full circle/sweep goals TODO).
+/// Phantom — vanilla only has AttackStrategy / Sweep / CircleAroundAnchor + player target.
+/// Full flight circle not ported; float + melee is the GoalSelector stand-in.
 pub struct PhantomEntity {
     pub mob_entity: MobEntity,
 }
@@ -23,29 +22,18 @@ impl PhantomEntity {
         let mob_entity = MobEntity::new(entity);
         let phantom = Self { mob_entity };
         let mob_arc = Arc::new(phantom);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // Sweep/circle not ported — float + dive/bite stand-in.
+            // 1 PhantomAttackStrategyGoal ≈ hover / reacquire
             goal_selector.add_goal(1, RandomFloatGoal::new());
-            // Dive pounce toward target (circle sweep TODO).
-            goal_selector.add_goal(1, Box::new(LeapAtTargetGoal::new(0.5)));
+            // 2 PhantomSweepAttackGoal ≈ close-range melee dive
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, true)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+            // 3 PhantomCircleAroundAnchorGoal TODO
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // Vanilla PhantomAttackPlayerTargetGoal — players only (insomnia later).
+            // 1 PhantomAttackPlayerTargetGoal (insomnia filter TODO)
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),

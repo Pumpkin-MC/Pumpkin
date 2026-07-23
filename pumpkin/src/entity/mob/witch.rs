@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, join_anger::JoinAngerGoal, revenge::RevengeGoal, swim::SwimGoal,
+        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal, witch_attack::WitchAttackGoal,
     },
     mob::{Mob, MobEntity},
@@ -30,8 +30,9 @@ impl WitchEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Witch.registerGoals
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // Vanilla: RangedAttackGoal with splash potions.
+            // 2 RangedAttackGoal (splash potions) + WaterAvoidingRandomStroll
             goal_selector.add_goal(2, WitchAttackGoal::new(1.0));
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -40,26 +41,13 @@ impl WitchEntity {
             );
             goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
 
+            // 1 HurtByTarget(Raider ignore) — no setAlertOthers
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // Raid pack anger (vanilla HurtByTarget setAlertOthers illagers).
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::PILLAGER));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::VINDICATOR));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::EVOKER));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::ILLUSIONER));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::RAVAGER));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::WITCH));
+            // 2 NearestHealableRaiderTargetGoal TODO (raid heal allies)
+            // 3 NearestAttackableWitchTargetGoal(Player) — only players, not villager/golem
             target_selector.add_goal(
-                2,
+                3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            // Raid heal-target TODO; still attack villagers/golems opportunistically.
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
             );
         };
 

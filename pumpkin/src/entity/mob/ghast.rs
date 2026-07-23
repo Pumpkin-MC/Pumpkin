@@ -37,11 +37,12 @@ impl GhastEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // Vanilla: float around, look, shoot fireball.
+            // Vanilla 26.2 Ghast.registerGoals
             goal_selector.add_goal(5, RandomFloatGoal::new());
             goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak)));
             goal_selector.add_goal(7, FireballAttackGoal::new());
 
+            // Vanilla also filters |target.y - ghast.y| <= 4.0 (Y-band TODO).
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
