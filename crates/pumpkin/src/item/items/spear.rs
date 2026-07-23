@@ -169,7 +169,7 @@ impl SpearItem {
     }
 
     async fn targets_in_range(player: &Player) -> Vec<Arc<dyn EntityBase>> {
-        let start = player.eye_position();
+        let eye_position = player.eye_position();
         let (yaw, pitch) = player.rotation();
         let direction = Vector3::rotation_vector(f64::from(pitch), f64::from(yaw));
         let max_range = if player.gamemode.load() == GameMode::Creative {
@@ -177,13 +177,17 @@ impl SpearItem {
         } else {
             Self::SURVIVAL_RANGE
         };
-        let ray = direction * (max_range + Self::HITBOX_MARGIN);
-        let end = start.add(&ray);
+        let forward_movement = direction
+            .dot(&player.get_entity().movement.load())
+            .max(0.0);
+        let start = eye_position.add(&(direction * Self::MIN_RANGE));
+        let end = eye_position.add(&(direction * (max_range + forward_movement)));
+        let ray = end - start;
         let search_box = BoundingBox::new(
             Vector3::new(start.x.min(end.x), start.y.min(end.y), start.z.min(end.z)),
             Vector3::new(start.x.max(end.x), start.y.max(end.y), start.z.max(end.z)),
         )
-        .expand_all(Self::HITBOX_MARGIN);
+        .expand_all(1.0 + Self::HITBOX_MARGIN);
 
         let world = player.world();
         let mut targets = Vec::new();
@@ -207,14 +211,9 @@ impl SpearItem {
             ) else {
                 continue;
             };
-            let distance = intersection * ray.length();
-            if distance < Self::MIN_RANGE - Self::HITBOX_MARGIN {
-                continue;
-            }
-
             let hit_position = start.add(&(ray * intersection));
             if world
-                .raycast(start, hit_position, async |pos, ray_world| {
+                .raycast(eye_position, hit_position, async |pos, ray_world| {
                     let block = ray_world.get_block(pos);
                     block != &pumpkin_data::Block::AIR
                         && block != &pumpkin_data::Block::WATER
@@ -470,9 +469,15 @@ mod tests {
         let ray = Vector3::new(0.0, 0.0, 5.0);
         let hit = BoundingBox::new(Vector3::new(-0.5, -0.5, 2.0), Vector3::new(0.5, 0.5, 3.0));
         let miss = BoundingBox::new(Vector3::new(1.0, -0.5, 2.0), Vector3::new(2.0, 0.5, 3.0));
+        let containing_start =
+            BoundingBox::new(Vector3::new(-0.5, -0.5, -0.5), Vector3::new(0.5, 0.5, 0.5));
 
         assert_eq!(ray_intersection(&start, &ray, &hit), Some(0.4));
         assert_eq!(ray_intersection(&start, &ray, &miss), None);
+        assert_eq!(
+            ray_intersection(&start, &ray, &containing_start),
+            Some(0.0)
+        );
     }
 
     #[test]
