@@ -13,7 +13,12 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
-use tracing::{debug, error, warn};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::time::Instant;
+use tracing::{debug, error, info, warn};
+
+/// How many terrain-gen stages completed (all stages). Used for rate-limited INFO logs.
+static GEN_STAGE_DONE: AtomicU64 = AtomicU64::new(0);
 
 pub enum RecvChunk {
     IO(Chunk),
@@ -230,14 +235,38 @@ pub fn run_generation(
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
     let portal_ref = portal.as_deref().expect("Portal should be initialized");
+    let started = Instant::now();
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);
         cache // Return cache on success
     }));
 
+    let elapsed_ms = started.elapsed().as_millis();
     match result {
-        Ok(cache) => RecvChunk::Generation(cache),
+        Ok(cache) => {
+            let n = GEN_STAGE_DONE.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+            // Always surface slow stages (common when exploring new terrain).
+            if elapsed_ms > 80 {
+                info!(
+                    "Terrain gen slow: chunk {:?} stage {:?} took {}ms (#{})",
+                    pos, stage, elapsed_ms, n
+                );
+            } else if n == 1 || n.is_multiple_of(64) {
+                // Rate-limited progress so console shows generation is happening
+                // without flooding every stage of every chunk.
+                info!(
+                    "Terrain gen: {} stages done (latest {:?} {:?} {}ms)",
+                    n, pos, stage, elapsed_ms
+                );
+            } else {
+                debug!(
+                    "Terrain gen: chunk {:?} stage {:?} {}ms (#{})",
+                    pos, stage, elapsed_ms, n
+                );
+            }
+            RecvChunk::Generation(cache)
+        }
         Err(payload) => {
             let msg = payload
                 .downcast_ref::<&str>()

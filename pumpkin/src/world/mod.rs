@@ -1109,10 +1109,13 @@ impl World {
         }
 
         let total_elapsed = start.elapsed();
-        if total_elapsed.as_millis() > 50 {
-            debug!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
-                total_elapsed.as_millis(),
+        let total_ms = total_elapsed.as_millis();
+        // Default log level is INFO — keep lag visible so freezes are diagnosable
+        // without RUST_LOG=debug. 50ms ≈ one missed 20 TPS tick.
+        if total_ms > 200 {
+            warn!(
+                "Very slow tick [{}ms]: chunks={:?} players({})={:?} entities({})={:?} block_entities({})={:?}",
+                total_ms,
                 chunk_elapsed,
                 player_count,
                 player_elapsed,
@@ -1120,6 +1123,25 @@ impl World {
                 entity_elapsed,
                 block_entity_count,
                 block_entity_elapsed,
+            );
+        } else if total_ms > 50 {
+            info!(
+                "Slow tick [{}ms]: chunks={:?} players({})={:?} entities({})={:?} block_entities({})={:?}",
+                total_ms,
+                chunk_elapsed,
+                player_count,
+                player_elapsed,
+                entity_count,
+                entity_elapsed,
+                block_entity_count,
+                block_entity_elapsed,
+            );
+        } else if entity_elapsed.as_millis() > 40 {
+            info!(
+                "Entity tick heavy [{}ms] for {} entities (total tick {}ms)",
+                entity_elapsed.as_millis(),
+                entity_count,
+                total_ms,
             );
         }
     }

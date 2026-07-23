@@ -81,7 +81,8 @@ impl BlockBehaviour for NetherPortalBlock {
                 return;
             }
 
-            tracing::info!(
+            // Fires every tick while standing in a portal; keep off default INFO console.
+            tracing::debug!(
                 "Nether portal collision at {:?}, targeting world {:?}",
                 args.position,
                 target_world.dimension.minecraft_name

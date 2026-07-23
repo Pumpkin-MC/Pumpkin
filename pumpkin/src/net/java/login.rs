@@ -12,7 +12,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -163,10 +163,12 @@ impl JavaClient {
 
         // Don't allow duplicate UUIDs
         if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
-            debug!(
-                "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (username '{}')",
-                &self.address.lock().await,
+            // Client shows multiplayer.disconnect.duplicate_login ("异地登录").
+            // We kick the *new* connection; the old session stays online.
+            warn!(
+                "Duplicate login (UUID): new='{}' ip={} uuid={} still_online='{}' — kicking new connection",
                 &profile.name,
+                &self.address.lock().await,
                 &profile.id,
                 &online_player.gameprofile.name
             );
@@ -181,11 +183,11 @@ impl JavaClient {
 
         // Don't allow a duplicate username
         if let Some(online_player) = &server.get_player_by_name(&profile.name) {
-            debug!(
-                "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', username '{}')",
-                &self.address.lock().await,
+            warn!(
+                "Duplicate login (name): attempted='{}' ip={} online_uuid={} online='{}' — kicking new connection",
                 &profile.name,
-                &profile.id,
+                &self.address.lock().await,
+                &online_player.gameprofile.id,
                 &online_player.gameprofile.name
             );
             self.kick(TextComponent::translate_cross(
