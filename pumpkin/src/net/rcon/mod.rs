@@ -18,11 +18,20 @@ pub struct RCONServer;
 
 impl RCONServer {
     pub async fn run(config: &RCONConfig, server: Arc<Server>) {
+        // Empty password is rejected at config validation; belt-and-suspenders here.
+        if config.password.is_empty() {
+            error!("RCON refused to start: password is empty");
+            return;
+        }
+
         let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
 
         let password = Arc::new(config.password.clone());
+        // Track live connections with an atomic so the counter is decremented on close,
+        // not immediately after spawn (previous code made max_connections a no-op).
+        let connections = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let max_connections = config.max_connections;
 
-        let mut connections = 0;
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let await_new_client = || async {
                 let t1 = listener.accept();
@@ -39,18 +48,24 @@ impl RCONServer {
                 break;
             };
 
-            if config.max_connections != 0 && connections >= config.max_connections {
+            let current = connections.load(Ordering::Relaxed);
+            if max_connections != 0 && current >= max_connections {
+                debug!("RCON connection from {address} rejected: max_connections reached");
+                drop(connection);
                 continue;
             }
 
-            connections += 1;
+            connections.fetch_add(1, Ordering::Relaxed);
             let mut client = RCONClient::new(connection, address);
 
             let password = password.clone();
             let server = server.clone();
-            tokio::spawn(async move { while !client.handle(&server, &password).await {} });
-            debug!("closed RCON connection");
-            connections -= 1;
+            let connections = connections.clone();
+            tokio::spawn(async move {
+                while !client.handle(&server, &password).await {}
+                connections.fetch_sub(1, Ordering::Relaxed);
+                debug!("closed RCON connection");
+            });
         }
     }
 }
@@ -155,8 +170,27 @@ impl RCONClient {
     }
 
     async fn read_bytes(&mut self) -> std::io::Result<bool> {
+        // Bound the staging buffer so a slowloris client cannot retain unbounded memory.
+        const MAX_INCOMING: usize = 64 * 1024;
+        if self.incoming.len() > MAX_INCOMING {
+            self.closed = true;
+            return Ok(true);
+        }
         let mut buf = [0; 1460];
-        let n = self.connection.read(&mut buf).await?;
+        let n = match tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            self.connection.read(&mut buf),
+        )
+        .await
+        {
+            Ok(Ok(n)) => n,
+            Ok(Err(e)) => return Err(e),
+            Err(_) => {
+                // Read timeout
+                self.closed = true;
+                return Ok(true);
+            }
+        };
         if n == 0 {
             return Ok(true);
         }
