@@ -45,6 +45,11 @@ impl EndermiteEntity {
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // Vanilla also targets endermen.
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ENDERMAN, true),
+            );
         };
 
         mob_arc
