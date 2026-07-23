@@ -83,6 +83,7 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: Mutex<Option<ItemStack>>,
     pub active_hand: Mutex<Option<Hand>>,
+    pub recent_kinetic_enemies: Mutex<HashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -169,6 +170,7 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: Mutex::new(None),
             active_hand: Mutex::new(None),
+            recent_kinetic_enemies: Mutex::new(HashMap::new()),
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
@@ -421,14 +423,7 @@ impl LivingEntity {
             return instance.base_value;
         }
 
-        // Fall back to registry base value if no local instance exists
-        self.entity
-            .entity_type
-            .attributes
-            .iter()
-            .find(|a| a.0.id == attribute.id)
-            .unwrap()
-            .1
+        registered_attribute_base(self.entity.entity_type, attribute)
     }
 
     /// Update or insert the base value for an attribute on this entity.
@@ -2576,6 +2571,16 @@ impl EntityBase for LivingEntity {
             // Current active item
             {
                 let item_in_use = self.item_in_use.lock().await.clone();
+                if let Some(item) = item_in_use.as_ref() {
+                    let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+                    if let Some(player) = caller.get_player() {
+                        server
+                            .item_registry
+                            .on_use_tick(item, player, remaining_use_ticks)
+                            .await;
+                    }
+                }
+
                 if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
@@ -2789,6 +2794,14 @@ impl EntityBase for LivingEntity {
     }
 }
 
+fn registered_attribute_base(entity_type: &EntityType, attribute: &Attributes) -> f64 {
+    entity_type
+        .attributes
+        .iter()
+        .find(|(registered, _)| registered.id == attribute.id)
+        .map_or(attribute.default_value, |(_, base)| *base)
+}
+
 /// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
 /// These sources bypass armor entirely (fall, drown, freeze, etc.).
 pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
@@ -2952,6 +2965,15 @@ mod tests {
         assert_eq!(
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
             Sound::EntityGenericHurt
+        );
+    }
+
+    #[test]
+    fn missing_registered_attribute_uses_its_default_value() {
+        assert!(EntityType::PLAYER.attributes.is_empty());
+        assert_eq!(
+            registered_attribute_base(&EntityType::PLAYER, &Attributes::ATTACK_DAMAGE),
+            Attributes::ATTACK_DAMAGE.default_value
         );
     }
 }

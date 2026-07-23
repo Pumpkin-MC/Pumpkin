@@ -595,6 +595,7 @@ impl Player {
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
             Ordering::Relaxed,
         );
+        living_entity.set_attribute_base(&Attributes::ATTACK_DAMAGE, 1.0);
 
         let inventory = Arc::new(PlayerInventory::new(
             living_entity.entity_equipment.clone(),

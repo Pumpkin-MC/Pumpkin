@@ -93,8 +93,8 @@ impl ItemBehaviour for SpearItem {
                     let target_pos = target_entity.pos.load();
                     target_entity.knockback(
                         0.4,
-                        target_pos.x - attacker_pos.x,
-                        target_pos.z - attacker_pos.z,
+                        attacker_pos.x - target_pos.x,
+                        attacker_pos.z - target_pos.z,
                     );
                     player.damage_held_item(1).await;
                     hit_something = true;
@@ -118,6 +118,17 @@ impl ItemBehaviour for SpearItem {
         })
     }
 
+    fn on_use_tick<'a>(
+        &'a self,
+        stack: &'a ItemStack,
+        player: &'a Player,
+        remaining_use_ticks: i32,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            Self::kinetic_attack(stack, player, remaining_use_ticks).await;
+        })
+    }
+
     fn get_use_duration(&self) -> i32 {
         Self::USE_DURATION
     }
@@ -133,6 +144,7 @@ impl SpearItem {
     const SURVIVAL_RANGE: f64 = 4.5;
     const CREATIVE_RANGE: f64 = 6.5;
     const HITBOX_MARGIN: f64 = 0.125;
+    const CONTACT_COOLDOWN: i32 = 10;
 
     fn attack_attributes(player: &Player, stack: &ItemStack) -> (f64, f64) {
         let mut damage = player
@@ -219,6 +231,99 @@ impl SpearItem {
         targets.into_iter().map(|(_, target)| target).collect()
     }
 
+    async fn kinetic_attack(stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+        let Some(properties) = KineticProperties::from_item(stack.item) else {
+            return;
+        };
+        let ticks_used = Self::USE_DURATION - remaining_use_ticks - properties.delay_ticks;
+        if ticks_used < 0 {
+            return;
+        }
+
+        let (yaw, pitch) = player.rotation();
+        let look = Vector3::rotation_vector(f64::from(pitch), f64::from(yaw));
+        let attacker_speed = look.dot(&(player.get_entity().movement.load() * 20.0));
+        let current_tick = player.get_entity().age.load(Ordering::Relaxed);
+        let base_damage = player
+            .living_entity
+            .get_attribute_base(&Attributes::ATTACK_DAMAGE);
+        let mut affected = false;
+
+        for target in Self::targets_in_range(player).await {
+            let target_entity = target.get_entity();
+            {
+                let mut recent = player.living_entity.recent_kinetic_enemies.lock().await;
+                recent.retain(|_, hit_tick| current_tick - *hit_tick < Self::CONTACT_COOLDOWN);
+                if recent.contains_key(&target_entity.entity_id) {
+                    continue;
+                }
+                recent.insert(target_entity.entity_id, current_tick);
+            }
+
+            let target_speed = look.dot(&(target_entity.movement.load() * 20.0));
+            let relative_speed = (attacker_speed - target_speed).max(0.0);
+            let deals_damage = properties
+                .damage
+                .test(ticks_used, attacker_speed, relative_speed);
+            let deals_knockback =
+                properties
+                    .knockback
+                    .test(ticks_used, attacker_speed, relative_speed);
+            let dismounts = properties
+                .dismount
+                .test(ticks_used, attacker_speed, relative_speed);
+
+            if !deals_damage && !deals_knockback && !dismounts {
+                continue;
+            }
+
+            if deals_damage {
+                let damage = base_damage + (relative_speed * properties.damage_multiplier).floor();
+                if target
+                    .damage_with_context(
+                        target.as_ref(),
+                        damage as f32,
+                        DamageType::SPEAR,
+                        None,
+                        Some(player),
+                        Some(player),
+                    )
+                    .await
+                {
+                    player.damage_held_item(1).await;
+                    affected = true;
+                }
+            }
+
+            if deals_knockback {
+                let attacker_pos = player.position();
+                let target_pos = target_entity.pos.load();
+                target_entity.knockback(
+                    0.4,
+                    attacker_pos.x - target_pos.x,
+                    attacker_pos.z - target_pos.z,
+                );
+                affected = true;
+            }
+
+            if dismounts && let Some(vehicle) = target_entity.vehicle.lock().await.clone() {
+                vehicle
+                    .get_entity()
+                    .remove_passenger(target_entity.entity_id)
+                    .await;
+                affected = true;
+            }
+        }
+
+        if affected {
+            player.world().play_sound(
+                Self::hit_sound(stack.item),
+                SoundCategory::Players,
+                &player.position(),
+            );
+        }
+    }
+
     const fn use_sound(item: &Item) -> Sound {
         if item.id == Item::WOODEN_SPEAR.id {
             Sound::ItemSpearWoodUse
@@ -240,6 +345,81 @@ impl SpearItem {
             Sound::ItemSpearWoodAttack
         } else {
             Sound::ItemSpearAttack
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct KineticCondition {
+    max_duration_ticks: i32,
+    min_speed: f64,
+    min_relative_speed: f64,
+}
+
+impl KineticCondition {
+    const fn attacker_speed(max_duration_ticks: i32, min_speed: f64) -> Self {
+        Self {
+            max_duration_ticks,
+            min_speed,
+            min_relative_speed: 0.0,
+        }
+    }
+
+    const fn relative_speed(max_duration_ticks: i32, min_relative_speed: f64) -> Self {
+        Self {
+            max_duration_ticks,
+            min_speed: 0.0,
+            min_relative_speed,
+        }
+    }
+
+    fn test(self, ticks_used: i32, attacker_speed: f64, relative_speed: f64) -> bool {
+        ticks_used <= self.max_duration_ticks
+            && attacker_speed >= self.min_speed
+            && relative_speed >= self.min_relative_speed
+    }
+}
+
+#[derive(Clone, Copy)]
+struct KineticProperties {
+    delay_ticks: i32,
+    damage_multiplier: f64,
+    dismount: KineticCondition,
+    knockback: KineticCondition,
+    damage: KineticCondition,
+}
+
+impl KineticProperties {
+    const fn from_item(item: &Item) -> Option<Self> {
+        match item.id {
+            // A = delay_ticks, B = damage_multiplier, C = dismount_ticks,
+            // D = dismount_speed, E = knockback_ticks, F = damage_ticks
+            //                                                   A    B    C    D     E    F
+            id if id == Item::WOODEN_SPEAR.id => Some(Self::new(15, 0.7, 100, 14.0, 200, 300)),
+            id if id == Item::STONE_SPEAR.id => Some(Self::new(14, 0.82, 90, 13.0, 180, 275)),
+            id if id == Item::COPPER_SPEAR.id => Some(Self::new(13, 0.82, 80, 12.0, 165, 250)),
+            id if id == Item::IRON_SPEAR.id => Some(Self::new(12, 0.95, 50, 11.0, 135, 225)),
+            id if id == Item::GOLDEN_SPEAR.id => Some(Self::new(14, 0.7, 70, 13.0, 170, 275)),
+            id if id == Item::DIAMOND_SPEAR.id => Some(Self::new(10, 1.075, 60, 10.0, 130, 200)),
+            id if id == Item::NETHERITE_SPEAR.id => Some(Self::new(8, 1.2, 50, 9.0, 110, 175)),
+            _ => None,
+        }
+    }
+
+    const fn new(
+        delay_ticks: i32,
+        damage_multiplier: f64,
+        dismount_ticks: i32,
+        dismount_speed: f64,
+        knockback_ticks: i32,
+        damage_ticks: i32,
+    ) -> Self {
+        Self {
+            delay_ticks,
+            damage_multiplier,
+            dismount: KineticCondition::attacker_speed(dismount_ticks, dismount_speed),
+            knockback: KineticCondition::attacker_speed(knockback_ticks, 5.1),
+            damage: KineticCondition::relative_speed(damage_ticks, 4.6),
         }
     }
 }
@@ -293,5 +473,51 @@ mod tests {
 
         assert_eq!(ray_intersection(&start, &ray, &hit), Some(0.4));
         assert_eq!(ray_intersection(&start, &ray, &miss), None);
+    }
+
+    #[test]
+    fn kinetic_properties_match_vanilla_material_values() {
+        let cases = [
+            // A = delay_ticks, B = damage_multiplier, C = dismount_ticks,
+            // D = dismount_speed, E = knockback_ticks, F = damage_ticks
+            //                    A    B    C    D     E    F
+            (&Item::WOODEN_SPEAR, 15, 0.7, 100, 14.0, 200, 300),
+            (&Item::STONE_SPEAR, 14, 0.82, 90, 13.0, 180, 275),
+            (&Item::COPPER_SPEAR, 13, 0.82, 80, 12.0, 165, 250),
+            (&Item::IRON_SPEAR, 12, 0.95, 50, 11.0, 135, 225),
+            (&Item::GOLDEN_SPEAR, 14, 0.7, 70, 13.0, 170, 275),
+            (&Item::DIAMOND_SPEAR, 10, 1.075, 60, 10.0, 130, 200),
+            (&Item::NETHERITE_SPEAR, 8, 1.2, 50, 9.0, 110, 175),
+        ];
+
+        for (
+            item,
+            delay,
+            multiplier,
+            dismount_ticks,
+            dismount_speed,
+            knockback_ticks,
+            damage_ticks,
+        ) in cases
+        {
+            let properties = KineticProperties::from_item(item).unwrap();
+            assert_eq!(properties.delay_ticks, delay);
+            assert_eq!(properties.damage_multiplier, multiplier);
+            assert_eq!(properties.dismount.max_duration_ticks, dismount_ticks);
+            assert_eq!(properties.dismount.min_speed, dismount_speed);
+            assert_eq!(properties.knockback.max_duration_ticks, knockback_ticks);
+            assert_eq!(properties.knockback.min_speed, 5.1);
+            assert_eq!(properties.damage.max_duration_ticks, damage_ticks);
+            assert_eq!(properties.damage.min_relative_speed, 4.6);
+        }
+    }
+
+    #[test]
+    fn kinetic_conditions_include_their_duration_and_speed_boundaries() {
+        let condition = KineticCondition::relative_speed(20, 4.6);
+
+        assert!(condition.test(20, 0.0, 4.6));
+        assert!(!condition.test(21, 0.0, 4.6));
+        assert!(!condition.test(20, 0.0, 4.59));
     }
 }
