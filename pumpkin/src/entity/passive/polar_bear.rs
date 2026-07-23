@@ -41,10 +41,12 @@ impl PolarBearEntity {
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Cub-nearby player aggression not ported; still hunt foxes.
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
             );
+            // Adults may also retaliate against nearby players once angered via revenge.
         };
 
         mob_arc

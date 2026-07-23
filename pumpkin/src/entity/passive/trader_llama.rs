@@ -6,14 +6,13 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+        snowball_attack::SnowballAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Trader llama — guards the wandering trader (revenge + wolf target).
+/// Trader llama — guards the wandering trader (revenge + spit stand-in + wolf).
 pub struct TraderLlamaEntity {
     pub mob_entity: MobEntity,
 }
@@ -34,7 +33,7 @@ impl TraderLlamaEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.25, true)));
+            goal_selector.add_goal(2, SnowballAttackGoal::new(1.25));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(
                 6,

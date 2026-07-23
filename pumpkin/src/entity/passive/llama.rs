@@ -6,14 +6,13 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+        snowball_attack::SnowballAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Llama — neutral; revenge + spit stand-in melee + hunt wolves.
+/// Llama — neutral; revenge + snowball spit stand-in + hunt wolves.
 pub struct LlamaEntity {
     pub mob_entity: MobEntity,
 }
@@ -34,8 +33,8 @@ impl LlamaEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            // Spit not ported — melee stand-in at spit range speed.
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.25, true)));
+            // LlamaSpit entity not ported — snowball ranged stand-in.
+            goal_selector.add_goal(2, SnowballAttackGoal::new(1.25));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(
                 6,

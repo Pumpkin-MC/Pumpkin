@@ -1,17 +1,21 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Sniffer — slow wander / scent dig TODO.
+const TEMPT_ITEMS: &[&Item] = &[&Item::TORCHFLOWER_SEEDS];
+
+/// Sniffer — breed/tempt torchflower seeds; scent dig TODO.
 pub struct SnifferEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,13 +34,15 @@ impl SnifferEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            // Slow sniff wander stand-in.
-            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.4)));
+            goal_selector.add_goal(2, BreedGoal::new(0.8));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(0.8, TEMPT_ITEMS)));
+            // Slow sniff wander stand-in for dig/search.
+            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.4)));
             goal_selector.add_goal(
-                3,
+                5,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

@@ -38,6 +38,7 @@ pub mod place_block;
 pub mod ram;
 pub mod random_float;
 pub mod revenge;
+pub mod silverfish_wake;
 pub mod sit;
 pub mod sonic_boom;
 pub mod step_and_destroy_block;

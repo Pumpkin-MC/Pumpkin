@@ -7,12 +7,12 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        silverfish_wake::SilverfishWakeFriendsGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Silverfish — swarm via pack anger; merge-with-stone TODO.
+/// Silverfish — swarm via pack anger + wake infested blocks; merge-with-stone TODO.
 pub struct SilverfishEntity {
     entity: Arc<MobEntity>,
 }
@@ -32,6 +32,8 @@ impl SilverfishEntity {
             let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            // Crack nearby infested stone while fighting (vanilla wake friends).
+            goal_selector.add_goal(3, SilverfishWakeFriendsGoal::new());
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
