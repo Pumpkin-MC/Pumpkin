@@ -298,11 +298,15 @@ impl Level {
         let level = self.clone();
         if let Some(pool) = &self.gen_pool {
             pool.spawn(move || {
+                // Pull any structure-template entities placed during worldgen.
+                let structure_entities =
+                    crate::generation::structure::template::take_structure_entities(pos.x, pos.y);
+                let dirty = !structure_entities.is_empty();
                 let arc_chunk = Arc::new(ChunkEntityData {
                     x: pos.x,
                     z: pos.y,
-                    data: tokio::sync::Mutex::new(Vec::new()),
-                    dirty: AtomicBool::new(false),
+                    data: tokio::sync::Mutex::new(structure_entities),
+                    dirty: AtomicBool::new(dirty),
                 });
 
                 level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
@@ -319,11 +323,16 @@ impl Level {
             thread::Builder::new()
                 .name(format!("Entity Gen {pos:?}"))
                 .spawn(move || {
+                    let structure_entities =
+                        crate::generation::structure::template::take_structure_entities(
+                            pos.x, pos.y,
+                        );
+                    let dirty = !structure_entities.is_empty();
                     let arc_chunk = Arc::new(ChunkEntityData {
                         x: pos.x,
                         z: pos.y,
-                        data: tokio::sync::Mutex::new(Vec::new()),
-                        dirty: AtomicBool::new(false),
+                        data: tokio::sync::Mutex::new(structure_entities),
+                        dirty: AtomicBool::new(dirty),
                     });
 
                     level_clone

@@ -144,6 +144,10 @@ pub struct ProtoChunk {
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
+    /// Entities from structure templates (villagers, golems, animals, etc.).
+    /// Consumed when the proto-chunk is finalized into a level chunk, then
+    /// spawned on first entity-chunk load.
+    pub pending_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
@@ -229,6 +233,7 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            pending_entities: Vec::new(),
             fluid_ticks: Vec::new(),
         }
     }
@@ -341,6 +346,15 @@ impl ProtoChunk {
 
     pub fn take_pending_block_entities(&mut self) -> Vec<NbtCompound> {
         std::mem::take(&mut self.pending_block_entities)
+    }
+
+    /// Queue a structure-template entity (villager, iron golem, …) for this chunk.
+    pub fn add_entity(&mut self, nbt: NbtCompound) {
+        self.pending_entities.push(nbt);
+    }
+
+    pub fn take_pending_entities(&mut self) -> Vec<NbtCompound> {
+        std::mem::take(&mut self.pending_entities)
     }
 
     pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {

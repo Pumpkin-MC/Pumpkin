@@ -217,6 +217,7 @@ impl Chunk {
                 block_ticks: ChunkTickScheduler::default(),
                 fluid_ticks: ChunkTickScheduler::default(),
                 pending_block_entities: Mutex::default(),
+                pending_structure_entities: Mutex::default(),
                 light_engine: Mutex::new(ChunkLight::default()),
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
@@ -311,6 +312,7 @@ impl Chunk {
             block_ticks: ChunkTickScheduler::default(),
             fluid_ticks: ChunkTickScheduler::from_iter(proto_chunk.fluid_ticks),
             pending_block_entities: Mutex::new(pending_block_entities),
+            pending_structure_entities: Mutex::new(proto_chunk.pending_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
         };

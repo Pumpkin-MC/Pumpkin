@@ -29,6 +29,29 @@ pub mod shiftable_piece;
 pub mod structures;
 pub mod template;
 
+/// Build a jigsaw generator from vanilla structure definition fields.
+///
+/// Critical for villages / outposts: `use_expansion_hack` must be true so
+/// street pieces expand their bounding boxes and can attach houses (vanilla
+/// `JigsawStructure.useExpansionHack`).
+#[must_use]
+fn jigsaw_from_structure(structure: &Structure) -> JigsawGenerator {
+    let mut generator = JigsawGenerator::new(
+        structure
+            .start_pool
+            .expect("Jigsaw structure must have a start pool"),
+        structure.size.expect("Jigsaw structure must have a size"),
+    );
+    if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
+        generator = generator.with_start_jigsaw(start_jigsaw_name);
+    }
+    // Default false when field is None (non-village jigsaws).
+    if structure.use_expansion_hack.unwrap_or(false) {
+        generator = generator.with_expansion_hack(true);
+    }
+    generator
+}
+
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn try_generate_structure(
@@ -73,30 +96,13 @@ pub fn try_generate_structure(
         | StructureKeys::VillageDesert
         | StructureKeys::VillageSavanna
         | StructureKeys::VillageSnowy
-        | StructureKeys::VillageTaiga => {
-            let generator = JigsawGenerator::new(
-                structure
-                    .start_pool
-                    .expect("Jigsaw structure must have a start pool"),
-                structure.size.expect("Jigsaw structure must have a size"),
-            );
-            generator.get_structure_position(context)
-        }
-        StructureKeys::AncientCity
+        | StructureKeys::VillageTaiga
+        | StructureKeys::AncientCity
         | StructureKeys::BastionRemnant
         | StructureKeys::PillagerOutpost
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
-            let mut generator = JigsawGenerator::new(
-                structure
-                    .start_pool
-                    .expect("Jigsaw structure must have a start pool"),
-                structure.size.expect("Jigsaw structure must have a size"),
-            );
-            if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
-                generator = generator.with_start_jigsaw(start_jigsaw_name);
-            }
-            generator.get_structure_position(context)
+            jigsaw_from_structure(structure).get_structure_position(context)
         }
         StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
             let generator = ShipwreckGenerator {
@@ -202,16 +208,7 @@ pub fn lazily_generate_structure(
         | StructureKeys::PillagerOutpost
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
-            let mut generator = JigsawGenerator::new(
-                structure
-                    .start_pool
-                    .expect("Jigsaw structure must have a start pool"),
-                structure.size.expect("Jigsaw structure must have a size"),
-            );
-            if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
-                generator = generator.with_start_jigsaw(start_jigsaw_name);
-            }
-            generator.get_structure_position(context)
+            jigsaw_from_structure(structure).get_structure_position(context)
         }
         StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
             let generator = ShipwreckGenerator {

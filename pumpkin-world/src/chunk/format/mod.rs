@@ -367,6 +367,9 @@ impl ChunkData {
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
+            // Structure entities are only present on freshly generated chunks;
+            // after first load they live in the entity region files.
+            pending_structure_entities: std::sync::Mutex::new(Vec::new()),
             light_engine: std::sync::Mutex::new(light_engine),
             light_populated: AtomicBool::new(light_correct),
             status,

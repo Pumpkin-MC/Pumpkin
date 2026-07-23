@@ -3770,7 +3770,15 @@ impl World {
                     // truth, so the chunk's NBT is taken (cleared) to avoid keeping
                     // a duplicate copy that would be re-appended on the next unload
                     // and doubled on every reload.
-                    let entity_nbts = std::mem::take(&mut *chunk.data.lock().await);
+                    let mut entity_nbts = std::mem::take(&mut *chunk.data.lock().await);
+                    // Structure-template entities not yet pulled by entity-gen.
+                    let from_buffer =
+                        pumpkin_world::generation::structure::template::take_structure_entities(
+                            position.x, position.y,
+                        );
+                    if !from_buffer.is_empty() {
+                        entity_nbts.extend(from_buffer);
+                    }
                     let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
                         Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {

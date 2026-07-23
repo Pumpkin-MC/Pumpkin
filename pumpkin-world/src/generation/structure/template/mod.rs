@@ -26,6 +26,7 @@
 
 mod block_state_resolver;
 mod cache;
+mod entity_buffer;
 pub mod processor;
 mod structure_template;
 mod template_piece;
@@ -33,6 +34,7 @@ mod template_piece;
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
@@ -43,6 +45,7 @@ pub use cache::{
     TemplateCache, get_pool_elements, get_processor_list_json, get_template,
     get_template_pool_json, global_cache,
 };
+pub use entity_buffer::{push as push_structure_entity, take as take_structure_entities};
 pub use processor::StructureProcessor;
 pub use pumpkin_data::{Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
@@ -191,6 +194,75 @@ pub fn place_template(
             }
 
             chunk.add_block_entity(placed_nbt);
+        }
+    }
+
+    // Spawn structure-template entities (villagers, iron golems, animals, …).
+    // Vanilla places these when the structure piece is applied to the chunk.
+    for entity in &template.entities {
+        let local_block = rotation.transform_pos(entity.block_pos, template.size);
+        let wx = world_x + local_block.x;
+        let wy = origin.y + local_block.y;
+        let wz = world_z + local_block.z;
+
+        if let Some(bbox) = chunk_box
+            && (wx < bbox.min.x
+                || wx > bbox.max.x
+                || wy < bbox.min.y
+                || wy > bbox.max.y
+                || wz < bbox.min.z
+                || wz > bbox.max.z)
+        {
+            continue;
+        }
+
+        // Transform fractional position the same way as block coords.
+        let local_pos = transform_entity_pos(rotation, entity.pos, template.size);
+        let world_ex = f64::from(world_x) + local_pos.x;
+        let world_ey = f64::from(origin.y) + local_pos.y;
+        let world_ez = f64::from(world_z) + local_pos.z;
+
+        let mut placed = entity.nbt.clone();
+        // Ensure Pos is absolute world coordinates (vanilla entity chunk format).
+        placed.put_list(
+            "Pos",
+            vec![
+                NbtTag::Double(world_ex),
+                NbtTag::Double(world_ey),
+                NbtTag::Double(world_ez),
+            ],
+        );
+        // Clear residual motion from the template.
+        placed.put_list(
+            "Motion",
+            vec![
+                NbtTag::Double(0.0),
+                NbtTag::Double(0.0),
+                NbtTag::Double(0.0),
+            ],
+        );
+        // Global buffer is race-safe against the separate entity-generation path.
+        // (Entity chunks are built independently of block proto-chunks.)
+        entity_buffer::push(wx >> 4, wz >> 4, placed);
+    }
+}
+
+/// Rotate an entity's relative double position within a template of `size`.
+fn transform_entity_pos(
+    rotation: Rotation,
+    pos: Vector3<f64>,
+    size: Vector3<i32>,
+) -> Vector3<f64> {
+    match rotation {
+        Rotation::None => pos,
+        Rotation::Clockwise90 => Vector3::new(f64::from(size.z) - 1.0 - pos.z, pos.y, pos.x),
+        Rotation::Rotate180 => Vector3::new(
+            f64::from(size.x) - 1.0 - pos.x,
+            pos.y,
+            f64::from(size.z) - 1.0 - pos.z,
+        ),
+        Rotation::CounterClockwise90 => {
+            Vector3::new(pos.z, pos.y, f64::from(size.x) - 1.0 - pos.x)
         }
     }
 }

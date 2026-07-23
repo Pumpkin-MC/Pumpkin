@@ -588,13 +588,20 @@ impl StructureGenerator for JigsawGenerator {
                     bottom: dp,
                 });
 
+        // Prefer explicit generator flag; also honour structure data so callers that
+        // forget `with_expansion_hack` still match vanilla villages/outposts.
+        let use_expansion_hack = self.use_expansion_hack
+            || structure
+                .and_then(|s| s.use_expansion_hack)
+                .unwrap_or(false);
+
         JigsawPlacement::add_pieces(
             &mut context,
             &self.start_pool,
             self.start_jigsaw_name.as_deref(),
             self.size,
             start_pos,
-            self.use_expansion_hack,
+            use_expansion_hack,
             project_start_to_heightmap,
             &MaxDistance::new(max_distance),
             &dimension_padding,
@@ -714,5 +721,44 @@ mod tests {
             collector.pieces.len()
         );
         assert_eq!(position.start_pos.0.y, -27);
+    }
+
+    /// Villages need `use_expansion_hack` so street pieces expand and houses attach.
+    #[test]
+    fn plains_village_expansion_hack_grows_piece_graph() {
+        let with_hack = JigsawGenerator::new("minecraft:village/plains/town_centers", 6)
+            .with_expansion_hack(true);
+        let without_hack = JigsawGenerator::new("minecraft:village/plains/town_centers", 6);
+
+        let ctx = |seed| StructureGeneratorContext {
+            seed,
+            chunk_x: 4,
+            chunk_z: 4,
+            random: super::super::create_chunk_random(seed, 4, 4),
+            sea_level: 63,
+            min_y: -64,
+            height_sampler: None,
+            structure_key: Some(pumpkin_data::structures::StructureKeys::VillagePlains),
+        };
+
+        // structure_key carries use_expansion_hack=true, so even `without_hack`
+        // benefits from the data fallback — both should produce multi-piece villages.
+        let pos = with_hack
+            .get_structure_position(ctx(12345))
+            .expect("village with expansion hack");
+        let pieces = pos.collector.lock().unwrap().pieces.len();
+        assert!(
+            pieces > 1,
+            "plains village should expand beyond town center, got {pieces} pieces"
+        );
+
+        let pos2 = without_hack
+            .get_structure_position(ctx(12345))
+            .expect("village via structure data expansion hack");
+        let pieces2 = pos2.collector.lock().unwrap().pieces.len();
+        assert!(
+            pieces2 > 1,
+            "structure-data expansion hack should still grow village, got {pieces2} pieces"
+        );
     }
 }
