@@ -2109,7 +2109,13 @@ impl JavaClient {
                     player.swap_item().await;
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let held = player.inventory().held_item();
+                    let stack = held.lock().await.clone();
+                    server.item_registry.on_spear_jab(&stack, player).await;
                 }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
