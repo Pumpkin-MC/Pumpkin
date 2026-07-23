@@ -1,4 +1,5 @@
 use std::{
+    fs,
     fs::File,
     io::{Cursor, Read},
     path::Path,
@@ -152,27 +153,25 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let level = LevelDat { data: level_data };
 
         // ── Write level.dat atomically ──────────────────────────────────────
-        // Write to a temp file first, then rename atomically to prevent corruption
-        let temp_path = level_folder.join(format!("{}.tmp", LEVEL_DAT_FILE_NAME));
+        // Create directory if it doesn't exist (fixes #2423)
+        fs::create_dir_all(level_folder)?;
+        
+        // Write to temp file, then rename atomically to prevent corruption
+        let temp_path = level_folder.join(format!("{LEVEL_DAT_FILE_NAME}.tmp"));
+        let final_path = level_folder.join(LEVEL_DAT_FILE_NAME);
+        
+        // Write to temp file first
         let temp_file = File::create(&temp_path)?;
+        let mut encoder = GzEncoder::new(temp_file, Compression::best());
+        pumpkin_nbt::to_bytes(&level, &mut encoder)
+            .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+        encoder.finish()
+            .map_err(|e| WorldInfoError::SerializationError(format!("Failed to finish gzip: {e}")))?;
         
-        let compression_writer = GzEncoder::new(temp_file, Compression::best());
-        
-        // Serialize to bytes first
-        let mut buffer = Vec::new();
-        {
-            let mut encoder = GzEncoder::new(&mut buffer, Compression::best());
-            pumpkin_nbt::to_bytes(&level, &mut encoder)
-                .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
-        }
-        
-        // Write compressed bytes to temp file
-        std::fs::write(&temp_path, &buffer)
-            .map_err(|e| WorldInfoError::DeserializationError(format!("Failed to write temp file: {e}")))?;
-        
-        // Atomic rename
-        std::fs::rename(&temp_path, level_folder.join(LEVEL_DAT_FILE_NAME))
-            .map_err(|e| WorldInfoError::DeserializationError(format!("Failed to rename temp file: {e}")))?;
+        // Atomic rename (works on all platforms in Rust 1.95+)
+        std::fs::rename(&temp_path, &final_path)
+            .map_err(|e| WorldInfoError::IoError(e.kind()))?;
+
 
         let data_version = info.data_version;
 
