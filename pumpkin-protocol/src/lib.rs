@@ -7,7 +7,6 @@ use std::{
 use aes::cipher::BlockSizeUser;
 use bytes::Bytes;
 use codec::var_int::VarInt;
-use hybrid_array::{Array, sizes::U1};
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
@@ -156,11 +155,13 @@ impl<R: AsyncRead + Unpin> AsyncRead for StreamDecryptor<R> {
 
 type Aes128Cfb8Enc = cfb8::Encryptor<aes::Aes128>;
 
-///NOTE: This makes lots of small writes; make sure there is a buffer somewhere down the line
+const STREAM_ENCRYPTION_BUFFER_SIZE: usize = 16 * 1024;
+
 pub struct StreamEncryptor<W: AsyncWrite + Unpin> {
     cipher: Aes128Cfb8Enc,
     write: W,
-    last_unwritten_encrypted_byte: Option<u8>,
+    pending_ciphertext: Vec<u8>,
+    pending_offset: usize,
 }
 
 impl<W: AsyncWrite + Unpin> StreamEncryptor<W> {
@@ -169,8 +170,31 @@ impl<W: AsyncWrite + Unpin> StreamEncryptor<W> {
         Self {
             cipher,
             write: stream,
-            last_unwritten_encrypted_byte: None,
+            pending_ciphertext: Vec::with_capacity(STREAM_ENCRYPTION_BUFFER_SIZE),
+            pending_offset: 0,
         }
+    }
+
+    fn poll_drain_pending(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        while self.pending_offset < self.pending_ciphertext.len() {
+            match Pin::new(&mut self.write)
+                .poll_write(cx, &self.pending_ciphertext[self.pending_offset..])
+            {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Ok(0)) => {
+                    return Poll::Ready(Err(Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "failed to write buffered encrypted data",
+                    )));
+                }
+                Poll::Ready(Ok(written)) => self.pending_offset += written,
+                Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+            }
+        }
+
+        self.pending_ciphertext.clear();
+        self.pending_offset = 0;
+        Poll::Ready(Ok(()))
     }
 }
 
@@ -181,62 +205,48 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
         buf: &[u8],
     ) -> Poll<Result<usize, Error>> {
         let ref_self = self.get_mut();
-        let cipher = &mut ref_self.cipher;
 
-        let mut total_written = 0;
-        // Decrypt the raw data, note that our block size is 1 byte, so this is always safe
-        for block in buf.chunks(Aes128Cfb8Enc::block_size()) {
-            let mut out = [0u8];
-
-            if let Some(out_to_use) = ref_self.last_unwritten_encrypted_byte {
-                // This assumes that this `poll_write` is called on the same stream of bytes which I
-                // think is a fair assumption, since thats an invariant for the TCP stream anyway.
-
-                // This should never panic
-                out[0] = out_to_use;
-            } else {
-                let out_block: &mut Array<u8, U1> = (&mut out[..])
-                    .try_into()
-                    .map_err(|_| Error::other("Output slice size does not match block size"))?;
-                cipher
-                    .encrypt_b2b(block, out_block)
-                    .map_err(|_| Error::other("Encryption failed"))?;
-            }
-
-            let write = Pin::new(&mut ref_self.write);
-            match write.poll_write(cx, &out) {
-                Poll::Pending => {
-                    ref_self.last_unwritten_encrypted_byte = Some(out[0]);
-                    if total_written == 0 {
-                        //If we didn't write anything, return pending
-                        return Poll::Pending;
-                    }
-                    // Otherwise, we actually did write something
-                    return Poll::Ready(Ok(total_written));
-                }
-                Poll::Ready(result) => {
-                    ref_self.last_unwritten_encrypted_byte = None;
-                    match result {
-                        Ok(written) => total_written += written,
-                        Err(err) => return Poll::Ready(Err(err)),
-                    }
-                }
-            }
+        match ref_self.poll_drain_pending(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(Ok(())) => {}
+            Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
         }
 
-        Poll::Ready(Ok(total_written))
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
+
+        let plaintext_len = buf.len().min(STREAM_ENCRYPTION_BUFFER_SIZE);
+        ref_self.pending_ciphertext.resize(plaintext_len, 0);
+        ref_self
+            .cipher
+            .encrypt_b2b(&buf[..plaintext_len], &mut ref_self.pending_ciphertext)
+            .map_err(|_| Error::other("Encryption failed"))?;
+
+        // The ciphertext is now owned by this adapter, so the caller can reuse the plaintext
+        // buffer even if the underlying writer accepts only part of the encrypted output.
+        match ref_self.poll_drain_pending(cx) {
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+            Poll::Pending | Poll::Ready(Ok(())) => Poll::Ready(Ok(plaintext_len)),
+        }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let ref_self = self.get_mut();
-        let write = Pin::new(&mut ref_self.write);
-        write.poll_flush(cx)
+        match ref_self.poll_drain_pending(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok(())) => Pin::new(&mut ref_self.write).poll_flush(cx),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+        }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let ref_self = self.get_mut();
-        let write = Pin::new(&mut ref_self.write);
-        write.poll_shutdown(cx)
+        match ref_self.poll_drain_pending(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok(())) => Pin::new(&mut ref_self.write).poll_shutdown(cx),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+        }
     }
 }
 
@@ -498,4 +508,190 @@ pub enum LinkType {
     Forums = 7,
     News = 8,
     Announcements = 9,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aes::cipher::KeyIvInit;
+    use std::sync::{Arc, Mutex};
+    use tokio::io::AsyncWriteExt;
+
+    #[derive(Default)]
+    struct WriteRecord {
+        bytes: Vec<u8>,
+        poll_write_calls: usize,
+        flush_calls: usize,
+        shutdown_calls: usize,
+    }
+
+    struct TestWriter {
+        record: Arc<Mutex<WriteRecord>>,
+        max_write: usize,
+        return_pending: bool,
+        pending_next: bool,
+        return_zero: bool,
+    }
+
+    impl TestWriter {
+        fn new(
+            record: Arc<Mutex<WriteRecord>>,
+            max_write: usize,
+            return_pending: bool,
+            pending_first: bool,
+        ) -> Self {
+            Self {
+                record,
+                max_write,
+                return_pending,
+                pending_next: pending_first,
+                return_zero: false,
+            }
+        }
+    }
+
+    impl AsyncWrite for TestWriter {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<Result<usize, Error>> {
+            self.record.lock().unwrap().poll_write_calls += 1;
+
+            if self.pending_next {
+                self.pending_next = false;
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+
+            if self.return_zero {
+                return Poll::Ready(Ok(0));
+            }
+
+            let written = buf.len().min(self.max_write);
+            self.record
+                .lock()
+                .unwrap()
+                .bytes
+                .extend_from_slice(&buf[..written]);
+            self.pending_next = self.return_pending;
+            Poll::Ready(Ok(written))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            self.record.lock().unwrap().flush_calls += 1;
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            self.record.lock().unwrap().shutdown_calls += 1;
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    fn encrypt_reference(mut plaintext: Vec<u8>, key: &[u8; 16]) -> Vec<u8> {
+        let mut cipher = Aes128Cfb8Enc::new_from_slices(key, key).unwrap();
+        cipher.encrypt(&mut plaintext);
+        plaintext
+    }
+
+    #[tokio::test]
+    async fn stream_encryptor_matches_reference_across_fragmented_writes() {
+        let key = [0x7Bu8; 16];
+        let plaintext: Vec<u8> = (0..(STREAM_ENCRYPTION_BUFFER_SIZE * 2 + 137))
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let expected = encrypt_reference(plaintext.clone(), &key);
+        let record = Arc::new(Mutex::new(WriteRecord::default()));
+        let writer = TestWriter::new(record.clone(), 7, true, true);
+        let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
+        let mut encryptor = StreamEncryptor::new(cipher, writer);
+
+        let mut offset = 0;
+        for chunk_len in [1, 31, 4096, 17, 8192, 257, STREAM_ENCRYPTION_BUFFER_SIZE] {
+            if offset == plaintext.len() {
+                break;
+            }
+            let end = (offset + chunk_len).min(plaintext.len());
+            encryptor.write_all(&plaintext[offset..end]).await.unwrap();
+            offset = end;
+        }
+        encryptor.write_all(&plaintext[offset..]).await.unwrap();
+        encryptor.shutdown().await.unwrap();
+
+        let record = record.lock().unwrap();
+        assert_eq!(record.bytes, expected);
+        assert!(record.poll_write_calls > plaintext.len() / 7);
+        assert_eq!(record.shutdown_calls, 1);
+    }
+
+    #[tokio::test]
+    async fn stream_encryptor_flushes_ciphertext_buffered_after_pending() {
+        let key = [0x11u8; 16];
+        let plaintext = b"buffered ciphertext".to_vec();
+        let expected = encrypt_reference(plaintext.clone(), &key);
+        let record = Arc::new(Mutex::new(WriteRecord::default()));
+        let writer = TestWriter::new(record.clone(), plaintext.len(), false, true);
+        let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
+        let mut encryptor = StreamEncryptor::new(cipher, writer);
+
+        assert_eq!(encryptor.write(&plaintext).await.unwrap(), plaintext.len());
+        assert!(record.lock().unwrap().bytes.is_empty());
+
+        encryptor.flush().await.unwrap();
+
+        let record = record.lock().unwrap();
+        assert_eq!(record.bytes, expected);
+        assert_eq!(record.flush_calls, 1);
+    }
+
+    #[tokio::test]
+    async fn stream_encryptor_shutdown_drains_ciphertext_buffered_after_pending() {
+        let key = [0x19u8; 16];
+        let plaintext = b"shutdown drains ciphertext".to_vec();
+        let expected = encrypt_reference(plaintext.clone(), &key);
+        let record = Arc::new(Mutex::new(WriteRecord::default()));
+        let writer = TestWriter::new(record.clone(), plaintext.len(), false, true);
+        let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
+        let mut encryptor = StreamEncryptor::new(cipher, writer);
+
+        assert_eq!(encryptor.write(&plaintext).await.unwrap(), plaintext.len());
+        assert!(record.lock().unwrap().bytes.is_empty());
+
+        encryptor.shutdown().await.unwrap();
+
+        let record = record.lock().unwrap();
+        assert_eq!(record.bytes, expected);
+        assert_eq!(record.shutdown_calls, 1);
+    }
+
+    #[tokio::test]
+    async fn stream_encryptor_batches_downstream_writes() {
+        let key = [0x23u8; 16];
+        let plaintext = vec![0xAB; STREAM_ENCRYPTION_BUFFER_SIZE * 2 + 1];
+        let record = Arc::new(Mutex::new(WriteRecord::default()));
+        let writer = TestWriter::new(record.clone(), usize::MAX, false, false);
+        let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
+        let mut encryptor = StreamEncryptor::new(cipher, writer);
+
+        encryptor.write_all(&plaintext).await.unwrap();
+        encryptor.shutdown().await.unwrap();
+
+        let record = record.lock().unwrap();
+        assert_eq!(record.poll_write_calls, 3);
+        assert_eq!(record.bytes.len(), plaintext.len());
+    }
+
+    #[tokio::test]
+    async fn stream_encryptor_reports_write_zero() {
+        let key = [0x42u8; 16];
+        let record = Arc::new(Mutex::new(WriteRecord::default()));
+        let mut writer = TestWriter::new(record, 1, false, false);
+        writer.return_zero = true;
+        let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
+        let mut encryptor = StreamEncryptor::new(cipher, writer);
+
+        let error = encryptor.write(b"cannot write").await.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+    }
 }
