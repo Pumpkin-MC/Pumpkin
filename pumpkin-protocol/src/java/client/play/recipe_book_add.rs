@@ -3,8 +3,9 @@ use pumpkin_data::item_id_remap::remap_item_id_for_version;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::clientbound::PLAY_RECIPE_BOOK_ADD;
 use pumpkin_data::recipes::{
-    CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING, RecipeCategoryTypes,
-    RecipeIngredientTypes, RecipeResultStruct,
+    CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
+    RECIPES_STONECUTTING, RecipeCategoryTypes, RecipeIngredientTypes, RecipeResultStruct,
+    StonecutterRecipe,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -14,10 +15,11 @@ use std::{collections::HashMap, io::Write};
 use crate::codec::item_stack_seralizer::ItemStackTemplateSerializer;
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
 
-// Recipe Display type IDs
+// Recipe Display type IDs (registry order in modern Java)
 const RECIPE_DISPLAY_SHAPELESS: i32 = 0;
 const RECIPE_DISPLAY_SHAPED: i32 = 1;
 const RECIPE_DISPLAY_FURNACE: i32 = 2;
+const RECIPE_DISPLAY_STONECUTTER: i32 = 3;
 
 // Slot Display type IDs
 const SLOT_DISPLAY_EMPTY: i32 = 0;
@@ -473,6 +475,8 @@ impl ClientPacket for CRecipeBookAdd<'_> {
             .ok_or_else(|| WritingError::Message("smoker item must exist".into()))?;
         let campfire = Item::from_registry_key("campfire")
             .ok_or_else(|| WritingError::Message("campfire item must exist".into()))?;
+        let stonecutter = Item::from_registry_key("stonecutter")
+            .ok_or_else(|| WritingError::Message("stonecutter item must exist".into()))?;
 
         // First pass - count and skip CraftingSpecial and CraftingDecoratedPot entries.
         let crafting_count: usize = RECIPES_CRAFTING
@@ -486,7 +490,8 @@ impl ClientPacket for CRecipeBookAdd<'_> {
             })
             .count();
         let dynamic_count = self.dynamic_recipes.len();
-        let total = crafting_count + RECIPES_COOKING.len() + dynamic_count;
+        let total =
+            crafting_count + RECIPES_COOKING.len() + RECIPES_STONECUTTING.len() + dynamic_count;
 
         // Entry count (VarInt)
         write.write_var_int(&VarInt(total as i32))?;
@@ -572,6 +577,26 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                 campfire,
                 None,
                 Some((recipe, book_category)),
+            )?;
+            display_id += 1;
+        }
+
+        // Write stonecutter recipes (required for stonecutter GUI recipe list).
+        for recipe in RECIPES_STONECUTTING {
+            let group_id = resolve_group_id_owned(
+                &mut group_ids,
+                &mut next_group_id,
+                recipe.group.map(Cow::Borrowed),
+            );
+            let flags = entry_flags(self.replace, true, highlight);
+            write_stonecutter_entry(
+                &mut write,
+                display_id,
+                *version,
+                group_id,
+                flags,
+                stonecutter,
+                recipe,
             )?;
             display_id += 1;
         }
@@ -665,6 +690,34 @@ impl ClientPacket for CRecipeBookAdd<'_> {
         write.write_bool(self.replace)?;
         Ok(())
     }
+}
+
+/// Write a stonecutter `RecipeDisplayEntry` (display type 3).
+fn write_stonecutter_entry(
+    write: &mut impl Write,
+    display_id: i32,
+    version: JavaMinecraftVersion,
+    group_id: Option<i32>,
+    flags: u8,
+    stonecutter: &Item,
+    recipe: &StonecutterRecipe,
+) -> Result<(), WritingError> {
+    write.write_var_int(&VarInt(display_id))?;
+    write.write_var_int(&VarInt(RECIPE_DISPLAY_STONECUTTER))?;
+    // ingredient
+    write_ingredient_slot_display(write, &recipe.ingredient, version)?;
+    // result
+    write_result_slot_display(write, &recipe.result, version)?;
+    // craftingStation
+    write_item_slot_display(write, stonecutter, version)?;
+    // group
+    write_optional_var_int(write, group_id)?;
+    // category — building blocks fits most stone-cutting outputs
+    write.write_var_int(&VarInt(CATEGORY_CRAFTING_BUILDING))?;
+    // craftingRequirements: single input ingredient
+    write_crafting_requirements(write, &[Some(&recipe.ingredient)], version)?;
+    write.write_u8(flags)?;
+    Ok(())
 }
 
 fn resolve_group_id_owned<'a>(

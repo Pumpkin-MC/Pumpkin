@@ -14,10 +14,13 @@ pub mod shulker_box;
 // Workstations & processing
 pub mod blast_furnace;
 pub mod brewing_stand;
+pub mod cartography_table;
 pub mod crafting_table;
 pub mod enchanting_table;
+pub mod fletching_table;
 pub mod furnace;
 pub mod grindstone;
+pub mod smithing_table;
 pub mod smoker;
 pub mod stonecutter;
 

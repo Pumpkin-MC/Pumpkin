@@ -33,6 +33,7 @@
 pub mod anvil;
 pub mod beacon_screen_handler;
 pub mod brewing;
+pub mod cartography_screen_handler;
 pub mod container_click;
 pub mod crafting;
 pub mod double;
@@ -47,6 +48,7 @@ pub mod merchant;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
+pub mod smithing_screen_handler;
 pub mod stonecutter_screen_handler;
 pub mod sync_handler;
 pub mod window_property;

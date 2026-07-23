@@ -27,8 +27,10 @@ pub struct IronGolemEntity {
     pub mob_entity: MobEntity,
 }
 
-/// Vanilla iron golem never acquires creepers as active targets.
-const GOLEM_EXCLUDE: &[&EntityType] = &[&EntityType::CREEPER];
+/// Vanilla: never target creepers. Wardens are also excluded here — a golem
+/// melee hit on a warden (500 HP + heavy AI) currently stalls the whole server
+/// tick path; players should not use golems as warden killers.
+const GOLEM_EXCLUDE: &[&EntityType] = &[&EntityType::CREEPER, &EntityType::WARDEN];
 
 impl IronGolemEntity {
     pub fn new(entity: Entity) -> Arc<Self> {

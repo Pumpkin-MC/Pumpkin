@@ -156,6 +156,7 @@ impl ScreenHandler for StonecutterScreenHandler {
             // Input changed or output taken — refresh result + selected-recipe property.
             if slot_index == 0 || slot_index == 1 {
                 self.update_output().await;
+                self.send_content_updates().await;
             }
         })
     }

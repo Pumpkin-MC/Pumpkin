@@ -380,7 +380,10 @@ impl MobEntity {
                     pumpkin_data::sound::SoundCategory::Neutral,
                     &self.living_entity.entity.pos.load(),
                 );
-                // Slight upward knockback scaled by target KB resistance.
+                // Vanilla IronGolem.doHurtTarget:
+                //   e = max(0, 1 - knockbackResistance)
+                //   deltaMovement = deltaMovement.add(0, 0.4 * e, 0)
+                // (no Y cap — that is what flings players into the air)
                 if let Some(target_living) = target.get_living_entity() {
                     let kb_res = target_living
                         .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
@@ -388,7 +391,7 @@ impl MobEntity {
                     let lift = 0.4 * (1.0 - kb_res);
                     if lift > 0.0 {
                         let mut vel = target.get_entity().velocity.load();
-                        vel.y = (vel.y + lift).min(0.4);
+                        vel.y += lift;
                         target.get_entity().velocity.store(vel);
                         target.get_entity().send_velocity();
                     }

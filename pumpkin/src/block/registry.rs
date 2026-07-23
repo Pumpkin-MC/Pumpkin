@@ -169,6 +169,7 @@ use super::{
 };
 use crate::block::OnEntityStepArgs;
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
+use crate::block::blocks::cartography_table::CartographyTableBlock;
 use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
@@ -176,6 +177,7 @@ use crate::block::blocks::dragon_egg::DragonEggBlock;
 use crate::block::blocks::enchanting_table::EnchantingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
+use crate::block::blocks::fletching_table::FletchingTableBlock;
 use crate::block::blocks::hopper::HopperBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
@@ -183,6 +185,7 @@ use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
+use crate::block::blocks::smithing_table::SmithingTableBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::blocks::stonecutter::StonecutterBlock;
 
@@ -237,6 +240,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SlimeBlock);
     manager.register(StairBlock);
     manager.register(StonecutterBlock);
+    manager.register(CartographyTableBlock);
+    manager.register(SmithingTableBlock);
+    manager.register(FletchingTableBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
