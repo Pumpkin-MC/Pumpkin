@@ -7,7 +7,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         Controls, Goal, GoalFuture, active_target::ActiveTargetGoal,
-        fireball_attack::FireballAttackGoal,
+        fireball_attack::FireballAttackGoal, random_float::RandomFloatGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -37,7 +37,8 @@ impl GhastEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // Vanilla: look + shoot fireball; RandomFloatAround not ported.
+            // Vanilla: float around, look, shoot fireball.
+            goal_selector.add_goal(5, RandomFloatGoal::new());
             goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak)));
             goal_selector.add_goal(7, FireballAttackGoal::new());
 

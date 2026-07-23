@@ -97,6 +97,11 @@ impl ShulkerEntity {
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // End city defense: also shoot at golems.
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
+            );
         };
 
         mob_arc

@@ -33,6 +33,7 @@ pub mod owner_hurt_by_target;
 pub mod owner_hurt_target;
 pub mod pick_up_block;
 pub mod place_block;
+pub mod random_float;
 pub mod revenge;
 pub mod sit;
 pub mod sonic_boom;
@@ -44,6 +45,7 @@ pub(crate) mod track_target;
 pub mod wander_around;
 pub mod wind_charge_attack;
 pub mod witch_attack;
+pub mod wither_skull;
 pub mod zombie_attack;
 
 #[must_use]

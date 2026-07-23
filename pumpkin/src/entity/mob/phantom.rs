@@ -31,8 +31,12 @@ impl PhantomEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // Sweep/circle not ported — chase + bite stand-in.
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
+            // Sweep/circle not ported — float + dive/bite stand-in.
+            goal_selector.add_goal(
+                1,
+                crate::entity::ai::goal::random_float::RandomFloatGoal::new(),
+            );
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, true)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
