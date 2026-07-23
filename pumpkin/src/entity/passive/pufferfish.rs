@@ -44,6 +44,10 @@ impl PufferfishEntity {
                 2,
                 Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 1.0, 1.2)),
             );
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::AXOLOTL, 8.0, 1.0, 1.2)),
+            );
             // Contact poke stand-in for inflate sting.
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));

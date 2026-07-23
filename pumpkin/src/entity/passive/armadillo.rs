@@ -35,19 +35,24 @@ impl ArmadilloEntity {
                 2,
                 Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 6.0, 1.0, 1.2)),
             );
-            // Vanilla also flees undead — cover common hostiles.
-            goal_selector.add_goal(
-                2,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 6.0, 1.0, 1.2)),
-            );
-            goal_selector.add_goal(
-                2,
-                Box::new(AvoidEntityGoal::new(&EntityType::SKELETON, 6.0, 1.0, 1.2)),
-            );
-            goal_selector.add_goal(
-                2,
-                Box::new(AvoidEntityGoal::new(&EntityType::SPIDER, 6.0, 1.0, 1.2)),
-            );
+            // Vanilla flees undead and other threats — cover common hostiles.
+            for ty in [
+                &EntityType::ZOMBIE,
+                &EntityType::HUSK,
+                &EntityType::DROWNED,
+                &EntityType::ZOMBIE_VILLAGER,
+                &EntityType::SKELETON,
+                &EntityType::STRAY,
+                &EntityType::BOGGED,
+                &EntityType::SPIDER,
+                &EntityType::CAVE_SPIDER,
+                &EntityType::CREEPER,
+            ] {
+                goal_selector.add_goal(
+                    2,
+                    Box::new(AvoidEntityGoal::new(ty, 6.0, 1.0, 1.2)),
+                );
+            }
             goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(
                 4,

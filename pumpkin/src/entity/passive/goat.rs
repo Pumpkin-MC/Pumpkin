@@ -6,17 +6,16 @@ use pumpkin_data::item::Item;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ram::RamGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, ram::RamGoal,
+        revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
-/// Goat — breed/tempt + ram charge; long-jump TODO.
+/// Goat — neutral; ram when angered; long-jump TODO.
 pub struct GoatEntity {
     pub mob_entity: MobEntity,
 }
@@ -48,11 +47,8 @@ impl GoatEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            // Occasionally ram nearby players (neutral aggression stand-in).
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            // Neutral: only ram after being hurt (vanilla prepare-ram is more complex).
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
         };
 
         mob_arc

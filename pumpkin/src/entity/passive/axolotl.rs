@@ -6,7 +6,8 @@ use pumpkin_data::item::Item;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
+        leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
@@ -16,7 +17,7 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 
-/// Axolotl — hunts aquatic hostiles; play-dead TODO.
+/// Axolotl — hunts aquatic hostiles; play-dead state TODO.
 pub struct AxolotlEntity {
     pub mob_entity: MobEntity,
 }
@@ -41,7 +42,10 @@ impl AxolotlEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Play-dead not ported — panic when hurt.
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.0));
             goal_selector.add_goal(2, Box::new(TemptGoal::new(0.9, TEMPT_ITEMS)));
+            goal_selector.add_goal(2, Box::new(LeapAtTargetGoal::new(0.3)));
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
@@ -61,6 +65,7 @@ impl AxolotlEntity {
                 (2, &EntityType::SALMON),
                 (2, &EntityType::TROPICAL_FISH),
                 (2, &EntityType::PUFFERFISH),
+                (2, &EntityType::TADPOLE),
             ] {
                 target_selector.add_goal(
                     prio,

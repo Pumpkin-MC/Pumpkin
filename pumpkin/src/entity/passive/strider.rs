@@ -6,9 +6,10 @@ use pumpkin_data::item::Item;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
@@ -26,10 +27,12 @@ impl StriderEntity {
         let mob_entity = MobEntity::new(entity);
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
-            // Prefer lava paths (malus 0).
+            // Prefer lava paths (malus 0); strongly avoid water (shiver/slow vanilla).
             nav.set_pathfinding_malus(PathType::Lava, 0.0);
             nav.set_pathfinding_malus(PathType::DamageFire, 0.0);
             nav.set_pathfinding_malus(PathType::DangerFire, 0.0);
+            nav.set_pathfinding_malus(PathType::Water, 16.0);
+            nav.set_pathfinding_malus(PathType::WaterBorder, 8.0);
         }
         let strider = Self { mob_entity };
         let mob_arc = Arc::new(strider);
@@ -42,6 +45,16 @@ impl StriderEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
+            // Zombified piglins scare striders off (vanilla brain-ish flee).
+            goal_selector.add_goal(
+                1,
+                Box::new(AvoidEntityGoal::new(
+                    &EntityType::ZOMBIFIED_PIGLIN,
+                    8.0,
+                    1.25,
+                    1.25,
+                )),
+            );
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));

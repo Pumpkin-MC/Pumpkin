@@ -32,6 +32,7 @@ impl PiglinBruteEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla: brutes do NOT flee zombified piglins (unlike regular piglins).
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(

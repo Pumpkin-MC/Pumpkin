@@ -39,7 +39,11 @@ impl BlazeEntity {
                     ),
                 ),
             );
-            // MoveTowardsRestrictionGoal TODO — stroll at 7
+            // Hover between fireball volleys (restriction stroll TODO).
+            goal_selector.add_goal(
+                5,
+                crate::entity::ai::goal::random_float::RandomFloatGoal::new(),
+            );
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,

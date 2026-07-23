@@ -5,8 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        active_target::ActiveTargetGoal, leap_at_target::LeapAtTargetGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, random_float::RandomFloatGoal, revenge::RevengeGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -32,10 +33,9 @@ impl PhantomEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             // Sweep/circle not ported — float + dive/bite stand-in.
-            goal_selector.add_goal(
-                1,
-                crate::entity::ai::goal::random_float::RandomFloatGoal::new(),
-            );
+            goal_selector.add_goal(1, RandomFloatGoal::new());
+            // Dive pounce toward target (circle sweep TODO).
+            goal_selector.add_goal(1, Box::new(LeapAtTargetGoal::new(0.5)));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, true)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(

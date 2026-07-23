@@ -89,6 +89,8 @@ impl IronGolemEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             // --- goalSelector (priority order from 26.2) ---
+            // No FloatGoal: iron golems do not swim (decreaseAirSupply is a no-op so they
+            // never drown, but they walk/sink rather than float).
             // 1 MeleeAttackGoal(this, 1.0, true)  — followingTargetEvenIfNotSeen
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             // 2 MoveTowardsTargetGoal(this, 0.9, 32.0f)
