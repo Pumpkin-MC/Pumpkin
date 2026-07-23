@@ -20,12 +20,12 @@ use uuid::Uuid;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_owner::FollowOwnerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, owner_hurt_by_target::OwnerHurtByTargetGoal,
-        owner_hurt_target::OwnerHurtTargetGoal, revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
+        revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -83,6 +83,23 @@ impl WolfEntity {
             target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
+            // Wild pack hunts (tamed wolves still get these; tame filter TODO).
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, true),
+            );
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, true),
+            );
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
+            );
+            target_selector.add_goal(
+                6,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, true),
+            );
         };
 
         mob_arc

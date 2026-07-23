@@ -16,6 +16,7 @@ pub mod escape_danger;
 pub mod evoker_cast;
 pub mod fireball_attack;
 pub mod flee_sun;
+pub mod freeze_when_looked;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod goal_selector;
@@ -41,6 +42,7 @@ pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
 pub mod wander_around;
+pub mod wind_charge_attack;
 pub mod witch_attack;
 pub mod zombie_attack;
 

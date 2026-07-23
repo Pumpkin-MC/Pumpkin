@@ -20,9 +20,10 @@ use uuid::Uuid;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, sit::SitGoal, swim::SwimGoal, tempt::TemptGoal,
+        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, sit::SitGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -59,12 +60,14 @@ impl CatEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
             goal_selector.add_goal(5, BreedGoal::new(0.8));
+            goal_selector.add_goal(6, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(7, FollowOwnerGoal::new(1.0, 10.0, 5.0));
             goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
             goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
@@ -73,6 +76,16 @@ impl CatEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
             goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
+
+            // Hunt rabbits / baby turtles (vanilla cat prey).
+            target_selector.add_goal(
+                1,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, true),
+            );
+            target_selector.add_goal(
+                1,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
+            );
         };
 
         mob_arc
