@@ -1,35 +1,44 @@
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
-    ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        wander_around::WanderAroundGoal,
+    ai::{
+        goal::{
+            active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+            wander_around::WanderAroundGoal,
+        },
+        pathfinder::node::PathType,
+        vanilla_enemy::{IRON_GOLEM_ENEMY_EXCLUDES, IRON_GOLEM_TARGET_CHANCE},
     },
-    ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
+use pumpkin_data::entity::EntityType;
 
-/// Iron golem — protects villagers; attacks most hostile monsters (not creepers).
+/// Iron golem — protects villagers; attacks hostile monsters (vanilla `Enemy`).
 ///
-/// Vanilla attack (`IronGolem.doHurtTarget`) is handled in `MobEntity::try_attack`:
-/// entity status `START_ATTACKING` (4) for both-arms raise, random damage, sound.
+/// # Vanilla targeting (`IronGolem` constructor)
+/// ```text
+/// targetSelector:
+///   1 HurtByTarget (alert others)
+///   2 NearestAttackableTarget(Mob, 5, false, false,
+///       e -> e instanceof Enemy && !(e instanceof Creeper))
+/// ```
+/// Pumpkin uses [`MobCategory::MONSTER`] as `Enemy` and excludes only creeper.
+/// **Warden is a valid target** (monster / Enemy).
 ///
-/// Pathfinding: water is treated as **impassable** so golems never walk into rivers
-/// / ponds when a target is knocked into water (they stay on the bank).
+/// # Attack (`IronGolem.doHurtTarget`)
+/// Handled in `MobEntity::try_attack`: arm-raise status 4, random damage,
+/// vertical knockback `0.4 * (1 - knockbackResistance)` (warden res=1 → no fling).
+///
+/// Pathfinding: water is impassable so golems stay on the bank when prey is in water.
 ///
 /// Wiki: <https://minecraft.wiki/w/Iron_Golem>
 pub struct IronGolemEntity {
     pub mob_entity: MobEntity,
 }
-
-/// Vanilla iron golem never acquires creepers as active targets.
-/// Wardens **are** valid targets in vanilla (Monster category).
-const GOLEM_EXCLUDE: &[&EntityType] = &[&EntityType::CREEPER];
 
 impl IronGolemEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
@@ -63,15 +72,16 @@ impl IronGolemEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
+            // Vanilla HurtByTargetGoal(this)
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Vanilla Enemy && !Creeper (includes warden, zombies, …)
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::for_category(
+                ActiveTargetGoal::for_enemies(
                     &mob_arc.mob_entity,
-                    &MobCategory::MONSTER,
-                    GOLEM_EXCLUDE,
-                    5,
-                    false,
+                    IRON_GOLEM_ENEMY_EXCLUDES,
+                    IRON_GOLEM_TARGET_CHANCE,
+                    false, // checkVisibility = false in vanilla golem target goal
                 ),
             );
         };

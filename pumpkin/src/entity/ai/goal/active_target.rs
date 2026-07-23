@@ -90,6 +90,9 @@ impl ActiveTargetGoal {
     /// Vanilla iron-golem style: target every Monster-category mob except those in
     /// `exclude` (typically just creeper). Single goal so the closest living
     /// hostile wins — no corpse of type A blocking a living type B.
+    ///
+    /// This is the Pumpkin stand-in for Java
+    /// `NearestAttackableTargetGoal(Mob.class, …, e -> e instanceof Enemy && …)`.
     #[must_use]
     pub fn for_category(
         mob: &MobEntity,
@@ -113,6 +116,26 @@ impl ActiveTargetGoal {
         })
     }
 
+    /// Vanilla `Enemy` targeting: all [`MobCategory::MONSTER`] minus `exclude`.
+    ///
+    /// - Iron golem: `exclude = IRON_GOLEM_ENEMY_EXCLUDES` (creeper only), chance 5, no LOS gate
+    /// - Snow golem: `exclude = []`, chance 10, with LOS
+    #[must_use]
+    pub fn for_enemies(
+        mob: &MobEntity,
+        exclude: &'static [&'static EntityType],
+        reciprocal_chance: i32,
+        check_visibility: bool,
+    ) -> Box<Self> {
+        Self::for_category(
+            mob,
+            crate::entity::ai::vanilla_enemy::ENEMY_CATEGORY,
+            exclude,
+            reciprocal_chance,
+            check_visibility,
+        )
+    }
+
     pub fn set_target(&mut self, target: Option<Arc<dyn EntityBase>>) {
         self.target = target;
     }
@@ -121,7 +144,11 @@ impl ActiveTargetGoal {
         match self.kind {
             TargetKind::Exact(want) => entity_type.id == want.id,
             TargetKind::Category { category, exclude } => {
-                entity_type.category == category && !exclude.iter().any(|e| e.id == entity_type.id)
+                // Vanilla Enemy ≈ MONSTER + mob + attackable, minus explicit excludes.
+                entity_type.category == category
+                    && entity_type.mob
+                    && entity_type.attackable != Some(false)
+                    && !exclude.iter().any(|e| e.id == entity_type.id)
             }
         }
     }
