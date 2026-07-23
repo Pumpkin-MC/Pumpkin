@@ -34,6 +34,7 @@ pub mod pick_up_block;
 pub mod place_block;
 pub mod revenge;
 pub mod sit;
+pub mod sonic_boom;
 pub mod step_and_destroy_block;
 pub mod swim;
 pub mod teleport_towards_player;

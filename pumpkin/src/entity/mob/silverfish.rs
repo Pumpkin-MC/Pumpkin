@@ -5,13 +5,14 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        active_target::ActiveTargetGoal, join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
+/// Silverfish — swarm via pack anger; merge-with-stone TODO.
 pub struct SilverfishEntity {
     entity: Arc<MobEntity>,
 }
@@ -30,7 +31,6 @@ impl SilverfishEntity {
             let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
 
-            // Vanilla 26.2 Silverfish (merge-with-stone / friendsGoal TODO)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
@@ -41,8 +41,10 @@ impl SilverfishEntity {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Wake friends when one is hurt.
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::SILVERFISH));
             target_selector.add_goal(
-                2,
+                3,
                 ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
             );
         };

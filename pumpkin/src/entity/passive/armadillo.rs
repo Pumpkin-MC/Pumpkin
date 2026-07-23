@@ -5,15 +5,14 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
+        avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Represents an Armadillo, a passive entity that can roll into a ball when threatened.
-///
-/// Wiki: <https://minecraft.wiki/w/Armadillo>
+/// Armadillo — flees threats; roll-up state TODO.
 pub struct ArmadilloEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,14 +29,31 @@ impl ArmadilloEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(
                 2,
+                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 6.0, 1.0, 1.2)),
+            );
+            // Vanilla also flees undead — cover common hostiles.
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::SKELETON, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::SPIDER, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(0.7)));
+            goal_selector.add_goal(
+                4,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

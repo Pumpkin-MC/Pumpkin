@@ -1,19 +1,26 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Represents a Parrot, a passive flying mob that can mimic nearby mob sounds.
-///
-/// Wiki: <https://minecraft.wiki/w/Parrot>
+const TEMPT_ITEMS: &[&Item] = &[
+    &Item::WHEAT_SEEDS,
+    &Item::MELON_SEEDS,
+    &Item::PUMPKIN_SEEDS,
+    &Item::BEETROOT_SEEDS,
+];
+
+/// Parrot — fly + tempt seeds; shoulder sit TODO.
 pub struct ParrotEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,14 +37,15 @@ impl ParrotEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
+            goal_selector.add_goal(2, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
+            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                4,
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
@@ -49,5 +57,9 @@ impl NBTStorage for ParrotEntity {}
 impl Mob for ParrotEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        0.05
     }
 }

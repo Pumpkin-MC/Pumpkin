@@ -11,9 +11,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Represents an Allay, a passive, flying entity that can collect items for the player.
-///
-/// Wiki: <https://minecraft.wiki/w/Allay>
+/// Allay — follows/looks at players; item collect TODO.
 pub struct AllayEntity {
     pub mob_entity: MobEntity,
 }
@@ -30,14 +28,15 @@ impl AllayEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            // Prefer staying near players (look + wander slowly).
             goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                1,
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 16.0),
             );
+            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            let _ = mob_weak;
         };
 
         mob_arc
@@ -49,5 +48,9 @@ impl NBTStorage for AllayEntity {}
 impl Mob for AllayEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        0.04
     }
 }
