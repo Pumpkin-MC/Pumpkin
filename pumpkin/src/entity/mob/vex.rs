@@ -31,8 +31,12 @@ impl VexEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // No swim — flying
-            goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, true)));
+            // No swim — flying + float between charges.
+            goal_selector.add_goal(
+                3,
+                crate::entity::ai::goal::random_float::RandomFloatGoal::new(),
+            );
+            goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, true)));
             goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 9,

@@ -1,6 +1,9 @@
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 
 use crate::entity::{
     Entity, NBTStorage,
@@ -12,7 +15,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Illusioner — bow attack + raid targets (mirror spell TODO).
+/// Illusioner — bow attack + raid targets (mirror/invis spell TODO).
 pub struct IllusionerEntity {
     pub mob_entity: MobEntity,
 }
@@ -36,7 +39,6 @@ impl IllusionerEntity {
                 1,
                 Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 0.6, 1.0)),
             );
-            // Ranged bow (vanilla uses bow; invisibility/mirror TODO)
             goal_selector.add_goal(4, BowAttackGoal::new(0.5, 20));
             goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
@@ -62,6 +64,18 @@ impl IllusionerEntity {
 
         mob_arc
     }
+
+    async fn equip_bow(&self) {
+        let living = &self.mob_entity.living_entity;
+        let stack = ItemStack::new(1, &Item::BOW);
+        living
+            .entity_equipment
+            .lock()
+            .await
+            .put(&EquipmentSlot::MAIN_HAND, stack.clone())
+            .await;
+        living.send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)]);
+    }
 }
 
 impl NBTStorage for IllusionerEntity {}
@@ -69,5 +83,11 @@ impl NBTStorage for IllusionerEntity {}
 impl Mob for IllusionerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_init_data_tracker(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.equip_bow().await;
+        })
     }
 }

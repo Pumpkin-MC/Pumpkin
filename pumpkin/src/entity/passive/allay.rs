@@ -5,13 +5,13 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        follow_player::FollowPlayerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Allay — follows/looks at players; item collect TODO.
+/// Allay — follows nearest player; item collect TODO.
 pub struct AllayEntity {
     pub mob_entity: MobEntity,
 }
@@ -29,14 +29,13 @@ impl AllayEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // Prefer staying near players (look + wander slowly).
+            goal_selector.add_goal(1, FollowPlayerGoal::new(1.0));
             goal_selector.add_goal(
-                1,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 16.0),
+                2,
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 16.0),
             );
-            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.6)));
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
-            let _ = mob_weak;
+            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(0.6)));
+            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
