@@ -29,8 +29,9 @@ use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -100,6 +101,8 @@ impl VillagerEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Panic when damaged (vanilla PanicGoal / brain flee stand-in).
+            goal_selector.add_goal(0, EscapeDangerGoal::new(0.5));
             // Villagers avoid threats
             goal_selector.add_goal(
                 1,

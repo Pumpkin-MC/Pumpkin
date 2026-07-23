@@ -22,7 +22,8 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        follow_parent::FollowParentGoal, join_anger::JoinAngerGoal,
+        leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
         revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -67,6 +68,7 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
+            goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
             // Melee only useful once tamed (owner-hurt goals set target).
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
@@ -83,6 +85,8 @@ impl WolfEntity {
             target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
+            // Pack joins when a nearby wolf is attacked.
+            target_selector.add_goal(4, JoinAngerGoal::new(&EntityType::WOLF));
             // Wild pack hunts (tamed wolves still get these; tame filter TODO).
             target_selector.add_goal(
                 5,

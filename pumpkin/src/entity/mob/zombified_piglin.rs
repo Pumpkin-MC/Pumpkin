@@ -43,6 +43,12 @@ impl ZombifiedPiglinEntity {
             // Personal revenge first, then pack anger from nearby allies.
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::ZOMBIFIED_PIGLIN));
+            // Vanilla Zombie HurtByTargetGoal.setAlertOthers(ZombifiedPiglin):
+            // also join when a nearby zombie is attacked.
+            target_selector.add_goal(3, JoinAngerGoal::new(&EntityType::ZOMBIE));
+            target_selector.add_goal(3, JoinAngerGoal::new(&EntityType::HUSK));
+            target_selector.add_goal(3, JoinAngerGoal::new(&EntityType::DROWNED));
+            target_selector.add_goal(3, JoinAngerGoal::new(&EntityType::ZOMBIE_VILLAGER));
         };
 
         mob_arc

@@ -449,6 +449,19 @@ impl MobEntity {
                             blend: false,
                         })
                         .await;
+                } else if id == pumpkin_data::entity::EntityType::PUFFERFISH.id {
+                    // Inflate sting stand-in (vanilla contact poison).
+                    target_living
+                        .add_effect(Effect {
+                            effect_type: &StatusEffect::POISON,
+                            duration: 5 * 20,
+                            amplifier: 1,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
                 } else if id == pumpkin_data::entity::EntityType::HUSK.id {
                     target_living
                         .add_effect(Effect {
