@@ -157,6 +157,10 @@ impl JavaClient {
                         e => TextComponent::text(e.to_string()),
                     })
                     .await;
+                    // Critical: kick() only schedules disconnect. Without return,
+                    // login falls through and finish_login() completes with the
+                    // unverified client-supplied profile (auth bypass).
+                    return;
                 }
             }
         }

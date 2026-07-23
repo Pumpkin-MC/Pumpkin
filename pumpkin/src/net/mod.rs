@@ -373,11 +373,16 @@ pub enum EncryptionError {
     AlreadyEncrypted,
 }
 
+/// Validates a player name for join/login.
+/// Rejects empty names, overlong names, control chars (incl. NUL), spaces, and
+/// the section sign (`§`) used for client format-code injection.
 fn is_valid_player_name(name: &str) -> bool {
-    if name.len() > 16 {
+    if name.is_empty() || name.len() > 16 {
         return false;
     }
-    !name.chars().any(|c| c.is_control() || c == ' ')
+    !name
+        .chars()
+        .any(|c| c.is_control() || c == ' ' || c == '\0' || c == '§')
 }
 
 #[derive(Clone, Copy)]
@@ -590,13 +595,19 @@ mod tests {
         );
     }
 
-    /// Test case for an empty string (length 0, but included for completeness).
+    /// Test case for an empty string — must be rejected (query `CString`, impersonation).
     #[test]
     fn invalid_empty_string() {
         let name = "";
+        assert!(!is_valid_player_name(name), "Empty string must be invalid");
+    }
+
+    #[test]
+    fn invalid_section_sign() {
+        let name = "Player§cName";
         assert!(
-            is_valid_player_name(name),
-            "Empty string should be valid (length <= 16 and no invalid chars)"
+            !is_valid_player_name(name),
+            "Section sign format codes must be rejected"
         );
     }
 
