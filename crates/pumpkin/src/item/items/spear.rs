@@ -9,7 +9,6 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -59,7 +58,8 @@ impl ItemBehaviour for SpearItem {
                 return;
             }
 
-            let (damage, attack_speed) = Self::attack_attributes(player, stack);
+            player.update_equipment_attributes().await;
+            let (damage, attack_speed) = Self::attack_attributes(player);
             let server = player.world().server.upgrade().unwrap();
             let attack_delay = f64::from(server.basic_config.tps) / attack_speed;
             let elapsed = f64::from(player.last_attacked_ticks.load(Ordering::Acquire));
@@ -146,24 +146,13 @@ impl SpearItem {
     const HITBOX_MARGIN: f64 = 0.125;
     const CONTACT_COOLDOWN: i32 = 10;
 
-    fn attack_attributes(player: &Player, stack: &ItemStack) -> (f64, f64) {
-        let mut damage = player
+    fn attack_attributes(player: &Player) -> (f64, f64) {
+        let damage = player
             .living_entity
             .get_attribute_value(&Attributes::ATTACK_DAMAGE);
-        let mut attack_speed = 4.0;
-
-        if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
-            for modifier in modifiers.attribute_modifiers.iter() {
-                if modifier.operation != Operation::AddValue {
-                    continue;
-                }
-                if modifier.id == "minecraft:base_attack_damage" {
-                    damage += modifier.amount;
-                } else if modifier.id == "minecraft:base_attack_speed" {
-                    attack_speed += modifier.amount;
-                }
-            }
-        }
+        let attack_speed = player
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_SPEED);
 
         (damage.max(0.0), attack_speed.max(f64::EPSILON))
     }
@@ -177,9 +166,7 @@ impl SpearItem {
         } else {
             Self::SURVIVAL_RANGE
         };
-        let forward_movement = direction
-            .dot(&player.get_entity().movement.load())
-            .max(0.0);
+        let forward_movement = direction.dot(&player.get_entity().movement.load()).max(0.0);
         let start = eye_position.add(&(direction * Self::MIN_RANGE));
         let end = eye_position.add(&(direction * (max_range + forward_movement)));
         let ray = end - start;
@@ -474,10 +461,7 @@ mod tests {
 
         assert_eq!(ray_intersection(&start, &ray, &hit), Some(0.4));
         assert_eq!(ray_intersection(&start, &ray, &miss), None);
-        assert_eq!(
-            ray_intersection(&start, &ray, &containing_start),
-            Some(0.0)
-        );
+        assert_eq!(ray_intersection(&start, &ray, &containing_start), Some(0.0));
     }
 
     #[test]
