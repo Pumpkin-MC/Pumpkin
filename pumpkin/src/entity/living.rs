@@ -2484,21 +2484,26 @@ impl EntityBase for LivingEntity {
                 );
 
                 if let Some(source) = source {
-                    // Vanilla LivingEntity.takeKnockback:
-                    //   strength *= 1.0 - knockbackResistance
-                    // Warden / iron golem (resistance 1.0) take no knockback;
-                    // players (0.0) get the full fling.
-                    let kb_res = self
-                        .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
-                        .clamp(0.0, 1.0);
-                    let strength = 0.4 * (1.0 - kb_res);
-                    if strength > 0.0 {
-                        let source_pos = source.get_entity().pos.load();
-                        let target_pos = self.entity.pos.load();
-                        let dx = source_pos.x - target_pos.x;
-                        let dz = source_pos.z - target_pos.z;
-                        self.entity.apply_knockback(strength, dx, dz);
-                        self.entity.send_velocity();
+                    // Vanilla / Paper / Leaves: IronGolem.doHurtTarget fully overrides
+                    // Mob.doHurtTarget and does NOT apply horizontal knockback here.
+                    // It only adds vertical motion after a successful hit (see try_attack).
+                    // Applying generic KB for golem attacks would be non-vanilla.
+                    let attacker_is_iron_golem = source.get_entity().entity_type.id
+                        == pumpkin_data::entity::EntityType::IRON_GOLEM.id;
+                    if !attacker_is_iron_golem {
+                        // LivingEntity.takeKnockback: strength *= 1 - knockbackResistance
+                        let kb_res = self
+                            .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+                            .clamp(0.0, 1.0);
+                        let strength = 0.4 * (1.0 - kb_res);
+                        if strength > 0.0 {
+                            let source_pos = source.get_entity().pos.load();
+                            let target_pos = self.entity.pos.load();
+                            let dx = source_pos.x - target_pos.x;
+                            let dz = source_pos.z - target_pos.z;
+                            self.entity.apply_knockback(strength, dx, dz);
+                            self.entity.send_velocity();
+                        }
                     }
                 }
             }

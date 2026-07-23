@@ -328,6 +328,9 @@ impl MobEntity {
         true
     }
 
+    /// Melee attack entry — mirrors vanilla `Mob.doHurtTarget` /
+    /// `IronGolem.doHurtTarget` (Paper/Leaves leave this NMS path unpatched aside
+    /// from Bukkit target-reason hooks).
     pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
         if self.living_entity.dead.load(Relaxed) {
             return;
@@ -337,8 +340,22 @@ impl MobEntity {
         let is_golem = entity_type.id == pumpkin_data::entity::EntityType::IRON_GOLEM.id;
         let world = self.living_entity.entity.world.load();
 
-        // Vanilla IronGolem.doHurtTarget always fires the arm-raise entity event
-        // (status 4) *before* applying damage, even if the hit later fails.
+        // --- Vanilla IronGolem.doHurtTarget (Mojmap / Paper sources) ---
+        // attackAnimationTick = 10;
+        // level.broadcastEntityEvent(this, (byte)4);  // START_ATTACKING / both arms
+        // float f = attackDamage attribute;
+        // float g = (int)f > 0 ? f/2 + random.nextInt((int)f) : f;
+        // boolean bl = target.hurt(mobAttack(this), g);
+        // if (bl) {
+        //   double e = max(0, 1 - target.knockbackResistance);
+        //   target.setDeltaMovement(target.getDeltaMovement().add(0, 0.4F * e, 0));
+        //   doEnchantDamageEffects(...);
+        // }
+        // playSound(IRON_GOLEM_ATTACK);  // always
+        // return bl;
+        //
+        // Paper/Leaves: no change to this knockback formula (only collision
+        // target-reason + ironGolemsCanSpawnInAir spawn option).
         if is_golem {
             world.send_entity_status(
                 &self.living_entity.entity,
@@ -349,7 +366,7 @@ impl MobEntity {
         let base = self
             .living_entity
             .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
-        // Vanilla: damage = f/2 + random(0..floor(f)) → ~7.5–21.5 with f=15.
+        // Vanilla golem: ~7.5–21.5 when base attack is 15.
         let attack_damage = if is_golem {
             let whole = base as i32;
             if whole > 0 {
@@ -373,22 +390,23 @@ impl MobEntity {
             .await;
 
         if damaged {
-            // Vanilla IronGolem.doHurtTarget after a successful hurt:
-            //   e = max(0, 1 - knockbackResistance)
-            //   deltaMovement = deltaMovement.add(0, 0.4 * e, 0)
-            // Horizontal knockback already applied in LivingEntity.damage with
-            // resistance. Warden/golem have resistance 1.0 → no fling; players 0 → launch.
             if is_golem {
+                // Pure vertical fling only (IronGolem overrides Mob.doHurtTarget —
+                // no horizontal ATTACK_KNOCKBACK path). LivingEntity.damage skips
+                // generic horizontal KB when attacker is an iron golem.
+                // res 0 (player) → +0.4 y; res 1 (warden) → +0.
                 if let Some(target_living) = target.get_living_entity() {
                     let kb_res = target_living
                         .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
                         .clamp(0.0, 1.0);
                     let lift = 0.4 * (1.0 - kb_res);
                     if lift > 0.0 {
-                        let mut vel = target.get_entity().velocity.load();
+                        let ent = target.get_entity();
+                        let mut vel = ent.velocity.load();
                         vel.y += lift;
-                        target.get_entity().velocity.store(vel);
-                        target.get_entity().send_velocity();
+                        ent.velocity.store(vel);
+                        // ClientboundSetEntityMotionPacket
+                        ent.send_velocity();
                     }
                 }
             }
@@ -400,7 +418,7 @@ impl MobEntity {
                 .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
         }
 
-        // Vanilla always plays the golem attack sound (even if the hit failed).
+        // Vanilla always plays golem swing sound (even on a missed/blocked hit).
         if is_golem {
             world.play_sound(
                 pumpkin_data::sound::Sound::EntityIronGolemAttack,
