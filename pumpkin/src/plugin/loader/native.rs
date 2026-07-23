@@ -11,6 +11,35 @@ use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata};
 
 pub struct NativePluginLoader;
 
+/// Upper bound for plausible metadata text field lengths, in bytes.
+const MAX_METADATA_TEXT_LEN: usize = 4096;
+/// Upper bound for plausible metadata list lengths, in entries.
+const MAX_METADATA_LIST_LEN: usize = 1024;
+
+/// Best-effort check that metadata read from a plugin binary is plausible.
+///
+/// `METADATA` is plain Rust data whose layout is not stable across
+/// toolchains. If the plugin was built with a different Rust version or
+/// against a different Pumpkin build, the field lengths read here can be
+/// garbage even when the API version check passes, and cloning or logging
+/// such metadata aborts the server with an enormous allocation (see issue
+/// #2434). Only lengths and capacities are inspected here; the potentially
+/// invalid data pointers are never dereferenced.
+fn is_metadata_plausible(metadata: &PluginMetadata) -> bool {
+    let text_plausible =
+        |text: &String| text.len() <= MAX_METADATA_TEXT_LEN && text.len() <= text.capacity();
+    let list_plausible =
+        |list: &Vec<String>| list.len() <= MAX_METADATA_LIST_LEN && list.len() <= list.capacity();
+
+    !metadata.name.is_empty()
+        && text_plausible(&metadata.name)
+        && text_plausible(&metadata.version)
+        && text_plausible(&metadata.description)
+        && list_plausible(&metadata.authors)
+        && list_plausible(&metadata.dependencies)
+        && list_plausible(&metadata.permissions)
+}
+
 impl PluginLoader for NativePluginLoader {
     fn load<'a>(&'a self, path: &'a Path) -> PluginLoadFuture<'a> {
         Box::pin(async {
@@ -40,6 +69,10 @@ impl PluginLoader for NativePluginLoader {
                     .get::<*const PluginMetadata>(b"METADATA")
                     .map_err(|_| LoaderError::MetadataMissing)?
             };
+
+            if !is_metadata_plausible(metadata) {
+                return Err(LoaderError::MetadataCorrupt);
+            }
 
             // 3. Extract Plugin Factory (plugin)
             let plugin_factory = unsafe {
