@@ -5,9 +5,9 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
@@ -39,6 +39,20 @@ impl TurtleEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
+            // Flee predators that hunt turtles (esp. babies; adults still dodge).
+            for ty in [
+                &EntityType::ZOMBIE,
+                &EntityType::HUSK,
+                &EntityType::DROWNED,
+                &EntityType::ZOMBIE_VILLAGER,
+                &EntityType::FOX,
+                &EntityType::CAT,
+            ] {
+                goal_selector.add_goal(
+                    1,
+                    Box::new(AvoidEntityGoal::new(ty, 8.0, 1.2, 1.2)),
+                );
+            }
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));
             // Home/lay-egg goals TODO.

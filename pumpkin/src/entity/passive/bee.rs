@@ -9,6 +9,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
 
@@ -20,6 +21,12 @@ pub struct BeeEntity {
 impl BeeEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        {
+            let mut nav = mob_entity.navigator.lock().unwrap();
+            // Prefer air; strongly avoid water (vanilla bee water malus).
+            nav.set_pathfinding_malus(PathType::Water, 16.0);
+            nav.set_pathfinding_malus(PathType::WaterBorder, 8.0);
+        }
         let bee = Self { mob_entity };
         let mob_arc = Arc::new(bee);
         let mob_weak: Weak<dyn Mob> = {

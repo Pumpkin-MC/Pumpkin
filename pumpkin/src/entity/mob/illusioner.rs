@@ -9,7 +9,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, bow_attack::BowAttackGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, join_anger::JoinAngerGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -48,6 +48,13 @@ impl IllusionerEntity {
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Raid pack anger (vanilla HurtByTarget setAlertOthers illagers).
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::PILLAGER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::VINDICATOR));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::EVOKER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::ILLUSIONER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::RAVAGER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::WITCH));
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),

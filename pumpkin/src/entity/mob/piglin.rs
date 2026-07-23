@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
@@ -52,17 +52,18 @@ impl PiglinEntity {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::PIGLIN));
             // Adults attack players without gold armor (gold check TODO).
             target_selector.add_goal(
-                2,
+                3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
             target_selector.add_goal(
-                3,
+                4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::HOGLIN, true),
             );
             target_selector.add_goal(
-                3,
+                4,
                 ActiveTargetGoal::with_default(
                     &mob_arc.mob_entity,
                     &EntityType::WITHER_SKELETON,
@@ -70,7 +71,7 @@ impl PiglinEntity {
                 ),
             );
             target_selector.add_goal(
-                3,
+                4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
             );
         };

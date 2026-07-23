@@ -5,7 +5,7 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        active_target::ActiveTargetGoal, join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
@@ -41,6 +41,13 @@ impl RavagerEntity {
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
+            // Raid pack anger.
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::PILLAGER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::VINDICATOR));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::EVOKER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::ILLUSIONER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::RAVAGER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::WITCH));
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),

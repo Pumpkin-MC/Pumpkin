@@ -10,7 +10,7 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        melee_attack::MeleeAttackGoal, join_anger::JoinAngerGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -51,6 +51,13 @@ impl VindicatorEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
             // HurtByTargetGoal (Raider class filter TODO)
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Raid pack anger (vanilla HurtByTarget setAlertOthers illagers).
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::PILLAGER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::VINDICATOR));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::EVOKER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::ILLUSIONER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::RAVAGER));
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::WITCH));
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),

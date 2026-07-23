@@ -5,14 +5,15 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, join_anger::JoinAngerGoal, leap_at_target::LeapAtTargetGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Polar bear — neutral; revenge + hunt foxes (vanilla core).
+/// Polar bear — neutral pack; revenge + hunt foxes (cub-player aggro TODO).
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
 }
@@ -32,7 +33,8 @@ impl PolarBearEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.25, false)));
+            goal_selector.add_goal(1, Box::new(LeapAtTargetGoal::new(0.4)));
+            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.25, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
@@ -41,12 +43,21 @@ impl PolarBearEntity {
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // Cub-nearby player aggression not ported; still hunt foxes.
+            // Pack joins when another polar bear is hurt.
+            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::POLAR_BEAR));
+            // Cub-nearby player aggression not ported; still hunt foxes / fish.
             target_selector.add_goal(
-                2,
+                3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
             );
-            // Adults may also retaliate against nearby players once angered via revenge.
+            target_selector.add_goal(
+                4,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::COD, true),
+            );
+            target_selector.add_goal(
+                4,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SALMON, true),
+            );
         };
 
         mob_arc
