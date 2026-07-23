@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::Block;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::{
     BlockDirection,
     math::{block_box::BlockBox, position::BlockPos},
@@ -19,6 +20,7 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
+            template::push_structure_entity,
         },
     },
 };
@@ -46,6 +48,8 @@ impl StructureGenerator for SwampHutGenerator {
                 9,
                 BlockDirection::get_random_horizontal_direction(&mut context.random).get_axis(),
             ),
+            has_witch: false,
+            has_cat: false,
         }));
 
         Some(StructurePosition {
@@ -57,6 +61,34 @@ impl StructureGenerator for SwampHutGenerator {
 
 pub struct SwampHutPiece {
     shiftable_structure_piece: ShiftableStructurePiece,
+    has_witch: bool,
+    has_cat: bool,
+}
+
+/// Queue a living entity for later chunk spawn (structure-template entity buffer).
+fn queue_structure_mob(entity_id: &str, wx: f64, wy: f64, wz: f64) {
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("id", entity_id.to_string());
+    nbt.put_list(
+        "Pos",
+        vec![
+            NbtTag::Double(wx),
+            NbtTag::Double(wy),
+            NbtTag::Double(wz),
+        ],
+    );
+    nbt.put_list(
+        "Motion",
+        vec![
+            NbtTag::Double(0.0),
+            NbtTag::Double(0.0),
+            NbtTag::Double(0.0),
+        ],
+    );
+    // Chunk coords from block position (floor toward -inf for negatives).
+    let cx = (wx.floor() as i32) >> 4;
+    let cz = (wz.floor() as i32) >> 4;
+    push_structure_entity(cx, cz, nbt);
 }
 
 impl StructurePieceBase for SwampHutPiece {
@@ -231,14 +263,32 @@ impl StructurePieceBase for SwampHutPiece {
             }
         }
 
-        // if !self.has_witch {
-        //     let world_coords = p.get_world_coords(2, 2, 5);
-        //     if box_limit.contains(world_coords.0, world_coords.1, world_coords.2) {
-        //         self.has_witch = true;
-        //         // TODO: chunk.add_entity(Witch, world_coords)
-        //     }
-        // }
-        // TODO: self.spawn_cat(chunk, &box_limit);
+        // Vanilla SwampHutPiece: witch at (2, 2, 5), cat at (2, 2, 5) sit offset —
+        // place witch on the cauldron side and cat near the entrance.
+        if !self.has_witch {
+            let pos = p.offset_pos(2, 2, 5);
+            if box_limit.contains(pos.x, pos.y, pos.z) {
+                self.has_witch = true;
+                queue_structure_mob(
+                    "minecraft:witch",
+                    f64::from(pos.x) + 0.5,
+                    f64::from(pos.y),
+                    f64::from(pos.z) + 0.5,
+                );
+            }
+        }
+        if !self.has_cat {
+            let pos = p.offset_pos(2, 2, 2);
+            if box_limit.contains(pos.x, pos.y, pos.z) {
+                self.has_cat = true;
+                queue_structure_mob(
+                    "minecraft:cat",
+                    f64::from(pos.x) + 0.5,
+                    f64::from(pos.y),
+                    f64::from(pos.z) + 0.5,
+                );
+            }
+        }
     }
     fn get_structure_piece(&self) -> &super::StructurePiece {
         &self.shiftable_structure_piece.piece
