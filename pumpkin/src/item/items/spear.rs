@@ -243,8 +243,8 @@ impl SpearItem {
                 if recent.contains_key(&target_entity.entity_id) {
                     continue;
                 }
-                recent.insert(target_entity.entity_id, current_tick);
-            }
+                recent.insert(target_entity.entity_id, current_tick)
+            };
 
             let target_speed = look.dot(&(target_entity.movement.load() * 20.0));
             let relative_speed = (attacker_speed - target_speed).max(0.0);
