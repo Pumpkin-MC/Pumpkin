@@ -50,7 +50,7 @@ use pumpkin_protocol::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
-    io::{BufReader, BufWriter},
+    io::BufReader,
     net::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -107,7 +107,7 @@ pub struct JavaClient {
     /// A high-priority queue of serialized packets to send to the network.
     outgoing_packet_priority_recv: Option<Receiver<OutgoingPacket>>,
     /// The packet encoder for outgoing packets.
-    network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
+    network_writer: Arc<Mutex<TCPNetworkEncoder<OwnedWriteHalf>>>,
     /// The packet decoder for incoming packets.
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
     /// Keep Alive:
@@ -168,7 +168,7 @@ impl JavaClient {
             outgoing_packet_priority_send: priority_send,
             outgoing_packet_priority_recv: Some(priority_recv),
             version: AtomicCell::new(CURRENT_MC_VERSION),
-            network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
+            network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(write))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
             player: Mutex::new(None),

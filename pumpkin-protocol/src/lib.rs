@@ -206,29 +206,37 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
     ) -> Poll<Result<usize, Error>> {
         let ref_self = self.get_mut();
 
-        match ref_self.poll_drain_pending(cx) {
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(Ok(())) => {}
-            Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
-        }
-
         if buf.is_empty() {
             return Poll::Ready(Ok(0));
         }
 
-        let plaintext_len = buf.len().min(STREAM_ENCRYPTION_BUFFER_SIZE);
-        ref_self.pending_ciphertext.resize(plaintext_len, 0);
+        if ref_self.pending_offset > 0
+            || ref_self.pending_ciphertext.len() == STREAM_ENCRYPTION_BUFFER_SIZE
+        {
+            match ref_self.poll_drain_pending(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Ok(())) => {}
+                Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+            }
+        }
+
+        let available = STREAM_ENCRYPTION_BUFFER_SIZE - ref_self.pending_ciphertext.len();
+        let plaintext_len = buf.len().min(available);
+        let ciphertext_start = ref_self.pending_ciphertext.len();
+        ref_self
+            .pending_ciphertext
+            .resize(ciphertext_start + plaintext_len, 0);
         ref_self
             .cipher
-            .encrypt_b2b(&buf[..plaintext_len], &mut ref_self.pending_ciphertext)
+            .encrypt_b2b(
+                &buf[..plaintext_len],
+                &mut ref_self.pending_ciphertext[ciphertext_start..],
+            )
             .map_err(|_| Error::other("Encryption failed"))?;
 
-        // The ciphertext is now owned by this adapter, so the caller can reuse the plaintext
-        // buffer even if the underlying writer accepts only part of the encrypted output.
-        match ref_self.poll_drain_pending(cx) {
-            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
-            Poll::Pending | Poll::Ready(Ok(())) => Poll::Ready(Ok(plaintext_len)),
-        }
+        // The ciphertext is now owned by this adapter. Keep accumulating writes until the
+        // buffer is full or the caller explicitly flushes.
+        Poll::Ready(Ok(plaintext_len))
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
@@ -683,6 +691,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stream_encryptor_coalesces_small_writes_until_flush() {
+        let key = [0x31u8; 16];
+        let first = b"packet length";
+        let second = b"packet payload";
+        let expected = encrypt_reference([first.as_slice(), second.as_slice()].concat(), &key);
+        let record = Arc::new(Mutex::new(WriteRecord::default()));
+        let writer = TestWriter::new(record.clone(), usize::MAX, false, false);
+        let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
+        let mut encryptor = StreamEncryptor::new(cipher, writer);
+
+        encryptor.write_all(first).await.unwrap();
+        encryptor.write_all(second).await.unwrap();
+        assert_eq!(record.lock().unwrap().poll_write_calls, 0);
+
+        encryptor.flush().await.unwrap();
+
+        let record = record.lock().unwrap();
+        assert_eq!(record.bytes, expected);
+        assert_eq!(record.poll_write_calls, 1);
+        assert_eq!(record.flush_calls, 1);
+    }
+
+    #[tokio::test]
     async fn stream_encryptor_reports_write_zero() {
         let key = [0x42u8; 16];
         let record = Arc::new(Mutex::new(WriteRecord::default()));
@@ -691,7 +722,8 @@ mod tests {
         let cipher = Aes128Cfb8Enc::new_from_slices(&key, &key).unwrap();
         let mut encryptor = StreamEncryptor::new(cipher, writer);
 
-        let error = encryptor.write(b"cannot write").await.unwrap_err();
+        encryptor.write_all(b"cannot write").await.unwrap();
+        let error = encryptor.flush().await.unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
     }
 }

@@ -2,7 +2,7 @@ use aes::cipher::KeyIvInit;
 use bytes::Bytes;
 use flate2::{Compress, Compression, FlushCompress, Status};
 use thiserror::Error;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 
 use crate::{
     Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE,
@@ -13,14 +13,17 @@ use crate::{
 
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
-    None(W),
+    None(BufWriter<W>),
 }
 
 impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
     #[must_use]
     pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
         match self {
-            Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
+            Self::None(stream) => {
+                debug_assert!(stream.buffer().is_empty());
+                Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream.into_inner())))
+            }
             Self::Encrypt(_) => self,
         }
     }
@@ -91,9 +94,9 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
-    pub const fn new(writer: W) -> Self {
+    pub fn new(writer: W) -> Self {
         Self {
-            writer: Some(EncryptionWriter::None(writer)),
+            writer: Some(EncryptionWriter::None(BufWriter::new(writer))),
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
@@ -112,6 +115,14 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {
             return Err(PacketEncodeError::Message(
                 "Encryption already enabled".into(),
+            ));
+        }
+        if matches!(
+            self.writer,
+            Some(EncryptionWriter::None(ref writer)) if !writer.buffer().is_empty()
+        ) {
+            return Err(PacketEncodeError::Message(
+                "Cannot enable encryption while unencrypted data is buffered".into(),
             ));
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
@@ -427,6 +438,7 @@ mod tests {
             .write_packet(packet_buf.into())
             .await
             .map_err(|e| e.to_string())?;
+        encoder.flush().await.map_err(|e| e.to_string())?;
 
         Ok(buf.into_boxed_slice())
     }
@@ -557,6 +569,22 @@ mod tests {
         packet.write_packet_data(&mut expected_payload, &JavaMinecraftVersion::V_1_21_11)?;
         assert_eq!(buffer, expected_payload);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn enabling_encryption_rejects_buffered_unencrypted_data() {
+        let mut output = Vec::new();
+        let mut encoder = TCPNetworkEncoder::new(&mut output);
+        encoder
+            .write_packet(Bytes::from_static(b"unencrypted"))
+            .await
+            .unwrap();
+
+        let key = [0x2Au8; 16];
+        assert!(encoder.set_encryption(&key).is_err());
+
+        encoder.flush().await.unwrap();
+        encoder.set_encryption(&key).unwrap();
     }
 
     /// Test encoding with both compression and encryption

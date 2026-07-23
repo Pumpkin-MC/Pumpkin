@@ -24,7 +24,9 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for CountingWriter<W> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, Error>> {
-        self.writes.fetch_add(1, Ordering::Relaxed);
+        if !buf.is_empty() {
+            self.writes.fetch_add(1, Ordering::Relaxed);
+        }
         Pin::new(&mut self.writer).poll_write(cx, buf)
     }
 
@@ -80,28 +82,32 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for BytewiseEncryptor<W> {
     }
 }
 
-async fn encrypt_buffered(payload: &[u8]) -> usize {
+async fn encrypt_buffered(payload: &[u8], fragment_size: usize) -> usize {
     let writes = Arc::new(AtomicUsize::new(0));
     let cipher = cfb8::Encryptor::<aes::Aes128>::new_from_slices(&KEY, &KEY).unwrap();
     let sink = CountingWriter {
-        writer: BufWriter::new(tokio::io::sink()),
+        writer: tokio::io::sink(),
         writes: writes.clone(),
     };
     let mut writer = StreamEncryptor::new(cipher, sink);
-    writer.write_all(payload).await.unwrap();
+    for fragment in payload.chunks(fragment_size) {
+        writer.write_all(fragment).await.unwrap();
+    }
     writer.shutdown().await.unwrap();
     writes.load(Ordering::Relaxed)
 }
 
-async fn encrypt_bytewise(payload: &[u8]) -> usize {
+async fn encrypt_bytewise(payload: &[u8], fragment_size: usize) -> usize {
     let writes = Arc::new(AtomicUsize::new(0));
     let cipher = cfb8::Encryptor::<aes::Aes128>::new_from_slices(&KEY, &KEY).unwrap();
-    let sink = CountingWriter {
-        writer: BufWriter::new(tokio::io::sink()),
+    let sink = BufWriter::new(CountingWriter {
+        writer: tokio::io::sink(),
         writes: writes.clone(),
-    };
+    });
     let mut writer = BytewiseEncryptor::new(cipher, sink);
-    writer.write_all(payload).await.unwrap();
+    for fragment in payload.chunks(fragment_size) {
+        writer.write_all(fragment).await.unwrap();
+    }
     writer.shutdown().await.unwrap();
     writes.load(Ordering::Relaxed)
 }
@@ -114,24 +120,55 @@ fn bench_stream_encryption(c: &mut Criterion) {
         let payload: Vec<u8> = (0..size).map(|index| (index % 251) as u8).collect();
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(
-            BenchmarkId::new("bytewise", size),
+            BenchmarkId::new("old_bytewise_bufwriter", size),
             &payload,
             |b, payload| {
                 b.to_async(&runtime).iter(|| async {
-                    assert!(black_box(encrypt_bytewise(black_box(payload)).await) >= payload.len());
+                    let writes =
+                        black_box(encrypt_bytewise(black_box(payload), payload.len()).await);
+                    let expected = payload.len().div_ceil(8 * 1024);
+                    assert!((expected..=expected + 1).contains(&writes));
                 });
             },
         );
         group.bench_with_input(
-            BenchmarkId::new("buffered", size),
+            BenchmarkId::new("buffered_direct", size),
             &payload,
             |b, payload| {
                 b.to_async(&runtime).iter(|| async {
-                    // BufWriter can split each 16 KiB ciphertext buffer into two writes and
-                    // flush one final partial buffer during shutdown.
-                    assert!(
-                        black_box(encrypt_buffered(black_box(payload)).await)
-                            <= payload.len().div_ceil(16 * 1024) * 2 + 1
+                    let writes =
+                        black_box(encrypt_buffered(black_box(payload), payload.len()).await);
+                    let expected = payload.len().div_ceil(16 * 1024);
+                    assert!((expected..=expected + 1).contains(&writes));
+                });
+            },
+        );
+    }
+    group.finish();
+
+    let payload: Vec<u8> = (0..64 * 1024).map(|index| (index % 251) as u8).collect();
+    let mut group = c.benchmark_group("stream_encryption_fragmented_64k");
+    group.throughput(Throughput::Bytes(payload.len() as u64));
+
+    for fragment_size in [64, 1024, 16 * 1024] {
+        group.bench_with_input(
+            BenchmarkId::new("old_bytewise_bufwriter", fragment_size),
+            &fragment_size,
+            |b, &fragment_size| {
+                b.to_async(&runtime).iter(|| async {
+                    black_box(
+                        encrypt_bytewise(black_box(&payload), black_box(fragment_size)).await,
+                    );
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("buffered_direct", fragment_size),
+            &fragment_size,
+            |b, &fragment_size| {
+                b.to_async(&runtime).iter(|| async {
+                    black_box(
+                        encrypt_buffered(black_box(&payload), black_box(fragment_size)).await,
                     );
                 });
             },
