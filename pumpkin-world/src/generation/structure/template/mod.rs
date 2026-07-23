@@ -30,23 +30,30 @@ pub mod processor;
 mod structure_template;
 mod template_piece;
 
+use pumpkin_data::BlockStateId;
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
-use crate::ProtoChunk;
-
 pub use block_state_resolver::BlockStateResolver;
 pub use cache::{
-    TemplateCache, get_pool_elements, get_processor_list_json, get_template,
+    TemplateCache, all_template_names, get_pool_elements, get_processor_list_json, get_template,
     get_template_pool_json, global_cache,
 };
 pub use processor::StructureProcessor;
-pub use pumpkin_data::{Mirror as BlockMirror, Rotation as BlockRotation};
+pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
 pub use template_piece::TemplatePiece;
+
+/// Abstraction over block placement, implemented by both [`ProtoChunk`] (worldgen) and
+/// [`WorldBlockPlacer`] (live `/place template` command).
+pub trait BlockPlacer {
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
+    fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState);
+    fn add_block_entity(&mut self, nbt: NbtCompound);
+}
 
 /// Places a template at a world origin with an un-rotated XZ offset.
 ///
@@ -60,7 +67,7 @@ pub use template_piece::TemplatePiece;
 /// `offset` is the un-rotated XZ offset from origin (`x_offset`, `z_offset`) - rotation is applied automatically.
 #[allow(clippy::too_many_arguments)]
 pub fn place_template(
-    chunk: &mut ProtoChunk,
+    placer: &mut impl BlockPlacer,
     template: &StructureTemplate,
     origin: Vector3<i32>,
     offset: (i32, i32),
@@ -131,7 +138,7 @@ pub fn place_template(
         let world_pos = Vector3::new(wx, wy, wz);
 
         if apply_waterlogging
-            && chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
+            && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
             && let Some((_, waterlogged)) = placed_entry
                 .properties
                 .iter_mut()
@@ -148,7 +155,7 @@ pub fn place_template(
         // Apply processors
         let mut should_place = true;
         for processor in processors {
-            let Some(processed_state) = processor.process(chunk, world_pos, state) else {
+            let Some(processed_state) = processor.process(placer, world_pos, state) else {
                 should_place = false;
                 break;
             };
@@ -158,7 +165,7 @@ pub fn place_template(
             continue;
         }
 
-        chunk.set_block_state(wx, wy, wz, state);
+        placer.set_block_state(&Vector3::new(wx, wy, wz), state);
 
         // Create block entities for interactive blocks (furnaces, chests, etc.)
         let block_entity_id = get_block_entity_id(&placed_entry.name);
@@ -190,7 +197,7 @@ pub fn place_template(
                 placed_nbt.put_long("LootTableSeed", random.next_i64());
             }
 
-            chunk.add_block_entity(placed_nbt);
+            placer.add_block_entity(placed_nbt);
         }
     }
 }

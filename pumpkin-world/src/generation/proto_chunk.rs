@@ -57,6 +57,7 @@ use crate::{
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::generation::structure::template::BlockPlacer;
 use crate::tick::{ScheduledTick, TickPriority};
 
 enum ActiveSupplier {
@@ -1496,5 +1497,19 @@ impl BlockAccessor for ProtoChunk {
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
         BlockState::from_id_with_block(id)
+    }
+}
+
+impl BlockPlacer for ProtoChunk {
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
+        self.get_block_state(pos)
+    }
+
+    fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState) {
+        ProtoChunk::set_block_state(self, pos.x, pos.y, pos.z, state);
+    }
+
+    fn add_block_entity(&mut self, nbt: NbtCompound) {
+        self.add_block_entity(nbt);
     }
 }

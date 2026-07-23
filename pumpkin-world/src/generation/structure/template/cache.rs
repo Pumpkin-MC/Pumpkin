@@ -143,3 +143,12 @@ pub fn global_cache() -> &'static TemplateCache {
 pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
     global_cache().get(name)
 }
+
+/// Returns a list of all available template names that can be loaded.
+///
+/// These are derived from the embedded structure files at compile time.
+/// Useful for tab-completion in commands.
+#[must_use]
+pub fn all_template_names() -> &'static [&'static str] {
+    _generated_all_template_names()
+}
