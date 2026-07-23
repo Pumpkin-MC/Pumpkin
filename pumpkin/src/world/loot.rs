@@ -385,8 +385,17 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
                     })
             }
             Self::Item(item_entry) => {
-                let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
-                vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
+                let key = item_entry
+                    .name
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(item_entry.name);
+                Item::from_registry_key(key).map_or_else(
+                    || {
+                        tracing::warn!("Unknown item {:?} in loot table entry", item_entry.name);
+                        Vec::new()
+                    },
+                    |item| vec![ItemStack::new(1, item)],
+                )
             }
             Self::Tag(tag) => {
                 let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
