@@ -2731,6 +2731,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "cfb8",
+ "criterion",
  "ctr",
  "flate2",
  "hybrid-array",
