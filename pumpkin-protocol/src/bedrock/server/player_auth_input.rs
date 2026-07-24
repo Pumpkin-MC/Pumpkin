@@ -69,7 +69,21 @@ impl PacketRead for SPlayerAuthInput {
 
         // 3. Block Actions
         let block_actions = if input_data.get(InputData::PerformBlockActions as usize) {
-            let count = VarInt::read(reader)?.0 as usize;
+            const MAX_BLOCK_ACTIONS: usize = 64;
+            let count_i = VarInt::read(reader)?.0;
+            if count_i < 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "negative block action count",
+                ));
+            }
+            let count = count_i as usize;
+            if count > MAX_BLOCK_ACTIONS {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("block action count {count_i} exceeds limit {MAX_BLOCK_ACTIONS}"),
+                ));
+            }
             let mut actions = Vec::with_capacity(count);
             for _ in 0..count {
                 actions.push(PlayerBlockAction::read(reader)?);
