@@ -420,7 +420,7 @@ impl Level {
 
         info!("Flushing chunk data to disk for {}...", world_id);
         if timeout(
-            Duration::from_secs(60),
+            Duration::from_mins(1),
             self.chunk_saver.block_and_await_ongoing_tasks(),
         )
         .await

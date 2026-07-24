@@ -77,6 +77,34 @@ pub fn place_template(
     let world_x = origin.x + rotated_ox;
     let world_z = origin.z + rotated_oz;
 
+    place_template_blocks(
+        chunk,
+        template,
+        origin,
+        world_x,
+        world_z,
+        rotation,
+        skip_air,
+        apply_waterlogging,
+        processors,
+        chunk_box,
+    );
+    place_template_entities(template, origin, world_x, world_z, rotation, chunk_box);
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn place_template_blocks(
+    chunk: &mut ProtoChunk,
+    template: &StructureTemplate,
+    origin: Vector3<i32>,
+    world_x: i32,
+    world_z: i32,
+    rotation: Rotation,
+    skip_air: bool,
+    apply_waterlogging: bool,
+    processors: &[StructureProcessor],
+    chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
+) {
     for block in &template.blocks {
         let palette_entry = &template.palette[block.state as usize];
 
@@ -162,41 +190,60 @@ pub fn place_template(
         }
 
         chunk.set_block_state(wx, wy, wz, state);
+        place_block_entity(chunk, &placed_entry, block_entity_nbt.as_ref(), wx, wy, wz);
+    }
+}
 
-        // Create block entities for interactive blocks (furnaces, chests, etc.)
-        let block_entity_id = get_block_entity_id(&placed_entry.name);
-        if block_entity_nbt.is_some() || block_entity_id.is_some() {
-            let block_entity_id = block_entity_id.unwrap_or(&placed_entry.name);
-            let mut placed_nbt = NbtCompound::new();
+fn place_block_entity(
+    chunk: &mut ProtoChunk,
+    placed_entry: &PaletteEntry,
+    block_entity_nbt: Option<&NbtCompound>,
+    wx: i32,
+    wy: i32,
+    wz: i32,
+) {
+    let block_entity_id = get_block_entity_id(&placed_entry.name);
+    if block_entity_nbt.is_none() && block_entity_id.is_none() {
+        return;
+    }
+    let block_entity_id = block_entity_id.unwrap_or(&placed_entry.name);
+    let mut placed_nbt = NbtCompound::new();
 
-            placed_nbt.put_string("id", block_entity_id.to_string());
-            placed_nbt.put_int("x", wx);
-            placed_nbt.put_int("y", wy);
-            placed_nbt.put_int("z", wz);
+    placed_nbt.put_string("id", block_entity_id.to_string());
+    placed_nbt.put_int("x", wx);
+    placed_nbt.put_int("y", wy);
+    placed_nbt.put_int("z", wz);
 
-            if let Some(template_nbt) = &block_entity_nbt {
-                for (key, value) in &template_nbt.child_tags {
-                    if key.as_ref() != "x"
-                        && key.as_ref() != "y"
-                        && key.as_ref() != "z"
-                        && key.as_ref() != "id"
-                    {
-                        placed_nbt.child_tags.insert(key.clone(), value.clone());
-                    }
-                }
-            }
-
-            if placed_nbt.get_string("LootTable").is_some()
-                && placed_nbt.get_long("LootTableSeed").is_none()
+    if let Some(template_nbt) = block_entity_nbt {
+        for (key, value) in &template_nbt.child_tags {
+            if key.as_ref() != "x"
+                && key.as_ref() != "y"
+                && key.as_ref() != "z"
+                && key.as_ref() != "id"
             {
-                let mut random = LegacyRand::from_seed(hash_block_pos(wx, wy, wz) as u64);
-                placed_nbt.put_long("LootTableSeed", random.next_i64());
+                placed_nbt.child_tags.insert(key.clone(), value.clone());
             }
-
-            chunk.add_block_entity(placed_nbt);
         }
     }
 
+    if placed_nbt.get_string("LootTable").is_some()
+        && placed_nbt.get_long("LootTableSeed").is_none()
+    {
+        let mut random = LegacyRand::from_seed(hash_block_pos(wx, wy, wz) as u64);
+        placed_nbt.put_long("LootTableSeed", random.next_i64());
+    }
+
+    chunk.add_block_entity(placed_nbt);
+}
+
+fn place_template_entities(
+    template: &StructureTemplate,
+    origin: Vector3<i32>,
+    world_x: i32,
+    world_z: i32,
+    rotation: Rotation,
+    chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
+) {
     // Spawn structure-template entities (villagers, iron golems, animals, …).
     // Vanilla places these when the structure piece is applied to the chunk.
     for entity in &template.entities {
