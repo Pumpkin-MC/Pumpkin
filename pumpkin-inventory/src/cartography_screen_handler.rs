@@ -43,7 +43,7 @@ impl CartographyScreenHandler {
             0,
         )));
         handler.add_slot(Arc::new(NormalSlot::new(
-            input_inventory.clone() as Arc<dyn Inventory>,
+            input_inventory as Arc<dyn Inventory>,
             1,
         )));
         handler.add_slot(Arc::new(CartographyOutputSlot::new(
