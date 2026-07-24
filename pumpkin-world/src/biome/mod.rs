@@ -36,8 +36,8 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
-        let biome =
-            LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result));
+        let biome = LAST_RESULT_NODE
+            .with_borrow_mut(|last_result| self.source.get(&point_list, last_result));
         // Overworld only: slightly reduce taiga-family prevalence (~5%) so
         // temperate forests/plains appear more often when exploring.
         // Disabled under `cfg(test)` so vanilla multi-noise golden tests stay exact.
