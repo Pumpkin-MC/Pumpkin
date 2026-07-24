@@ -245,9 +245,7 @@ impl CollectingNeighborUpdater {
         } else if self.count - 1 == self.max_chained {
             error!(
                 "Too many chained neighbor updates. Skipping the rest. First skipped position: {}, {}, {}",
-                pos_for_log.0.x,
-                pos_for_log.0.y,
-                pos_for_log.0.z
+                pos_for_log.0.x, pos_for_log.0.y, pos_for_log.0.z
             );
         }
         // true → caller must drive run_updates (we are the top-level entry)
@@ -497,8 +495,7 @@ pub fn initial_orientation_experiments(
     up: Option<BlockDirection>,
     rng_index: usize,
 ) -> NeighborOrientation {
-    let mut o = RedstoneOrientation::from_index(rng_index)
-        .with_side_bias(SideBias::Left);
+    let mut o = RedstoneOrientation::from_index(rng_index).with_side_bias(SideBias::Left);
     if let Some(u) = up {
         o = o.with_up(u);
     }

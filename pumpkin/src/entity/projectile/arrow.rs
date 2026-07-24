@@ -353,10 +353,7 @@ impl EntityBase for ArrowEntity {
 
             match hit {
                 ProjectileHit::Block {
-                    pos,
-                    face,
-                    hit_pos,
-                    ..
+                    pos, face, hit_pos, ..
                 } => {
                     // Arrow hit a block - stick into it
                     self.in_ground.store(true, Ordering::Relaxed);

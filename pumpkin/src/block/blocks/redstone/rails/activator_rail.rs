@@ -287,5 +287,4 @@ impl ActivatorRailBlock {
             }
         }
     }
-
 }

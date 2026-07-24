@@ -314,11 +314,7 @@ fn log_performance_backends(perf: &PerformanceConfig) {
         _ => {}
     }
 
-    let active_allocator = if built_mimalloc {
-        "mimalloc"
-    } else {
-        "system"
-    };
+    let active_allocator = if built_mimalloc { "mimalloc" } else { "system" };
     let active_compression = if built_zlib_rs {
         "zlib-rs"
     } else {

@@ -31,11 +31,7 @@ use crate::world::chunker::is_within_view_distance;
 use crate::world::{chunker::get_view_distance, loot::LootContextParameters};
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
-    block::{
-        self,
-        registry::BlockRegistry,
-        {OnScheduledTickArgs},
-    },
+    block::{self, OnScheduledTickArgs, registry::BlockRegistry},
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},
     error::PumpkinError,

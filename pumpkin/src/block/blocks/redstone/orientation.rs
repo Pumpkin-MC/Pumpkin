@@ -100,10 +100,7 @@ fn generate_context(
     lookup[idx] = Some(self_o);
 
     for bias in SideBias::all() {
-        let child = generate_context(
-            make_orientation(self_o.up, self_o.front, bias),
-            lookup,
-        );
+        let child = generate_context(make_orientation(self_o.up, self_o.front, bias), lookup);
         self_o.with_side_bias[bias.ordinal()] = child.index;
     }
 
@@ -115,10 +112,7 @@ fn generate_context(
         if front == self_o.up.opposite() {
             up = self_o.front;
         }
-        let child = generate_context(
-            make_orientation(up, front, self_o.side_bias),
-            lookup,
-        );
+        let child = generate_context(make_orientation(up, front, self_o.side_bias), lookup);
         self_o.with_front[direction_ordinal(front)] = child.index;
     }
 
@@ -130,10 +124,7 @@ fn generate_context(
         if up == self_o.front.opposite() {
             front = self_o.up;
         }
-        let child = generate_context(
-            make_orientation(up, front, self_o.side_bias),
-            lookup,
-        );
+        let child = generate_context(make_orientation(up, front, self_o.side_bias), lookup);
         self_o.with_up[direction_ordinal(up)] = child.index;
     }
 
@@ -290,11 +281,7 @@ fn nearest_direction(x: i32, y: i32, z: i32) -> BlockDirection {
 /// (Rust `+` binds tighter than `<<`, matching the intended 48-slot packing).
 fn generate_index(up: BlockDirection, front: BlockDirection, side_bias: SideBias) -> usize {
     let front_axis_key = if up.to_axis() == Axis::Y {
-        if front.to_axis() == Axis::X {
-            1
-        } else {
-            0
-        }
+        if front.to_axis() == Axis::X { 1 } else { 0 }
     } else if front.to_axis() == Axis::Y {
         1
     } else {
@@ -348,10 +335,7 @@ mod tests {
                     assert_eq!(o.get_up(), up);
                     assert_eq!(o.get_front(), front);
                     assert_eq!(o.get_side_bias(), bias);
-                    assert_eq!(
-                        o.get_index() as usize,
-                        generate_index(up, front, bias)
-                    );
+                    assert_eq!(o.get_index() as usize, generate_index(up, front, bias));
                 }
             }
         }

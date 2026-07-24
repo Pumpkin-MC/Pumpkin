@@ -9,9 +9,9 @@
 
 use std::io::{Read, Write};
 
+use flate2::Compression;
 use flate2::read::{DeflateDecoder, ZlibDecoder};
 use flate2::write::{DeflateEncoder, ZlibEncoder};
-use flate2::Compression;
 
 fn zlib_roundtrip(data: &[u8], level: Compression) {
     let mut enc = ZlibEncoder::new(Vec::new(), level);
