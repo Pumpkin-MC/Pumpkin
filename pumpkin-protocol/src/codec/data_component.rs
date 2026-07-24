@@ -11,9 +11,9 @@ use pumpkin_data::data_component_impl::{
     DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl,
     FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
     IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
-    MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
-    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
-    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
+    MooshroomVariantImpl, OminousBottleAmplifierImpl, PaintingVariantImpl, ParrotVariantImpl,
+    PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl,
+    SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
     TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
     UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
     WolfVariantImpl, ZombieNautilusVariantImpl, get,
@@ -777,6 +777,9 @@ pub fn deserialize(
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::OminousBottleAmplifier => {
+            Ok(OminousBottleAmplifierImpl::deserialize(seq)?.to_dyn())
+        }
         _ => Err(ReadingError::Message(format!("{id:?} (TODO)"))),
     }
 }
@@ -802,10 +805,25 @@ pub fn serialize(
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
+        DataComponent::OminousBottleAmplifier => {
+            get::<OminousBottleAmplifierImpl>(value).serialize(seq)
+        }
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
             id.to_name()
         ))),
+    }
+}
+
+impl DataComponentCodec<Self> for OminousBottleAmplifierImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        // Vanilla: varint amplifier (0-4)
+        seq.write_var_int(&VarInt::from(self.amplifier))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let amplifier = seq.get_var_int()?.0;
+        Ok(Self { amplifier })
     }
 }
 

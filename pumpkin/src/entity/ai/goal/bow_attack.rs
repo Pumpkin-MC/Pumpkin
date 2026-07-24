@@ -91,7 +91,12 @@ impl BowAttackGoal {
         let mut eq = living.entity_equipment.lock().await;
         let hand = eq.get(&EquipmentSlot::MAIN_HAND);
         let current = hand.lock().await.clone();
-        if !current.is_empty() && current.item.id == Item::BOW.id {
+        // Keep an already-equipped ranged weapon. Pillagers use this goal as a
+        // stand-in for vanilla RangedCrossbowAttackGoal and must keep their
+        // crossbow — do not replace it with a bow.
+        if !current.is_empty()
+            && (current.item.id == Item::BOW.id || current.item.id == Item::CROSSBOW.id)
+        {
             return current;
         }
         // Summon / reload path sometimes skips equip; force a bow so clients render it
