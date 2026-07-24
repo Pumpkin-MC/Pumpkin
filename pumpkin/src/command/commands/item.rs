@@ -47,7 +47,7 @@ impl CommandExecutor for BlockReplaceExecutor {
                 CommandSender::Console
                 | CommandSender::Rcon(_)
                 | CommandSender::Dummy
-                | CommandSender::Entity(_) => {
+                | CommandSender::Entity(..) => {
                     let guard = server.worlds.load();
                     guard
                         .first()

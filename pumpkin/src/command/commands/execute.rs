@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::command::CommandSender;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
@@ -64,8 +65,9 @@ fn execute_as_modifier<'a>(
             let display_name = target.get_display_name().await;
             let name = target.get_name().get_text();
             source.entity = Some(target.clone());
-            // Keep the original output sender so the nested command retains the
-            // invoker's permissions (including explicit permission grants).
+            source.output = CommandSender::Entity(name.clone(), Box::new(source.output.clone()));
+            // The entity sender presents the target's identity while delegating
+            // permission checks to the original invoker.
             // TODO: Teach fallback commands to use CommandSource world/position
             // context so `execute as/at/positioned` applies to them as well.
             source.name = name;

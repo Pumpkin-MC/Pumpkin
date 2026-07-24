@@ -81,9 +81,9 @@ pub enum CommandSender {
     /// world context it exists in for coordinate-relative execution (e.g., `~ ~ ~`).
     CommandBlock(Arc<CommandBlockEntity>, Arc<World>),
     /// An entity executing a command, e.g. via `/execute as @e`.
-    /// Stores the entity's display name for use in command output
-    /// (e.g. the [`say`] command broadcasts the sender's name).
-    Entity(String),
+    /// Stores the entity's display name for command output and the original
+    /// sender whose permissions should be used.
+    Entity(String, Box<CommandSender>),
     /// Nothingness. Anything sent to this sender is void.
     /// Has the same permissions as that of `CommandBlock`.
     Dummy,
@@ -99,7 +99,7 @@ impl fmt::Display for CommandSender {
                 Self::Rcon(_) => "Rcon",
                 Self::Player(p) => &p.gameprofile.name,
                 Self::CommandBlock(..) => "@",
-                Self::Entity(name) => name.as_str(),
+                Self::Entity(name, _) => name.as_str(),
                 Self::Dummy => "",
             }
         )
@@ -110,7 +110,7 @@ impl CommandSender {
     pub async fn send_message(&self, text: TextComponent) {
         match self {
             #[allow(clippy::print_stdout)]
-            Self::Console | Self::Entity(_) => println!("{}", text.to_pretty_console()),
+            Self::Console | Self::Entity(..) => println!("{}", text.to_pretty_console()),
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {
@@ -158,7 +158,8 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => PermissionLvl::Four,
             Self::Player(p) => p.permission_lvl.load(),
-            Self::CommandBlock(..) | Self::Dummy | Self::Entity(_) => PermissionLvl::Two,
+            Self::Entity(_, permission_source) => permission_source.permission_lvl(),
+            Self::CommandBlock(..) | Self::Dummy => PermissionLvl::Two,
         }
     }
 
@@ -167,7 +168,8 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true,
             Self::Player(p) => p.permission_lvl.load().ge(&lvl),
-            Self::CommandBlock(..) | Self::Dummy | Self::Entity(_) => PermissionLvl::Two >= lvl,
+            Self::Entity(_, permission_source) => permission_source.has_permission_lvl(lvl),
+            Self::CommandBlock(..) | Self::Dummy => PermissionLvl::Two >= lvl,
         }
     }
 
@@ -176,7 +178,10 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
             Self::Player(p) => p.has_permission(server, node).await,
-            Self::CommandBlock(..) | Self::Dummy | Self::Entity(_) => {
+            Self::Entity(_, permission_source) => {
+                Box::pin(permission_source.has_permission(server, node)).await
+            }
+            Self::CommandBlock(..) | Self::Dummy => {
                 let perm_reg = server.permission_registry.read().await;
                 let Some(p) = perm_reg.get_permission(node) else {
                     return false;
@@ -193,7 +198,7 @@ impl CommandSender {
     #[must_use]
     pub fn position(&self) -> Option<Vector3<f64>> {
         match self {
-            Self::Console | Self::Rcon(..) | Self::Dummy | Self::Entity(_) => None,
+            Self::Console | Self::Rcon(..) | Self::Dummy | Self::Entity(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.pos.load()),
             Self::CommandBlock(c, _) => Some(c.get_position().to_centered_f64()),
         }
@@ -202,7 +207,7 @@ impl CommandSender {
     #[must_use]
     pub fn rotation(&self) -> Option<(f32, f32)> {
         match self {
-            Self::Console | Self::Rcon(..) | Self::Dummy | Self::Entity(_) => None,
+            Self::Console | Self::Rcon(..) | Self::Dummy | Self::Entity(..) => None,
             Self::Player(player) => Some(player.rotation()),
             Self::CommandBlock(command_block, world) => {
                 let pos = command_block.get_position();
@@ -229,7 +234,7 @@ impl CommandSender {
     pub fn world(&self) -> Option<Arc<World>> {
         match self {
             // TODO: maybe return first world when console
-            Self::Console | Self::Rcon(..) | Self::Dummy | Self::Entity(_) => None,
+            Self::Console | Self::Rcon(..) | Self::Dummy | Self::Entity(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
@@ -242,7 +247,7 @@ impl CommandSender {
             | Self::Console
             | Self::Rcon(..)
             | Self::Dummy
-            | Self::Entity(_) => Locale::EnUs, // Default locale for console and RCON
+            | Self::Entity(..) => Locale::EnUs, // Default locale for console and RCON
             Self::Player(player) => {
                 Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
             }
@@ -264,7 +269,7 @@ impl CommandSender {
                     .send_command_feedback
             }
             Self::Console | Self::Rcon(_) => true,
-            Self::Dummy | Self::Entity(_) => false,
+            Self::Dummy | Self::Entity(..) => false,
         }
     }
 
@@ -276,14 +281,14 @@ impl CommandSender {
             Self::Console | Self::Rcon(_) => {
                 BROADCAST_CONSOLE_TO_OPS.load(std::sync::atomic::Ordering::Relaxed)
             }
-            Self::Dummy | Self::Entity(_) => false,
+            Self::Dummy | Self::Entity(..) => false,
         }
     }
 
     #[must_use]
     pub const fn should_track_output(&self) -> bool {
         match self {
-            Self::Dummy | Self::Entity(_) => false,
+            Self::Dummy | Self::Entity(..) => false,
             Self::Player(..) | Self::Console | Self::Rcon(_) | Self::CommandBlock(..) => true,
         }
     }
@@ -356,10 +361,10 @@ impl CommandSender {
                     server.clone(),
                 )
             }
-            Self::Entity(name) => {
+            Self::Entity(name, permission_source) => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
                 CommandSource::new(
-                    Self::Entity(name.clone()),
+                    Self::Entity(name.clone(), permission_source),
                     world,
                     None,
                     spawn_point,
