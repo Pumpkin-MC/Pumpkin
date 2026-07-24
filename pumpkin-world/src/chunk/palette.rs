@@ -182,6 +182,50 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
+    /// Builds a complete palette without paying the bookkeeping cost of individual mutations.
+    pub(crate) fn from_fn(mut value_at: impl FnMut(usize, usize, usize) -> V) -> Self {
+        let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
+        let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
+        let mut palette = Vec::new();
+        let mut counts = Vec::<u16>::new();
+
+        for y in 0..DIM {
+            for z in 0..DIM {
+                for x in 0..DIM {
+                    let value = value_at(x, y, z);
+                    cube[y][z][x] = value;
+                    let index =
+                        if let Some(index) = palette.iter().position(|entry| *entry == value) {
+                            counts[index] += 1;
+                            index
+                        } else {
+                            palette.push(value);
+                            counts.push(1);
+                            palette.len() - 1
+                        };
+                    if let Ok(index) = u8::try_from(index) {
+                        indices[y][z][x] = index;
+                    }
+                }
+            }
+        }
+
+        if palette.len() == 1 {
+            return Self::Homogeneous(palette[0]);
+        }
+
+        let storage = if palette.len() <= 256 && std::mem::size_of::<V>() > 1 {
+            PaletteStorage::Indexed(indices)
+        } else {
+            PaletteStorage::Dense(cube)
+        };
+        Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+            storage,
+            palette,
+            counts,
+        }))
+    }
+
     fn bits_per_entry(&self) -> u8 {
         match self {
             Self::Homogeneous(_) => 0,
@@ -870,3 +914,72 @@ const BIOME_DISK_MIN_BITS: u8 = 0;
 const BIOME_NETWORK_MIN_MAP_BITS: u8 = 1;
 const BIOME_NETWORK_MAX_MAP_BITS: u8 = 3;
 pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
+
+#[cfg(test)]
+mod tests {
+    use super::{BlockPalette, NetworkPalette};
+    use pumpkin_data::{Block, BlockStateId};
+
+    fn network_palette_values(palette: NetworkPalette<u16>) -> Option<Box<[u16]>> {
+        match palette {
+            NetworkPalette::Single(value) => Some(Box::new([value])),
+            NetworkPalette::Indirect(values) => Some(values),
+            NetworkPalette::Direct => None,
+        }
+    }
+
+    fn assert_bulk_matches_mutations(value_at: impl Fn(usize, usize, usize) -> BlockStateId) {
+        let mut mutated = BlockPalette::default();
+        for y in 0..BlockPalette::SIZE {
+            for z in 0..BlockPalette::SIZE {
+                for x in 0..BlockPalette::SIZE {
+                    mutated.set(x, y, z, value_at(x, y, z));
+                }
+            }
+        }
+        let bulk = BlockPalette::from_fn(value_at);
+
+        assert_eq!(
+            mutated.iter().collect::<Vec<_>>(),
+            bulk.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            mutated.random_ticking_counts(),
+            bulk.random_ticking_counts()
+        );
+        assert_eq!(mutated.non_air_block_count(), bulk.non_air_block_count());
+        assert_eq!(mutated.liquid_block_count(), bulk.liquid_block_count());
+
+        let mutated_network = mutated.convert_network();
+        let bulk_network = bulk.convert_network();
+        assert_eq!(mutated_network.bits_per_entry, bulk_network.bits_per_entry);
+        assert_eq!(mutated_network.packed_data, bulk_network.packed_data);
+        assert_eq!(
+            network_palette_values(mutated_network.palette),
+            network_palette_values(bulk_network.palette)
+        );
+    }
+
+    #[test]
+    fn bulk_palette_matches_individual_mutations() {
+        let states = [
+            Block::AIR.default_state.id,
+            Block::STONE.default_state.id,
+            Block::WATER.default_state.id,
+            Block::LAVA.default_state.id,
+        ];
+        assert_bulk_matches_mutations(|x, y, z| states[(x + y + z) % states.len()]);
+    }
+
+    #[test]
+    fn bulk_palette_handles_homogeneous_sections() {
+        assert_bulk_matches_mutations(|_, _, _| Block::STONE.default_state.id);
+    }
+
+    #[test]
+    fn bulk_palette_handles_direct_network_palettes() {
+        assert_bulk_matches_mutations(|x, y, z| {
+            BlockStateId::new_or_air(((y * 256 + z * 16 + x) % 300) as u16)
+        });
+    }
+}

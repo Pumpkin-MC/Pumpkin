@@ -1,4 +1,7 @@
-use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
+use crate::chunk::{
+    ChunkData, ChunkHeightmapType, ChunkHeightmaps, ChunkLight, ChunkSections,
+    palette::{BiomePalette, BlockPalette},
+};
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -200,6 +203,58 @@ impl Chunk {
             Self::Proto(chunk) => chunk,
         }
     }
+
+    fn build_level_sections(proto_chunk: &ProtoChunk, dimension: &Dimension) -> ChunkSections {
+        let total_sections = dimension.height as usize / BlockPalette::SIZE;
+        let biome_min_y = biome_coords::from_block(dimension.min_y);
+        let block_sections = (0..total_sections)
+            .map(|section_index| {
+                BlockPalette::from_fn(|x, y, z| {
+                    let y = section_index * BlockPalette::SIZE + y;
+                    proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let biome_sections = (0..total_sections)
+            .map(|section_index| {
+                BiomePalette::from_fn(|x, y, z| {
+                    let y = section_index * BiomePalette::SIZE + y;
+                    proto_chunk.get_biome_id(x as i32, biome_min_y + y as i32, z as i32)
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        ChunkSections::from_palettes(block_sections, biome_sections, dimension.min_y)
+    }
+
+    fn build_level_heightmaps(proto_chunk: &ProtoChunk, min_y: i32) -> ChunkHeightmaps {
+        let mut heightmaps = ChunkHeightmaps::default();
+        for x in 0..16 {
+            for z in 0..16 {
+                let source_index = x * 16 + z;
+                for (heightmap_type, height) in [
+                    (
+                        ChunkHeightmapType::WorldSurface,
+                        proto_chunk.flat_surface_height_map[source_index],
+                    ),
+                    (
+                        ChunkHeightmapType::MotionBlocking,
+                        proto_chunk.flat_motion_blocking_height_map[source_index],
+                    ),
+                    (
+                        ChunkHeightmapType::MotionBlockingNoLeaves,
+                        proto_chunk.flat_motion_blocking_no_leaves_height_map[source_index],
+                    ),
+                ] {
+                    heightmaps.set(heightmap_type, x as i32, z as i32, i32::from(height), min_y);
+                }
+            }
+        }
+        heightmaps
+    }
+
     pub fn upgrade_to_level_chunk(
         &mut self,
         dimension: &Dimension,
@@ -230,54 +285,8 @@ impl Chunk {
 
         let proto_chunk = *proto_chunk_box;
 
-        let total_sections = dimension.height as usize / 16;
-        let sections = ChunkSections::new(total_sections, dimension.min_y);
-
-        let proto_biome_height = biome_coords::from_block(proto_chunk.height() as i32);
-        let biome_min_y = biome_coords::from_block(dimension.min_y);
-
-        for y_offset in 0..proto_biome_height {
-            let section_index = y_offset as usize / 4;
-            let relative_y = y_offset as usize % 4;
-
-            if let Some(section) = sections
-                .biome_sections
-                .write()
-                .unwrap()
-                .get_mut(section_index)
-            {
-                let absolute_biome_y = biome_min_y + y_offset;
-
-                for z in 0..4 {
-                    for x in 0..4 {
-                        let biome = proto_chunk.get_biome_id(x as i32, absolute_biome_y, z as i32);
-                        section.set(x, relative_y, z, biome);
-                    }
-                }
-            }
-        }
-
-        let proto_block_height = proto_chunk.height();
-
-        for y_offset in 0..proto_block_height {
-            let section_index = (y_offset as usize) / 16;
-            let relative_y = (y_offset as usize) % 16;
-
-            if let Some(section) = sections
-                .block_sections
-                .write()
-                .unwrap()
-                .get_mut(section_index)
-            {
-                for z in 0..16 {
-                    for x in 0..16 {
-                        let block =
-                            proto_chunk.get_block_state_raw(x as i32, y_offset as i32, z as i32);
-                        section.set(x, relative_y, z, block);
-                    }
-                }
-            }
-        }
+        let sections = Self::build_level_sections(&proto_chunk, dimension);
+        let heightmaps = Self::build_level_heightmaps(&proto_chunk, dimension.min_y);
 
         // Move the light data instead of cloning it
         // By taking ownership of proto_chunk, we can move the light data directly
@@ -300,11 +309,11 @@ impl Chunk {
             }
         }
 
-        let mut chunk = ChunkData {
+        let chunk = ChunkData {
             light_engine: Mutex::new(light_data),
             light_populated: AtomicBool::new(is_lit),
             section: sections,
-            heightmap: Mutex::default(),
+            heightmap: Mutex::new(heightmaps),
             x: proto_chunk.x,
             z: proto_chunk.z,
             dirty: AtomicBool::new(true),
@@ -315,7 +324,6 @@ impl Chunk {
             blending_data: proto_chunk.blending_data,
         };
 
-        chunk.heightmap = Mutex::new(chunk.calculate_heightmap());
         *self = Self::Level(Arc::new(chunk));
     }
 }
