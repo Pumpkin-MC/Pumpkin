@@ -83,7 +83,7 @@ pub enum CommandSender {
     /// An entity executing a command, e.g. via `/execute as @e`.
     /// Stores the entity's display name for command output and the original
     /// sender whose permissions should be used.
-    Entity(String, Box<CommandSender>),
+    Entity(String, Box<Self>),
     /// Nothingness. Anything sent to this sender is void.
     /// Has the same permissions as that of `CommandBlock`.
     Dummy,
