@@ -8,7 +8,7 @@ use pumpkin_data::{effect::StatusEffect, sound::Sound, sound::SoundCategory};
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
@@ -40,28 +40,35 @@ impl DolphinEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Dolphin.registerGoals (treasure/swim-with-player TODO).
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, true)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(
                 5,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // Vanilla may attack guardians when provoked / nearby hostiles.
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::GUARDIAN, true),
+            goal_selector.add_goal(6, Box::new(MeleeAttackGoal::new(1.2, true)));
+            // Avoid guardians — do NOT hunt them.
+            goal_selector.add_goal(
+                9,
+                Box::new(AvoidEntityGoal::new(&EntityType::GUARDIAN, 8.0, 1.0, 1.0)),
             );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
+            goal_selector.add_goal(
+                9,
+                Box::new(AvoidEntityGoal::new(
                     &EntityType::ELDER_GUARDIAN,
-                    true,
-                ),
+                    8.0,
+                    1.0,
+                    1.0,
+                )),
+            );
+
+            // HurtByTarget + setAlertOthers (pack); ignore guardian as damage source TODO.
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                1,
+                crate::entity::ai::goal::join_anger::JoinAngerGoal::new(&EntityType::DOLPHIN),
             );
         };
 

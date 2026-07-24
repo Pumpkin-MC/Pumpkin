@@ -6,9 +6,8 @@ use pumpkin_data::item::Item;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
@@ -42,28 +41,19 @@ impl StriderEntity {
         };
 
         {
+            // Vanilla 26.2 Strider.registerGoals — no FloatGoal, no zombified avoid.
+            // StriderGoToLavaGoal TODO (path malus already prefers lava).
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
-            // Zombified piglins scare striders off (vanilla brain-ish flee).
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ZOMBIFIED_PIGLIN,
-                    8.0,
-                    1.25,
-                    1.25,
-                )),
-            );
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.65));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.4, TEMPT_ITEMS)));
+            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.0)));
+            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                8,
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

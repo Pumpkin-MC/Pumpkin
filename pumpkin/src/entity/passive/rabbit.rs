@@ -6,7 +6,6 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
@@ -32,30 +31,38 @@ impl RabbitEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
+            // Vanilla 26.2: avoid Player/Wolf/Monster; RaidGarden TODO.
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.2));
-            // Flee wolves / foxes / cats (vanilla AvoidEntity goals).
             goal_selector.add_goal(
-                2,
+                4,
+                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 2.2, 2.2)),
+            );
+            goal_selector.add_goal(
+                4,
                 Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 10.0, 2.2, 2.2)),
             );
-            goal_selector.add_goal(
-                2,
-                Box::new(AvoidEntityGoal::new(&EntityType::FOX, 8.0, 2.2, 2.2)),
-            );
-            goal_selector.add_goal(
-                2,
-                Box::new(AvoidEntityGoal::new(&EntityType::CAT, 8.0, 2.2, 2.2)),
-            );
-            goal_selector.add_goal(3, BreedGoal::new(0.8));
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
-            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(0.8)));
+            // Monster.class stand-in: common hostiles
+            for ty in [
+                &EntityType::ZOMBIE,
+                &EntityType::SKELETON,
+                &EntityType::SPIDER,
+                &EntityType::CREEPER,
+                &EntityType::HUSK,
+                &EntityType::STRAY,
+            ] {
+                goal_selector.add_goal(
+                    4,
+                    Box::new(AvoidEntityGoal::new(ty, 4.0, 2.2, 2.2)),
+                );
+            }
+            goal_selector.add_goal(2, BreedGoal::new(0.8));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 11,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
-            goal_selector.add_goal(11, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

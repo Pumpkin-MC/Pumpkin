@@ -20,13 +20,13 @@ use uuid::Uuid;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, join_anger::JoinAngerGoal,
-        leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        join_anger::JoinAngerGoal, leap_at_target::LeapAtTargetGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, owner_hurt_by_target::OwnerHurtByTargetGoal,
+        owner_hurt_target::OwnerHurtTargetGoal, revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -65,29 +65,37 @@ impl WolfEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Wolf.registerGoals
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, SitGoal::new());
-            goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
+            // WolfAvoidEntityGoal(Llama, 24, 1.5, 1.5)
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::LLAMA, 24.0, 1.5, 1.5)),
+            );
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::TRADER_LLAMA, 24.0, 1.5, 1.5)),
+            );
             goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
-            // Melee only useful once tamed (owner-hurt goals set target).
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             goal_selector.add_goal(7, BreedGoal::new(1.0));
-            goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
             goal_selector.add_goal(
                 10,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
-            goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
 
             target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
+            // HurtByTarget.setAlertOthers()
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
-            // Pack joins when a nearby wolf is attacked.
-            target_selector.add_goal(4, JoinAngerGoal::new(&EntityType::WOLF));
-            // Wild pack hunts (tamed wolves still get these; tame filter TODO).
+            target_selector.add_goal(3, JoinAngerGoal::new(&EntityType::WOLF));
+            // NonTameRandomTarget(Animal PREY) — sheep/rabbit/fox stand-in
             target_selector.add_goal(
                 5,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, true),
@@ -100,9 +108,18 @@ impl WolfEntity {
                 5,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
             );
+            // NearestAttackableTarget(AbstractSkeleton)
             target_selector.add_goal(
-                6,
+                7,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, true),
+            );
+            target_selector.add_goal(
+                7,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::STRAY, true),
+            );
+            target_selector.add_goal(
+                7,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER_SKELETON, true),
             );
         };
 

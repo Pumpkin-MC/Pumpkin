@@ -12,8 +12,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, breed::BreedGoal, eat_grass::EatGrassGoal,
-        escape_danger::EscapeDangerGoal,
+        breed::BreedGoal, eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
@@ -50,13 +49,9 @@ impl SheepEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
+            // Vanilla 26.2 Sheep.registerGoals — no predator AvoidEntity.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
-            // Vanilla sheep flee wolves.
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 8.0, 1.25, 1.25)),
-            );
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));

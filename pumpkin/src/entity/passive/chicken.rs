@@ -16,10 +16,9 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -62,19 +61,9 @@ impl ChickenEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
+            // Vanilla 26.2 Chicken.registerGoals — Panic only, no predator AvoidEntity.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.4));
-            // Flee common predators (vanilla AvoidEntity goals).
-            for ty in [
-                &EntityType::OCELOT,
-                &EntityType::CAT,
-                &EntityType::FOX,
-            ] {
-                goal_selector.add_goal(
-                    1,
-                    Box::new(AvoidEntityGoal::new(ty, 8.0, 1.4, 1.4)),
-                );
-            }
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));

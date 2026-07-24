@@ -1,27 +1,18 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
-        follow_player::FollowPlayerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        look_at_entity::LookAtEntityGoal, sit::SitGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-const TEMPT_ITEMS: &[&Item] = &[
-    &Item::WHEAT_SEEDS,
-    &Item::MELON_SEEDS,
-    &Item::PUMPKIN_SEEDS,
-    &Item::BEETROOT_SEEDS,
-];
-
-/// Parrot — flees hostiles, follows player, tempt seeds; shoulder sit TODO.
+/// Parrot — vanilla 26.2: panic/float/look/sit/follow owner/wander; shoulder TODO.
 pub struct ParrotEntity {
     pub mob_entity: MobEntity,
 }
@@ -37,32 +28,18 @@ impl ParrotEntity {
         };
 
         {
+            // No predator AvoidEntity / Tempt in vanilla registerGoals.
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            goal_selector.add_goal(0, EscapeDangerGoal::new(1.25));
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
-            // Vanilla flees many mobs; cover common hostiles.
-            for ty in [
-                &EntityType::CREEPER,
-                &EntityType::SKELETON,
-                &EntityType::ZOMBIE,
-                &EntityType::SPIDER,
-                &EntityType::BLAZE,
-                &EntityType::WITCH,
-            ] {
-                goal_selector.add_goal(
-                    1,
-                    Box::new(AvoidEntityGoal::new(ty, 8.0, 1.2, 1.4)),
-                );
-            }
-            goal_selector.add_goal(2, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
-            // Stand-in for flying to nearby player (shoulder perch TODO).
-            goal_selector.add_goal(3, FollowPlayerGoal::new(1.0));
-            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                5,
+                1,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(2, SitGoal::new());
+            goal_selector.add_goal(2, FollowOwnerGoal::new(1.0, 5.0, 1.0));
+            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
+            // LandOnOwnersShoulderGoal / FollowMobGoal TODO
         };
 
         mob_arc

@@ -6,10 +6,10 @@ use pumpkin_data::item::Item;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, join_anger::JoinAngerGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -35,21 +35,37 @@ impl PandaEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Panda — avoid player/monsters when worried; sit/roll TODO.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            goal_selector.add_goal(2, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS)));
-            goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, true)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, true)));
+            goal_selector.add_goal(4, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
             goal_selector.add_goal(
                 6,
+                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 2.0, 2.0)),
+            );
+            for ty in [
+                &EntityType::ZOMBIE,
+                &EntityType::SKELETON,
+                &EntityType::CREEPER,
+                &EntityType::SPIDER,
+            ] {
+                goal_selector.add_goal(
+                    6,
+                    Box::new(AvoidEntityGoal::new(ty, 4.0, 2.0, 2.0)),
+                );
+            }
+            goal_selector.add_goal(
+                9,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(14, Box::new(WanderAroundGoal::new(1.0)));
 
-            // Aggressive personalities retaliate; pack joins nearby panda anger.
+            // PandaHurtByTarget.setAlertOthers()
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::PANDA));
+            target_selector.add_goal(1, JoinAngerGoal::new(&EntityType::PANDA));
         };
 
         mob_arc
